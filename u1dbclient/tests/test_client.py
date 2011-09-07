@@ -50,6 +50,13 @@ class TestInMemoryClient(TestInMemoryClientBase):
     def test__get_machine_id(self):
         self.assertEqual('test', self.c._machine_id)
 
+    def test__get_current_rev_missing(self):
+        self.assertEqual(None, self.c._get_current_rev('doc-id'))
+
+    def test__get_current_rev_exists(self):
+        doc_id, doc_rev, db_rev = self.c.put_doc(None, None, simple_doc)
+        self.assertEqual(doc_rev, self.c._get_current_rev(doc_id))
+
     def test_put_doc_allocating_doc_id(self):
         doc_id, new_rev, db_rev = self.c.put_doc(None, None, simple_doc)
         self.assertNotEqual(None, doc_id)
@@ -107,13 +114,13 @@ class TestInMemoryClient(TestInMemoryClientBase):
         self.c.put_doc(doc_id, doc_rev, '{"new": "contents"}')
         self.assertEqual(set([doc_id]), self.c.whats_changed(0))
 
-    def test_get_state_info(self):
-        self.assertEqual(('test', 0), self.c.get_state_info())
+    def test_get_sync_info(self):
+        self.assertEqual(('test', 0, 0), self.c.get_sync_info('other'))
 
     def test_put_updates_state_info(self):
-        self.assertEqual(('test', 0), self.c.get_state_info())
+        self.assertEqual(('test', 0, 0), self.c.get_sync_info('other'))
         doc_id, doc_rev, db_rev = self.c.put_doc(None, None, simple_doc)
-        self.assertEqual(('test', 1), self.c.get_state_info())
+        self.assertEqual(('test', 1, 0), self.c.get_sync_info('other'))
 
     def test_put_state_info(self):
         self.assertEqual({}, self.c._other_revs)
@@ -198,6 +205,13 @@ class TestInMemoryClientIndexes(TestInMemoryClientBase):
         self.c.delete_index('test-idx')
         self.assertEqual([], self.c._indexes.keys())
 
+    def DONT_receive_docs(self):
+        result = self.c.receive_docs([('doc-id', 'other-machine:1', simple_doc)],
+                                     'other-machine', from_machine_rev=10,
+                                     last_known_rev=0)
+        self.assertEqual(('doc-rev', simple_doc, False),
+                         self.c.get_doc('doc-id'))
+
 
 class TestInMemoryClientSync(tests.TestCase):
 
@@ -210,6 +224,13 @@ class TestInMemoryClientSync(tests.TestCase):
         self.c1.sync(self.c2)
         self.assertEqual({self.c2._machine_id: 0}, self.c1._other_revs)
         self.assertEqual({self.c1._machine_id: 0}, self.c2._other_revs)
+
+    def DONT_sync_puts_changes(self):
+        doc_id, doc_rev, db_rev = self.c1.put_doc(None, None, simple_doc)
+        self.c1.sync(self.c2)
+        self.assertEqual((doc_rev, simple_doc, False), self.c1.get_doc(doc_id))
+        self.assertEqual({self.c2._machine_id: 1}, self.c1._other_revs)
+        self.assertEqual({self.c1._machine_id: 1}, self.c2._other_revs)
 
 
 class TestInMemoryIndex(tests.TestCase):
@@ -272,3 +293,40 @@ class TestInMemoryIndex(tests.TestCase):
         idx.add_json('doc-id', simple_doc)
         idx.add_json('doc2-id', simple_doc)
         self.assertEqual(['doc-id', 'doc2-id'], idx.lookup([('value',)]))
+
+
+class TestVectorClockRev(tests.TestCase):
+
+    def assertIsNewer(self, newer_rev, older_rev):
+        new_vcr = client.VectorClockRev(newer_rev)
+        old_vcr = client.VectorClockRev(older_rev)
+        self.assertTrue(new_vcr.is_newer(old_vcr))
+        self.assertFalse(old_vcr.is_newer(new_vcr))
+
+    def assertIsConflicted(self, rev_a, rev_b):
+        vcr_a = client.VectorClockRev(rev_a)
+        vcr_b = client.VectorClockRev(rev_b)
+        self.assertFalse(vcr_a.is_newer(vcr_b))
+        self.assertFalse(vcr_b.is_newer(vcr_a))
+
+    def test__is_newer_doc_rev(self):
+        self.assertIsNewer('test:1', None)
+        self.assertIsNewer('test:2', 'test:1')
+        self.assertIsNewer('test:1|other:2', 'test:1|other:1')
+        self.assertIsNewer('test:1|other:1', 'other:1')
+        self.assertIsConflicted('test:1|other:2', 'test:2|other:1')
+        self.assertIsConflicted('test:1|other:1', 'other:2')
+        # self.assertIsConflicted('test:1', 'test:1')
+
+    def test__expand_None(self):
+        vcr = client.VectorClockRev(None)
+        self.assertEqual({}, vcr._expand())
+        vcr = client.VectorClockRev('')
+        self.assertEqual({}, vcr._expand())
+
+    def test__expand(self):
+        vcr = client.VectorClockRev('test:1')
+        self.assertEqual({'test': 1}, vcr._expand())
+        vcr = client.VectorClockRev('other:2|test:1')
+        self.assertEqual({'other': 2, 'test': 1}, vcr._expand())
+
