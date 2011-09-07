@@ -206,14 +206,27 @@ class InMemoryClient(Client):
         return self._docs.get(doc_id, (None, None))[0]
 
     def resolve_doc(self, doc_id, doc, conflicted_doc_revs):
-        del self._conflicts[doc_id]
         cur_rev, cur_doc = self._docs[doc_id]
         vcr = VectorClockRev(cur_rev)
         for rev in conflicted_doc_revs:
             vcr = VectorClockRev(vcr.maximize(rev))
         new_rev = vcr.increment(self._machine_id)
-        self._put_and_update_indexes(doc_id, cur_doc, new_rev, doc)
-        return new_rev, False
+        superseded_revs = set(conflicted_doc_revs)
+        remaining_conflicts = []
+        cur_conflicts = self._conflicts[doc_id]
+        for c_rev, c_doc in cur_conflicts:
+            if c_rev in superseded_revs:
+                continue
+            remaining_conflicts.append((c_rev, c_doc))
+        if cur_rev in superseded_revs:
+            self._put_and_update_indexes(doc_id, cur_doc, new_rev, doc)
+        else:
+            remaining_conflicts.append((new_rev, doc))
+        if not remaining_conflicts:
+            del self._conflicts[doc_id]
+        else:
+            self._conflicts[doc_id] = remaining_conflicts
+        return new_rev, bool(remaining_conflicts)
 
     def delete_doc(self, doc_id, doc_rev):
         cur_doc_rev, old_doc = self._docs[doc_id]

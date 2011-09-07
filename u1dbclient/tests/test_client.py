@@ -403,28 +403,48 @@ class TestInMemoryClientSync(tests.TestCase):
         self.assertTrue(vcr_new.is_newer(vcr_1))
         self.assertTrue(vcr_new.is_newer(vcr_2))
 
-    # def test_resolve_doc_partially_winning(self):
-    #     doc_id, doc1_rev, _ = self.c1.put_doc(None, None, simple_doc)
-    #     new_doc2 = '{"key": "valin2"}'
-    #     doc_id, doc2_rev, _ = self.c2.put_doc(doc_id, None, new_doc2)
-    #     self.c1.sync(self.c2)
-    #     self.assertEqual([(doc2_rev, new_doc2),
-    #                       (doc1_rev, simple_doc)],
-    #                      self.c1.get_doc_conflicts(doc_id))
-    #     self.c3 = client.InMemoryClient('test3')
-    #     new_doc3 = '{"key": "valin3"}'
-    #     doc_id, doc3_rev, _ = self.c3.put_doc(doc_id, None, new_doc3)
-    #     self.c1.sync(self.c3)
-    #     self.assertEqual([(doc3_rev, new_doc3),
-    #                       (doc1_rev, simple_doc),
-    #                       (doc2_rev, new_doc2)],
-    #                      self.c1.get_doc_conflicts(doc_id))
-    #     new_rev, has_conflicts = self.c1.resolve_doc(doc_id, simple_doc,
-    #                                                  [doc2_rev, doc1_rev])
-    #     self.assertTrue(has_conflicts)
-    #     self.assertEqual((doc3_rev, new_doc3, True), self.c1.get_doc(doc_id))
-    #     self.assertEqual([(doc3_rev, new_doc3), (new_rev, simple_doc)],
-    #                      self.c1.get_doc_conflicts(doc_id))
+    def test_resolve_doc_partial_not_winning(self):
+        doc_id, doc1_rev, _ = self.c1.put_doc(None, None, simple_doc)
+        new_doc2 = '{"key": "valin2"}'
+        doc_id, doc2_rev, _ = self.c2.put_doc(doc_id, None, new_doc2)
+        self.c1.sync(self.c2)
+        self.assertEqual([(doc2_rev, new_doc2),
+                          (doc1_rev, simple_doc)],
+                         self.c1.get_doc_conflicts(doc_id))
+        self.c3 = client.InMemoryClient('test3')
+        new_doc3 = '{"key": "valin3"}'
+        doc_id, doc3_rev, _ = self.c3.put_doc(doc_id, None, new_doc3)
+        self.c1.sync(self.c3)
+        self.assertEqual([(doc3_rev, new_doc3),
+                          (doc1_rev, simple_doc),
+                          (doc2_rev, new_doc2)],
+                         self.c1.get_doc_conflicts(doc_id))
+        new_rev, has_conflicts = self.c1.resolve_doc(doc_id, simple_doc,
+                                                     [doc2_rev, doc1_rev])
+        self.assertTrue(has_conflicts)
+        self.assertEqual((doc3_rev, new_doc3, True), self.c1.get_doc(doc_id))
+        self.assertEqual([(doc3_rev, new_doc3), (new_rev, simple_doc)],
+                         self.c1.get_doc_conflicts(doc_id))
+
+    def test_resolve_doc_partial_winning(self):
+        doc_id, doc1_rev, _ = self.c1.put_doc(None, None, simple_doc)
+        new_doc2 = '{"key": "valin2"}'
+        doc_id, doc2_rev, _ = self.c2.put_doc(doc_id, None, new_doc2)
+        self.c1.sync(self.c2)
+        self.c3 = client.InMemoryClient('test3')
+        new_doc3 = '{"key": "valin3"}'
+        doc_id, doc3_rev, _ = self.c3.put_doc(doc_id, None, new_doc3)
+        self.c1.sync(self.c3)
+        self.assertEqual([(doc3_rev, new_doc3),
+                          (doc1_rev, simple_doc),
+                          (doc2_rev, new_doc2)],
+                         self.c1.get_doc_conflicts(doc_id))
+        new_rev, has_conflicts = self.c1.resolve_doc(doc_id, simple_doc,
+                                                     [doc3_rev, doc1_rev])
+        self.assertTrue(has_conflicts)
+        self.assertEqual([(new_rev, simple_doc),
+                          (doc2_rev, new_doc2)],
+                         self.c1.get_doc_conflicts(doc_id))
 
 
 class TestInMemoryIndex(tests.TestCase):
