@@ -188,8 +188,8 @@ class InMemoryClient(Client):
             doc_rev, doc = self._docs[doc_id]
         except KeyError:
             return None, None, False
-        if doc is None or doc == 'null':
-            return None, None, False
+        if doc == 'null':
+            doc = None
         return doc_rev, doc, (doc_id in self._conflicts)
 
     def get_doc_conflicts(self, doc_id):
@@ -324,12 +324,12 @@ class InMemoryClient(Client):
         for doc_id in self.whats_changed(last_known_rev):
             if doc_id in seen_ids:
                 continue
-            doc_rev, doc, _ = self.get_doc(doc_id)
+            doc_rev, doc = self._docs[doc_id]
             new_docs.append((doc_id, doc_rev, doc))
         self._other_revs[from_machine_id] = from_machine_rev
         conflicts = []
         for doc_id in conflict_ids:
-            doc_rev, doc, _ = self.get_doc(doc_id)
+            doc_rev, doc = self._docs[doc_id]
             conflicts.append((doc_id, doc_rev, doc))
         self._last_exchange_log = {
             'receive': {'docs': [(di, dr) for di, dr, _ in docs_info],
