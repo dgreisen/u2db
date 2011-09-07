@@ -264,6 +264,11 @@ class TestInMemoryClientSync(tests.TestCase):
         self.c1.sync(self.c2)
         self.assertEqual(0, self.c1._get_other_machine_rev(self.c2._machine_id))
         self.assertEqual(0, self.c2._get_other_machine_rev(self.c1._machine_id))
+        self.assertEqual({'receive': {'docs': [], 'from_id': 'test1',
+                                      'from_rev': 0, 'last_known_rev': 0},
+                          'return': {'new_docs': [], 'conf_docs': [],
+                                     'last_rev': 0}},
+                         self.c2._last_exchange_log)
 
     def test_sync_puts_changes(self):
         doc_id, doc_rev, db_rev = self.c1.put_doc(None, None, simple_doc)
@@ -271,6 +276,12 @@ class TestInMemoryClientSync(tests.TestCase):
         self.assertEqual((doc_rev, simple_doc, False), self.c2.get_doc(doc_id))
         self.assertEqual(1, self.c1._get_other_machine_rev(self.c2._machine_id))
         self.assertEqual(1, self.c2._get_other_machine_rev(self.c1._machine_id))
+        self.assertEqual({'receive': {'docs': [(doc_id, doc_rev)],
+                                      'from_id': 'test1',
+                                      'from_rev': 1, 'last_known_rev': 0},
+                          'return': {'new_docs': [], 'conf_docs': [],
+                                     'last_rev': 1}},
+                         self.c2._last_exchange_log)
 
     def test_sync_pulls_changes(self):
         doc_id, doc_rev, db_rev = self.c2.put_doc(None, None, simple_doc)
@@ -278,6 +289,24 @@ class TestInMemoryClientSync(tests.TestCase):
         self.assertEqual((doc_rev, simple_doc, False), self.c1.get_doc(doc_id))
         self.assertEqual(1, self.c1._get_other_machine_rev(self.c2._machine_id))
         self.assertEqual(1, self.c2._get_other_machine_rev(self.c1._machine_id))
+        self.assertEqual({'receive': {'docs': [], 'from_id': 'test1',
+                                      'from_rev': 0, 'last_known_rev': 0},
+                          'return': {'new_docs': [(doc_id, doc_rev)],
+                                     'conf_docs': [], 'last_rev': 1}},
+                         self.c2._last_exchange_log)
+
+    def test_sync_ignores_convergence(self):
+        doc_id, doc_rev, db_rev = self.c1.put_doc(None, None, simple_doc)
+        self.c3 = client.InMemoryClient('test3')
+        self.c1.sync(self.c3)
+        self.c2.sync(self.c3)
+        self.c1.sync(self.c2)
+        self.assertEqual({'receive': {'docs': [(doc_id, doc_rev)],
+                                      'from_id': 'test1',
+                                      'from_rev': 1, 'last_known_rev': 0},
+                          'return': {'new_docs': [],
+                                     'conf_docs': [], 'last_rev': 1}},
+                         self.c2._last_exchange_log)
 
 
 class TestInMemoryIndex(tests.TestCase):

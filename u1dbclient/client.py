@@ -245,6 +245,15 @@ class InMemoryClient(Client):
             doc_rev, doc, _ = self.get_doc(doc_id)
             new_docs.append((doc_id, doc_rev, doc))
         self._other_revs[from_machine_id] = from_machine_rev
+        self._last_exchange_log = {
+            'receive': {'docs': [(di, dr) for di, dr, _ in docs_info],
+                        'from_id': from_machine_id,
+                        'from_rev': from_machine_rev,
+                        'last_known_rev': last_known_rev},
+            'return': {'new_docs': [(di, dr) for di, dr, _ in new_docs],
+                       'conf_docs': [(di, dr) for di, dr, _ in conflicts],
+                       'last_rev': len(self._transaction_log)}
+        }
         return new_docs, conflicts, len(self._transaction_log)
 
     def sync(self, other, callback=None):
