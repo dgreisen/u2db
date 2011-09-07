@@ -177,7 +177,8 @@ class InMemoryClient(Client):
         for index in self._indexes.itervalues():
             if old_doc is not None:
                 index.remove_json(doc_id, old_doc)
-            index.add_json(doc_id, doc)
+            if doc not in (None, 'null'):
+                index.add_json(doc_id, doc)
         self._docs[doc_id] = (new_rev, doc)
         self._transaction_log.append(doc_id)
 
@@ -186,7 +187,7 @@ class InMemoryClient(Client):
             doc_rev, doc = self._docs[doc_id]
         except KeyError:
             return None, None, False
-        if doc is None:
+        if doc == 'null':
             return None, None, False
         return doc_rev, doc, (doc_id in self._conflicts)
 
@@ -237,8 +238,9 @@ class InMemoryClient(Client):
         for index in self._indexes.itervalues():
             index.remove_json(doc_id, old_doc)
         new_doc_rev = self._allocate_doc_rev(cur_doc_rev)
-        self._docs[doc_id] = (new_doc_rev, None)
+        self._docs[doc_id] = (new_doc_rev, 'null')
         self._transaction_log.append(doc_id)
+        return new_doc_rev
 
     def create_index(self, index_name, index_expression):
         index = InMemoryIndex(index_name, index_expression)
@@ -341,7 +343,7 @@ class InMemoryClient(Client):
          others_my_rev) = other.get_sync_info(self._machine_id)
         docs_to_send = []
         for doc_id in self.whats_changed(others_my_rev):
-            doc_rev, doc, _ = self.get_doc(doc_id)
+            doc_rev, doc = self._docs[doc_id]
             docs_to_send.append((doc_id, doc_rev, doc))
         other_last_known_rev = self._other_revs.get(other_machine_id, 0)
         (new_records, conflicted_records,

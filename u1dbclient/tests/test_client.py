@@ -367,6 +367,34 @@ class TestInMemoryClientSync(tests.TestCase):
         self.assertEqual([], self.c1.get_from_index('test-idx', [('value',)]))
         self.assertEqual([], self.c1.get_from_index('test-idx', [('localval',)]))
 
+    def test_sync_propagates_deletes(self):
+        doc_id, doc1_rev, _ = self.c1.put_doc(None, None, simple_doc)
+        self.c1.create_index('test-idx', ['key'])
+        self.c1.sync(self.c2)
+        self.c2.create_index('test-idx', ['key'])
+        self.c3 = client.InMemoryClient('test3')
+        self.c1.sync(self.c3)
+        deleted_rev = self.c1.delete_doc(doc_id, doc1_rev)
+        self.c1.sync(self.c2)
+        self.assertEqual({'receive': {'docs': [(doc_id, deleted_rev)],
+                                      'from_id': 'test1',
+                                      'from_rev': 2, 'last_known_rev': 1},
+                          'return': {'new_docs': [], 'conf_docs': [],
+                                     'last_rev': 2}},
+                         self.c2._last_exchange_log)
+        self.assertEqual((None, None, False), self.c1.get_doc(doc_id))
+        self.assertEqual((None, None, False), self.c2.get_doc(doc_id))
+        self.assertEqual([], self.c1.get_from_index('test-idx', [('value',)]))
+        self.assertEqual([], self.c2.get_from_index('test-idx', [('value',)]))
+        self.c2.sync(self.c3)
+        self.assertEqual({'receive': {'docs': [(doc_id, deleted_rev)],
+                                      'from_id': 'test2',
+                                      'from_rev': 2, 'last_known_rev': 0},
+                          'return': {'new_docs': [], 'conf_docs': [],
+                                     'last_rev': 2}},
+                         self.c3._last_exchange_log)
+        self.assertEqual((None, None, False), self.c3.get_doc(doc_id))
+
     def test_put_refuses_to_update_conflicted(self):
         doc_id, doc1_rev, db1_rev = self.c1.put_doc(None, None, simple_doc)
         new_doc1 = '{"key": "altval"}'
