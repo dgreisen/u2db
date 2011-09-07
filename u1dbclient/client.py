@@ -181,6 +181,15 @@ class InMemoryClient(Client):
         self._docs[doc_id] = (new_rev, doc)
         self._transaction_log.append(doc_id)
 
+    def get_doc(self, doc_id):
+        try:
+            doc_rev, doc = self._docs[doc_id]
+        except KeyError:
+            return None, None, False
+        if doc is None:
+            return None, None, False
+        return doc_rev, doc, (doc_id in self._conflicts)
+
     def get_doc_conflicts(self, doc_id):
         """Get the list of conflict texts for the given document.
         The order of the conflicts is such that the first entry is the value
@@ -194,13 +203,6 @@ class InMemoryClient(Client):
         result = [self._docs[doc_id]]
         result.extend(self._conflicts[doc_id])
         return result
-
-    def get_doc(self, doc_id):
-        try:
-            doc_rev, doc = self._docs[doc_id]
-        except KeyError:
-            return None, None, False
-        return doc_rev, doc, (doc_id in self._conflicts)
 
     def _get_current_rev(self, doc_id):
         return self._docs.get(doc_id, (None, None))[0]
@@ -234,7 +236,8 @@ class InMemoryClient(Client):
             raise InvalidDocRev()
         for index in self._indexes.itervalues():
             index.remove_json(doc_id, old_doc)
-        del self._docs[doc_id]
+        new_doc_rev = self._allocate_doc_rev(cur_doc_rev)
+        self._docs[doc_id] = (new_doc_rev, None)
         self._transaction_log.append(doc_id)
 
     def create_index(self, index_name, index_expression):
