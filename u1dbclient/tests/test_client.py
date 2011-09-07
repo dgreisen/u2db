@@ -110,27 +110,6 @@ class TestInMemoryClient(TestInMemoryClientBase):
 
 class TestInMemoryClientIndexes(TestInMemoryClientBase):
 
-    def test__evaluate_index(self):
-        self.assertEqual('value', self.c._evaluate_index(['key'], simple_doc))
-
-    def test__evaluate_index_field_None(self):
-        self.assertEqual(None, self.c._evaluate_index(['missing'], simple_doc))
-
-    def test__evaluate_index_subfield_None(self):
-        self.assertEqual(None,
-                         self.c._evaluate_index(['key', 'missing'], simple_doc))
-
-    def test__evaluate_multi_index(self):
-        doc = '{"key": "value", "key2": "value2"}'
-        self.assertEqual('value\x01value2',
-                         self.c._evaluate_index(['key', 'key2'], doc))
-
-    def test__update_index_ignores_None(self):
-        doc = '{"key": "value", "key2": "value2"}'
-        index = {}
-        self.c._update_index(index, ['nokey'], 'doc-id', simple_doc)
-        self.assertEqual({}, index)
-
     def test_create_index(self):
         self.c.create_index('test-idx', ['name'])
         self.assertEqual({'test-idx': ['name']}, self.c._index_definitions)
@@ -223,3 +202,27 @@ class TestInMemoryIndex(tests.TestCase):
         self.assertEqual('value\x01value2',
                          idx.evaluate_json(doc))
 
+    def test_update_ignores_None(self):
+        idx = client.InMemoryIndex('idx-name', ['nokey'])
+        idx.update_json('doc-id', simple_doc)
+        self.assertEqual({}, idx._values)
+
+    def test_update_adds_entry(self):
+        idx = client.InMemoryIndex('idx-name', ['key'])
+        idx.update_json('doc-id', simple_doc)
+        self.assertEqual({'value': ['doc-id']}, idx._values)
+
+    def test_remove_json(self):
+        idx = client.InMemoryIndex('idx-name', ['key'])
+        idx.update_json('doc-id', simple_doc)
+        self.assertEqual({'value': ['doc-id']}, idx._values)
+        idx.remove_json('doc-id', simple_doc)
+        self.assertEqual({}, idx._values)
+
+    def test_remove_json_multiple(self):
+        idx = client.InMemoryIndex('idx-name', ['key'])
+        idx.update_json('doc-id', simple_doc)
+        idx.update_json('doc2-id', simple_doc)
+        self.assertEqual({'value': ['doc-id', 'doc2-id']}, idx._values)
+        idx.remove_json('doc-id', simple_doc)
+        self.assertEqual({'value': ['doc2-id']}, idx._values)

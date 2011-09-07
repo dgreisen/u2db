@@ -115,6 +115,7 @@ class InMemoryClient(Client):
 
     def __init__(self):
         self._docs = {}
+        self._indexes = {}
         self._index_definitions = {}
         self._indexes = {}
         self._doc_counter = 0
@@ -219,6 +220,7 @@ class InMemoryIndex(object):
     def __init__(self, index_name, index_definition):
         self._name = index_name
         self._definition = index_definition
+        self._values = {}
 
     def evaluate_json(self, doc):
         """Determine the 'key' after applying this index to the doc."""
@@ -235,3 +237,15 @@ class InMemoryIndex(object):
             result.append(val)
         return '\x01'.join(result)
 
+    def update_json(self, doc_id, doc):
+        key = self.evaluate_json(doc)
+        if key is None:
+            return
+        self._values.setdefault(key, []).append(doc_id)
+
+    def remove_json(self, doc_id, doc):
+        key = self.evaluate_json(doc)
+        doc_ids = self._values[key]
+        doc_ids.remove(doc_id)
+        if not doc_ids:
+            del self._values[key]
