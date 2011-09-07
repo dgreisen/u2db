@@ -59,8 +59,15 @@ class TestInMemoryClient(tests.TestCase):
     def test__get_machine_id(self):
         self.assertEqual('test', self.c._machine_id)
 
+    def test_put_doc_allocating_doc_id(self):
+        doc = '{"doc": "value"}'
+        doc_id, new_rev = self.c.put_doc(None, None, doc)
+        self.assertNotEqual(None, doc_id)
+        self.assertNotEqual(None, new_rev)
+        self.assertEqual((new_rev, doc, False), self.c.get_doc(doc_id))
+        
+
     def test_put_doc_creating_initial(self):
-        c = client.InMemoryClient()
         doc = '{"doc": "value"}'
         doc_id, new_rev = self.c.put_doc('my_doc_id', None, doc)
         self.assertEqual({'my_doc_id': (new_rev, doc)},
