@@ -299,6 +299,7 @@ class TestInMemoryClientSync(tests.TestCase):
     def test_sync_pulls_changes(self):
         doc_id, doc_rev, db_rev = self.c2.put_doc(None, None, simple_doc)
         self.c1.sync(self.c2)
+        self.c1.create_index('test-idx', ['key'])
         self.assertEqual((doc_rev, simple_doc, False), self.c1.get_doc(doc_id))
         self.assertEqual(1, self.c1._get_other_machine_rev(self.c2._machine_id))
         self.assertEqual(1, self.c2._get_other_machine_rev(self.c1._machine_id))
@@ -307,6 +308,8 @@ class TestInMemoryClientSync(tests.TestCase):
                           'return': {'new_docs': [(doc_id, doc_rev)],
                                      'conf_docs': [], 'last_rev': 1}},
                          self.c2._last_exchange_log)
+        self.assertEqual([(doc_id, doc_rev, simple_doc)],
+                         self.c1.get_from_index('test-idx', [('value',)]))
 
     def test_sync_ignores_convergence(self):
         doc_id, doc_rev, db_rev = self.c1.put_doc(None, None, simple_doc)
@@ -323,6 +326,7 @@ class TestInMemoryClientSync(tests.TestCase):
 
     def test_sync_sees_remote_conflicted(self):
         doc_id, doc1_rev, db1_rev = self.c1.put_doc(None, None, simple_doc)
+        self.c1.create_index('test-idx', ['key'])
         new_doc = '{"key": "altval"}'
         doc_id, doc2_rev, db2_rev = self.c2.put_doc(doc_id, None, new_doc)
         self.assertEqual([doc_id], self.c1._transaction_log)
@@ -337,9 +341,13 @@ class TestInMemoryClientSync(tests.TestCase):
         self.assertEqual([doc_id, doc_id], self.c1._transaction_log)
         self.assertEqual((doc2_rev, new_doc, True), self.c1.get_doc(doc_id))
         self.assertEqual((doc2_rev, new_doc, False), self.c2.get_doc(doc_id))
+        self.assertEqual([(doc_id, doc2_rev, new_doc)],
+                         self.c1.get_from_index('test-idx', [('altval',)]))
+        self.assertEqual([], self.c1.get_from_index('test-idx', [('value',)]))
 
     def test_sync_local_race_conflicted(self):
         doc_id, doc1_rev, _ = self.c1.put_doc(None, None, simple_doc)
+        self.c1.create_index('test-idx', ['key'])
         self.c1.sync(self.c2)
         new_doc1 = '{"key": "localval"}'
         new_doc2 = '{"key": "altval"}'
@@ -354,6 +362,10 @@ class TestInMemoryClientSync(tests.TestCase):
         self.c1.whats_changed = after_whatschanged
         self.c1.sync(self.c2)
         self.assertEqual((doc2_rev2, new_doc2, True), self.c1.get_doc(doc_id))
+        self.assertEqual([(doc_id, doc2_rev2, new_doc2)],
+                         self.c1.get_from_index('test-idx', [('altval',)]))
+        self.assertEqual([], self.c1.get_from_index('test-idx', [('value',)]))
+        self.assertEqual([], self.c1.get_from_index('test-idx', [('localval',)]))
 
     def test_put_refuses_to_update_conflicted(self):
         doc_id, doc1_rev, db1_rev = self.c1.put_doc(None, None, simple_doc)

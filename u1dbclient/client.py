@@ -259,7 +259,15 @@ class InMemoryClient(Client):
         return set(self._transaction_log[old_db_rev:])
 
     def _insert_many_docs(self, docs_info):
-        conflict_ids = []
+        """Add a bunch of documents to the local store.
+
+        This will only add entries if they supersede the local entries,
+        otherwise the doc ids will be added to conflict_ids.
+        :param docs_info: List of [(doc_id, doc_rev, doc)]
+        :return: (seen_ids, conflict_ids) sets of entries that were seen, and
+            what was considered conflicted and not added.
+        """
+        conflict_ids = set()
         seen_ids = set()
         for doc_id, doc_rev, doc in docs_info:
             cur_rev, cur_doc, _ = self.get_doc(doc_id)
@@ -270,15 +278,14 @@ class InMemoryClient(Client):
                 # magical convergence
                 continue
             else:
-                conflict_ids.append(doc_id)
+                conflict_ids.add(doc_id)
         return seen_ids, conflict_ids
 
     def _insert_conflicts(self, docs_info):
         for doc_id, doc_rev, doc in docs_info:
             my_doc_rev, my_doc = self._docs[doc_id]
             self._conflicts.setdefault(doc_id, []).append((my_doc_rev, my_doc))
-            self._docs[doc_id] = (doc_rev, doc)
-            self._transaction_log.append(doc_id)
+            self._put_and_update_indexes(doc_id, my_doc, doc_rev, doc)
 
     def sync_exchange(self, docs_info, from_machine_id, from_machine_rev,
                       last_known_rev):
@@ -340,7 +347,6 @@ class InMemoryClient(Client):
                             other_last_known_rev)
         _, conflict_ids = self._insert_many_docs(new_records)
         self._insert_conflicts(conflicted_records)
-        conflict_ids = set(conflict_ids)
         self._insert_conflicts([r for r in new_records if r[0] in conflict_ids])
         self.put_state_info(other_machine_id, new_db_rev)
         other.put_state_info(self._machine_id, len(self._transaction_log))
