@@ -211,3 +211,27 @@ class InMemoryClient(Client):
                 doc_rev, doc = self._docs[doc_id]
                 result.append((doc_id, doc_rev, doc))
         return result
+
+
+class InMemoryIndex(object):
+    """Interface for managing an Index."""
+
+    def __init__(self, index_name, index_definition):
+        self._name = index_name
+        self._definition = index_definition
+
+    def evaluate_json(self, doc):
+        """Determine the 'key' after applying this index to the doc."""
+        raw = simplejson.loads(doc)
+        return self.evaluate(raw)
+
+    def evaluate(self, obj):
+        """Evaluate a dict object, applying this definition."""
+        result = []
+        for field in self._definition:
+            val = obj.get(field)
+            if val is None:
+                return None
+            result.append(val)
+        return '\x01'.join(result)
+
