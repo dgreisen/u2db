@@ -22,7 +22,51 @@ from u1dbclient import (
     tests,
     )
 
+
 class TestClient(tests.TestCase):
 
     def test_create(self):
         c = client.Client()
+
+    def test_has_api_sync(self):
+        c = client.Client()
+        self.assertNotEqual(None, getattr(c, 'sync', None))
+
+    def test_has_api_whatschanged(self):
+        c = client.Client()
+        self.assertNotEqual(None, getattr(c, 'whats_changed', None))
+
+
+class TestInMemoryClient(tests.TestCase):
+
+    def setUp(self):
+        super(TestInMemoryClient, self).setUp()
+        self.c = client.InMemoryClient()
+
+    def test__allocate_doc_id(self):
+        self.assertEqual('doc-1', self.c._allocate_doc_id())
+
+    def test__allocate_doc_rev_from_None(self):
+        self.assertEqual('test:1', self.c._allocate_doc_rev(None))
+
+    def test__allocate_doc_rev_incremental(self):
+        self.assertEqual('test:2', self.c._allocate_doc_rev('test:1'))
+
+    def test__allocate_doc_rev_other(self):
+        self.assertEqual('machine:1|test:1',
+                         self.c._allocate_doc_rev('machine:1'))
+
+    def test__get_machine_id(self):
+        self.assertEqual('test', self.c._machine_id)
+
+    def test_put_doc_creating_initial(self):
+        c = client.InMemoryClient()
+        doc = '{"doc": "value"}'
+        self.c.put_doc('my_doc_id', None, doc)
+        self.assertEqual({'my_doc_id': (None, doc)},
+                         self.c._docs)
+
+    def test_get_doc_after_put(self):
+        doc = '{"doc": "value"}'
+        self.c.put_doc('my_doc_id', None, doc)
+        self.assertEqual((None, doc, False), self.c.get_doc('my_doc_id'))
