@@ -106,7 +106,9 @@ class InMemoryClient(Client):
         return '|'.join(result)
 
     def put_doc(self, doc_id, old_doc_rev, doc):
-        self._docs[doc_id] = (old_doc_rev, doc)
+        new_rev = self._allocate_doc_rev(old_doc_rev)
+        self._docs[doc_id] = (new_rev, doc)
+        return doc_id, new_rev
 
     def get_doc(self, doc_id):
         doc_rev, doc = self._docs[doc_id]

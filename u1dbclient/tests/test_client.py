@@ -62,11 +62,11 @@ class TestInMemoryClient(tests.TestCase):
     def test_put_doc_creating_initial(self):
         c = client.InMemoryClient()
         doc = '{"doc": "value"}'
-        self.c.put_doc('my_doc_id', None, doc)
-        self.assertEqual({'my_doc_id': (None, doc)},
+        doc_id, new_rev = self.c.put_doc('my_doc_id', None, doc)
+        self.assertEqual({'my_doc_id': (new_rev, doc)},
                          self.c._docs)
 
     def test_get_doc_after_put(self):
         doc = '{"doc": "value"}'
-        self.c.put_doc('my_doc_id', None, doc)
-        self.assertEqual((None, doc, False), self.c.get_doc('my_doc_id'))
+        doc_id, new_rev = self.c.put_doc('my_doc_id', None, doc)
+        self.assertEqual((new_rev, doc, False), self.c.get_doc('my_doc_id'))
