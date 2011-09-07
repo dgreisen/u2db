@@ -177,6 +177,9 @@ class InMemoryClient(Client):
             index.add_json(doc_id, doc)
         self._indexes[index_name] = index
 
+    def delete_index(self, index_name):
+        del self._indexes[index_name]
+
     def get_from_index(self, index_name, key_values):
         index = self._indexes[index_name]
         doc_ids = index.lookup(key_values)

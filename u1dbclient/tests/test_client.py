@@ -93,6 +93,20 @@ class TestInMemoryClient(TestInMemoryClientBase):
             self.c.delete_doc, doc_id, 'other:1')
         self.assertEqual((doc_rev, simple_doc, False), self.c.get_doc(doc_id))
 
+    def test_put_updates_transaction_log(self):
+        doc_id, doc_rev, db_rev = self.c.put_doc(None, None, simple_doc)
+        self.assertEqual(set([doc_id]), self.c.whats_changed(0))
+
+    def test_delete_updates_transaction_log(self):
+        doc_id, doc_rev, db_rev = self.c.put_doc(None, None, simple_doc)
+        self.c.delete_doc(doc_id, doc_rev)
+        self.assertEqual(set([doc_id]), self.c.whats_changed(db_rev))
+
+    def test_whats_changed_returns_one_id_for_multiple_changes(self):
+        doc_id, doc_rev, db_rev = self.c.put_doc(None, None, simple_doc)
+        self.c.put_doc(doc_id, doc_rev, '{"new": "contents"}')
+        self.assertEqual(set([doc_id]), self.c.whats_changed(0))
+
 
 class TestInMemoryClientIndexes(TestInMemoryClientBase):
 
@@ -154,10 +168,6 @@ class TestInMemoryClientIndexes(TestInMemoryClientBase):
         self.assertEqual([(doc_id, new_doc_rev, new_doc)],
             self.c.get_from_index('test-idx', [('altval',)]))
 
-    def test_put_updates_transaction_log(self):
-        doc_id, doc_rev, db_rev = self.c.put_doc(None, None, simple_doc)
-        self.assertEqual(set([doc_id]), self.c.whats_changed(0))
-
     def test_delete_updates_index(self):
         doc_id, doc_rev, db_rev = self.c.put_doc(None, None, simple_doc)
         doc2_id, doc2_rev, db_rev = self.c.put_doc(None, None, simple_doc)
@@ -169,15 +179,11 @@ class TestInMemoryClientIndexes(TestInMemoryClientBase):
         self.assertEqual([(doc2_id, doc2_rev, simple_doc)],
             self.c.get_from_index('test-idx', [('value',)]))
 
-    def test_delete_updates_transaction_log(self):
-        doc_id, doc_rev, db_rev = self.c.put_doc(None, None, simple_doc)
-        self.c.delete_doc(doc_id, doc_rev)
-        self.assertEqual(set([doc_id]), self.c.whats_changed(db_rev))
-
-    def test_whats_changed_returns_one_id_for_multiple_changes(self):
-        doc_id, doc_rev, db_rev = self.c.put_doc(None, None, simple_doc)
-        self.c.put_doc(doc_id, doc_rev, '{"new": "contents"}')
-        self.assertEqual(set([doc_id]), self.c.whats_changed(0))
+    def test_delete_index(self):
+        self.c.create_index('test-idx', ['key'])
+        self.assertEqual(['test-idx'], self.c._indexes.keys())
+        self.c.delete_index('test-idx')
+        self.assertEqual([], self.c._indexes.keys())
 
 
 class TestInMemoryIndex(tests.TestCase):
