@@ -112,12 +112,13 @@ class TestInMemoryClientIndexes(TestInMemoryClientBase):
 
     def test_create_index(self):
         self.c.create_index('test-idx', ['name'])
-        self.assertEqual({'test-idx': ['name']}, self.c._index_definitions)
+        self.assertEqual(['test-idx'], self.c._indexes.keys())
 
     def test_create_index_evaluates_it(self):
         doc_id, doc_rev = self.c.put_doc(None, None, simple_doc)
         self.c.create_index('test-idx', ['key'])
-        self.assertEqual({'test-idx': {'value': [doc_id]}}, self.c._indexes)
+        self.assertEqual({'value': [doc_id]},
+                         self.c._indexes['test-idx']._values)
 
     def test_create_index_multiple_exact_matches(self):
         doc_id, doc_rev = self.c.put_doc(None, None, simple_doc)
@@ -169,11 +170,13 @@ class TestInMemoryClientIndexes(TestInMemoryClientBase):
 
     def test_delete_updates_index(self):
         doc_id, doc_rev = self.c.put_doc(None, None, simple_doc)
+        doc2_id, doc2_rev = self.c.put_doc(None, None, simple_doc)
         self.c.create_index('test-idx', ['key'])
-        self.assertEqual([(doc_id, doc_rev, simple_doc)],
+        self.assertEqual([(doc_id, doc_rev, simple_doc),
+                          (doc2_id, doc2_rev, simple_doc)],
             self.c.get_from_index('test-idx', [('value',)]))
         self.c.delete_doc(doc_id, doc_rev)
-        self.assertEqual([],
+        self.assertEqual([(doc2_id, doc2_rev, simple_doc)],
             self.c.get_from_index('test-idx', [('value',)]))
 
 

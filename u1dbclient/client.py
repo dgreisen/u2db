@@ -116,8 +116,6 @@ class InMemoryClient(Client):
     def __init__(self):
         self._docs = {}
         self._indexes = {}
-        self._index_definitions = {}
-        self._indexes = {}
         self._doc_counter = 0
         self._machine_id = 'test'
 
@@ -147,11 +145,10 @@ class InMemoryClient(Client):
             if old_rev != old_doc_rev:
                 raise InvalidDocRev()
         new_rev = self._allocate_doc_rev(old_doc_rev)
-        for index_name, index_expression in self._index_definitions.iteritems():
-            index = self._indexes[index_name]
+        for index in self._indexes.itervalues():
             if old_doc is not None:
-                self._remove_from_index(index, index_expression, old_doc)
-            self._update_index(index, index_expression, doc_id, doc)
+                index.remove_json(doc_id, old_doc)
+            index.update_json(doc_id, doc)
         self._docs[doc_id] = (new_rev, doc)
         return doc_id, new_rev
 
@@ -166,9 +163,8 @@ class InMemoryClient(Client):
         cur_doc_rev, old_doc = self._docs[doc_id]
         if doc_rev != cur_doc_rev:
             raise InvalidDocRev()
-        for index_name, index_expression in self._index_definitions.iteritems():
-            index = self._indexes[index_name]
-            self._remove_from_index(index, index_expression, old_doc)
+        for index in self._indexes.itervalues():
+            index.remove_json(doc_id, old_doc)
         del self._docs[doc_id]
 
     def _evaluate_index(self, index_expression, doc):
@@ -193,10 +189,9 @@ class InMemoryClient(Client):
         del index[key]
 
     def create_index(self, index_name, index_expression):
-        self._index_definitions[index_name] = index_expression
-        index = {}
+        index = InMemoryIndex(index_name, index_expression)
         for doc_id, (doc_rev, doc) in self._docs.iteritems():
-            self._update_index(index, index_expression, doc_id, doc)
+            index.update_json(doc_id, doc)
         self._indexes[index_name] = index
 
     def get_from_index(self, index_name, key_values):
@@ -205,7 +200,7 @@ class InMemoryClient(Client):
         for value in key_values:
             key = '\x01'.join(value)
             try:
-                doc_ids = index[key]
+                doc_ids = index._values[key]
             except KeyError:
                 continue
             for doc_id in doc_ids:
