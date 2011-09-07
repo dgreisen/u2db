@@ -212,6 +212,18 @@ class TestInMemoryClientIndexes(TestInMemoryClientBase):
         self.assertEqual(('other-machine:1', simple_doc, False),
                          self.c.get_doc('doc-id'))
         self.assertEqual(['doc-id'], self.c._transaction_log)
+        self.assertEqual(([], [], 1), result)
+
+    def test_receive_refuses_conflicts(self):
+        doc_id, doc_rev, db_rev = self.c.put_doc(None, None, simple_doc)
+        self.assertEqual([doc_id], self.c._transaction_log)
+        new_doc = '{"key": "altval"}'
+        result = self.c.receive_docs([(doc_id, 'other-machine:1', new_doc)],
+                                     'other-machine', from_machine_rev=10,
+                                     last_known_rev=1)
+        self.assertEqual([doc_id], self.c._transaction_log)
+        self.assertEqual(([], [(doc_id, doc_rev, simple_doc)], 1), result)
+
 
 class TestInMemoryClientSync(tests.TestCase):
 

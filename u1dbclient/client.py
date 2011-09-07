@@ -229,11 +229,16 @@ class InMemoryClient(Client):
             new_db_rev - After applying docs_info, this is the current db_rev
                 for this client
         """
+        conflicts = []
         for doc_id, doc_rev, doc in docs_info:
-            # current_rev = self._get_current_rev(doc_id)
-            # if VectorClockRev(doc_rev).is_newer(VectorClockRev(current_rev)):
-            self._docs[doc_id] = (doc_rev, doc)
-            self._transaction_log.append(doc_id)
+            current_rev = self._get_current_rev(doc_id)
+            if VectorClockRev(doc_rev).is_newer(VectorClockRev(current_rev)):
+                self._docs[doc_id] = (doc_rev, doc)
+                self._transaction_log.append(doc_id)
+            else:
+                _, current_doc, _ = self.get_doc(doc_id)
+                conflicts.append((doc_id, current_rev, current_doc))
+        return [], conflicts, len(self._transaction_log)
 
     def sync(self, other, callback=None):
         (other_machine_id, other_rev,
