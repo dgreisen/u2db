@@ -422,6 +422,15 @@ class TestInMemoryClientSync(tests.TestCase):
         self.assertRaises(client.ConflictedDoc,
             self.c1.put_doc, doc_id, doc2_rev, new_doc2)
 
+    def test_delete_refuses_for_conflicted(self):
+        doc_id, doc1_rev, db1_rev = self.c1.put_doc(None, None, simple_doc)
+        new_doc1 = '{"key": "altval"}'
+        doc_id, doc2_rev, db2_rev = self.c2.put_doc(doc_id, None, new_doc1)
+        self.c1.sync(self.c2)
+        self.assertEqual((doc2_rev, new_doc1, True), self.c1.get_doc(doc_id))
+        self.assertRaises(client.ConflictedDoc,
+            self.c1.delete_doc, doc_id, doc2_rev)
+
     def test_get_doc_conflicts_unconflicted(self):
         doc_id, doc1_rev, db1_rev = self.c1.put_doc(None, None, simple_doc)
         self.assertEqual([], self.c1.get_doc_conflicts(doc_id))

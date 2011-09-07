@@ -188,7 +188,7 @@ class InMemoryClient(Client):
             doc_rev, doc = self._docs[doc_id]
         except KeyError:
             return None, None, False
-        if doc == 'null':
+        if doc is None or doc == 'null':
             return None, None, False
         return doc_rev, doc, (doc_id in self._conflicts)
 
@@ -233,15 +233,10 @@ class InMemoryClient(Client):
         return new_rev, bool(remaining_conflicts)
 
     def delete_doc(self, doc_id, doc_rev):
-        cur_doc_rev, old_doc = self._docs[doc_id]
-        if doc_rev != cur_doc_rev:
-            raise InvalidDocRev()
-        for index in self._indexes.itervalues():
-            index.remove_json(doc_id, old_doc)
-        new_doc_rev = self._allocate_doc_rev(cur_doc_rev)
-        self._docs[doc_id] = (new_doc_rev, 'null')
-        self._transaction_log.append(doc_id)
-        return new_doc_rev
+        if doc_id not in self._docs:
+            raise KeyError
+        _, new_rev, _ = self.put_doc(doc_id, doc_rev, None)
+        return new_rev
 
     def create_index(self, index_name, index_expression):
         index = InMemoryIndex(index_name, index_expression)
