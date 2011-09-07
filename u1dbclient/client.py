@@ -22,12 +22,12 @@ import simplejson
 
 class Client(object):
 
-    def sync(self, callback):
-        """Synchronize my database with the remote database.
-        Does not (yet) support a peer, so sync is defined only to U1. This
-        pushes local changes to the remote, and pulls remote changes locally.
-        There is not a separate push vs pull step.
+    def sync(self, other, callback):
+        """Synchronize my database with another database.
+        This pushes local changes to the remote, and pulls remote changes
+        locally.  There is not a separate push vs pull step.
 
+        :param other: Another database to sync with
         :param callback: gives optional progress callbacks
         :return: db_revid for the new global last-modified-db-info
         """
@@ -114,12 +114,19 @@ class InvalidDocRev(Exception):
 class InMemoryClient(Client):
     """A client that only stores the data internally."""
 
-    def __init__(self):
+    def __init__(self, machine_id):
         self._transaction_log = []
         self._docs = {}
+        self._other_revs = {}
         self._indexes = {}
         self._doc_counter = 0
-        self._machine_id = 'test'
+        self._machine_id = machine_id
+
+    def get_state_info(self):
+        return self._machine_id, len(self._transaction_log)
+
+    def put_state_info(self, machine_id, db_rev):
+        self._other_revs[machine_id] = db_rev
 
     def _allocate_doc_id(self):
         self._doc_counter += 1
@@ -191,6 +198,11 @@ class InMemoryClient(Client):
 
     def whats_changed(self, old_db_rev):
         return set(self._transaction_log[old_db_rev:])
+
+    def sync(self, other, callback=None):
+        other_machine_id, other_rev = other.get_state_info()
+        self.put_state_info(other_machine_id, other_rev)
+        other.put_state_info(self._machine_id, len(self._transaction_log))
 
 
 class InMemoryIndex(object):

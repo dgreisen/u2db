@@ -29,7 +29,7 @@ class TestInMemoryClientBase(tests.TestCase):
 
     def setUp(self):
         super(TestInMemoryClientBase, self).setUp()
-        self.c = client.InMemoryClient()
+        self.c = client.InMemoryClient('test')
 
 
 class TestInMemoryClient(TestInMemoryClientBase):
@@ -106,6 +106,19 @@ class TestInMemoryClient(TestInMemoryClientBase):
         doc_id, doc_rev, db_rev = self.c.put_doc(None, None, simple_doc)
         self.c.put_doc(doc_id, doc_rev, '{"new": "contents"}')
         self.assertEqual(set([doc_id]), self.c.whats_changed(0))
+
+    def test_get_state_info(self):
+        self.assertEqual(('test', 0), self.c.get_state_info())
+
+    def test_put_updates_state_info(self):
+        self.assertEqual(('test', 0), self.c.get_state_info())
+        doc_id, doc_rev, db_rev = self.c.put_doc(None, None, simple_doc)
+        self.assertEqual(('test', 1), self.c.get_state_info())
+
+    def test_put_state_info(self):
+        self.assertEqual({}, self.c._other_revs)
+        self.c.put_state_info('machine', 10)
+        self.assertEqual({'machine': 10}, self.c._other_revs)
 
 
 class TestInMemoryClientIndexes(TestInMemoryClientBase):
@@ -184,6 +197,19 @@ class TestInMemoryClientIndexes(TestInMemoryClientBase):
         self.assertEqual(['test-idx'], self.c._indexes.keys())
         self.c.delete_index('test-idx')
         self.assertEqual([], self.c._indexes.keys())
+
+
+class TestInMemoryClientSync(tests.TestCase):
+
+    def setUp(self):
+        super(TestInMemoryClientSync, self).setUp()
+        self.c1 = client.InMemoryClient('test1')
+        self.c2 = client.InMemoryClient('test2')
+
+    def test_sync_tracks_db_rev_of_other(self):
+        self.c1.sync(self.c2)
+        self.assertEqual({self.c2._machine_id: 0}, self.c1._other_revs)
+        self.assertEqual({self.c1._machine_id: 0}, self.c2._other_revs)
 
 
 class TestInMemoryIndex(tests.TestCase):
