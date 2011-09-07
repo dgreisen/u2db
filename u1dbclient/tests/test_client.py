@@ -137,7 +137,15 @@ class TestInMemoryClientIndexes(TestInMemoryClientBase):
     def test_create_index_evaluates_it(self):
         doc_id, doc_rev = self.c.put_doc(None, None, self.doc)
         self.c.create_index('test-idx', ['key'])
-        self.assertEqual({'test-idx': {'value': doc_id}}, self.c._indexes)
+        self.assertEqual({'test-idx': {'value': [doc_id]}}, self.c._indexes)
+
+    def test_create_index_multiple_exact_matches(self):
+        doc_id, doc_rev = self.c.put_doc(None, None, self.doc)
+        doc2_id, doc2_rev = self.c.put_doc(None, None, self.doc)
+        self.c.create_index('test-idx', ['key'])
+        self.assertEqual([(doc_id, doc_rev, self.doc),
+                          (doc2_id, doc2_rev, self.doc)],
+                         self.c.get_from_index('test-idx', [('value',)]))
 
     def test_get_from_index(self):
         doc_id, doc_rev = self.c.put_doc(None, None, self.doc)

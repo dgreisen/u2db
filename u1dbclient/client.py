@@ -185,7 +185,7 @@ class InMemoryClient(Client):
         key = self._evaluate_index(index_expression, doc)
         if key is None:
             return
-        index[key] = doc_id
+        index.setdefault(key, []).append(doc_id)
 
     def _remove_from_index(self, index, index_expression, doc):
         key = self._evaluate_index(index_expression, doc)
@@ -204,9 +204,10 @@ class InMemoryClient(Client):
         for value in key_values:
             key = '\x01'.join(value)
             try:
-                doc_id = index[key]
+                doc_ids = index[key]
             except KeyError:
                 continue
-            doc_rev, doc = self._docs[doc_id]
-            result.append((doc_id, doc_rev, doc))
+            for doc_id in doc_ids:
+                doc_rev, doc = self._docs[doc_id]
+                result.append((doc_id, doc_rev, doc))
         return result
