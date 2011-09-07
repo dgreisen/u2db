@@ -77,7 +77,7 @@ class Client(object):
         (might be equivalent to PUT(nil)). Will abort if the document is now
         'newer' than old_doc_rev.
         """
-        raise NotImplementedError(self.delet_doc)
+        raise NotImplementedError(self.delete_doc)
 
 
 class InvalidDocRev(Exception):
@@ -121,5 +121,14 @@ class InMemoryClient(Client):
         return doc_id, new_rev
 
     def get_doc(self, doc_id):
-        doc_rev, doc = self._docs[doc_id]
+        try:
+            doc_rev, doc = self._docs[doc_id]
+        except KeyError:
+            return None, None, False
         return doc_rev, doc, False
+
+    def delete_doc(self, doc_id, doc_rev):
+        cur_doc_rev, _ = self._docs[doc_id]
+        if doc_rev != cur_doc_rev:
+            raise InvalidDocRev()
+        del self._docs[doc_id]

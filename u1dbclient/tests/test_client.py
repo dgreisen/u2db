@@ -42,6 +42,7 @@ class TestInMemoryClient(tests.TestCase):
     def setUp(self):
         super(TestInMemoryClient, self).setUp()
         self.c = client.InMemoryClient()
+        self.doc = '{"doc": "value"}'
 
     def test__allocate_doc_id(self):
         self.assertEqual('doc-1', self.c._allocate_doc_id())
@@ -60,28 +61,44 @@ class TestInMemoryClient(tests.TestCase):
         self.assertEqual('test', self.c._machine_id)
 
     def test_put_doc_allocating_doc_id(self):
-        doc = '{"doc": "value"}'
-        doc_id, new_rev = self.c.put_doc(None, None, doc)
+        doc_id, new_rev = self.c.put_doc(None, None, self.doc)
         self.assertNotEqual(None, doc_id)
         self.assertNotEqual(None, new_rev)
-        self.assertEqual((new_rev, doc, False), self.c.get_doc(doc_id))
+        self.assertEqual((new_rev, self.doc, False), self.c.get_doc(doc_id))
 
     def test_put_doc_creating_initial(self):
-        doc = '{"doc": "value"}'
-        doc_id, new_rev = self.c.put_doc('my_doc_id', None, doc)
-        self.assertEqual({'my_doc_id': (new_rev, doc)},
+        doc_id, new_rev = self.c.put_doc('my_doc_id', None, self.doc)
+        self.assertEqual({'my_doc_id': (new_rev, self.doc)},
                          self.c._docs)
 
     def test_get_doc_after_put(self):
-        doc = '{"doc": "value"}'
-        doc_id, new_rev = self.c.put_doc('my_doc_id', None, doc)
-        self.assertEqual((new_rev, doc, False), self.c.get_doc('my_doc_id'))
+        doc_id, new_rev = self.c.put_doc('my_doc_id', None, self.doc)
+        self.assertEqual((new_rev, self.doc, False), self.c.get_doc('my_doc_id'))
+
+    def test_get_doc_nonexisting(self):
+        self.assertEqual((None, None, False), self.c.get_doc('non-existing'))
 
     def test_put_fails_with_bad_old_rev(self):
-        doc = '{"doc": "value"}'
-        doc_id, old_rev = self.c.put_doc('my_doc_id', None, doc)
+        doc_id, old_rev = self.c.put_doc('my_doc_id', None, self.doc)
         new_doc = '{"something": "else"}'
         self.assertRaises(client.InvalidDocRev,
             self.c.put_doc, 'my_doc_id', 'other:1', new_doc)
-        self.assertEqual((old_rev, doc, False),
+        self.assertEqual((old_rev, self.doc, False),
                          self.c.get_doc('my_doc_id'))
+
+    def test_delete_doc(self):
+        doc_id, doc_rev = self.c.put_doc(None, None, self.doc)
+        self.assertEqual((doc_rev, self.doc, False), self.c.get_doc(doc_id))
+        self.c.delete_doc(doc_id, doc_rev)
+        self.assertEqual((None, None, False), self.c.get_doc(doc_id))
+
+    def test_delete_doc_non_existant(self):
+        self.assertRaises(KeyError,
+            self.c.delete_doc, 'non-existing', 'other:1')
+
+    def test_delete_doc_bad_rev(self):
+        doc_id, doc_rev = self.c.put_doc(None, None, self.doc)
+        self.assertEqual((doc_rev, self.doc, False), self.c.get_doc(doc_id))
+        self.assertRaises(client.InvalidDocRev,
+            self.c.delete_doc, doc_id, 'other:1')
+        self.assertEqual((doc_rev, self.doc, False), self.c.get_doc(doc_id))
