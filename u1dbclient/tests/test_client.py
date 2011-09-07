@@ -156,3 +156,19 @@ class TestInMemoryClientIndexes(TestInMemoryClientBase):
         self.c.create_index('test-idx', ['key', 'key2'])
         self.assertEqual([(doc_id, doc_rev, doc)],
             self.c.get_from_index('test-idx', [('value', 'value2')]))
+
+    def test_put_adds_to_index(self):
+        self.c.create_index('test-idx', ['key'])
+        doc_id, doc_rev = self.c.put_doc(None, None, self.doc)
+        self.assertEqual([(doc_id, doc_rev, self.doc)],
+            self.c.get_from_index('test-idx', [('value',)]))
+
+    def test_put_updates_index(self):
+        doc_id, doc_rev = self.c.put_doc(None, None, self.doc)
+        self.c.create_index('test-idx', ['key'])
+        new_doc = '{"key": "altval"}'
+        _, new_doc_rev = self.c.put_doc(doc_id, doc_rev, new_doc)
+        self.assertEqual([],
+            self.c.get_from_index('test-idx', [('value',)]))
+        self.assertEqual([(doc_id, new_doc_rev, new_doc)],
+            self.c.get_from_index('test-idx', [('altval',)]))

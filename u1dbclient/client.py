@@ -140,11 +140,17 @@ class InMemoryClient(Client):
     def put_doc(self, doc_id, old_doc_rev, doc):
         if doc_id is None:
             doc_id = self._allocate_doc_id()
+        old_doc = None
         if doc_id in self._docs:
-            old_rev, _ = self._docs[doc_id]
+            old_rev, old_doc = self._docs[doc_id]
             if old_rev != old_doc_rev:
                 raise InvalidDocRev()
         new_rev = self._allocate_doc_rev(old_doc_rev)
+        for index_name, index_expression in self._index_definitions.iteritems():
+            index = self._indexes[index_name]
+            if old_doc is not None:
+                self._remove_from_index(index, index_expression, old_doc)
+            self._update_index(index, index_expression, doc_id, doc)
         self._docs[doc_id] = (new_rev, doc)
         return doc_id, new_rev
 
@@ -172,12 +178,19 @@ class InMemoryClient(Client):
             result.append(val)
         return '\x01'.join(result)
 
+    def _update_index(self, index, index_expression, doc_id, doc):
+        key = self._evaluate_index(index_expression, doc)
+        index[key] = doc_id
+
+    def _remove_from_index(self, index, index_expression, doc):
+        key = self._evaluate_index(index_expression, doc)
+        del index[key]
+
     def create_index(self, index_name, index_expression):
         self._index_definitions[index_name] = index_expression
         index = {}
         for doc_id, (doc_rev, doc) in self._docs.iteritems():
-            val = self._evaluate_index(index_expression, doc)
-            index[val] = doc_id
+            self._update_index(index, index_expression, doc_id, doc)
         self._indexes[index_name] = index
 
     def get_from_index(self, index_name, key_values):
