@@ -134,17 +134,8 @@ class InMemoryClient(Client):
         return 'doc-%d' % (self._doc_counter,)
 
     def _allocate_doc_rev(self, old_doc_rev):
-        if old_doc_rev is None:
-            return self._machine_id + ':1'
-        result = old_doc_rev.split('|')
-        for idx, machine_counter in enumerate(result):
-            machine_id, counter = machine_counter.split(':')
-            if machine_id == self._machine_id:
-                result[idx] = '%s:%d' % (machine_id, int(counter) + 1)
-                break
-        else:
-            result.append('%s:%d' % (self._machine_id, 1))
-        return '|'.join(result)
+        vcr = VectorClockRev(old_doc_rev)
+        return vcr.increment(self._machine_id)
 
     @staticmethod
     def _is_newer_doc_rev(maybe_new_rev, old_rev):
@@ -340,3 +331,13 @@ class VectorClockRev(object):
         if other_expand:
             return False
         return True
+
+    def increment(self, machine_id):
+        """Increase the 'machine_id' section of this vector clock.
+
+        :return: A string representing the new vector clock value
+        """
+        expanded = self._expand()
+        expanded[machine_id] = expanded.get(machine_id, 0) + 1
+        result = ['%s:%d' % (m, c) for m, c in sorted(expanded.items())]
+        return '|'.join(result)

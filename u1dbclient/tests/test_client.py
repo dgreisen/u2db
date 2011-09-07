@@ -330,3 +330,12 @@ class TestVectorClockRev(tests.TestCase):
         vcr = client.VectorClockRev('other:2|test:1')
         self.assertEqual({'other': 2, 'test': 1}, vcr._expand())
 
+    def assertIncrement(self, original, machine_id, after_increment):
+        vcr = client.VectorClockRev(original)
+        self.assertEqual(after_increment, vcr.increment(machine_id))
+
+    def test_increment(self):
+        self.assertIncrement(None, 'test', 'test:1')
+        self.assertIncrement('test:1', 'test', 'test:2')
+        self.assertIncrement('other:1', 'test', 'other:1|test:1')
+
