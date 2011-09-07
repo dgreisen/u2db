@@ -106,6 +106,19 @@ class Client(object):
         """
         raise NotImplementedError(self.get_from_index)
 
+    def resolve_doc(self, doc_id, doc, conflicted_doc_revs):
+        """Mark a document as no longer conflicted.
+        We take the list of revisions that the client knows about that it is
+        superseding. This may be a different list from the actual current
+        conflicts, in which case only those are removed as conflicted.  This
+        may fail if the conflict list is significantly different from the
+        supplied information. (sync could have happened in the background from
+        the time you GET_DOC_CONFLICTS until the point where you RESOLVE)
+
+        :return: (new_rev, still_conflicted)
+        """
+        raise NotImplementedError(self.resolve_doc)
+
 
 class InvalidDocRev(Exception):
     """The document revisions supplied does not match the current version."""
@@ -157,13 +170,16 @@ class InMemoryClient(Client):
             if old_rev != old_doc_rev:
                 raise InvalidDocRev()
         new_rev = self._allocate_doc_rev(old_doc_rev)
+        self._put_and_update_indexes(doc_id, old_doc, new_rev, doc)
+        return doc_id, new_rev, len(self._transaction_log)
+
+    def _put_and_update_indexes(self, doc_id, old_doc, new_rev, doc):
         for index in self._indexes.itervalues():
             if old_doc is not None:
                 index.remove_json(doc_id, old_doc)
             index.add_json(doc_id, doc)
         self._docs[doc_id] = (new_rev, doc)
         self._transaction_log.append(doc_id)
-        return doc_id, new_rev, len(self._transaction_log)
 
     def get_doc_conflicts(self, doc_id):
         """Get the list of conflict texts for the given document.
@@ -188,6 +204,16 @@ class InMemoryClient(Client):
 
     def _get_current_rev(self, doc_id):
         return self._docs.get(doc_id, (None, None))[0]
+
+    def resolve_doc(self, doc_id, doc, conflicted_doc_revs):
+        del self._conflicts[doc_id]
+        cur_rev, cur_doc = self._docs[doc_id]
+        vcr = VectorClockRev(cur_rev)
+        for rev in conflicted_doc_revs:
+            vcr = VectorClockRev(vcr.maximize(rev))
+        new_rev = vcr.increment(self._machine_id)
+        self._put_and_update_indexes(doc_id, cur_doc, new_rev, doc)
+        return new_rev, False
 
     def delete_doc(self, doc_id, doc_rev):
         cur_doc_rev, old_doc = self._docs[doc_id]
@@ -364,6 +390,9 @@ class VectorClockRev(object):
     def __init__(self, value):
         self._value = value
 
+    def __repr__(self):
+        return '%s(%s)' % (self.__class__.__name__, self._value)
+
     def _expand(self):
         if not self._value:
             return {}
@@ -405,4 +434,18 @@ class VectorClockRev(object):
         expanded = self._expand()
         expanded[machine_id] = expanded.get(machine_id, 0) + 1
         result = ['%s:%d' % (m, c) for m, c in sorted(expanded.items())]
+        return '|'.join(result)
+
+    def maximize(self, other_rev):
+        other_vcr = VectorClockRev(other_rev)
+        this_exp = self._expand()
+        other_exp = other_vcr._expand()
+        for machine_id, counter in other_exp.iteritems():
+            if machine_id not in this_exp:
+                this_exp[machine_id] = counter
+            else:
+                this_counter = this_exp[machine_id]
+                if this_counter < counter:
+                    this_exp[machine_id] = counter
+        result = ['%s:%d' % (m, c) for m, c in sorted(this_exp.items())]
         return '|'.join(result)
