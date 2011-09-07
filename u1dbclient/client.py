@@ -197,6 +197,23 @@ class InMemoryClient(Client):
     def whats_changed(self, old_db_rev):
         return set(self._transaction_log[old_db_rev:])
 
+    def _insert_many_docs(self, docs_info):
+        conflicts = []
+        seen_ids = set()
+        for doc_id, doc_rev, doc in docs_info:
+            current_rev = self._get_current_rev(doc_id)
+            seen_ids.add(doc_id)
+            if VectorClockRev(doc_rev).is_newer(VectorClockRev(current_rev)):
+                self._docs[doc_id] = (doc_rev, doc)
+                self._transaction_log.append(doc_id)
+            elif doc_rev == current_rev:
+                # magical convergence
+                continue
+            else:
+                _, current_doc, _ = self.get_doc(doc_id)
+                conflicts.append((doc_id, current_rev, current_doc))
+        return seen_ids, conflicts
+
     def sync_exchange(self, docs_info, from_machine_id, from_machine_rev,
                       last_known_rev):
         """Incorporate the documents sent from the other machine.
@@ -220,23 +237,10 @@ class InMemoryClient(Client):
             new_db_rev - After applying docs_info, this is the current db_rev
                 for this client
         """
-        conflicts = []
-        seen_entries = set()
-        for doc_id, doc_rev, doc in docs_info:
-            current_rev = self._get_current_rev(doc_id)
-            seen_entries.add(doc_id)
-            if VectorClockRev(doc_rev).is_newer(VectorClockRev(current_rev)):
-                self._docs[doc_id] = (doc_rev, doc)
-                self._transaction_log.append(doc_id)
-            elif doc_rev == current_rev:
-                # magical convergence
-                continue
-            else:
-                _, current_doc, _ = self.get_doc(doc_id)
-                conflicts.append((doc_id, current_rev, current_doc))
+        seen_ids, conflicts = self._insert_many_docs(docs_info)
         new_docs = []
         for doc_id in self.whats_changed(last_known_rev):
-            if doc_id in seen_entries:
+            if doc_id in seen_ids:
                 continue
             doc_rev, doc, _ = self.get_doc(doc_id)
             new_docs.append((doc_id, doc_rev, doc))
@@ -255,6 +259,7 @@ class InMemoryClient(Client):
          new_db_rev) = other.sync_exchange(docs_to_send, self._machine_id,
                             len(self._transaction_log),
                             other_last_known_rev)
+        seen_ids, conflicts = self._insert_many_docs(new_records)
         self.put_state_info(other_machine_id, new_db_rev)
         other.put_state_info(self._machine_id, len(self._transaction_log))
 

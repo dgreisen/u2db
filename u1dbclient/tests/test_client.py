@@ -268,6 +268,13 @@ class TestInMemoryClientSync(tests.TestCase):
     def test_sync_puts_changes(self):
         doc_id, doc_rev, db_rev = self.c1.put_doc(None, None, simple_doc)
         self.c1.sync(self.c2)
+        self.assertEqual((doc_rev, simple_doc, False), self.c2.get_doc(doc_id))
+        self.assertEqual(1, self.c1._get_other_machine_rev(self.c2._machine_id))
+        self.assertEqual(1, self.c2._get_other_machine_rev(self.c1._machine_id))
+
+    def test_sync_pulls_changes(self):
+        doc_id, doc_rev, db_rev = self.c2.put_doc(None, None, simple_doc)
+        self.c1.sync(self.c2)
         self.assertEqual((doc_rev, simple_doc, False), self.c1.get_doc(doc_id))
         self.assertEqual(1, self.c1._get_other_machine_rev(self.c2._machine_id))
         self.assertEqual(1, self.c2._get_other_machine_rev(self.c1._machine_id))
