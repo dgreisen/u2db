@@ -117,6 +117,8 @@ class InMemoryClient(Client):
     def __init__(self, machine_id):
         self._transaction_log = []
         self._docs = {}
+        # Map from doc_id => [(doc_rev, doc)] conflicts beyond 'winner'
+        self._conflicts = {}
         self._other_revs = {}
         self._indexes = {}
         self._doc_counter = 0
@@ -162,7 +164,7 @@ class InMemoryClient(Client):
             doc_rev, doc = self._docs[doc_id]
         except KeyError:
             return None, None, False
-        return doc_rev, doc, False
+        return doc_rev, doc, (doc_id in self._conflicts)
 
     def _get_current_rev(self, doc_id):
         return self._docs.get(doc_id, (None, None))[0]
@@ -213,6 +215,13 @@ class InMemoryClient(Client):
                 _, current_doc, _ = self.get_doc(doc_id)
                 conflicts.append((doc_id, current_rev, current_doc))
         return seen_ids, conflicts
+
+    def _insert_conflicts(self, docs_info):
+        for doc_id, doc_rev, doc in docs_info:
+            my_doc_rev, my_doc = self._docs[doc_id]
+            self._conflicts.setdefault(doc_id, []).append((my_doc_rev, my_doc))
+            self._docs[doc_id] = (doc_rev, doc)
+            self._transaction_log.append(doc_id)
 
     def sync_exchange(self, docs_info, from_machine_id, from_machine_rev,
                       last_known_rev):
@@ -269,6 +278,7 @@ class InMemoryClient(Client):
                             len(self._transaction_log),
                             other_last_known_rev)
         seen_ids, conflicts = self._insert_many_docs(new_records)
+        self._insert_conflicts(conflicted_records)
         self.put_state_info(other_machine_id, new_db_rev)
         other.put_state_info(self._machine_id, len(self._transaction_log))
 

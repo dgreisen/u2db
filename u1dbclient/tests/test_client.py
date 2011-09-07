@@ -65,8 +65,8 @@ class TestInMemoryClient(TestInMemoryClientBase):
 
     def test_put_doc_creating_initial(self):
         doc_id, new_rev, db_rev = self.c.put_doc('my_doc_id', None, simple_doc)
-        self.assertEqual({'my_doc_id': (new_rev, simple_doc)},
-                         self.c._docs)
+        self.assertEqual((new_rev, simple_doc, False),
+                         self.c.get_doc('my_doc_id'))
 
     def test_get_doc_after_put(self):
         doc_id, new_rev, db_rev = self.c.put_doc('my_doc_id', None, simple_doc)
@@ -307,6 +307,24 @@ class TestInMemoryClientSync(tests.TestCase):
                           'return': {'new_docs': [],
                                      'conf_docs': [], 'last_rev': 1}},
                          self.c2._last_exchange_log)
+
+    def test_sync_sees_remote_conflicted(self):
+        doc_id, doc1_rev, db1_rev = self.c1.put_doc(None, None, simple_doc)
+        new_doc = '{"key": "altval"}'
+        doc_id, doc2_rev, db2_rev = self.c2.put_doc(doc_id, None, new_doc)
+        self.assertEqual([doc_id], self.c1._transaction_log)
+        self.c1.sync(self.c2)
+        self.assertEqual({'receive': {'docs': [(doc_id, doc1_rev)],
+                                      'from_id': 'test1',
+                                      'from_rev': 1, 'last_known_rev': 0},
+                          'return': {'new_docs': [],
+                                     'conf_docs': [(doc_id, doc2_rev)],
+                                     'last_rev': 1}},
+                         self.c2._last_exchange_log)
+        self.assertEqual([doc_id, doc_id], self.c1._transaction_log)
+        self.assertEqual((doc2_rev, new_doc, True), self.c1.get_doc(doc_id))
+        self.assertEqual((doc2_rev, new_doc, False), self.c2.get_doc(doc_id))
+
 
 
 class TestInMemoryIndex(tests.TestCase):
