@@ -65,7 +65,6 @@ class TestInMemoryClient(tests.TestCase):
         self.assertNotEqual(None, doc_id)
         self.assertNotEqual(None, new_rev)
         self.assertEqual((new_rev, doc, False), self.c.get_doc(doc_id))
-        
 
     def test_put_doc_creating_initial(self):
         doc = '{"doc": "value"}'
@@ -77,3 +76,12 @@ class TestInMemoryClient(tests.TestCase):
         doc = '{"doc": "value"}'
         doc_id, new_rev = self.c.put_doc('my_doc_id', None, doc)
         self.assertEqual((new_rev, doc, False), self.c.get_doc('my_doc_id'))
+
+    def test_put_fails_with_bad_old_rev(self):
+        doc = '{"doc": "value"}'
+        doc_id, old_rev = self.c.put_doc('my_doc_id', None, doc)
+        new_doc = '{"something": "else"}'
+        self.assertRaises(client.InvalidDocRev,
+            self.c.put_doc, 'my_doc_id', 'other:1', new_doc)
+        self.assertEqual((old_rev, doc, False),
+                         self.c.get_doc('my_doc_id'))

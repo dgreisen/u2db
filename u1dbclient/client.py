@@ -80,6 +80,10 @@ class Client(object):
         raise NotImplementedError(self.delet_doc)
 
 
+class InvalidDocRev(Exception):
+    """The document revisions supplied does not match the current version."""
+
+
 class InMemoryClient(Client):
     """A client that only stores the data internally."""
 
@@ -108,6 +112,10 @@ class InMemoryClient(Client):
     def put_doc(self, doc_id, old_doc_rev, doc):
         if doc_id is None:
             doc_id = self._allocate_doc_id()
+        if doc_id in self._docs:
+            old_rev, _ = self._docs[doc_id]
+            if old_rev != old_doc_rev:
+                raise InvalidDocRev()
         new_rev = self._allocate_doc_rev(old_doc_rev)
         self._docs[doc_id] = (new_rev, doc)
         return doc_id, new_rev
