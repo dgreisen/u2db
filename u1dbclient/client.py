@@ -183,6 +183,8 @@ class InMemoryClient(Client):
 
     def _update_index(self, index, index_expression, doc_id, doc):
         key = self._evaluate_index(index_expression, doc)
+        if key is None:
+            return
         index[key] = doc_id
 
     def _remove_from_index(self, index, index_expression, doc):

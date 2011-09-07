@@ -124,6 +124,12 @@ class TestInMemoryClientIndexes(TestInMemoryClientBase):
         self.assertEqual('value\x01value2',
                          self.c._evaluate_index(['key', 'key2'], doc))
 
+    def test__update_index_ignores_None(self):
+        doc = '{"key": "value", "key2": "value2"}'
+        index = {}
+        self.c._update_index(index, ['nokey'], 'doc-id', self.doc)
+        self.assertEqual({}, index)
+
     def test_create_index(self):
         self.c.create_index('test-idx', ['name'])
         self.assertEqual({'test-idx': ['name']}, self.c._index_definitions)
