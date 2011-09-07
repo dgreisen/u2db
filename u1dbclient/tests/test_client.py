@@ -172,3 +172,12 @@ class TestInMemoryClientIndexes(TestInMemoryClientBase):
             self.c.get_from_index('test-idx', [('value',)]))
         self.assertEqual([(doc_id, new_doc_rev, new_doc)],
             self.c.get_from_index('test-idx', [('altval',)]))
+
+    def test_delete_updates_index(self):
+        doc_id, doc_rev = self.c.put_doc(None, None, self.doc)
+        self.c.create_index('test-idx', ['key'])
+        self.assertEqual([(doc_id, doc_rev, self.doc)],
+            self.c.get_from_index('test-idx', [('value',)]))
+        self.c.delete_doc(doc_id, doc_rev)
+        self.assertEqual([],
+            self.c.get_from_index('test-idx', [('value',)]))

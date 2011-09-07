@@ -162,9 +162,12 @@ class InMemoryClient(Client):
         return doc_rev, doc, False
 
     def delete_doc(self, doc_id, doc_rev):
-        cur_doc_rev, _ = self._docs[doc_id]
+        cur_doc_rev, old_doc = self._docs[doc_id]
         if doc_rev != cur_doc_rev:
             raise InvalidDocRev()
+        for index_name, index_expression in self._index_definitions.iteritems():
+            index = self._indexes[index_name]
+            self._remove_from_index(index, index_expression, old_doc)
         del self._docs[doc_id]
 
     def _evaluate_index(self, index_expression, doc):
