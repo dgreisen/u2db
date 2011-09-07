@@ -17,6 +17,7 @@
 """The Client class for U1DB."""
 
 import re
+import simplejson
 
 
 class Client(object):
@@ -79,6 +80,31 @@ class Client(object):
         """
         raise NotImplementedError(self.delete_doc)
 
+    def create_index(self, index_name, index_expression):
+        """Create an named index, which can then be queried for future lookups.
+        Creating an index which already exists is not an error, and is cheap.
+        Creating an index which does not match the index_expressions of the
+        existing index is an error.
+        Creating an index will block until the expressions have been evaluated
+        and the index generated.
+
+        :name: A unique name which can be used as a key prefix
+        :index_expressions: A list of index expressions defining the index
+            information. Examples:
+                ["field"] to index alphabetically sorted on field.
+                ["number(field, bits)", "lower(field)", "field.subfield"]
+        """
+        raise NotImplementedError(self.create_index)
+
+    def get_from_index(self, index_name, key_values):
+        """Return documents that match the exact keys supplied.
+
+        :return: List of [(doc_id, doc_rev, doc)]
+        :param index_name: The index to query
+        :param key_values: A list of tuple of values to match. eg, if you have
+        """
+        raise NotImplementedError(self.get_from_index)
+
 
 class InvalidDocRev(Exception):
     """The document revisions supplied does not match the current version."""
@@ -89,6 +115,8 @@ class InMemoryClient(Client):
 
     def __init__(self):
         self._docs = {}
+        self._index_definitions = {}
+        self._indexes = {}
         self._doc_counter = 0
         self._machine_id = 'test'
 
@@ -132,3 +160,29 @@ class InMemoryClient(Client):
         if doc_rev != cur_doc_rev:
             raise InvalidDocRev()
         del self._docs[doc_id]
+
+    def _evaluate_index(self, index_expression, doc):
+        """Apply index_expression to doc, and return the evaluation."""
+        decomposed = simplejson.loads(doc)
+        result = []
+        for field in index_expression:
+            result.append(decomposed.get(field))
+        return ''.join(result)
+
+    def create_index(self, index_name, index_expression):
+        self._index_definitions[index_name] = index_expression
+        index = {}
+        for doc_id, (doc_rev, doc) in self._docs.iteritems():
+            val = self._evaluate_index(index_expression, doc)
+            index[val] = doc_id
+        self._indexes[index_name] = index
+
+    def get_from_index(self, index_name, key_values):
+        index = self._indexes[index_name]
+        result = []
+        for value in key_values:
+            key = ''.join(value)
+            doc_id = index[key]
+            doc_rev, doc = self._docs[doc_id]
+            result.append((doc_id, doc_rev, doc))
+        return result

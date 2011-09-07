@@ -37,12 +37,15 @@ class TestClient(tests.TestCase):
         self.assertNotEqual(None, getattr(c, 'whats_changed', None))
 
 
-class TestInMemoryClient(tests.TestCase):
+class TestInMemoryClientBase(tests.TestCase):
 
     def setUp(self):
-        super(TestInMemoryClient, self).setUp()
+        super(TestInMemoryClientBase, self).setUp()
         self.c = client.InMemoryClient()
         self.doc = '{"doc": "value"}'
+
+
+class TestInMemoryClient(TestInMemoryClientBase):
 
     def test__allocate_doc_id(self):
         self.assertEqual('doc-1', self.c._allocate_doc_id())
@@ -102,3 +105,24 @@ class TestInMemoryClient(tests.TestCase):
         self.assertRaises(client.InvalidDocRev,
             self.c.delete_doc, doc_id, 'other:1')
         self.assertEqual((doc_rev, self.doc, False), self.c.get_doc(doc_id))
+
+
+class TestInMemoryClientIndexes(TestInMemoryClientBase):
+
+    def test__evaluate_index(self):
+        self.assertEqual('value', self.c._evaluate_index(['doc'], self.doc))
+
+    def test_create_index(self):
+        self.c.create_index('test-idx', ['name'])
+        self.assertEqual({'test-idx': ['name']}, self.c._index_definitions)
+
+    def test_create_index_evaluates_it(self):
+        doc_id, doc_rev = self.c.put_doc(None, None, self.doc)
+        self.c.create_index('test-idx', ['doc'])
+        self.assertEqual({'test-idx': {'value': doc_id}}, self.c._indexes)
+
+    def test_get_from_index(self):
+        doc_id, doc_rev = self.c.put_doc(None, None, self.doc)
+        self.c.create_index('test-idx', ['doc'])
+        self.assertEqual([(doc_id, doc_rev, self.doc)],
+                         self.c.get_from_index('test-idx', ['value']))
