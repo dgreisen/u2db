@@ -194,8 +194,8 @@ class InMemoryClient(Client):
     def whats_changed(self, old_db_rev):
         return set(self._transaction_log[old_db_rev:])
 
-    def receive_docs(self, docs_info, from_machine_id, from_machine_rev,
-                     last_known_rev):
+    def sync_exchange(self, docs_info, from_machine_id, from_machine_rev,
+                      last_known_rev):
         """Incorporate the documents sent from the other machine.
 
         This adds docs to the local store, and determines documents that need
@@ -248,9 +248,9 @@ class InMemoryClient(Client):
             docs_to_send.append((doc_id, doc_rev, doc))
         other_last_known_rev = self._other_revs.get(other_machine_id, 0)
         # (new_records, conflicted_records, new_db_rev) = \
-        other.receive_docs(docs_to_send, self._machine_id,
-                           len(self._transaction_log),
-                           other_last_known_rev)
+        other.sync_exchange(docs_to_send, self._machine_id,
+                            len(self._transaction_log),
+                            other_last_known_rev)
         self.put_state_info(other_machine_id, other_rev)
         other.put_state_info(self._machine_id, len(self._transaction_log))
 
