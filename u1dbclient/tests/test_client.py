@@ -325,6 +325,22 @@ class TestInMemoryClientSync(tests.TestCase):
         self.assertEqual((doc2_rev, new_doc, True), self.c1.get_doc(doc_id))
         self.assertEqual((doc2_rev, new_doc, False), self.c2.get_doc(doc_id))
 
+    def test_sync_local_race_conflicted(self):
+        doc_id, doc1_rev, _ = self.c1.put_doc(None, None, simple_doc)
+        self.c1.sync(self.c2)
+        new_doc1 = '{"key": "localval"}'
+        new_doc2 = '{"key": "altval"}'
+        _, doc2_rev2, _ = self.c2.put_doc(doc_id, doc1_rev, new_doc2)
+        # Monkey patch so that after the local client has determined recent
+        # changes, we get another one, before sync finishes.
+        orig_wc = self.c1.whats_changed
+        def after_whatschanged(*args, **kwargs):
+            val = orig_wc(*args, **kwargs)
+            self.c1.put_doc(doc_id, doc1_rev, new_doc1)
+            return val
+        self.c1.whats_changed = after_whatschanged
+        self.c1.sync(self.c2)
+        self.assertEqual((doc2_rev2, new_doc2, True), self.c1.get_doc(doc_id))
 
 
 class TestInMemoryIndex(tests.TestCase):

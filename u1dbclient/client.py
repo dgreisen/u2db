@@ -200,7 +200,7 @@ class InMemoryClient(Client):
         return set(self._transaction_log[old_db_rev:])
 
     def _insert_many_docs(self, docs_info):
-        conflicts = []
+        conflict_ids = []
         seen_ids = set()
         for doc_id, doc_rev, doc in docs_info:
             current_rev = self._get_current_rev(doc_id)
@@ -212,9 +212,8 @@ class InMemoryClient(Client):
                 # magical convergence
                 continue
             else:
-                _, current_doc, _ = self.get_doc(doc_id)
-                conflicts.append((doc_id, current_rev, current_doc))
-        return seen_ids, conflicts
+                conflict_ids.append(doc_id)
+        return seen_ids, conflict_ids
 
     def _insert_conflicts(self, docs_info):
         for doc_id, doc_rev, doc in docs_info:
@@ -246,7 +245,7 @@ class InMemoryClient(Client):
             new_db_rev - After applying docs_info, this is the current db_rev
                 for this client
         """
-        seen_ids, conflicts = self._insert_many_docs(docs_info)
+        seen_ids, conflict_ids = self._insert_many_docs(docs_info)
         new_docs = []
         for doc_id in self.whats_changed(last_known_rev):
             if doc_id in seen_ids:
@@ -254,6 +253,10 @@ class InMemoryClient(Client):
             doc_rev, doc, _ = self.get_doc(doc_id)
             new_docs.append((doc_id, doc_rev, doc))
         self._other_revs[from_machine_id] = from_machine_rev
+        conflicts = []
+        for doc_id in conflict_ids:
+            doc_rev, doc, _ = self.get_doc(doc_id)
+            conflicts.append((doc_id, doc_rev, doc))
         self._last_exchange_log = {
             'receive': {'docs': [(di, dr) for di, dr, _ in docs_info],
                         'from_id': from_machine_id,
@@ -277,8 +280,10 @@ class InMemoryClient(Client):
          new_db_rev) = other.sync_exchange(docs_to_send, self._machine_id,
                             len(self._transaction_log),
                             other_last_known_rev)
-        seen_ids, conflicts = self._insert_many_docs(new_records)
+        _, conflict_ids = self._insert_many_docs(new_records)
         self._insert_conflicts(conflicted_records)
+        conflict_ids = set(conflict_ids)
+        self._insert_conflicts([r for r in new_records if r[0] in conflict_ids])
         self.put_state_info(other_machine_id, new_db_rev)
         other.put_state_info(self._machine_id, len(self._transaction_log))
 
