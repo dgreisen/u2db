@@ -99,7 +99,7 @@ class InMemoryClient(Client):
         for idx, machine_counter in enumerate(result):
             machine_id, counter = machine_counter.split(':')
             if machine_id == self._machine_id:
-                result[idx] = '%s:%d' % (machine_id, counter + 1)
+                result[idx] = '%s:%d' % (machine_id, int(counter) + 1)
                 break
         else:
             result.append('%s:%d' % (self._machine_id, 1))
