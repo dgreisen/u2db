@@ -166,8 +166,11 @@ class InMemoryClient(Client):
         decomposed = simplejson.loads(doc)
         result = []
         for field in index_expression:
-            result.append(decomposed.get(field))
-        return ''.join(result)
+            val = decomposed.get(field)
+            if val is None:
+                return None
+            result.append(val)
+        return '\x01'.join(result)
 
     def create_index(self, index_name, index_expression):
         self._index_definitions[index_name] = index_expression
@@ -181,8 +184,11 @@ class InMemoryClient(Client):
         index = self._indexes[index_name]
         result = []
         for value in key_values:
-            key = ''.join(value)
-            doc_id = index[key]
+            key = '\x01'.join(value)
+            try:
+                doc_id = index[key]
+            except KeyError:
+                continue
             doc_rev, doc = self._docs[doc_id]
             result.append((doc_id, doc_rev, doc))
         return result

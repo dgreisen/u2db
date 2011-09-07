@@ -42,7 +42,7 @@ class TestInMemoryClientBase(tests.TestCase):
     def setUp(self):
         super(TestInMemoryClientBase, self).setUp()
         self.c = client.InMemoryClient()
-        self.doc = '{"doc": "value"}'
+        self.doc = '{"key": "value"}'
 
 
 class TestInMemoryClient(TestInMemoryClientBase):
@@ -110,7 +110,19 @@ class TestInMemoryClient(TestInMemoryClientBase):
 class TestInMemoryClientIndexes(TestInMemoryClientBase):
 
     def test__evaluate_index(self):
-        self.assertEqual('value', self.c._evaluate_index(['doc'], self.doc))
+        self.assertEqual('value', self.c._evaluate_index(['key'], self.doc))
+
+    def test__evaluate_index_field_None(self):
+        self.assertEqual(None, self.c._evaluate_index(['missing'], self.doc))
+
+    def test__evaluate_index_subfield_None(self):
+        self.assertEqual(None,
+                         self.c._evaluate_index(['key', 'missing'], self.doc))
+
+    def test__evaluate_multi_index(self):
+        doc = '{"key": "value", "key2": "value2"}'
+        self.assertEqual('value\x01value2',
+                         self.c._evaluate_index(['key', 'key2'], doc))
 
     def test_create_index(self):
         self.c.create_index('test-idx', ['name'])
@@ -118,11 +130,29 @@ class TestInMemoryClientIndexes(TestInMemoryClientBase):
 
     def test_create_index_evaluates_it(self):
         doc_id, doc_rev = self.c.put_doc(None, None, self.doc)
-        self.c.create_index('test-idx', ['doc'])
+        self.c.create_index('test-idx', ['key'])
         self.assertEqual({'test-idx': {'value': doc_id}}, self.c._indexes)
 
     def test_get_from_index(self):
         doc_id, doc_rev = self.c.put_doc(None, None, self.doc)
-        self.c.create_index('test-idx', ['doc'])
+        self.c.create_index('test-idx', ['key'])
         self.assertEqual([(doc_id, doc_rev, self.doc)],
-                         self.c.get_from_index('test-idx', ['value']))
+                         self.c.get_from_index('test-idx', [('value',)]))
+
+    def test_get_from_index_unmatched(self):
+        doc_id, doc_rev = self.c.put_doc(None, None, self.doc)
+        self.c.create_index('test-idx', ['key'])
+        self.assertEqual([], self.c.get_from_index('test-idx', [('novalue',)]))
+
+    def test_get_from_index_some_matches(self):
+        doc_id, doc_rev = self.c.put_doc(None, None, self.doc)
+        self.c.create_index('test-idx', ['key'])
+        self.assertEqual([(doc_id, doc_rev, self.doc)],
+            self.c.get_from_index('test-idx', [('value',), ('novalue',)]))
+
+    def test_get_from_index_multi(self):
+        doc = '{"key": "value", "key2": "value2"}'
+        doc_id, doc_rev = self.c.put_doc(None, None, doc)
+        self.c.create_index('test-idx', ['key', 'key2'])
+        self.assertEqual([(doc_id, doc_rev, doc)],
+            self.c.get_from_index('test-idx', [('value', 'value2')]))
