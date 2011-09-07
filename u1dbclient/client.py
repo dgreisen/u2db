@@ -126,6 +126,9 @@ class InMemoryClient(Client):
         other_rev = self._other_revs.get(other_machine_id, 0)
         return self._machine_id, len(self._transaction_log), other_rev
 
+    def _get_other_machine_rev(self, other_machine_id):
+        return self._other_revs.get(other_machine_id, 0)
+
     def put_state_info(self, machine_id, db_rev):
         self._other_revs[machine_id] = db_rev
 
@@ -237,6 +240,7 @@ class InMemoryClient(Client):
                 continue
             doc_rev, doc, _ = self.get_doc(doc_id)
             new_docs.append((doc_id, doc_rev, doc))
+        self._other_revs[from_machine_id] = from_machine_rev
         return new_docs, conflicts, len(self._transaction_log)
 
     def sync(self, other, callback=None):
@@ -247,11 +251,11 @@ class InMemoryClient(Client):
             doc_rev, doc, _ = self.get_doc(doc_id)
             docs_to_send.append((doc_id, doc_rev, doc))
         other_last_known_rev = self._other_revs.get(other_machine_id, 0)
-        # (new_records, conflicted_records, new_db_rev) = \
-        other.sync_exchange(docs_to_send, self._machine_id,
+        (new_records, conflicted_records,
+         new_db_rev) = other.sync_exchange(docs_to_send, self._machine_id,
                             len(self._transaction_log),
                             other_last_known_rev)
-        self.put_state_info(other_machine_id, other_rev)
+        self.put_state_info(other_machine_id, new_db_rev)
         other.put_state_info(self._machine_id, len(self._transaction_log))
 
 

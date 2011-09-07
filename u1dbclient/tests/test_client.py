@@ -213,6 +213,7 @@ class TestInMemoryClientIndexes(TestInMemoryClientBase):
                          self.c.get_doc('doc-id'))
         self.assertEqual(['doc-id'], self.c._transaction_log)
         self.assertEqual(([], [], 1), result)
+        self.assertEqual(10, self.c.get_sync_info('machine')[-1])
 
     def test_sync_exchange_refuses_conflicts(self):
         doc_id, doc_rev, db_rev = self.c.put_doc(None, None, simple_doc)
@@ -241,7 +242,7 @@ class TestInMemoryClientIndexes(TestInMemoryClientBase):
         self.assertEqual([doc_id], self.c._transaction_log)
         self.assertEqual(([(doc_id, doc_rev, simple_doc)], [], 1), result)
 
-    def test_recieve_getting_newer_docs(self):
+    def test_sync_exchange_getting_newer_docs(self):
         doc_id, doc_rev, db_rev = self.c.put_doc(None, None, simple_doc)
         self.assertEqual([doc_id], self.c._transaction_log)
         new_doc = '{"key": "altval"}'
@@ -261,15 +262,15 @@ class TestInMemoryClientSync(tests.TestCase):
 
     def test_sync_tracks_db_rev_of_other(self):
         self.c1.sync(self.c2)
-        self.assertEqual({self.c2._machine_id: 0}, self.c1._other_revs)
-        self.assertEqual({self.c1._machine_id: 0}, self.c2._other_revs)
+        self.assertEqual(0, self.c1._get_other_machine_rev(self.c2._machine_id))
+        self.assertEqual(0, self.c2._get_other_machine_rev(self.c1._machine_id))
 
-    def DONT_sync_puts_changes(self):
+    def test_sync_puts_changes(self):
         doc_id, doc_rev, db_rev = self.c1.put_doc(None, None, simple_doc)
         self.c1.sync(self.c2)
         self.assertEqual((doc_rev, simple_doc, False), self.c1.get_doc(doc_id))
-        self.assertEqual({self.c2._machine_id: 1}, self.c1._other_revs)
-        self.assertEqual({self.c1._machine_id: 1}, self.c2._other_revs)
+        self.assertEqual(1, self.c1._get_other_machine_rev(self.c2._machine_id))
+        self.assertEqual(1, self.c2._get_other_machine_rev(self.c1._machine_id))
 
 
 class TestInMemoryIndex(tests.TestCase):
