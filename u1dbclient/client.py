@@ -148,7 +148,7 @@ class InMemoryClient(Client):
         for index in self._indexes.itervalues():
             if old_doc is not None:
                 index.remove_json(doc_id, old_doc)
-            index.update_json(doc_id, doc)
+            index.add_json(doc_id, doc)
         self._docs[doc_id] = (new_rev, doc)
         return doc_id, new_rev
 
@@ -191,21 +191,16 @@ class InMemoryClient(Client):
     def create_index(self, index_name, index_expression):
         index = InMemoryIndex(index_name, index_expression)
         for doc_id, (doc_rev, doc) in self._docs.iteritems():
-            index.update_json(doc_id, doc)
+            index.add_json(doc_id, doc)
         self._indexes[index_name] = index
 
     def get_from_index(self, index_name, key_values):
         index = self._indexes[index_name]
+        doc_ids = index.lookup(key_values)
         result = []
-        for value in key_values:
-            key = '\x01'.join(value)
-            try:
-                doc_ids = index._values[key]
-            except KeyError:
-                continue
-            for doc_id in doc_ids:
-                doc_rev, doc = self._docs[doc_id]
-                result.append((doc_id, doc_rev, doc))
+        for doc_id in doc_ids:
+            doc_rev, doc = self._docs[doc_id]
+            result.append((doc_id, doc_rev, doc))
         return result
 
 
@@ -232,15 +227,29 @@ class InMemoryIndex(object):
             result.append(val)
         return '\x01'.join(result)
 
-    def update_json(self, doc_id, doc):
+    def add_json(self, doc_id, doc):
+        """Add this json doc to the index."""
         key = self.evaluate_json(doc)
         if key is None:
             return
         self._values.setdefault(key, []).append(doc_id)
 
     def remove_json(self, doc_id, doc):
+        """Remove this json doc from the index."""
         key = self.evaluate_json(doc)
         doc_ids = self._values[key]
         doc_ids.remove(doc_id)
         if not doc_ids:
             del self._values[key]
+
+    def lookup(self, values):
+        """Find docs that match the values."""
+        result = []
+        for value in values:
+            key = '\x01'.join(value)
+            try:
+                doc_ids = self._values[key]
+            except KeyError:
+                continue
+            result.extend(doc_ids)
+        return result

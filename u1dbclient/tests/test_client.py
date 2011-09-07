@@ -207,25 +207,36 @@ class TestInMemoryIndex(tests.TestCase):
 
     def test_update_ignores_None(self):
         idx = client.InMemoryIndex('idx-name', ['nokey'])
-        idx.update_json('doc-id', simple_doc)
+        idx.add_json('doc-id', simple_doc)
         self.assertEqual({}, idx._values)
 
     def test_update_adds_entry(self):
         idx = client.InMemoryIndex('idx-name', ['key'])
-        idx.update_json('doc-id', simple_doc)
+        idx.add_json('doc-id', simple_doc)
         self.assertEqual({'value': ['doc-id']}, idx._values)
 
     def test_remove_json(self):
         idx = client.InMemoryIndex('idx-name', ['key'])
-        idx.update_json('doc-id', simple_doc)
+        idx.add_json('doc-id', simple_doc)
         self.assertEqual({'value': ['doc-id']}, idx._values)
         idx.remove_json('doc-id', simple_doc)
         self.assertEqual({}, idx._values)
 
     def test_remove_json_multiple(self):
         idx = client.InMemoryIndex('idx-name', ['key'])
-        idx.update_json('doc-id', simple_doc)
-        idx.update_json('doc2-id', simple_doc)
+        idx.add_json('doc-id', simple_doc)
+        idx.add_json('doc2-id', simple_doc)
         self.assertEqual({'value': ['doc-id', 'doc2-id']}, idx._values)
         idx.remove_json('doc-id', simple_doc)
         self.assertEqual({'value': ['doc2-id']}, idx._values)
+
+    def test_lookup(self):
+        idx = client.InMemoryIndex('idx-name', ['key'])
+        idx.add_json('doc-id', simple_doc)
+        self.assertEqual(['doc-id'], idx.lookup([('value',)]))
+
+    def test_lookup_multi(self):
+        idx = client.InMemoryIndex('idx-name', ['key'])
+        idx.add_json('doc-id', simple_doc)
+        idx.add_json('doc2-id', simple_doc)
+        self.assertEqual(['doc-id', 'doc2-id'], idx.lookup([('value',)]))
