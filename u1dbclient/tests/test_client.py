@@ -205,13 +205,13 @@ class TestInMemoryClientIndexes(TestInMemoryClientBase):
         self.c.delete_index('test-idx')
         self.assertEqual([], self.c._indexes.keys())
 
-    def DONT_receive_docs(self):
+    def test_receive_docs(self):
         result = self.c.receive_docs([('doc-id', 'other-machine:1', simple_doc)],
                                      'other-machine', from_machine_rev=10,
                                      last_known_rev=0)
-        self.assertEqual(('doc-rev', simple_doc, False),
+        self.assertEqual(('other-machine:1', simple_doc, False),
                          self.c.get_doc('doc-id'))
-
+        self.assertEqual(['doc-id'], self.c._transaction_log)
 
 class TestInMemoryClientSync(tests.TestCase):
 

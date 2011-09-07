@@ -230,7 +230,10 @@ class InMemoryClient(Client):
                 for this client
         """
         for doc_id, doc_rev, doc in docs_info:
-            self.put_doc(doc_id, doc_rev, doc)
+            # current_rev = self._get_current_rev(doc_id)
+            # if VectorClockRev(doc_rev).is_newer(VectorClockRev(current_rev)):
+            self._docs[doc_id] = (doc_rev, doc)
+            self._transaction_log.append(doc_id)
 
     def sync(self, other, callback=None):
         (other_machine_id, other_rev,
