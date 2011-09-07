@@ -224,6 +224,15 @@ class TestInMemoryClientIndexes(TestInMemoryClientBase):
         self.assertEqual([doc_id], self.c._transaction_log)
         self.assertEqual(([], [(doc_id, doc_rev, simple_doc)], 1), result)
 
+    def test_receive_ignores_convergence(self):
+        doc_id, doc_rev, db_rev = self.c.put_doc(None, None, simple_doc)
+        self.assertEqual([doc_id], self.c._transaction_log)
+        result = self.c.receive_docs([(doc_id, doc_rev, simple_doc)],
+                                     'other-machine', from_machine_rev=10,
+                                     last_known_rev=1)
+        self.assertEqual([doc_id], self.c._transaction_log)
+        self.assertEqual(([], [], 1), result)
+
 
 class TestInMemoryClientSync(tests.TestCase):
 
@@ -328,7 +337,7 @@ class TestVectorClockRev(tests.TestCase):
         self.assertIsNewer('test:1|other:1', 'other:1')
         self.assertIsConflicted('test:1|other:2', 'test:2|other:1')
         self.assertIsConflicted('test:1|other:1', 'other:2')
-        # self.assertIsConflicted('test:1', 'test:1')
+        self.assertIsConflicted('test:1', 'test:1')
 
     def test__expand_None(self):
         vcr = client.VectorClockRev(None)

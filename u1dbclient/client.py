@@ -137,18 +137,6 @@ class InMemoryClient(Client):
         vcr = VectorClockRev(old_doc_rev)
         return vcr.increment(self._machine_id)
 
-    @staticmethod
-    def _is_newer_doc_rev(maybe_new_rev, old_rev):
-        """Check if maybe_new_rev is actually newer than old_rev"""
-        if maybe_new_rev is None:
-            return False
-        if old_rev is None:
-            return True
-        result = old_doc_rev.split('|')
-        for idx, machine_counter in enumerate(maybe_new_rev):
-            machine_id, counter = machine_counter.split(':')
-
-
     def put_doc(self, doc_id, old_doc_rev, doc):
         if doc_id is None:
             doc_id = self._allocate_doc_id()
@@ -235,6 +223,9 @@ class InMemoryClient(Client):
             if VectorClockRev(doc_rev).is_newer(VectorClockRev(current_rev)):
                 self._docs[doc_id] = (doc_rev, doc)
                 self._transaction_log.append(doc_id)
+            elif doc_rev == current_rev:
+                # magical convergence
+                continue
             else:
                 _, current_doc, _ = self.get_doc(doc_id)
                 conflicts.append((doc_id, current_rev, current_doc))
@@ -331,14 +322,19 @@ class VectorClockRev(object):
             return True
         this_expand = self._expand()
         other_expand = other._expand()
+        this_is_newer = False
         for key, value in this_expand.iteritems():
             if key in other_expand:
                 other_value = other_expand.pop(key)
                 if other_value > value:
                     return False
+                elif other_value < value:
+                    this_is_newer = True
+            else:
+                this_is_newer = True
         if other_expand:
             return False
-        return True
+        return this_is_newer
 
     def increment(self, machine_id):
         """Increase the 'machine_id' section of this vector clock.
