@@ -165,6 +165,20 @@ class InMemoryClient(Client):
         self._transaction_log.append(doc_id)
         return doc_id, new_rev, len(self._transaction_log)
 
+    def get_doc_conflicts(self, doc_id):
+        """Get the list of conflict texts for the given document.
+        The order of the conflicts is such that the first entry is the value
+        that would be returned by "GET_DOC".
+
+        :return: [(doc_rev, doc)] a list of tuples of the revision for the
+            content, and the JSON string of the content.
+        """
+        if doc_id not in self._conflicts:
+            return []
+        result = [self._docs[doc_id]]
+        result.extend(self._conflicts[doc_id])
+        return result
+
     def get_doc(self, doc_id):
         try:
             doc_rev, doc = self._docs[doc_id]

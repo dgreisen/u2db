@@ -352,6 +352,22 @@ class TestInMemoryClientSync(tests.TestCase):
         self.assertRaises(client.ConflictedDoc,
             self.c1.put_doc, doc_id, doc2_rev, new_doc2)
 
+    def test_get_doc_conflicts_unconflicted(self):
+        doc_id, doc1_rev, db1_rev = self.c1.put_doc(None, None, simple_doc)
+        self.assertEqual([], self.c1.get_doc_conflicts(doc_id))
+
+    def test_get_doc_conflicts_no_such_id(self):
+        self.assertEqual([], self.c1.get_doc_conflicts('doc-id'))
+
+    def test_get_doc_conflicts(self):
+        doc_id, doc1_rev, db1_rev = self.c1.put_doc(None, None, simple_doc)
+        new_doc1 = '{"key": "altval"}'
+        doc_id, doc2_rev, db2_rev = self.c2.put_doc(doc_id, None, new_doc1)
+        self.c1.sync(self.c2)
+        self.assertEqual([(doc2_rev, new_doc1),
+                          (doc1_rev, simple_doc)],
+                         self.c1.get_doc_conflicts(doc_id))
+
 
 class TestInMemoryIndex(tests.TestCase):
 
