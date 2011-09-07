@@ -111,6 +111,10 @@ class InvalidDocRev(Exception):
     """The document revisions supplied does not match the current version."""
 
 
+class ConflictedDoc(Exception):
+    """The document is conflicted, you must call resolve before put()"""
+
+
 class InMemoryClient(Client):
     """A client that only stores the data internally."""
 
@@ -147,6 +151,8 @@ class InMemoryClient(Client):
             doc_id = self._allocate_doc_id()
         old_doc = None
         if doc_id in self._docs:
+            if doc_id in self._conflicts:
+                raise ConflictedDoc()
             old_rev, old_doc = self._docs[doc_id]
             if old_rev != old_doc_rev:
                 raise InvalidDocRev()

@@ -342,6 +342,16 @@ class TestInMemoryClientSync(tests.TestCase):
         self.c1.sync(self.c2)
         self.assertEqual((doc2_rev2, new_doc2, True), self.c1.get_doc(doc_id))
 
+    def test_put_refuses_to_update_conflicted(self):
+        doc_id, doc1_rev, db1_rev = self.c1.put_doc(None, None, simple_doc)
+        new_doc1 = '{"key": "altval"}'
+        doc_id, doc2_rev, db2_rev = self.c2.put_doc(doc_id, None, new_doc1)
+        self.c1.sync(self.c2)
+        self.assertEqual((doc2_rev, new_doc1, True), self.c1.get_doc(doc_id))
+        new_doc2 = '{"key": "local"}'
+        self.assertRaises(client.ConflictedDoc,
+            self.c1.put_doc, doc_id, doc2_rev, new_doc2)
+
 
 class TestInMemoryIndex(tests.TestCase):
 
