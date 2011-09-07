@@ -23,20 +23,6 @@ from u1dbclient import (
     )
 
 
-class TestClient(tests.TestCase):
-
-    def test_create(self):
-        c = client.Client()
-
-    def test_has_api_sync(self):
-        c = client.Client()
-        self.assertNotEqual(None, getattr(c, 'sync', None))
-
-    def test_has_api_whatschanged(self):
-        c = client.Client()
-        self.assertNotEqual(None, getattr(c, 'whats_changed', None))
-
-
 simple_doc = '{"key": "value"}'
 
 class TestInMemoryClientBase(tests.TestCase):
@@ -65,25 +51,25 @@ class TestInMemoryClient(TestInMemoryClientBase):
         self.assertEqual('test', self.c._machine_id)
 
     def test_put_doc_allocating_doc_id(self):
-        doc_id, new_rev = self.c.put_doc(None, None, simple_doc)
+        doc_id, new_rev, db_rev = self.c.put_doc(None, None, simple_doc)
         self.assertNotEqual(None, doc_id)
         self.assertNotEqual(None, new_rev)
         self.assertEqual((new_rev, simple_doc, False), self.c.get_doc(doc_id))
 
     def test_put_doc_creating_initial(self):
-        doc_id, new_rev = self.c.put_doc('my_doc_id', None, simple_doc)
+        doc_id, new_rev, db_rev = self.c.put_doc('my_doc_id', None, simple_doc)
         self.assertEqual({'my_doc_id': (new_rev, simple_doc)},
                          self.c._docs)
 
     def test_get_doc_after_put(self):
-        doc_id, new_rev = self.c.put_doc('my_doc_id', None, simple_doc)
+        doc_id, new_rev, db_rev = self.c.put_doc('my_doc_id', None, simple_doc)
         self.assertEqual((new_rev, simple_doc, False), self.c.get_doc('my_doc_id'))
 
     def test_get_doc_nonexisting(self):
         self.assertEqual((None, None, False), self.c.get_doc('non-existing'))
 
     def test_put_fails_with_bad_old_rev(self):
-        doc_id, old_rev = self.c.put_doc('my_doc_id', None, simple_doc)
+        doc_id, old_rev, db_rev = self.c.put_doc('my_doc_id', None, simple_doc)
         new_doc = '{"something": "else"}'
         self.assertRaises(client.InvalidDocRev,
             self.c.put_doc, 'my_doc_id', 'other:1', new_doc)
@@ -91,7 +77,7 @@ class TestInMemoryClient(TestInMemoryClientBase):
                          self.c.get_doc('my_doc_id'))
 
     def test_delete_doc(self):
-        doc_id, doc_rev = self.c.put_doc(None, None, simple_doc)
+        doc_id, doc_rev, db_rev = self.c.put_doc(None, None, simple_doc)
         self.assertEqual((doc_rev, simple_doc, False), self.c.get_doc(doc_id))
         self.c.delete_doc(doc_id, doc_rev)
         self.assertEqual((None, None, False), self.c.get_doc(doc_id))
@@ -101,7 +87,7 @@ class TestInMemoryClient(TestInMemoryClientBase):
             self.c.delete_doc, 'non-existing', 'other:1')
 
     def test_delete_doc_bad_rev(self):
-        doc_id, doc_rev = self.c.put_doc(None, None, simple_doc)
+        doc_id, doc_rev, db_rev = self.c.put_doc(None, None, simple_doc)
         self.assertEqual((doc_rev, simple_doc, False), self.c.get_doc(doc_id))
         self.assertRaises(client.InvalidDocRev,
             self.c.delete_doc, doc_id, 'other:1')
@@ -115,62 +101,66 @@ class TestInMemoryClientIndexes(TestInMemoryClientBase):
         self.assertEqual(['test-idx'], self.c._indexes.keys())
 
     def test_create_index_evaluates_it(self):
-        doc_id, doc_rev = self.c.put_doc(None, None, simple_doc)
+        doc_id, doc_rev, db_rev = self.c.put_doc(None, None, simple_doc)
         self.c.create_index('test-idx', ['key'])
         self.assertEqual({'value': [doc_id]},
                          self.c._indexes['test-idx']._values)
 
     def test_create_index_multiple_exact_matches(self):
-        doc_id, doc_rev = self.c.put_doc(None, None, simple_doc)
-        doc2_id, doc2_rev = self.c.put_doc(None, None, simple_doc)
+        doc_id, doc_rev, db_rev = self.c.put_doc(None, None, simple_doc)
+        doc2_id, doc2_rev, db_rev = self.c.put_doc(None, None, simple_doc)
         self.c.create_index('test-idx', ['key'])
         self.assertEqual([(doc_id, doc_rev, simple_doc),
                           (doc2_id, doc2_rev, simple_doc)],
                          self.c.get_from_index('test-idx', [('value',)]))
 
     def test_get_from_index(self):
-        doc_id, doc_rev = self.c.put_doc(None, None, simple_doc)
+        doc_id, doc_rev, db_rev = self.c.put_doc(None, None, simple_doc)
         self.c.create_index('test-idx', ['key'])
         self.assertEqual([(doc_id, doc_rev, simple_doc)],
                          self.c.get_from_index('test-idx', [('value',)]))
 
     def test_get_from_index_unmatched(self):
-        doc_id, doc_rev = self.c.put_doc(None, None, simple_doc)
+        doc_id, doc_rev, db_rev = self.c.put_doc(None, None, simple_doc)
         self.c.create_index('test-idx', ['key'])
         self.assertEqual([], self.c.get_from_index('test-idx', [('novalue',)]))
 
     def test_get_from_index_some_matches(self):
-        doc_id, doc_rev = self.c.put_doc(None, None, simple_doc)
+        doc_id, doc_rev, db_rev = self.c.put_doc(None, None, simple_doc)
         self.c.create_index('test-idx', ['key'])
         self.assertEqual([(doc_id, doc_rev, simple_doc)],
             self.c.get_from_index('test-idx', [('value',), ('novalue',)]))
 
     def test_get_from_index_multi(self):
         doc = '{"key": "value", "key2": "value2"}'
-        doc_id, doc_rev = self.c.put_doc(None, None, doc)
+        doc_id, doc_rev, db_rev = self.c.put_doc(None, None, doc)
         self.c.create_index('test-idx', ['key', 'key2'])
         self.assertEqual([(doc_id, doc_rev, doc)],
             self.c.get_from_index('test-idx', [('value', 'value2')]))
 
     def test_put_adds_to_index(self):
         self.c.create_index('test-idx', ['key'])
-        doc_id, doc_rev = self.c.put_doc(None, None, simple_doc)
+        doc_id, doc_rev, db_rev = self.c.put_doc(None, None, simple_doc)
         self.assertEqual([(doc_id, doc_rev, simple_doc)],
             self.c.get_from_index('test-idx', [('value',)]))
 
     def test_put_updates_index(self):
-        doc_id, doc_rev = self.c.put_doc(None, None, simple_doc)
+        doc_id, doc_rev, db_rev = self.c.put_doc(None, None, simple_doc)
         self.c.create_index('test-idx', ['key'])
         new_doc = '{"key": "altval"}'
-        _, new_doc_rev = self.c.put_doc(doc_id, doc_rev, new_doc)
+        _, new_doc_rev, db_rev = self.c.put_doc(doc_id, doc_rev, new_doc)
         self.assertEqual([],
             self.c.get_from_index('test-idx', [('value',)]))
         self.assertEqual([(doc_id, new_doc_rev, new_doc)],
             self.c.get_from_index('test-idx', [('altval',)]))
 
+    def test_put_updates_transaction_log(self):
+        doc_id, doc_rev, db_rev = self.c.put_doc(None, None, simple_doc)
+        self.assertEqual(set([doc_id]), self.c.whats_changed(0))
+
     def test_delete_updates_index(self):
-        doc_id, doc_rev = self.c.put_doc(None, None, simple_doc)
-        doc2_id, doc2_rev = self.c.put_doc(None, None, simple_doc)
+        doc_id, doc_rev, db_rev = self.c.put_doc(None, None, simple_doc)
+        doc2_id, doc2_rev, db_rev = self.c.put_doc(None, None, simple_doc)
         self.c.create_index('test-idx', ['key'])
         self.assertEqual([(doc_id, doc_rev, simple_doc),
                           (doc2_id, doc2_rev, simple_doc)],
@@ -178,6 +168,16 @@ class TestInMemoryClientIndexes(TestInMemoryClientBase):
         self.c.delete_doc(doc_id, doc_rev)
         self.assertEqual([(doc2_id, doc2_rev, simple_doc)],
             self.c.get_from_index('test-idx', [('value',)]))
+
+    def test_delete_updates_transaction_log(self):
+        doc_id, doc_rev, db_rev = self.c.put_doc(None, None, simple_doc)
+        self.c.delete_doc(doc_id, doc_rev)
+        self.assertEqual(set([doc_id]), self.c.whats_changed(db_rev))
+
+    def test_whats_changed_returns_one_id_for_multiple_changes(self):
+        doc_id, doc_rev, db_rev = self.c.put_doc(None, None, simple_doc)
+        self.c.put_doc(doc_id, doc_rev, '{"new": "contents"}')
+        self.assertEqual(set([doc_id]), self.c.whats_changed(0))
 
 
 class TestInMemoryIndex(tests.TestCase):

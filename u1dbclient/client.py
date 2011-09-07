@@ -63,13 +63,14 @@ class Client(object):
         """Add/update a document.
         If the document currently has conflicts, put will fail.
 
-        :param doc_id: Unique handle for a document
+        :param doc_id: Unique handle for a document, if it is None, a new
+            identifier will be allocated for you.
         :param old_doc_rev: The document revision that we know to be
             superseding. If 'old_doc_rev' doesn't actually match the current
             doc_rev, the put fails, indicating there is a newer version stored.
         :param doc: The actual JSON document string.
-        :return: (doc_id, new_doc_rev) Returns the new revision string for the
-            document.
+        :return: (doc_id, new_doc_rev, new_db_rev) Returns the new revision
+            string for the document.
         """
         raise NotImplementedError(self.put_doc)
 
@@ -114,6 +115,7 @@ class InMemoryClient(Client):
     """A client that only stores the data internally."""
 
     def __init__(self):
+        self._transaction_log = []
         self._docs = {}
         self._indexes = {}
         self._doc_counter = 0
@@ -150,7 +152,8 @@ class InMemoryClient(Client):
                 index.remove_json(doc_id, old_doc)
             index.add_json(doc_id, doc)
         self._docs[doc_id] = (new_rev, doc)
-        return doc_id, new_rev
+        self._transaction_log.append(doc_id)
+        return doc_id, new_rev, len(self._transaction_log)
 
     def get_doc(self, doc_id):
         try:
@@ -166,27 +169,7 @@ class InMemoryClient(Client):
         for index in self._indexes.itervalues():
             index.remove_json(doc_id, old_doc)
         del self._docs[doc_id]
-
-    def _evaluate_index(self, index_expression, doc):
-        """Apply index_expression to doc, and return the evaluation."""
-        decomposed = simplejson.loads(doc)
-        result = []
-        for field in index_expression:
-            val = decomposed.get(field)
-            if val is None:
-                return None
-            result.append(val)
-        return '\x01'.join(result)
-
-    def _update_index(self, index, index_expression, doc_id, doc):
-        key = self._evaluate_index(index_expression, doc)
-        if key is None:
-            return
-        index.setdefault(key, []).append(doc_id)
-
-    def _remove_from_index(self, index, index_expression, doc):
-        key = self._evaluate_index(index_expression, doc)
-        del index[key]
+        self._transaction_log.append(doc_id)
 
     def create_index(self, index_name, index_expression):
         index = InMemoryIndex(index_name, index_expression)
@@ -202,6 +185,9 @@ class InMemoryClient(Client):
             doc_rev, doc = self._docs[doc_id]
             result.append((doc_id, doc_rev, doc))
         return result
+
+    def whats_changed(self, old_db_rev):
+        return set(self._transaction_log[old_db_rev:])
 
 
 class InMemoryIndex(object):
