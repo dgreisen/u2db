@@ -324,6 +324,23 @@ class TestInMemoryClientSync(tests.TestCase):
                                      'conf_docs': [], 'last_rev': 1}},
                          self.c2._last_exchange_log)
 
+    def test_sync_ignores_superseded(self):
+        doc_id, doc_rev, _ = self.c1.put_doc(None, None, simple_doc)
+        self.c3 = client.InMemoryClient('test3')
+        self.c1.sync(self.c3)
+        self.c2.sync(self.c3)
+        new_doc = '{"key": "altval"}'
+        _, doc_rev2, _ = self.c1.put_doc(doc_id, doc_rev, new_doc)
+        self.c2.sync(self.c1)
+        self.assertEqual({'receive': {'docs': [(doc_id, doc_rev)],
+                                      'from_id': 'test2',
+                                      'from_rev': 1, 'last_known_rev': 0},
+                          'return': {'new_docs': [(doc_id, doc_rev2)],
+                                     'conf_docs': [], 'last_rev': 2}},
+                         self.c1._last_exchange_log)
+        self.assertEqual((doc_rev2, new_doc, False), self.c1.get_doc(doc_id))
+
+
     def test_sync_sees_remote_conflicted(self):
         doc_id, doc1_rev, db1_rev = self.c1.put_doc(None, None, simple_doc)
         self.c1.create_index('test-idx', ['key'])

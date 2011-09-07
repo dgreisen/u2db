@@ -140,6 +140,7 @@ class InMemoryClient(Client):
         self._indexes = {}
         self._doc_counter = 0
         self._machine_id = machine_id
+        self._last_exchange_log = None
 
     def get_sync_info(self, other_machine_id):
         other_rev = self._other_revs.get(other_machine_id, 0)
@@ -276,11 +277,19 @@ class InMemoryClient(Client):
         seen_ids = set()
         for doc_id, doc_rev, doc in docs_info:
             cur_rev, cur_doc, _ = self.get_doc(doc_id)
+            doc_vcr = VectorClockRev(doc_rev)
+            cur_vcr = VectorClockRev(cur_rev)
             seen_ids.add(doc_id)
-            if VectorClockRev(doc_rev).is_newer(VectorClockRev(cur_rev)):
+            if doc_vcr.is_newer(cur_vcr):
                 self._put_and_update_indexes(doc_id, cur_doc, doc_rev, doc)
             elif doc_rev == cur_rev:
                 # magical convergence
+                continue
+            elif cur_vcr.is_newer(doc_vcr):
+                # Don't add this to seen_ids, because we have something newer,
+                # so we should send it back, and we should not generate a
+                # conflict
+                seen_ids.remove(doc_id)
                 continue
             else:
                 conflict_ids.add(doc_id)
@@ -350,9 +359,10 @@ class InMemoryClient(Client):
          new_db_rev) = other.sync_exchange(docs_to_send, self._machine_id,
                             len(self._transaction_log),
                             other_last_known_rev)
-        _, conflict_ids = self._insert_many_docs(new_records)
-        self._insert_conflicts(conflicted_records)
-        self._insert_conflicts([r for r in new_records if r[0] in conflict_ids])
+        all_records = new_records + conflicted_records
+        _, conflict_ids = self._insert_many_docs(all_records)
+        # self._insert_conflicts(conflicted_records)
+        self._insert_conflicts([r for r in all_records if r[0] in conflict_ids])
         self.put_state_info(other_machine_id, new_db_rev)
         other.put_state_info(self._machine_id, len(self._transaction_log))
 
