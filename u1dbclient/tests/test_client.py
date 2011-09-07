@@ -252,6 +252,19 @@ class TestInMemoryClientIndexes(TestInMemoryClientBase):
         self.assertEqual([doc_id, doc_id], self.c._transaction_log)
         self.assertEqual(([], [], 2), result)
 
+    def test_sync_exchange_updates_indexes(self):
+        doc_id, doc_rev, db_rev = self.c.put_doc(None, None, simple_doc)
+        self.c.create_index('test-idx', ['key'])
+        new_doc = '{"key": "altval"}'
+        other_rev = 'test:1|z:2'
+        result = self.c.sync_exchange([(doc_id, other_rev, new_doc)],
+                                      'other-machine', from_machine_rev=10,
+                                      last_known_rev=0)
+        self.assertEqual((other_rev, new_doc, False), self.c.get_doc(doc_id))
+        self.assertEqual([(doc_id, other_rev, new_doc)],
+                         self.c.get_from_index('test-idx', [('altval',)]))
+        self.assertEqual([], self.c.get_from_index('test-idx', [('value',)]))
+
 
 class TestInMemoryClientSync(tests.TestCase):
 

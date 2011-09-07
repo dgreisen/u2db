@@ -262,12 +262,11 @@ class InMemoryClient(Client):
         conflict_ids = []
         seen_ids = set()
         for doc_id, doc_rev, doc in docs_info:
-            current_rev = self._get_current_rev(doc_id)
+            cur_rev, cur_doc, _ = self.get_doc(doc_id)
             seen_ids.add(doc_id)
-            if VectorClockRev(doc_rev).is_newer(VectorClockRev(current_rev)):
-                self._docs[doc_id] = (doc_rev, doc)
-                self._transaction_log.append(doc_id)
-            elif doc_rev == current_rev:
+            if VectorClockRev(doc_rev).is_newer(VectorClockRev(cur_rev)):
+                self._put_and_update_indexes(doc_id, cur_doc, doc_rev, doc)
+            elif doc_rev == cur_rev:
                 # magical convergence
                 continue
             else:
