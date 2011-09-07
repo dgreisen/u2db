@@ -218,8 +218,10 @@ class InMemoryClient(Client):
                 for this client
         """
         conflicts = []
+        seen_entries = set()
         for doc_id, doc_rev, doc in docs_info:
             current_rev = self._get_current_rev(doc_id)
+            seen_entries.add(doc_id)
             if VectorClockRev(doc_rev).is_newer(VectorClockRev(current_rev)):
                 self._docs[doc_id] = (doc_rev, doc)
                 self._transaction_log.append(doc_id)
@@ -229,7 +231,13 @@ class InMemoryClient(Client):
             else:
                 _, current_doc, _ = self.get_doc(doc_id)
                 conflicts.append((doc_id, current_rev, current_doc))
-        return [], conflicts, len(self._transaction_log)
+        new_docs = []
+        for doc_id in self.whats_changed(last_known_rev):
+            if doc_id in seen_entries:
+                continue
+            doc_rev, doc, _ = self.get_doc(doc_id)
+            new_docs.append((doc_id, doc_rev, doc))
+        return new_docs, conflicts, len(self._transaction_log)
 
     def sync(self, other, callback=None):
         (other_machine_id, other_rev,

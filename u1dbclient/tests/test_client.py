@@ -220,7 +220,7 @@ class TestInMemoryClientIndexes(TestInMemoryClientBase):
         new_doc = '{"key": "altval"}'
         result = self.c.receive_docs([(doc_id, 'other-machine:1', new_doc)],
                                      'other-machine', from_machine_rev=10,
-                                     last_known_rev=1)
+                                     last_known_rev=0)
         self.assertEqual([doc_id], self.c._transaction_log)
         self.assertEqual(([], [(doc_id, doc_rev, simple_doc)], 1), result)
 
@@ -232,6 +232,24 @@ class TestInMemoryClientIndexes(TestInMemoryClientBase):
                                      last_known_rev=1)
         self.assertEqual([doc_id], self.c._transaction_log)
         self.assertEqual(([], [], 1), result)
+
+    def test_receive_returns_new_docs(self):
+        doc_id, doc_rev, db_rev = self.c.put_doc(None, None, simple_doc)
+        self.assertEqual([doc_id], self.c._transaction_log)
+        result = self.c.receive_docs([], 'other-machine', from_machine_rev=10,
+                                     last_known_rev=0)
+        self.assertEqual([doc_id], self.c._transaction_log)
+        self.assertEqual(([(doc_id, doc_rev, simple_doc)], [], 1), result)
+
+    def test_recieve_getting_newer_docs(self):
+        doc_id, doc_rev, db_rev = self.c.put_doc(None, None, simple_doc)
+        self.assertEqual([doc_id], self.c._transaction_log)
+        new_doc = '{"key": "altval"}'
+        result = self.c.receive_docs([(doc_id, 'test:1|z:2', new_doc)],
+                                     'other-machine', from_machine_rev=10,
+                                     last_known_rev=0)
+        self.assertEqual([doc_id, doc_id], self.c._transaction_log)
+        self.assertEqual(([], [], 2), result)
 
 
 class TestInMemoryClientSync(tests.TestCase):
