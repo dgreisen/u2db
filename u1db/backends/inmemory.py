@@ -55,6 +55,9 @@ class InMemoryDatabase(u1db.Database):
         vcr = VectorClockRev(old_doc_rev)
         return vcr.increment(self._machine_id)
 
+    def create_doc(self, doc, doc_id=None):
+        return self.put_doc(doc_id, None, doc)
+
     def put_doc(self, doc_id, old_doc_rev, doc):
         if doc_id is None:
             doc_id = self._allocate_doc_id()

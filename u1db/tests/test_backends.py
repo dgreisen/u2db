@@ -48,11 +48,24 @@ class DatabaseTests(DatabaseBaseTests):
         self.assertNotEqual(None, new_rev)
         self.assertEqual((new_rev, simple_doc, False), self.c.get_doc(doc_id))
 
-    ## def test_create_doc_allocating_doc_id(self):
-    ##     doc_id, new_rev = self.c.create_doc(simple_doc)
-    ##     self.assertNotEqual(None, doc_id)
-    ##     self.assertNotEqual(None, new_rev)
-    ##     self.assertEqual((new_rev, simple_doc, False), self.c.get_doc(doc_id))
+    def test_create_doc_allocating_doc_id(self):
+        doc_id, new_rev = self.c.create_doc(simple_doc)
+        self.assertNotEqual(None, doc_id)
+        self.assertNotEqual(None, new_rev)
+        self.assertEqual((new_rev, simple_doc, False), self.c.get_doc(doc_id))
+
+    def test_create_doc_with_id(self):
+        doc_id, new_rev = self.c.create_doc(simple_doc, doc_id='my-id')
+        self.assertEqual('my-id', doc_id)
+        self.assertNotEqual(None, new_rev)
+        self.assertEqual((new_rev, simple_doc, False), self.c.get_doc('my-id'))
+
+    def test_create_doc_existing_id(self):
+        doc_id, new_rev = self.c.create_doc(simple_doc)
+        new_doc = '{"something": "else"}'
+        self.assertRaises(u1db.InvalidDocRev, self.c.create_doc,
+                          new_doc, doc_id)
+        self.assertEqual((new_rev, simple_doc, False), self.c.get_doc(doc_id))
 
     def test_put_doc_creating_initial(self):
         doc_id, new_rev = self.c.put_doc('my_doc_id', None, simple_doc)
