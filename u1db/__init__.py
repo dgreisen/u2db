@@ -30,10 +30,11 @@ class Database(object):
 
         :param other: Another database to sync with
         :param callback: gives optional progress callbacks
-        :return: (old_db_rev, new_db_rev)
-            The global database revision before sync started, and the current
-            database revision. You can pass the old_db_rev to whats_changed to
-            find out what was actually updated.
+        :return: old_db_rev
+            The global database revision before sync started. You can pass the
+            old_db_rev to whats_changed to find out what was actually updated.
+            (concurrent updates to the local db outside of sync will also be
+            included in whats_changed)
         """
         raise NotImplementedError(self.sync)
 
