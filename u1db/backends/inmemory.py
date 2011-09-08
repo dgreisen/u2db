@@ -52,6 +52,9 @@ class InMemoryDatabase(CommonBackend):
     def _get_transaction_log(self):
         return self._transaction_log
 
+    def _get_db_rev(self):
+        return len(self._transaction_log)
+
     def put_doc(self, doc_id, old_doc_rev, doc):
         if doc_id is None:
             raise u1db.InvalidDocId()
@@ -93,10 +96,7 @@ class InMemoryDatabase(CommonBackend):
 
     def resolve_doc(self, doc_id, doc, conflicted_doc_revs):
         cur_rev, cur_doc = self._docs[doc_id]
-        vcr = VectorClockRev(cur_rev)
-        for rev in conflicted_doc_revs:
-            vcr = VectorClockRev(vcr.maximize(rev))
-        new_rev = vcr.increment(self._machine_id)
+        new_rev = self._ensure_maximal_rev(cur_rev, conflicted_doc_revs)
         superseded_revs = set(conflicted_doc_revs)
         remaining_conflicts = []
         cur_conflicts = self._conflicts[doc_id]

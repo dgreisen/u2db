@@ -211,12 +211,15 @@ class SQLiteDatabase(CommonBackend):
             self._put_and_update_indexes(doc_id, old_doc, new_rev, None)
         return new_rev
 
+    def _get_conflicts(self, doc_id):
+        c = self._db_handle.cursor()
+        c.execute("SELECT doc_rev, doc FROM conflicts WHERE doc_id = ?",
+                  (doc_id,))
+        return c.fetchall()
+
     def get_doc_conflicts(self, doc_id):
         with self._db_handle:
-            c = self._db_handle.cursor()
-            c.execute("SELECT doc_rev, doc FROM conflicts WHERE doc_id = ?",
-                      (doc_id,))
-            conflict_docs = c.fetchall()
+            conflict_docs = self._get_conflicts(doc_id)
             if not conflict_docs:
                 return conflict_docs
             this_doc_rev, this_doc = self._get_doc(doc_id)
@@ -247,10 +250,30 @@ class SQLiteDatabase(CommonBackend):
             return super(SQLiteDatabase, self)._compare_and_insert_doc(
                 doc_id, doc_rev, doc)
 
+    def _add_conflict(self, c, doc_id, my_doc_rev, my_doc):
+        c.execute("INSERT INTO conflicts VALUES (?, ?, ?)",
+                  (doc_id, my_doc_rev, my_doc))
+
     def _put_as_conflict(self, doc_id, doc_rev, doc):
         with self._db_handle:
             my_doc_rev, my_doc = self._get_doc(doc_id)
             c = self._db_handle.cursor()
-            c.execute("INSERT INTO conflicts VALUES (?, ?, ?)",
-                      (doc_id, my_doc_rev, my_doc))
+            self._add_conflict(c, doc_id, my_doc_rev, my_doc)
             self._put_and_update_indexes(doc_id, my_doc, doc_rev, doc)
+
+    def resolve_doc(self, doc_id, doc, conflicted_doc_revs):
+        with self._db_handle:
+            cur_rev, cur_doc = self._get_doc(doc_id)
+            new_rev = self._ensure_maximal_rev(cur_rev, conflicted_doc_revs)
+            superseded_revs = set(conflicted_doc_revs)
+            cur_conflicts = self._get_conflicts(doc_id)
+            c = self._db_handle.cursor()
+            if cur_rev in superseded_revs:
+                self._put_and_update_indexes(doc_id, cur_doc, new_rev, doc)
+            else:
+                self._add_conflict(c, doc_id, new_rev, doc)
+            deleting = [(doc_id, c_rev) for c_rev in superseded_revs]
+            c.executemany("DELETE FROM conflicts"
+                          " WHERE doc_id=? AND doc_rev=?", deleting)
+            return new_rev, self._has_conflicts(doc_id)
+

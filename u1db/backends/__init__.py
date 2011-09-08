@@ -30,6 +30,9 @@ class CommonBackend(u1db.Database):
         vcr = VectorClockRev(old_doc_rev)
         return vcr.increment(self._machine_id)
 
+    def _get_db_rev(self):
+        raise NotImplementedError(self._get_db_rev)
+
     def create_doc(self, doc, doc_id=None):
         if doc_id is None:
             doc_id = self._allocate_doc_id()
@@ -160,3 +163,9 @@ class CommonBackend(u1db.Database):
         if cur_db_rev == my_db_rev + num_inserted:
             other._record_sync_info(self._machine_id, cur_db_rev)
         return my_db_rev
+
+    def _ensure_maximal_rev(self, cur_rev, extra_revs):
+        vcr = VectorClockRev(cur_rev)
+        for rev in extra_revs:
+            vcr = VectorClockRev(vcr.maximize(rev))
+        return vcr.increment(self._machine_id)
