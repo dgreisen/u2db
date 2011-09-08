@@ -161,7 +161,7 @@ class DatabaseTests(DatabaseBaseTests):
         self.assertEqual(('test', 1, 0), self.c._get_sync_info('other'))
 
     def test__record_sync_info(self):
-        self.assertEqual({}, self.c._other_revs)
+        self.assertEqual(('test', 0, 0), self.c._get_sync_info('machine'))
         self.c._record_sync_info('machine', 10)
         self.assertEqual(('test', 0, 10), self.c._get_sync_info('machine'))
 

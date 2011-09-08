@@ -52,6 +52,7 @@ class TestSQLiteDatabase(tests.TestCase):
         # These tables must exist, though we don't care what is in them yet
         c.execute("SELECT * FROM transaction_log")
         c.execute("SELECT * FROM document")
+        c.execute("SELECT * FROM sync_log")
 
     def test__set_machine_id(self):
         db = sqlite_backend.SQLiteDatabase(':memory:')

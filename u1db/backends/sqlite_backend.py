@@ -66,6 +66,9 @@ class SQLiteDatabase(CommonBackend):
                       " doc_rev TEXT,"
                       " doc TEXT)"
                       )
+            c.execute("CREATE TABLE sync_log ("
+                      " machine_id TEXT PRIMARY KEY,"
+                      " known_db_rev INTEGER)")
             c.execute("CREATE TABLE u1db_config (name TEXT, value TEXT)")
             c.execute("INSERT INTO u1db_config VALUES ('sql_schema', '0')")
 
@@ -177,3 +180,23 @@ class SQLiteDatabase(CommonBackend):
             new_rev = self._allocate_doc_rev(old_doc_rev)
             self._put_and_update_indexes(doc_id, old_doc, new_rev, None, c)
         return new_rev
+
+    def _get_sync_info(self, other_machine_id):
+        c = self._db_handle.cursor()
+        my_db_rev = self._get_db_rev()
+        c.execute("SELECT known_db_rev FROM sync_log WHERE machine_id = ?",
+                  (other_machine_id,))
+        val = c.fetchone()
+        if val is None:
+            other_db_rev = 0
+        else:
+            other_db_rev = val[0]
+
+        return self._machine_id, my_db_rev, other_db_rev
+
+    def _record_sync_info(self, machine_id, db_rev):
+        with self._db_handle:
+            c = self._db_handle.cursor()
+            my_db_rev = self._get_db_rev()
+            c.execute("INSERT OR REPLACE INTO sync_log VALUES (?, ?)",
+                      (machine_id, db_rev))
