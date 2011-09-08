@@ -56,11 +56,13 @@ class InMemoryDatabase(u1db.Database):
         return vcr.increment(self._machine_id)
 
     def create_doc(self, doc, doc_id=None):
-        return self.put_doc(doc_id, None, doc)
+        if doc_id is None:
+            doc_id = self._allocate_doc_id()
+        return doc_id, self.put_doc(doc_id, None, doc)
 
     def put_doc(self, doc_id, old_doc_rev, doc):
         if doc_id is None:
-            doc_id = self._allocate_doc_id()
+            raise u1db.InvalidDocId()
         old_doc = None
         if doc_id in self._docs:
             if doc_id in self._conflicts:
@@ -70,7 +72,7 @@ class InMemoryDatabase(u1db.Database):
                 raise u1db.InvalidDocRev()
         new_rev = self._allocate_doc_rev(old_doc_rev)
         self._put_and_update_indexes(doc_id, old_doc, new_rev, doc)
-        return doc_id, new_rev
+        return new_rev
 
     def _put_and_update_indexes(self, doc_id, old_doc, new_rev, doc):
         for index in self._indexes.itervalues():
@@ -133,7 +135,7 @@ class InMemoryDatabase(u1db.Database):
     def delete_doc(self, doc_id, doc_rev):
         if doc_id not in self._docs:
             raise KeyError
-        _, new_rev = self.put_doc(doc_id, doc_rev, None)
+        new_rev = self.put_doc(doc_id, doc_rev, None)
         return new_rev
 
     def create_index(self, index_name, index_expression):

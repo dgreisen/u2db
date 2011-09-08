@@ -56,6 +56,19 @@ class Database(object):
         """
         raise NotImplementedError(self.get_doc)
 
+    def create_doc(self, doc, doc_id=None):
+        """Create a new document.
+
+        You can optionally specify the document identifier, but the document
+        must not already exist. See 'put_doc' if you want to override an
+        existing document.
+        :param doc: The JSON document string
+        :param doc_id: An optional identifier specifying the document id.
+        :return: (doc_id, doc_rev) The identifier used for the document, and
+            the current revision identifier for it.
+        """
+        raise NotImplementedError(self.create_doc)
+
     def put_doc(self, doc_id, old_doc_rev, doc):
         """Add/update a document.
         If the document currently has conflicts, put will fail.
@@ -66,8 +79,7 @@ class Database(object):
             superseding. If 'old_doc_rev' doesn't actually match the current
             doc_rev, the put fails, indicating there is a newer version stored.
         :param doc: The actual JSON document string.
-        :return: (doc_id, new_doc_rev, new_db_rev) Returns the new revision
-            string for the document.
+        :return: new_doc_rev - The new revision identifier for the document
         """
         raise NotImplementedError(self.put_doc)
 
@@ -119,6 +131,10 @@ class Database(object):
 
 class InvalidDocRev(Exception):
     """The document revisions supplied does not match the current version."""
+
+
+class InvalidDocId(Exception):
+    """A document was tried with an invalid document identifier."""
 
 
 class ConflictedDoc(Exception):
