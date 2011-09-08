@@ -353,12 +353,19 @@ class SQLiteDatabase(CommonBackend):
             for field, val in zip(definition, key_value):
                 args.append(field)
                 args.append(val)
-            c.execute("SELECT d.doc_id, d.doc_rev, d.doc FROM document d,"
-                      + ', '.join(tables) + " WHERE " + ', '.join(where),
-                      tuple(args))
-            res = c.fetchone()
-            if res is None:
-                continue
-            result.append(res)
+            statement = ("SELECT d.doc_id, d.doc_rev, d.doc FROM document d, "
+                         + ', '.join(tables) + " WHERE " + ' AND '.join(where))
+            try:
+                c.execute(statement, tuple(args))
+            except dbapi2.OperationalError, e:
+                raise dbapi2.OperationalError(str(e) +
+                    '\nstatement: %s\nargs: %s\n' % (statement, args))
+            res = c.fetchall()
+            result.extend(res)
         return result
 
+    def delete_index(self, index_name):
+        with self._db_handle:
+            c = self._db_handle.cursor()
+            c.execute("DELETE FROM index_definitions WHERE name = ?",
+                      (index_name,))
