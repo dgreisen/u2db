@@ -44,7 +44,7 @@ class InMemoryDatabase(u1db.Database):
     def _get_other_machine_rev(self, other_machine_id):
         return self._other_revs.get(other_machine_id, 0)
 
-    def put_state_info(self, machine_id, db_rev):
+    def _record_sync_info(self, machine_id, db_rev):
         self._other_revs[machine_id] = db_rev
 
     def _allocate_doc_id(self):
@@ -239,8 +239,8 @@ class InMemoryDatabase(u1db.Database):
         _, conflict_ids = self._insert_many_docs(all_records)
         # self._insert_conflicts(conflicted_records)
         self._insert_conflicts([r for r in all_records if r[0] in conflict_ids])
-        self.put_state_info(other_machine_id, new_db_rev)
-        other.put_state_info(self._machine_id, len(self._transaction_log))
+        self._record_sync_info(other_machine_id, new_db_rev)
+        other._record_sync_info(self._machine_id, len(self._transaction_log))
         return before_db_rev, len(self._transaction_log)
 
 

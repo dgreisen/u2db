@@ -150,6 +150,28 @@ class Database(object):
         """
         raise NotImplementedError(self._get_sync_info)
 
+    def _record_sync_info(self, other_machine_id, other_machine_rev):
+        """Record tip information for another machine.
+
+        This is not meant to be called from client code, but is part of the
+        sync api.
+
+        After _sync_exchange has been processed, the caller will have received
+        new content from this machine. This call allows the machine instigating
+        the sync to inform us what their global database revision became after
+        applying the documents we returned.
+
+        This is used to allow future sync operations to not need to repeat data
+        that we just talked about. It also means that if this is called at the
+        wrong time, there can be database records that will never be
+        synchronized.
+
+        :param other_machine_id: The identifier for the other machine.
+        :param other_machine_rev: The database revision for other_machine
+        :return: None
+        """
+        raise NotImplementedError(self._record_sync_info)
+
     def _sync_exchange(self, docs_info, from_machine_id, from_machine_rev,
                        last_known_rev):
         """Incorporate the documents sent from the other machine.

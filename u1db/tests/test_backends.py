@@ -128,10 +128,10 @@ class DatabaseTests(DatabaseBaseTests):
         doc_id, doc_rev = self.c.create_doc(simple_doc)
         self.assertEqual(('test', 1, 0), self.c._get_sync_info('other'))
 
-    def test_put_state_info(self):
+    def test__record_sync_info(self):
         self.assertEqual({}, self.c._other_revs)
-        self.c.put_state_info('machine', 10)
-        self.assertEqual({'machine': 10}, self.c._other_revs)
+        self.c._record_sync_info('machine', 10)
+        self.assertEqual(('test', 0, 10), self.c._get_sync_info('machine'))
 
 
 class TestInMemoryDatabase(InMemoryDatabaseMixin, DatabaseTests,
