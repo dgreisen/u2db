@@ -52,7 +52,7 @@ class TestInMemoryDatabaseInternals(tests.TestCase):
         self.assertEqual(None, self.c._get_current_rev('doc-id'))
 
     def test__get_current_rev_exists(self):
-        doc_id, doc_rev, db_rev = self.c.put_doc(None, None, simple_doc)
+        doc_id, doc_rev = self.c.put_doc(None, None, simple_doc)
         self.assertEqual(doc_rev, self.c._get_current_rev(doc_id))
 
 

@@ -67,7 +67,7 @@ class InMemoryDatabase(u1db.Database):
                 raise u1db.InvalidDocRev()
         new_rev = self._allocate_doc_rev(old_doc_rev)
         self._put_and_update_indexes(doc_id, old_doc, new_rev, doc)
-        return doc_id, new_rev, len(self._transaction_log)
+        return doc_id, new_rev
 
     def _put_and_update_indexes(self, doc_id, old_doc, new_rev, doc):
         for index in self._indexes.itervalues():
@@ -130,7 +130,7 @@ class InMemoryDatabase(u1db.Database):
     def delete_doc(self, doc_id, doc_rev):
         if doc_id not in self._docs:
             raise KeyError
-        _, new_rev, _ = self.put_doc(doc_id, doc_rev, None)
+        _, new_rev = self.put_doc(doc_id, doc_rev, None)
         return new_rev
 
     def create_index(self, index_name, index_expression):
@@ -151,8 +151,9 @@ class InMemoryDatabase(u1db.Database):
             result.append((doc_id, doc_rev, doc))
         return result
 
-    def whats_changed(self, old_db_rev):
-        return set(self._transaction_log[old_db_rev:])
+    def whats_changed(self, old_db_rev=0):
+        return (len(self._transaction_log),
+                set(self._transaction_log[old_db_rev:]))
 
     def _insert_many_docs(self, docs_info):
         """Add a bunch of documents to the local store.
@@ -216,7 +217,7 @@ class InMemoryDatabase(u1db.Database):
         """
         seen_ids, conflict_ids = self._insert_many_docs(docs_info)
         new_docs = []
-        for doc_id in self.whats_changed(last_known_rev):
+        for doc_id in self.whats_changed(last_known_rev)[1]:
             if doc_id in seen_ids:
                 continue
             doc_rev, doc = self._docs[doc_id]
@@ -241,7 +242,7 @@ class InMemoryDatabase(u1db.Database):
         (other_machine_id, other_rev,
          others_my_rev) = other.get_sync_info(self._machine_id)
         docs_to_send = []
-        for doc_id in self.whats_changed(others_my_rev):
+        for doc_id in self.whats_changed(others_my_rev)[1]:
             doc_rev, doc = self._docs[doc_id]
             docs_to_send.append((doc_id, doc_rev, doc))
         other_last_known_rev = self._other_revs.get(other_machine_id, 0)
