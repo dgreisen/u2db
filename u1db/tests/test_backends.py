@@ -247,13 +247,14 @@ class DatabaseIndexTests(DatabaseBaseTests):
 
     def test_create_index(self):
         self.c.create_index('test-idx', ['name'])
-        self.assertEqual(['test-idx'], self.c._indexes.keys())
+        self.assertEqual([('test-idx', ['name'])],
+                         self.c.list_indexes())
 
     def test_create_index_evaluates_it(self):
         doc_id, doc_rev = self.c.create_doc(simple_doc)
         self.c.create_index('test-idx', ['key'])
-        self.assertEqual({'value': [doc_id]},
-                         self.c._indexes['test-idx']._values)
+        self.assertEqual([(doc_id, doc_rev, simple_doc)],
+                         self.c.get_from_index('test-idx', [('value',)]))
 
     def test_create_index_multiple_exact_matches(self):
         doc_id, doc_rev = self.c.create_doc(simple_doc)
@@ -287,6 +288,8 @@ class DatabaseIndexTests(DatabaseBaseTests):
         self.assertEqual([(doc_id, doc_rev, doc)],
             self.c.get_from_index('test-idx', [('value', 'value2')]))
 
+    # TODO: Add tests that show indexes actually show selectivity, etc
+
     def test_put_adds_to_index(self):
         self.c.create_index('test-idx', ['key'])
         doc_id, doc_rev = self.c.create_doc(simple_doc)
@@ -316,9 +319,9 @@ class DatabaseIndexTests(DatabaseBaseTests):
 
     def test_delete_index(self):
         self.c.create_index('test-idx', ['key'])
-        self.assertEqual(['test-idx'], self.c._indexes.keys())
+        self.assertEqual([('test-idx', ['key'])], self.c.list_indexes())
         self.c.delete_index('test-idx')
-        self.assertEqual([], self.c._indexes.keys())
+        self.assertEqual([], self.c.list_indexes())
 
     def test__sync_exchange_updates_indexes(self):
         doc_id, doc_rev = self.c.create_doc(simple_doc)
@@ -336,6 +339,11 @@ class DatabaseIndexTests(DatabaseBaseTests):
 
 class TestInMemoryDatabaseIndexes(InMemoryDatabaseMixin, DatabaseIndexTests,
                                   tests.TestCase):
+    pass
+
+
+class TestSQLiteDatabaseIndexes(SQLiteDatabaseMixin, DatabaseIndexTests,
+                                tests.TestCase):
     pass
 
 

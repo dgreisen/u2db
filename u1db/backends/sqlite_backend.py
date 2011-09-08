@@ -16,6 +16,7 @@
 
 """A U1DB implementation that uses SQLite as its persistence layer."""
 
+import simplejson
 from sqlite3 import dbapi2
 
 import u1db
@@ -66,6 +67,14 @@ class SQLiteDatabase(CommonBackend):
                       " doc_rev TEXT,"
                       " doc TEXT)"
                       )
+            c.execute("CREATE TABLE document_fields ("
+                      " doc_id TEXT,"
+                      " field_name TEXT,"
+                      " value TEXT,"
+                      " CONSTRAINT document_fields_pkey"
+                      " PRIMARY KEY (doc_id, field_name))")
+            # TODO: CREATE_INDEX document_fields(value), or maybe
+            #       document_fields(field_name, value) or ...
             c.execute("CREATE TABLE sync_log ("
                       " machine_id TEXT PRIMARY KEY,"
                       " known_db_rev INTEGER)")
@@ -74,6 +83,12 @@ class SQLiteDatabase(CommonBackend):
                       " doc_rev TEXT,"
                       " doc TEXT,"
                   " CONSTRAINT conflicts_pkey PRIMARY KEY (doc_id, doc_rev))")
+            c.execute("CREATE TABLE index_definitions ("
+                      " name TEXT,"
+                      " offset INT,"
+                      " field TEXT,"
+                      " CONSTRAINT index_definitions_pkey"
+                      " PRIMARY KEY (name, offset))")
             c.execute("CREATE TABLE u1db_config (name TEXT, value TEXT)")
             c.execute("INSERT INTO u1db_config VALUES ('sql_schema', '0')")
 
@@ -170,12 +185,22 @@ class SQLiteDatabase(CommonBackend):
         #         index.remove_json(doc_id, old_doc)
         #     if doc not in (None, 'null'):
         #         index.add_json(doc_id, doc)
+        if doc:
+            raw_doc = simplejson.loads(doc)
+        else:
+            raw_doc = {}
         if old_doc:
             c.execute("UPDATE document SET doc_rev=?, doc=? WHERE doc_id = ?",
                       (new_rev, doc, doc_id))
+            c.execute("DELETE FROM document_fields WHERE doc_id = ?",
+                      (doc_id,))
         else:
             c.execute("INSERT INTO document VALUES (?, ?, ?)",
                       (doc_id, new_rev, doc))
+        values = [(doc_id, field_name, value) for field_name, value in
+                  raw_doc.iteritems()]
+        c.executemany("INSERT INTO document_fields VALUES (?, ?, ?)",
+                      values)
         c.execute("INSERT INTO transaction_log(doc_id) VALUES (?)",
                   (doc_id,))
 
@@ -277,3 +302,70 @@ class SQLiteDatabase(CommonBackend):
                           " WHERE doc_id=? AND doc_rev=?", deleting)
             return new_rev, self._has_conflicts(doc_id)
 
+    def create_index(self, index_name, index_expression):
+        with self._db_handle:
+            c = self._db_handle.cursor()
+            definition = [(index_name, idx, field)
+                          for idx, field in enumerate(index_expression)]
+            c.executemany("INSERT INTO index_definitions VALUES (?, ?, ?)",
+                          definition)
+
+    def list_indexes(self):
+        """Return the list of indexes and their definitions."""
+        c = self._db_handle.cursor()
+        # TODO: How do we test the ordering?
+        c.execute("SELECT name, field FROM index_definitions"
+                  " ORDER BY name, offset")
+        definitions = []
+        cur_name = None
+        for name, field in c.fetchall():
+            if cur_name != name:
+                definitions.append((name, []))
+                cur_name = name
+            definitions[-1][-1].append(field)
+        return definitions
+
+    def _get_index_definition(self, index_name):
+        """Return the stored definition for a given index_name."""
+        c = self._db_handle.cursor()
+        c.execute("SELECT field FROM index_definitions"
+                  " WHERE name = ? ORDER BY offset", (index_name,))
+        return [x[0] for x in c.fetchall()]
+
+    def get_from_index(self, index_name, key_values):
+        definition = self._get_index_definition(index_name)
+        # First, build the definition. We join the document_fields table
+        # against itself, as many times as the 'width' of our definition.
+        # We then do a query for each key_value, one-at-a-time.
+        tables = ["document_fields d%d" % i for i in range(len(definition))]
+        where = ["d.doc_id = d%d.doc_id"
+                 " AND d%d.field_name = ?"
+                 " AND d%d.value = ?"
+                 % (i, i, i) for i in range(len(definition))]
+        c = self._db_handle.cursor()
+        result = []
+        for key_value in key_values:
+            # Merge the lists together, so that:
+            # [field1, field2, field3], [val1, val2, val3]
+            # Becomes:
+            # (field1, val1, field2, val2, field3, val3)
+            args = []
+            for field, val in zip(definition, key_value):
+                args.append(field)
+                args.append(val)
+            statement = ("SELECT d.doc_id, d.doc_rev, d.doc FROM document d, "
+                         + ', '.join(tables) + " WHERE " + ' AND '.join(where))
+            try:
+                c.execute(statement, tuple(args))
+            except dbapi2.OperationalError, e:
+                raise dbapi2.OperationalError(str(e) +
+                    '\nstatement: %s\nargs: %s\n' % (statement, args))
+            res = c.fetchall()
+            result.extend(res)
+        return result
+
+    def delete_index(self, index_name):
+        with self._db_handle:
+            c = self._db_handle.cursor()
+            c.execute("DELETE FROM index_definitions WHERE name = ?",
+                      (index_name,))

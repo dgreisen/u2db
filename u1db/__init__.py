@@ -124,6 +124,13 @@ class Database(object):
         """
         raise NotImplementedError(self.delete_index)
 
+    def list_indexes(self):
+        """List the definitions of all known indexes.
+
+        :return: A list of [('index-name', ['field', 'field2'])] definitions.
+        """
+        raise NotImplementedError(self.list_indexes)
+
     def get_from_index(self, index_name, key_values):
         """Return documents that match the exact keys supplied.
 
