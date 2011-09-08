@@ -33,30 +33,14 @@ class DatabaseBaseTests(object):
         super(DatabaseBaseTests, self).setUp()
         self.c = self.create_database('test')
 
+
+class InMemoryDatabaseMixin(object):
+
+    def create_database(self, machine_id):
+        return inmemory.InMemoryDatabase(machine_id)
+
+
 class DatabaseTests(DatabaseBaseTests):
-
-    def test__allocate_doc_id(self):
-        self.assertEqual('doc-1', self.c._allocate_doc_id())
-
-    def test__allocate_doc_rev_from_None(self):
-        self.assertEqual('test:1', self.c._allocate_doc_rev(None))
-
-    def test__allocate_doc_rev_incremental(self):
-        self.assertEqual('test:2', self.c._allocate_doc_rev('test:1'))
-
-    def test__allocate_doc_rev_other(self):
-        self.assertEqual('machine:1|test:1',
-                         self.c._allocate_doc_rev('machine:1'))
-
-    def test__get_machine_id(self):
-        self.assertEqual('test', self.c._machine_id)
-
-    def test__get_current_rev_missing(self):
-        self.assertEqual(None, self.c._get_current_rev('doc-id'))
-
-    def test__get_current_rev_exists(self):
-        doc_id, doc_rev, db_rev = self.c.put_doc(None, None, simple_doc)
-        self.assertEqual(doc_rev, self.c._get_current_rev(doc_id))
 
     def test_put_doc_allocating_doc_id(self):
         doc_id, new_rev, db_rev = self.c.put_doc(None, None, simple_doc)
@@ -128,17 +112,34 @@ class DatabaseTests(DatabaseBaseTests):
         self.c.put_state_info('machine', 10)
         self.assertEqual({'machine': 10}, self.c._other_revs)
 
-class InMemoryDatabaseMixin(object):
-
-    def create_database(self, machine_id):
-        return inmemory.InMemoryDatabase(machine_id)
-
 class TestInMemoryDatabase(InMemoryDatabaseMixin, DatabaseTests,
                            tests.TestCase):
-    pass
 
-class TestInMemoryDatabaseIndexes(InMemoryDatabaseMixin, DatabaseBaseTests,
-                                  tests.TestCase):
+    def test__allocate_doc_id(self):
+        self.assertEqual('doc-1', self.c._allocate_doc_id())
+
+    def test__allocate_doc_rev_from_None(self):
+        self.assertEqual('test:1', self.c._allocate_doc_rev(None))
+
+    def test__allocate_doc_rev_incremental(self):
+        self.assertEqual('test:2', self.c._allocate_doc_rev('test:1'))
+
+    def test__allocate_doc_rev_other(self):
+        self.assertEqual('machine:1|test:1',
+                         self.c._allocate_doc_rev('machine:1'))
+
+    def test__get_machine_id(self):
+        self.assertEqual('test', self.c._machine_id)
+
+    def test__get_current_rev_missing(self):
+        self.assertEqual(None, self.c._get_current_rev('doc-id'))
+
+    def test__get_current_rev_exists(self):
+        doc_id, doc_rev, db_rev = self.c.put_doc(None, None, simple_doc)
+        self.assertEqual(doc_rev, self.c._get_current_rev(doc_id))
+
+
+class DatabaseIndexTests(DatabaseBaseTests):
 
     def test_create_index(self):
         self.c.create_index('test-idx', ['name'])
@@ -276,12 +277,16 @@ class TestInMemoryDatabaseIndexes(InMemoryDatabaseMixin, DatabaseBaseTests,
         self.assertEqual([], self.c.get_from_index('test-idx', [('value',)]))
 
 
-class TestInMemoryDatabaseSync(tests.TestCase):
+class TestInMemoryDatabaseIndexes(InMemoryDatabaseMixin, DatabaseIndexTests,
+                                  tests.TestCase):
+    pass
+
+class DatabaseSyncTests(DatabaseBaseTests):
 
     def setUp(self):
-        super(TestInMemoryDatabaseSync, self).setUp()
-        self.c1 = inmemory.InMemoryDatabase('test1')
-        self.c2 = inmemory.InMemoryDatabase('test2')
+        super(DatabaseSyncTests, self).setUp()
+        self.c1 = self.create_database('test1')
+        self.c2 = self.create_database('test2')
 
     def test_sync_tracks_db_rev_of_other(self):
         self.c1.sync(self.c2)
@@ -323,7 +328,7 @@ class TestInMemoryDatabaseSync(tests.TestCase):
 
     def test_sync_ignores_convergence(self):
         doc_id, doc_rev, db_rev = self.c1.put_doc(None, None, simple_doc)
-        self.c3 = inmemory.InMemoryDatabase('test3')
+        self.c3 = self.create_database('test3')
         self.c1.sync(self.c3)
         self.c2.sync(self.c3)
         self.c1.sync(self.c2)
@@ -336,7 +341,7 @@ class TestInMemoryDatabaseSync(tests.TestCase):
 
     def test_sync_ignores_superseded(self):
         doc_id, doc_rev, _ = self.c1.put_doc(None, None, simple_doc)
-        self.c3 = inmemory.InMemoryDatabase('test3')
+        self.c3 = self.create_database('test3')
         self.c1.sync(self.c3)
         self.c2.sync(self.c3)
         new_doc = '{"key": "altval"}'
@@ -421,7 +426,7 @@ class TestInMemoryDatabaseSync(tests.TestCase):
         self.c1.create_index('test-idx', ['key'])
         self.c1.sync(self.c2)
         self.c2.create_index('test-idx', ['key'])
-        self.c3 = inmemory.InMemoryDatabase('test3')
+        self.c3 = self.create_database('test3')
         self.c1.sync(self.c3)
         deleted_rev = self.c1.delete_doc(doc_id, doc1_rev)
         self.c1.sync(self.c2)
@@ -522,7 +527,7 @@ class TestInMemoryDatabaseSync(tests.TestCase):
         self.assertEqual([(doc2_rev, new_doc2),
                           (doc1_rev, simple_doc)],
                          self.c1.get_doc_conflicts(doc_id))
-        self.c3 = inmemory.InMemoryDatabase('test3')
+        self.c3 = self.create_database('test3')
         new_doc3 = '{"key": "valin3"}'
         doc_id, doc3_rev, _ = self.c3.put_doc(doc_id, None, new_doc3)
         self.c1.sync(self.c3)
@@ -542,7 +547,7 @@ class TestInMemoryDatabaseSync(tests.TestCase):
         new_doc2 = '{"key": "valin2"}'
         doc_id, doc2_rev, _ = self.c2.put_doc(doc_id, None, new_doc2)
         self.c1.sync(self.c2)
-        self.c3 = inmemory.InMemoryDatabase('test3')
+        self.c3 = self.create_database('test3')
         new_doc3 = '{"key": "valin3"}'
         doc_id, doc3_rev, _ = self.c3.put_doc(doc_id, None, new_doc3)
         self.c1.sync(self.c3)
@@ -557,6 +562,10 @@ class TestInMemoryDatabaseSync(tests.TestCase):
                           (doc2_rev, new_doc2)],
                          self.c1.get_doc_conflicts(doc_id))
 
+
+class TestInMemoryDatabaseSync(InMemoryDatabaseMixin, DatabaseSyncTests,
+                               tests.TestCase):
+    pass
 
 class TestInMemoryIndex(tests.TestCase):
 
