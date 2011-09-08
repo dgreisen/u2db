@@ -78,11 +78,15 @@ class InMemoryDatabase(CommonBackend):
         self._docs[doc_id] = (new_rev, doc)
         self._transaction_log.append(doc_id)
 
-    def get_doc(self, doc_id):
+    def _get_doc(self, doc_id):
         try:
             doc_rev, doc = self._docs[doc_id]
         except KeyError:
-            return None, None, False
+            return None, None
+        return doc_rev, doc
+
+    def get_doc(self, doc_id):
+        doc_rev, doc = self._get_doc(doc_id)
         if doc == 'null':
             doc = None
         return doc_rev, doc, (doc_id in self._conflicts)

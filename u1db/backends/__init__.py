@@ -33,6 +33,14 @@ class CommonBackend(u1db.Database):
     def _get_db_rev(self):
         raise NotImplementedError(self._get_db_rev)
 
+    def _get_doc(self, doc_id):
+        """Extract the document from storage.
+
+        This can return None if the document doesn't exist, it should not check
+        if there are any conflicts, etc.
+        """
+        raise NotImplementedError(self._get_doc)
+
     def create_doc(self, doc, doc_id=None):
         if doc_id is None:
             doc_id = self._allocate_doc_id()
@@ -50,7 +58,7 @@ class CommonBackend(u1db.Database):
 
         :return: (old_doc, state)
         """
-        cur_rev, cur_doc, _ = self.get_doc(doc_id)
+        cur_rev, cur_doc = self._get_doc(doc_id)
         doc_vcr = VectorClockRev(doc_rev)
         cur_vcr = VectorClockRev(cur_rev)
         if doc_vcr.is_newer(cur_vcr):
@@ -124,11 +132,11 @@ class CommonBackend(u1db.Database):
         for doc_id in changed_doc_ids:
             if doc_id in seen_ids:
                 continue
-            doc_rev, doc, _ = self.get_doc(doc_id)
+            doc_rev, doc = self._get_doc(doc_id)
             new_docs.append((doc_id, doc_rev, doc))
         conflicts = []
         for doc_id in conflict_ids:
-            doc_rev, doc, _ = self.get_doc(doc_id)
+            doc_rev, doc = self._get_doc(doc_id)
             conflicts.append((doc_id, doc_rev, doc))
         self._record_sync_info(from_machine_id, from_machine_rev)
         self._last_exchange_log = {
@@ -148,7 +156,7 @@ class CommonBackend(u1db.Database):
         docs_to_send = []
         my_db_rev, changed_doc_ids = self.whats_changed(others_my_rev)
         for doc_id in changed_doc_ids:
-            doc_rev, doc, _ = self.get_doc(doc_id)
+            doc_rev, doc = self._get_doc(doc_id)
             docs_to_send.append((doc_id, doc_rev, doc))
         _, _, other_last_known_rev = self._get_sync_info(other_machine_id)
         (new_records, conflicted_records,
