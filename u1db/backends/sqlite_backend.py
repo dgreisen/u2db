@@ -325,6 +325,40 @@ class SQLiteDatabase(CommonBackend):
             definitions[-1][-1].append(field)
         return definitions
 
+    def _get_index_definition(self, index_name):
+        """Return the stored definition for a given index_name."""
+        c = self._db_handle.cursor()
+        c.execute("SELECT field FROM index_definitions"
+                  " WHERE name = ? ORDER BY offset", (index_name,))
+        return [x[0] for x in c.fetchall()]
+
     def get_from_index(self, index_name, key_values):
-        return []
+        definition = self._get_index_definition(index_name)
+        # First, build the definition. We join the document_fields table
+        # against itself, as many times as the 'width' of our definition.
+        # We then do a query for each key_value, one-at-a-time.
+        tables = ["document_fields d%d" % i for i in range(len(definition))]
+        where = ["d.doc_id = d%d.doc_id"
+                 " AND d%d.field_name = ?"
+                 " AND d%d.value = ?"
+                 % (i, i, i) for i in range(len(definition))]
+        c = self._db_handle.cursor()
+        result = []
+        for key_value in key_values:
+            # Merge the lists together, so that:
+            # [field1, field2, field3], [val1, val2, val3]
+            # Becomes:
+            # (field1, val1, field2, val2, field3, val3)
+            args = []
+            for field, val in zip(definition, key_value):
+                args.append(field)
+                args.append(val)
+            c.execute("SELECT d.doc_id, d.doc_rev, d.doc FROM document d,"
+                      + ', '.join(tables) + " WHERE " + ', '.join(where),
+                      tuple(args))
+            res = c.fetchone()
+            if res is None:
+                continue
+            result.append(res)
+        return result
 

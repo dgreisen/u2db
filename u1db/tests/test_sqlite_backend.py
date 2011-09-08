@@ -89,6 +89,14 @@ class TestSQLiteDatabase(tests.TestCase):
         db.create_index('test-idx', ["key", "key2"])
         self.assertEqual([('test-idx', ["key", "key2"])], db.list_indexes())
 
+    def test__get_index_definition(self):
+        db = sqlite_backend.SQLiteDatabase(':memory:')
+        db.create_index('test-idx', ["key", "key2"])
+        # TODO: How would you test that an index is getting used for an SQL
+        #       request?
+        self.assertEqual(["key", "key2"],
+                         db._get_index_definition('test-idx'))
+
     def test_list_index_mixed(self):
         db = sqlite_backend.SQLiteDatabase(':memory:')
         # Make sure that we properly order the output
