@@ -28,6 +28,7 @@ class SQLiteDatabase(u1db.Database):
     def __init__(self, sqlite_file):
         """Create a new sqlite file."""
         self._db_handle = dbapi2.connect(sqlite_file)
+        self._real_machine_id = None
         self._ensure_schema()
 
     def _get_sqlite_handle(self):
@@ -66,3 +67,24 @@ class SQLiteDatabase(u1db.Database):
                       )
             c.execute("CREATE TABLE u1db_config (name TEXT, value TEXT)")
             c.execute("INSERT INTO u1db_config VALUES ('sql_schema', '0')")
+
+    def _set_machine_id(self, machine_id):
+        """Force the machine_id to be set."""
+        with self._db_handle:
+            c = self._db_handle.cursor()
+            c.execute("INSERT INTO u1db_config VALUES ('machine_id', ?)",
+                      (machine_id,))
+        self._real_machine_id = machine_id
+
+    def _get_machine_id(self):
+        if self._real_machine_id is not None:
+            return self._real_machine_id
+        c = self._db_handle.cursor()
+        c.execute("SELECT value FROM u1db_config WHERE name = 'machine_id'")
+        val = c.fetchone()
+        if val is None:
+            return None
+        self._real_machine_id = val[0]
+        return self._real_machine_id
+
+    _machine_id = property(_get_machine_id)

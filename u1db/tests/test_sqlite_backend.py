@@ -52,3 +52,16 @@ class TestSQLiteDatabase(tests.TestCase):
         # These tables must exist, though we don't care what is in them yet
         c.execute("SELECT * FROM transaction_log")
         c.execute("SELECT * FROM document")
+
+    def test__set_machine_id(self):
+        db = sqlite_backend.SQLiteDatabase(':memory:')
+        self.assertEqual(None, db._real_machine_id)
+        self.assertEqual(None, db._machine_id)
+        db._set_machine_id('foo')
+        c = db._get_sqlite_handle().cursor()
+        c.execute("SELECT value FROM u1db_config WHERE name='machine_id'")
+        self.assertEqual(('foo',), c.fetchone())
+        self.assertEqual('foo', db._real_machine_id)
+        self.assertEqual('foo', db._machine_id)
+        db._close_sqlite_handle()
+        self.assertEqual('foo', db._machine_id)
