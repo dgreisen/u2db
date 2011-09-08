@@ -291,8 +291,8 @@ class DatabaseSyncTests(DatabaseBaseTests):
 
     def test_sync_tracks_db_rev_of_other(self):
         self.assertEqual((0, 0), self.c1.sync(self.c2))
-        self.assertEqual(0, self.c1._get_other_machine_rev(self.c2._machine_id))
-        self.assertEqual(0, self.c2._get_other_machine_rev(self.c1._machine_id))
+        self.assertEqual(0, self.c1._get_sync_info('test2')[2])
+        self.assertEqual(0, self.c2._get_sync_info('test1')[2])
         self.assertEqual({'receive': {'docs': [], 'from_id': 'test1',
                                       'from_rev': 0, 'last_known_rev': 0},
                           'return': {'new_docs': [], 'conf_docs': [],
@@ -303,8 +303,8 @@ class DatabaseSyncTests(DatabaseBaseTests):
         doc_id, doc_rev = self.c1.create_doc(simple_doc)
         self.assertEqual((1, 1), self.c1.sync(self.c2))
         self.assertEqual((doc_rev, simple_doc, False), self.c2.get_doc(doc_id))
-        self.assertEqual(1, self.c1._get_other_machine_rev(self.c2._machine_id))
-        self.assertEqual(1, self.c2._get_other_machine_rev(self.c1._machine_id))
+        self.assertEqual(1, self.c1._get_sync_info('test2')[2])
+        self.assertEqual(1, self.c2._get_sync_info('test1')[2])
         self.assertEqual({'receive': {'docs': [(doc_id, doc_rev)],
                                       'from_id': 'test1',
                                       'from_rev': 1, 'last_known_rev': 0},
@@ -317,8 +317,8 @@ class DatabaseSyncTests(DatabaseBaseTests):
         self.c1.create_index('test-idx', ['key'])
         self.assertEqual((0, 1), self.c1.sync(self.c2))
         self.assertEqual((doc_rev, simple_doc, False), self.c1.get_doc(doc_id))
-        self.assertEqual(1, self.c1._get_other_machine_rev(self.c2._machine_id))
-        self.assertEqual(1, self.c2._get_other_machine_rev(self.c1._machine_id))
+        self.assertEqual(1, self.c1._get_sync_info('test2')[2])
+        self.assertEqual(1, self.c2._get_sync_info('test1')[2])
         self.assertEqual({'receive': {'docs': [], 'from_id': 'test1',
                                       'from_rev': 0, 'last_known_rev': 0},
                           'return': {'new_docs': [(doc_id, doc_rev)],

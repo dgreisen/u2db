@@ -41,10 +41,6 @@ class InMemoryDatabase(u1db.Database):
         other_rev = self._other_revs.get(other_machine_id, 0)
         return self._machine_id, len(self._transaction_log), other_rev
 
-    def _get_other_machine_rev(self, other_machine_id):
-        """Used by the test suite to examine the internal state."""
-        return self._other_revs.get(other_machine_id, 0)
-
     def _record_sync_info(self, machine_id, db_rev):
         self._other_revs[machine_id] = db_rev
 
