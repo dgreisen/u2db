@@ -207,7 +207,8 @@ class SQLiteDatabase(CommonBackend):
             c.execute("INSERT OR REPLACE INTO sync_log VALUES (?, ?)",
                       (machine_id, db_rev))
 
-    def _insert_many_docs(self, docs_info):
+    def _compare_and_insert_doc(self, doc_id, doc_rev, doc):
         with self._db_handle:
-            return super(SQLiteDatabase, self)._insert_many_docs(docs_info)
+            return super(SQLiteDatabase, self)._compare_and_insert_doc(
+                doc_id, doc_rev, doc)
 

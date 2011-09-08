@@ -42,6 +42,28 @@ class CommonBackend(u1db.Database):
     def _put_and_update_indexes(self, doc_id, old_doc, new_rev, doc):
         raise NotImplementedError(self._put_and_update_indexes)
 
+    def _compare_and_insert_doc(self, doc_id, doc_rev, doc):
+        """Check if a document is newer than current and insert it.
+
+        :return: (old_doc, state)
+        """
+        cur_rev, cur_doc, _ = self.get_doc(doc_id)
+        doc_vcr = VectorClockRev(doc_rev)
+        cur_vcr = VectorClockRev(cur_rev)
+        if doc_vcr.is_newer(cur_vcr):
+            self._put_and_update_indexes(doc_id, cur_doc, doc_rev, doc)
+            return cur_doc, 'inserted'
+        elif doc_rev == cur_rev:
+            # magical convergence
+            return cur_doc, 'converged'
+        elif cur_vcr.is_newer(doc_vcr):
+            # Don't add this to seen_ids, because we have something newer,
+            # so we should send it back, and we should not generate a
+            # conflict
+            return cur_doc, 'superseded'
+        else:
+            return cur_doc, 'conflicted'
+
     def _insert_many_docs(self, docs_info):
         """Add a bunch of documents to the local store.
 
@@ -56,23 +78,21 @@ class CommonBackend(u1db.Database):
         seen_ids = set()
         num_inserted = 0
         for doc_id, doc_rev, doc in docs_info:
-            cur_rev, cur_doc, _ = self.get_doc(doc_id)
-            doc_vcr = VectorClockRev(doc_rev)
-            cur_vcr = VectorClockRev(cur_rev)
+            old_doc, state = self._compare_and_insert_doc(doc_id, doc_rev, doc)
             seen_ids.add(doc_id)
-            if doc_vcr.is_newer(cur_vcr):
-                self._put_and_update_indexes(doc_id, cur_doc, doc_rev, doc)
+            if state == 'inserted':
                 num_inserted += 1
-            elif doc_rev == cur_rev:
+            elif state == 'converged':
                 # magical convergence
                 continue
-            elif cur_vcr.is_newer(doc_vcr):
+            elif state == 'superseded':
                 # Don't add this to seen_ids, because we have something newer,
                 # so we should send it back, and we should not generate a
                 # conflict
                 seen_ids.remove(doc_id)
                 continue
             else:
+                assert state == 'conflicted'
                 conflict_ids.add(doc_id)
         return seen_ids, conflict_ids, num_inserted
 
