@@ -199,27 +199,6 @@ class InMemoryDatabase(u1db.Database):
 
     def _sync_exchange(self, docs_info, from_machine_id, from_machine_rev,
                        last_known_rev):
-        """Incorporate the documents sent from the other machine.
-
-        This adds docs to the local store, and determines documents that need
-        to be returned to the other machine.
-
-        :param docs_info: A list of [(doc_id, doc_rev, doc)] tuples indicating
-            documents which should be updated on this machine.
-        :param from_machine_id: The other machines' identifier
-        :param from_machine_rev: The db rev for the other machine, indicating
-            the tip of data being sent by docs_info.
-        :param last_known_rev: The last db_rev that other_machine knows about
-            this
-        :return: (new_records, conflicted_records, new_db_rev)
-            new_records - A list of [(doc_id, doc_rev, doc)] that have changed
-                          since other_my_rev
-            conflicted_records - A list of [(doc_id, doc_rev, doc)] for entries
-                which were sent in docs_info, but which cannot be applied
-                because it would conflict.
-            new_db_rev - After applying docs_info, this is the current db_rev
-                for this client
-        """
         seen_ids, conflict_ids = self._insert_many_docs(docs_info)
         new_docs = []
         for doc_id in self.whats_changed(last_known_rev)[1]:
@@ -255,12 +234,14 @@ class InMemoryDatabase(u1db.Database):
          new_db_rev) = other._sync_exchange(docs_to_send, self._machine_id,
                             len(self._transaction_log),
                             other_last_known_rev)
+        before_db_rev = len(self._transaction_log)
         all_records = new_records + conflicted_records
         _, conflict_ids = self._insert_many_docs(all_records)
         # self._insert_conflicts(conflicted_records)
         self._insert_conflicts([r for r in all_records if r[0] in conflict_ids])
         self.put_state_info(other_machine_id, new_db_rev)
         other.put_state_info(self._machine_id, len(self._transaction_log))
+        return before_db_rev, len(self._transaction_log)
 
 
 class InMemoryIndex(object):

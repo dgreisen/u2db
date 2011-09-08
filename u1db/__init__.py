@@ -26,7 +26,10 @@ class Database(object):
 
         :param other: Another database to sync with
         :param callback: gives optional progress callbacks
-        :return: db_revid for the new global last-modified-db-info
+        :return: (old_db_rev, new_db_rev)
+            The global database revision before sync started, and the current
+            database revision. You can pass the old_db_rev to whats_changed to
+            find out what was actually updated.
         """
         raise NotImplementedError(self.sync)
 
@@ -38,7 +41,9 @@ class Database(object):
 
         :param old_db_rev: The global revision state of the database in the old
             state.
-        :return: A list of [doc_id] that have changed since db_rev.
+        :return: (cur_db_rev, set([doc_id]))
+            The current global revision state of the database, and the set of
+            document ids that were changed in between old_db_rev and cur_db_rev
         """
         raise NotImplementedError(self.whats_changed)
 

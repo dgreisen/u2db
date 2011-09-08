@@ -289,7 +289,7 @@ class DatabaseSyncTests(DatabaseBaseTests):
         self.c2 = self.create_database('test2')
 
     def test_sync_tracks_db_rev_of_other(self):
-        self.c1.sync(self.c2)
+        self.assertEqual((0, 0), self.c1.sync(self.c2))
         self.assertEqual(0, self.c1._get_other_machine_rev(self.c2._machine_id))
         self.assertEqual(0, self.c2._get_other_machine_rev(self.c1._machine_id))
         self.assertEqual({'receive': {'docs': [], 'from_id': 'test1',
@@ -300,7 +300,7 @@ class DatabaseSyncTests(DatabaseBaseTests):
 
     def test_sync_puts_changes(self):
         doc_id, doc_rev = self.c1.create_doc(simple_doc)
-        self.c1.sync(self.c2)
+        self.assertEqual((1, 1), self.c1.sync(self.c2))
         self.assertEqual((doc_rev, simple_doc, False), self.c2.get_doc(doc_id))
         self.assertEqual(1, self.c1._get_other_machine_rev(self.c2._machine_id))
         self.assertEqual(1, self.c2._get_other_machine_rev(self.c1._machine_id))
