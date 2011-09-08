@@ -48,3 +48,7 @@ class TestSQLiteDatabase(tests.TestCase):
         c.execute("SELECT * FROM u1db_config")
         config = dict([(r[0], r[1]) for r in c.fetchall()])
         self.assertEqual({'sql_schema': '0'}, config)
+
+        # These tables must exist, though we don't care what is in them yet
+        c.execute("SELECT * FROM transaction_log")
+        c.execute("SELECT * FROM document")

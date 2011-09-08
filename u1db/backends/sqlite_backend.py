@@ -56,5 +56,13 @@ class SQLiteDatabase(u1db.Database):
         if val is not None:
             return
         with self._db_handle:
+            c.execute("CREATE TABLE transaction_log ("
+                      " db_rev INTEGER PRIMARY KEY AUTOINCREMENT,"
+                      " doc_id TEXT)")
+            c.execute("CREATE TABLE document ("
+                      " doc_id TEXT PRIMARY KEY,"
+                      " doc_rev TEXT,"
+                      " doc TEXT)"
+                      )
             c.execute("CREATE TABLE u1db_config (name TEXT, value TEXT)")
             c.execute("INSERT INTO u1db_config VALUES ('sql_schema', '0')")
