@@ -16,6 +16,7 @@
 
 """A U1DB implementation that uses SQLite as its persistence layer."""
 
+import simplejson
 from sqlite3 import dbapi2
 
 import u1db
@@ -72,7 +73,8 @@ class SQLiteDatabase(CommonBackend):
                       " value TEXT,"
                       " CONSTRAINT document_fields_pkey"
                       " PRIMARY KEY (doc_id, field_name))")
-            # TODO: CREATE_INDEX document_fields(value)
+            # TODO: CREATE_INDEX document_fields(value), or maybe
+            #       document_fields(field_name, value) or ...
             c.execute("CREATE TABLE sync_log ("
                       " machine_id TEXT PRIMARY KEY,"
                       " known_db_rev INTEGER)")
@@ -183,12 +185,22 @@ class SQLiteDatabase(CommonBackend):
         #         index.remove_json(doc_id, old_doc)
         #     if doc not in (None, 'null'):
         #         index.add_json(doc_id, doc)
+        if doc:
+            raw_doc = simplejson.loads(doc)
+        else:
+            raw_doc = {}
         if old_doc:
             c.execute("UPDATE document SET doc_rev=?, doc=? WHERE doc_id = ?",
                       (new_rev, doc, doc_id))
+            c.execute("DELETE FROM document_fields WHERE doc_id = ?",
+                      (doc_id,))
         else:
             c.execute("INSERT INTO document VALUES (?, ?, ?)",
                       (doc_id, new_rev, doc))
+        values = [(doc_id, field_name, value) for field_name, value in
+                  raw_doc.iteritems()]
+        c.executemany("INSERT INTO document_fields VALUES (?, ?, ?)",
+                      values)
         c.execute("INSERT INTO transaction_log(doc_id) VALUES (?)",
                   (doc_id,))
 

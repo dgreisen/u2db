@@ -104,3 +104,27 @@ class TestSQLiteDatabase(tests.TestCase):
         self.assertEqual([('idx-1', ['key10', 'key11']),
                           ('idx-2', ['key20', 'key21', 'key22'])],
                          db.list_indexes())
+
+    def test_create_extracts_fields(self):
+        db = sqlite_backend.SQLiteDatabase(':memory:')
+        doc1_id, doc1_rev = db.create_doc('{"key1": "val1", "key2": "val2"}')
+        doc2_id, doc2_rev = db.create_doc('{"key1": "valx", "key2": "valy"}')
+        c = db._get_sqlite_handle().cursor()
+        c.execute("SELECT doc_id, field_name, value FROM document_fields"
+                  " ORDER BY doc_id, field_name, value")
+        self.assertEqual([(doc1_id, "key1", "val1"),
+                          (doc1_id, "key2", "val2"),
+                          (doc2_id, "key1", "valx"),
+                          (doc2_id, "key2", "valy"),
+                         ], c.fetchall())
+
+    def test_put_updates_fields(self):
+        db = sqlite_backend.SQLiteDatabase(':memory:')
+        doc1_id, doc1_rev = db.create_doc('{"key1": "val1", "key2": "val2"}')
+        doc2_rev = db.put_doc(doc1_id, doc1_rev, '{"key1": "val1", "key2": "valy"}')
+        c = db._get_sqlite_handle().cursor()
+        c.execute("SELECT doc_id, field_name, value FROM document_fields"
+                  " ORDER BY doc_id, field_name, value")
+        self.assertEqual([(doc1_id, "key1", "val1"),
+                          (doc1_id, "key2", "valy"),
+                         ], c.fetchall())
