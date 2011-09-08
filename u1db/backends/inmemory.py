@@ -42,6 +42,7 @@ class InMemoryDatabase(u1db.Database):
         return self._machine_id, len(self._transaction_log), other_rev
 
     def _get_other_machine_rev(self, other_machine_id):
+        """Used by the test suite to examine the internal state."""
         return self._other_revs.get(other_machine_id, 0)
 
     def _record_sync_info(self, machine_id, db_rev):
@@ -93,21 +94,11 @@ class InMemoryDatabase(u1db.Database):
         return doc_rev, doc, (doc_id in self._conflicts)
 
     def get_doc_conflicts(self, doc_id):
-        """Get the list of conflict texts for the given document.
-        The order of the conflicts is such that the first entry is the value
-        that would be returned by "GET_DOC".
-
-        :return: [(doc_rev, doc)] a list of tuples of the revision for the
-            content, and the JSON string of the content.
-        """
         if doc_id not in self._conflicts:
             return []
         result = [self._docs[doc_id]]
         result.extend(self._conflicts[doc_id])
         return result
-
-    def _get_current_rev(self, doc_id):
-        return self._docs.get(doc_id, (None, None))[0]
 
     def resolve_doc(self, doc_id, doc, conflicted_doc_revs):
         cur_rev, cur_doc = self._docs[doc_id]

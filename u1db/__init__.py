@@ -120,6 +120,17 @@ class Database(object):
         """
         raise NotImplementedError(self.get_from_index)
 
+    def get_doc_conflicts(self, doc_id):
+        """Get the list of conflict texts for the given document.
+
+        The order of the conflicts is such that the first entry is the value
+        that would be returned by "get_doc".
+
+        :return: [(doc_rev, doc)] a list of tuples of the revision for the
+            content, and the JSON string of the content.
+        """
+        raise NotImplementedError(self.get_doc_conflicts)
+
     def resolve_doc(self, doc_id, doc, conflicted_doc_revs):
         """Mark a document as no longer conflicted.
         We take the list of revisions that the client knows about that it is

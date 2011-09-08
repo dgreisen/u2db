@@ -48,13 +48,6 @@ class TestInMemoryDatabaseInternals(tests.TestCase):
     def test__get_machine_id(self):
         self.assertEqual('test', self.c._machine_id)
 
-    def test__get_current_rev_missing(self):
-        self.assertEqual(None, self.c._get_current_rev('doc-id'))
-
-    def test__get_current_rev_exists(self):
-        doc_id, doc_rev = self.c.create_doc(simple_doc)
-        self.assertEqual(doc_rev, self.c._get_current_rev(doc_id))
-
 
 class TestInMemoryIndex(tests.TestCase):
 
