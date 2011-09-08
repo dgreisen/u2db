@@ -18,6 +18,10 @@
 
 
 class Database(object):
+    """A JSON Document data store.
+
+    This data store can be synchronized with other u1db.Database instances.
+    """
 
     def sync(self, other, callback):
         """Synchronize my database with another database.
