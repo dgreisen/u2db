@@ -19,9 +19,13 @@
 
 import u1db
 from u1db import (
-    tests, vectorclock
+    tests,
+    vectorclock,
     )
-from u1db.backends import inmemory
+from u1db.backends import (
+    inmemory,
+    sqlite_backend,
+    )
 
 
 simple_doc = '{"key": "value"}'
@@ -51,6 +55,14 @@ class InMemoryDatabaseMixin(object):
 
     def create_database(self, machine_id):
         return inmemory.InMemoryDatabase(machine_id)
+
+
+class SQLiteDatabaseMixin(object):
+
+    def create_database(self, machine_id):
+        db = sqlite_backend.SQLiteDatabase(':memory:')
+        db._set_machine_id(machine_id)
+        return db
 
 
 class DatabaseTests(DatabaseBaseTests):
@@ -125,6 +137,9 @@ class DatabaseTests(DatabaseBaseTests):
         self.c.delete_doc(doc_id, doc_rev)
         self.assertEqual((2, set([doc_id])), self.c.whats_changed(db_rev))
 
+    def test_whats_changed_initial_database(self):
+        self.assertEqual((0, set()), self.c.whats_changed())
+
     def test_whats_changed_returns_one_id_for_multiple_changes(self):
         doc_id, doc_rev = self.c.create_doc(simple_doc)
         self.c.put_doc(doc_id, doc_rev, '{"new": "contents"}')
@@ -148,6 +163,9 @@ class TestInMemoryDatabase(InMemoryDatabaseMixin, DatabaseTests,
                            tests.TestCase):
     pass
 
+class TestSQLiteDatabase(SQLiteDatabaseMixin, DatabaseTests,
+                         tests.TestCase):
+    pass
 
 class DatabaseIndexTests(DatabaseBaseTests):
 

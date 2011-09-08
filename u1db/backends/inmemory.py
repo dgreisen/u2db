@@ -20,10 +20,11 @@ import re
 import simplejson
 
 import u1db
+from u1db.backends import CommonBackend
 from u1db.vectorclock import VectorClockRev
 
 
-class InMemoryDatabase(u1db.Database):
+class InMemoryDatabase(CommonBackend):
     """A database that only stores the data internally."""
 
     def __init__(self, machine_id):
@@ -47,15 +48,6 @@ class InMemoryDatabase(u1db.Database):
     def _allocate_doc_id(self):
         self._doc_counter += 1
         return 'doc-%d' % (self._doc_counter,)
-
-    def _allocate_doc_rev(self, old_doc_rev):
-        vcr = VectorClockRev(old_doc_rev)
-        return vcr.increment(self._machine_id)
-
-    def create_doc(self, doc, doc_id=None):
-        if doc_id is None:
-            doc_id = self._allocate_doc_id()
-        return doc_id, self.put_doc(doc_id, None, doc)
 
     def put_doc(self, doc_id, old_doc_rev, doc):
         if doc_id is None:

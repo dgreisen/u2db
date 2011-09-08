@@ -15,3 +15,23 @@
 # Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
 
 """"""
+
+import u1db
+from u1db.vectorclock import VectorClockRev
+
+
+class CommonBackend(u1db.Database):
+
+    def _allocate_doc_id(self):
+        """Generate a unique identifier for this document."""
+        raise NotImplementedError(self._allocate_doc_id)
+
+    def _allocate_doc_rev(self, old_doc_rev):
+        vcr = VectorClockRev(old_doc_rev)
+        return vcr.increment(self._machine_id)
+
+    def create_doc(self, doc, doc_id=None):
+        if doc_id is None:
+            doc_id = self._allocate_doc_id()
+        return doc_id, self.put_doc(doc_id, None, doc)
+

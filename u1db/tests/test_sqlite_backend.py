@@ -65,3 +65,12 @@ class TestSQLiteDatabase(tests.TestCase):
         self.assertEqual('foo', db._machine_id)
         db._close_sqlite_handle()
         self.assertEqual('foo', db._machine_id)
+
+    def test__get_db_rev(self):
+        db = sqlite_backend.SQLiteDatabase(':memory:')
+        db._set_machine_id('foo')
+        self.assertEqual(0, db._get_db_rev())
+
+    def test__allocate_doc_id(self):
+        db = sqlite_backend.SQLiteDatabase(':memory:')
+        self.assertEqual('doc-0', db._allocate_doc_id())
