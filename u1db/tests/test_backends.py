@@ -290,7 +290,7 @@ class DatabaseSyncTests(DatabaseBaseTests):
         self.c2 = self.create_database('test2')
 
     def test_sync_tracks_db_rev_of_other(self):
-        self.assertEqual((0, 0), self.c1.sync(self.c2))
+        self.assertEqual(0, self.c1.sync(self.c2))
         self.assertEqual(0, self.c1._get_sync_info('test2')[2])
         self.assertEqual(0, self.c2._get_sync_info('test1')[2])
         self.assertEqual({'receive': {'docs': [], 'from_id': 'test1',
@@ -301,7 +301,7 @@ class DatabaseSyncTests(DatabaseBaseTests):
 
     def test_sync_puts_changes(self):
         doc_id, doc_rev = self.c1.create_doc(simple_doc)
-        self.assertEqual((1, 1), self.c1.sync(self.c2))
+        self.assertEqual(1, self.c1.sync(self.c2))
         self.assertEqual((doc_rev, simple_doc, False), self.c2.get_doc(doc_id))
         self.assertEqual(1, self.c1._get_sync_info('test2')[2])
         self.assertEqual(1, self.c2._get_sync_info('test1')[2])
@@ -315,7 +315,7 @@ class DatabaseSyncTests(DatabaseBaseTests):
     def test_sync_pulls_changes(self):
         doc_id, doc_rev = self.c2.create_doc(simple_doc)
         self.c1.create_index('test-idx', ['key'])
-        self.assertEqual((0, 1), self.c1.sync(self.c2))
+        self.assertEqual(0, self.c1.sync(self.c2))
         self.assertEqual((doc_rev, simple_doc, False), self.c1.get_doc(doc_id))
         self.assertEqual(1, self.c1._get_sync_info('test2')[2])
         self.assertEqual(1, self.c2._get_sync_info('test1')[2])
@@ -327,12 +327,36 @@ class DatabaseSyncTests(DatabaseBaseTests):
         self.assertEqual([(doc_id, doc_rev, simple_doc)],
                          self.c1.get_from_index('test-idx', [('value',)]))
 
+    def test_sync_pulling_doesnt_update_other_if_changed(self):
+        doc_id, doc_rev = self.c2.create_doc(simple_doc)
+        # Right after we call c2._sync_exchange, we update our local database
+        # with a new record. When we finish synchronizing, we can notice that
+        # something locally was updated, and we cannot tell c2 our new updated
+        # db_rev
+        orig_se = self.c2._sync_exchange
+        def after_sync_exchange(*args, **kwargs):
+            result = orig_se(*args, **kwargs)
+            self.c1.create_doc(simple_doc)
+            return result
+        self.c2._sync_exchange = after_sync_exchange
+        self.assertEqual(0, self.c1.sync(self.c2))
+        self.assertEqual({'receive': {'docs': [], 'from_id': 'test1',
+                                      'from_rev': 0, 'last_known_rev': 0},
+                          'return': {'new_docs': [(doc_id, doc_rev)],
+                                     'conf_docs': [], 'last_rev': 1}},
+                         self.c2._last_exchange_log)
+        self.assertEqual(1, self.c1._get_sync_info('test2')[2])
+        # c2 should not have gotten a '_record_sync_info' call, because the
+        # local database had been updated more than just by the messages
+        # returned from c2.
+        self.assertEqual(0, self.c2._get_sync_info('test1')[2])
+
     def test_sync_ignores_convergence(self):
         doc_id, doc_rev = self.c1.create_doc(simple_doc)
         self.c3 = self.create_database('test3')
-        self.assertEqual((1, 1), self.c1.sync(self.c3))
-        self.assertEqual((0, 1), self.c2.sync(self.c3))
-        self.assertEqual((1, 1), self.c1.sync(self.c2))
+        self.assertEqual(1, self.c1.sync(self.c3))
+        self.assertEqual(0, self.c2.sync(self.c3))
+        self.assertEqual(1, self.c1.sync(self.c2))
         self.assertEqual({'receive': {'docs': [(doc_id, doc_rev)],
                                       'from_id': 'test1',
                                       'from_rev': 1, 'last_known_rev': 0},
