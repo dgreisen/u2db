@@ -128,6 +128,34 @@ class Database(object):
         """
         raise NotImplementedError(self.resolve_doc)
 
+    def _sync_exchange(self, docs_info, from_machine_id, from_machine_rev,
+                       last_known_rev):
+        """Incorporate the documents sent from the other machine.
+
+        This is not meant to be called by client code directly, but is used as
+        part of sync().
+
+        This adds docs to the local store, and determines documents that need
+        to be returned to the other machine.
+
+        :param docs_info: A list of [(doc_id, doc_rev, doc)] tuples indicating
+            documents which should be updated on this machine.
+        :param from_machine_id: The other machines' identifier
+        :param from_machine_rev: The db rev for the other machine, indicating
+            the tip of data being sent by docs_info.
+        :param last_known_rev: The last db_rev that other_machine knows about
+            this
+        :return: (new_records, conflicted_records, new_db_rev)
+            new_records - A list of [(doc_id, doc_rev, doc)] that have changed
+                          since other_my_rev
+            conflicted_records - A list of [(doc_id, doc_rev, doc)] for entries
+                which were sent in docs_info, but which cannot be applied
+                because it would conflict.
+            new_db_rev - After applying docs_info, this is the current db_rev
+                for this client
+        """
+        raise NotImplementedError(self. sync_exchange)
+
 
 class InvalidDocRev(Exception):
     """The document revisions supplied does not match the current version."""

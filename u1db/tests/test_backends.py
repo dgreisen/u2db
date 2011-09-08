@@ -215,61 +215,61 @@ class DatabaseIndexTests(DatabaseBaseTests):
         self.c.delete_index('test-idx')
         self.assertEqual([], self.c._indexes.keys())
 
-    def test_sync_exchange(self):
-        result = self.c.sync_exchange([('doc-id', 'machine:1', simple_doc)],
-                                      'machine', from_machine_rev=10,
-                                      last_known_rev=0)
+    def test__sync_exchange(self):
+        result = self.c._sync_exchange([('doc-id', 'machine:1', simple_doc)],
+                                       'machine', from_machine_rev=10,
+                                       last_known_rev=0)
         self.assertEqual(('machine:1', simple_doc, False),
                          self.c.get_doc('doc-id'))
         self.assertEqual(['doc-id'], self.c._transaction_log)
         self.assertEqual(([], [], 1), result)
         self.assertEqual(10, self.c.get_sync_info('machine')[-1])
 
-    def test_sync_exchange_refuses_conflicts(self):
+    def test__sync_exchange_refuses_conflicts(self):
         doc_id, doc_rev = self.c.create_doc(simple_doc)
         self.assertEqual([doc_id], self.c._transaction_log)
         new_doc = '{"key": "altval"}'
-        result = self.c.sync_exchange([(doc_id, 'machine:1', new_doc)],
-                                      'machine', from_machine_rev=10,
-                                      last_known_rev=0)
+        result = self.c._sync_exchange([(doc_id, 'machine:1', new_doc)],
+                                       'machine', from_machine_rev=10,
+                                       last_known_rev=0)
         self.assertEqual([doc_id], self.c._transaction_log)
         self.assertEqual(([], [(doc_id, doc_rev, simple_doc)], 1), result)
 
-    def test_sync_exchange_ignores_convergence(self):
+    def test__sync_exchange_ignores_convergence(self):
         doc_id, doc_rev = self.c.create_doc(simple_doc)
         self.assertEqual([doc_id], self.c._transaction_log)
-        result = self.c.sync_exchange([(doc_id, doc_rev, simple_doc)],
-                                      'machine', from_machine_rev=10,
-                                      last_known_rev=1)
+        result = self.c._sync_exchange([(doc_id, doc_rev, simple_doc)],
+                                       'machine', from_machine_rev=10,
+                                       last_known_rev=1)
         self.assertEqual([doc_id], self.c._transaction_log)
         self.assertEqual(([], [], 1), result)
 
-    def test_sync_exchange_returns_new_docs(self):
+    def test__sync_exchange_returns_new_docs(self):
         doc_id, doc_rev = self.c.create_doc(simple_doc)
         self.assertEqual([doc_id], self.c._transaction_log)
-        result = self.c.sync_exchange([], 'other-machine', from_machine_rev=10,
-                                      last_known_rev=0)
+        result = self.c._sync_exchange([], 'other-machine',
+                                       from_machine_rev=10, last_known_rev=0)
         self.assertEqual([doc_id], self.c._transaction_log)
         self.assertEqual(([(doc_id, doc_rev, simple_doc)], [], 1), result)
 
-    def test_sync_exchange_getting_newer_docs(self):
+    def test__sync_exchange_getting_newer_docs(self):
         doc_id, doc_rev = self.c.create_doc(simple_doc)
         self.assertEqual([doc_id], self.c._transaction_log)
         new_doc = '{"key": "altval"}'
-        result = self.c.sync_exchange([(doc_id, 'test:1|z:2', new_doc)],
-                                      'other-machine', from_machine_rev=10,
-                                      last_known_rev=0)
+        result = self.c._sync_exchange([(doc_id, 'test:1|z:2', new_doc)],
+                                       'other-machine', from_machine_rev=10,
+                                       last_known_rev=0)
         self.assertEqual([doc_id, doc_id], self.c._transaction_log)
         self.assertEqual(([], [], 2), result)
 
-    def test_sync_exchange_updates_indexes(self):
+    def test__sync_exchange_updates_indexes(self):
         doc_id, doc_rev = self.c.create_doc(simple_doc)
         self.c.create_index('test-idx', ['key'])
         new_doc = '{"key": "altval"}'
         other_rev = 'test:1|z:2'
-        result = self.c.sync_exchange([(doc_id, other_rev, new_doc)],
-                                      'other-machine', from_machine_rev=10,
-                                      last_known_rev=0)
+        result = self.c._sync_exchange([(doc_id, other_rev, new_doc)],
+                                       'other-machine', from_machine_rev=10,
+                                       last_known_rev=0)
         self.assertEqual((other_rev, new_doc, False), self.c.get_doc(doc_id))
         self.assertEqual([(doc_id, other_rev, new_doc)],
                          self.c.get_from_index('test-idx', [('altval',)]))

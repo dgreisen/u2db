@@ -197,8 +197,8 @@ class InMemoryDatabase(u1db.Database):
             self._conflicts.setdefault(doc_id, []).append((my_doc_rev, my_doc))
             self._put_and_update_indexes(doc_id, my_doc, doc_rev, doc)
 
-    def sync_exchange(self, docs_info, from_machine_id, from_machine_rev,
-                      last_known_rev):
+    def _sync_exchange(self, docs_info, from_machine_id, from_machine_rev,
+                       last_known_rev):
         """Incorporate the documents sent from the other machine.
 
         This adds docs to the local store, and determines documents that need
@@ -252,7 +252,7 @@ class InMemoryDatabase(u1db.Database):
             docs_to_send.append((doc_id, doc_rev, doc))
         other_last_known_rev = self._other_revs.get(other_machine_id, 0)
         (new_records, conflicted_records,
-         new_db_rev) = other.sync_exchange(docs_to_send, self._machine_id,
+         new_db_rev) = other._sync_exchange(docs_to_send, self._machine_id,
                             len(self._transaction_log),
                             other_last_known_rev)
         all_records = new_records + conflicted_records
