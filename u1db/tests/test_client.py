@@ -17,8 +17,9 @@
 """The Client class for U1DB."""
 
 
+import u1db
 from u1db import (
-    tests,
+    tests, vectorclock
     )
 from u1db.backends import inmemory
 
@@ -63,7 +64,7 @@ class DatabaseTests(DatabaseBaseTests):
     def test_put_fails_with_bad_old_rev(self):
         doc_id, old_rev, db_rev = self.c.put_doc('my_doc_id', None, simple_doc)
         new_doc = '{"something": "else"}'
-        self.assertRaises(inmemory.InvalidDocRev,
+        self.assertRaises(u1db.InvalidDocRev,
             self.c.put_doc, 'my_doc_id', 'other:1', new_doc)
         self.assertEqual((old_rev, simple_doc, False),
                          self.c.get_doc('my_doc_id'))
@@ -81,7 +82,7 @@ class DatabaseTests(DatabaseBaseTests):
     def test_delete_doc_bad_rev(self):
         doc_id, doc_rev, db_rev = self.c.put_doc(None, None, simple_doc)
         self.assertEqual((doc_rev, simple_doc, False), self.c.get_doc(doc_id))
-        self.assertRaises(inmemory.InvalidDocRev,
+        self.assertRaises(u1db.InvalidDocRev,
             self.c.delete_doc, doc_id, 'other:1')
         self.assertEqual((doc_rev, simple_doc, False), self.c.get_doc(doc_id))
 
@@ -457,7 +458,7 @@ class DatabaseSyncTests(DatabaseBaseTests):
         self.c1.sync(self.c2)
         self.assertEqual((doc2_rev, new_doc1, True), self.c1.get_doc(doc_id))
         new_doc2 = '{"key": "local"}'
-        self.assertRaises(inmemory.ConflictedDoc,
+        self.assertRaises(u1db.ConflictedDoc,
             self.c1.put_doc, doc_id, doc2_rev, new_doc2)
 
     def test_delete_refuses_for_conflicted(self):
@@ -466,7 +467,7 @@ class DatabaseSyncTests(DatabaseBaseTests):
         doc_id, doc2_rev, db2_rev = self.c2.put_doc(doc_id, None, new_doc1)
         self.c1.sync(self.c2)
         self.assertEqual((doc2_rev, new_doc1, True), self.c1.get_doc(doc_id))
-        self.assertRaises(inmemory.ConflictedDoc,
+        self.assertRaises(u1db.ConflictedDoc,
             self.c1.delete_doc, doc_id, doc2_rev)
 
     def test_get_doc_conflicts_unconflicted(self):
@@ -514,9 +515,9 @@ class DatabaseSyncTests(DatabaseBaseTests):
         self.assertFalse(has_conflicts)
         self.assertEqual((new_rev, simple_doc, False), self.c1.get_doc(doc_id))
         self.assertEqual([], self.c1.get_doc_conflicts(doc_id))
-        vcr_1 = inmemory.VectorClockRev(doc1_rev)
-        vcr_2 = inmemory.VectorClockRev(doc2_rev)
-        vcr_new = inmemory.VectorClockRev(new_rev)
+        vcr_1 = vectorclock.VectorClockRev(doc1_rev)
+        vcr_2 = vectorclock.VectorClockRev(doc2_rev)
+        vcr_new = vectorclock.VectorClockRev(new_rev)
         self.assertTrue(vcr_new.is_newer(vcr_1))
         self.assertTrue(vcr_new.is_newer(vcr_2))
 
