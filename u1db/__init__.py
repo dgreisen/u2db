@@ -23,7 +23,7 @@ class Database(object):
     This data store can be synchronized with other u1db.Database instances.
     """
 
-    def sync(self, other, callback):
+    def sync(self, other, callback=None):
         """Synchronize my database with another database.
         This pushes local changes to the remote, and pulls remote changes
         locally.  There is not a separate push vs pull step.
@@ -222,7 +222,7 @@ class Database(object):
             new_db_rev - After applying docs_info, this is the current db_rev
                 for this client
         """
-        raise NotImplementedError(self. sync_exchange)
+        raise NotImplementedError(self._sync_exchange)
 
 
 class InvalidDocRev(Exception):

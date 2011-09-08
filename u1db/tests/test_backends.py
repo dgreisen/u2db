@@ -19,9 +19,13 @@
 
 import u1db
 from u1db import (
-    tests, vectorclock
+    tests,
+    vectorclock,
     )
-from u1db.backends import inmemory
+from u1db.backends import (
+    inmemory,
+    sqlite_backend,
+    )
 
 
 simple_doc = '{"key": "value"}'
@@ -32,15 +36,33 @@ class DatabaseBaseTests(object):
     def create_database(self, machine_id):
         raise NotImplementedError(self.create_database)
 
+    def close_database(self, database):
+        """Close the database that was opened by create_database.
+
+        The default implementation is a no-op.
+        """
+
     def setUp(self):
         super(DatabaseBaseTests, self).setUp()
         self.c = self.create_database('test')
+
+    def tearDown(self):
+        self.close_database(self.c)
+        super(DatabaseBaseTests, self).tearDown()
 
 
 class InMemoryDatabaseMixin(object):
 
     def create_database(self, machine_id):
         return inmemory.InMemoryDatabase(machine_id)
+
+
+class SQLiteDatabaseMixin(object):
+
+    def create_database(self, machine_id):
+        db = sqlite_backend.SQLiteDatabase(':memory:')
+        db._set_machine_id(machine_id)
+        return db
 
 
 class DatabaseTests(DatabaseBaseTests):
@@ -92,11 +114,18 @@ class DatabaseTests(DatabaseBaseTests):
         doc_id, doc_rev = self.c.create_doc(simple_doc)
         self.assertEqual((doc_rev, simple_doc, False), self.c.get_doc(doc_id))
         deleted_rev = self.c.delete_doc(doc_id, doc_rev)
+        self.assertNotEqual(None, deleted_rev)
         self.assertEqual((deleted_rev, None, False), self.c.get_doc(doc_id))
 
     def test_delete_doc_non_existant(self):
         self.assertRaises(KeyError,
             self.c.delete_doc, 'non-existing', 'other:1')
+
+    def test_delete_doc_already_deleted(self):
+        doc_id, doc_rev = self.c.create_doc(simple_doc)
+        new_rev = self.c.delete_doc(doc_id, doc_rev)
+        self.assertRaises(KeyError, self.c.delete_doc, doc_id, new_rev)
+        self.assertEqual((new_rev, None, False), self.c.get_doc(doc_id))
 
     def test_delete_doc_bad_rev(self):
         doc_id, doc_rev = self.c.create_doc(simple_doc)
@@ -107,7 +136,10 @@ class DatabaseTests(DatabaseBaseTests):
 
     def test_put_updates_transaction_log(self):
         doc_id, doc_rev = self.c.create_doc(simple_doc)
-        self.assertEqual((1, set([doc_id])), self.c.whats_changed())
+        self.assertEqual([doc_id], self.c._get_transaction_log())
+        doc_rev = self.c.put_doc(doc_id, doc_rev, '{"something": "else"}')
+        self.assertEqual([doc_id, doc_id], self.c._get_transaction_log())
+        self.assertEqual((2, set([doc_id])), self.c.whats_changed())
 
     def test_delete_updates_transaction_log(self):
         doc_id, doc_rev = self.c.create_doc(simple_doc)
@@ -115,10 +147,14 @@ class DatabaseTests(DatabaseBaseTests):
         self.c.delete_doc(doc_id, doc_rev)
         self.assertEqual((2, set([doc_id])), self.c.whats_changed(db_rev))
 
+    def test_whats_changed_initial_database(self):
+        self.assertEqual((0, set()), self.c.whats_changed())
+
     def test_whats_changed_returns_one_id_for_multiple_changes(self):
         doc_id, doc_rev = self.c.create_doc(simple_doc)
         self.c.put_doc(doc_id, doc_rev, '{"new": "contents"}')
         self.assertEqual((2, set([doc_id])), self.c.whats_changed())
+        self.assertEqual((2, set()), self.c.whats_changed(2))
 
     def test__get_sync_info(self):
         self.assertEqual(('test', 0, 0), self.c._get_sync_info('other'))
@@ -129,13 +165,81 @@ class DatabaseTests(DatabaseBaseTests):
         self.assertEqual(('test', 1, 0), self.c._get_sync_info('other'))
 
     def test__record_sync_info(self):
-        self.assertEqual({}, self.c._other_revs)
+        self.assertEqual(('test', 0, 0), self.c._get_sync_info('machine'))
         self.c._record_sync_info('machine', 10)
         self.assertEqual(('test', 0, 10), self.c._get_sync_info('machine'))
 
 
+    def test__sync_exchange(self):
+        result = self.c._sync_exchange([('doc-id', 'machine:1', simple_doc)],
+                                       'machine', from_machine_rev=10,
+                                       last_known_rev=0)
+        self.assertEqual(('machine:1', simple_doc, False),
+                         self.c.get_doc('doc-id'))
+        self.assertEqual(['doc-id'], self.c._get_transaction_log())
+        self.assertEqual(([], [], 1), result)
+        self.assertEqual(10, self.c._get_sync_info('machine')[-1])
+
+    def test__sync_exchange_refuses_conflicts(self):
+        doc_id, doc_rev = self.c.create_doc(simple_doc)
+        self.assertEqual([doc_id], self.c._get_transaction_log())
+        new_doc = '{"key": "altval"}'
+        result = self.c._sync_exchange([(doc_id, 'machine:1', new_doc)],
+                                       'machine', from_machine_rev=10,
+                                       last_known_rev=0)
+        self.assertEqual([doc_id], self.c._get_transaction_log())
+        self.assertEqual(([], [(doc_id, doc_rev, simple_doc)], 1), result)
+
+    def test__sync_exchange_ignores_convergence(self):
+        doc_id, doc_rev = self.c.create_doc(simple_doc)
+        self.assertEqual([doc_id], self.c._get_transaction_log())
+        result = self.c._sync_exchange([(doc_id, doc_rev, simple_doc)],
+                                       'machine', from_machine_rev=10,
+                                       last_known_rev=1)
+        self.assertEqual([doc_id], self.c._get_transaction_log())
+        self.assertEqual(([], [], 1), result)
+
+    def test__sync_exchange_returns_new_docs(self):
+        doc_id, doc_rev = self.c.create_doc(simple_doc)
+        self.assertEqual([doc_id], self.c._get_transaction_log())
+        result = self.c._sync_exchange([], 'other-machine',
+                                       from_machine_rev=10, last_known_rev=0)
+        self.assertEqual([doc_id], self.c._get_transaction_log())
+        self.assertEqual(([(doc_id, doc_rev, simple_doc)], [], 1), result)
+
+    def test__sync_exchange_getting_newer_docs(self):
+        doc_id, doc_rev = self.c.create_doc(simple_doc)
+        self.assertEqual([doc_id], self.c._get_transaction_log())
+        new_doc = '{"key": "altval"}'
+        result = self.c._sync_exchange([(doc_id, 'test:1|z:2', new_doc)],
+                                       'other-machine', from_machine_rev=10,
+                                       last_known_rev=0)
+        self.assertEqual([doc_id, doc_id], self.c._get_transaction_log())
+        self.assertEqual(([], [], 2), result)
+
+    def test__sync_exchange_with_concurrent_updates(self):
+        doc_id, doc_rev = self.c.create_doc(simple_doc)
+        self.assertEqual([doc_id], self.c._get_transaction_log())
+        orig_wc = self.c.whats_changed
+        def after_whatschanged(*args, **kwargs):
+            val = orig_wc(*args, **kwargs)
+            self.c.create_doc('{"new": "doc"}')
+            return val
+        self.c.whats_changed = after_whatschanged
+        new_doc = '{"key": "altval"}'
+        result = self.c._sync_exchange([(doc_id, 'test:1|z:2', new_doc)],
+                                       'other-machine', from_machine_rev=10,
+                                       last_known_rev=0)
+        self.assertEqual(([], [], 2), result)
+
+
 class TestInMemoryDatabase(InMemoryDatabaseMixin, DatabaseTests,
                            tests.TestCase):
+    pass
+
+
+class TestSQLiteDatabase(SQLiteDatabaseMixin, DatabaseTests,
+                         tests.TestCase):
     pass
 
 
@@ -215,53 +319,6 @@ class DatabaseIndexTests(DatabaseBaseTests):
         self.assertEqual(['test-idx'], self.c._indexes.keys())
         self.c.delete_index('test-idx')
         self.assertEqual([], self.c._indexes.keys())
-
-    def test__sync_exchange(self):
-        result = self.c._sync_exchange([('doc-id', 'machine:1', simple_doc)],
-                                       'machine', from_machine_rev=10,
-                                       last_known_rev=0)
-        self.assertEqual(('machine:1', simple_doc, False),
-                         self.c.get_doc('doc-id'))
-        self.assertEqual(['doc-id'], self.c._transaction_log)
-        self.assertEqual(([], [], 1), result)
-        self.assertEqual(10, self.c._get_sync_info('machine')[-1])
-
-    def test__sync_exchange_refuses_conflicts(self):
-        doc_id, doc_rev = self.c.create_doc(simple_doc)
-        self.assertEqual([doc_id], self.c._transaction_log)
-        new_doc = '{"key": "altval"}'
-        result = self.c._sync_exchange([(doc_id, 'machine:1', new_doc)],
-                                       'machine', from_machine_rev=10,
-                                       last_known_rev=0)
-        self.assertEqual([doc_id], self.c._transaction_log)
-        self.assertEqual(([], [(doc_id, doc_rev, simple_doc)], 1), result)
-
-    def test__sync_exchange_ignores_convergence(self):
-        doc_id, doc_rev = self.c.create_doc(simple_doc)
-        self.assertEqual([doc_id], self.c._transaction_log)
-        result = self.c._sync_exchange([(doc_id, doc_rev, simple_doc)],
-                                       'machine', from_machine_rev=10,
-                                       last_known_rev=1)
-        self.assertEqual([doc_id], self.c._transaction_log)
-        self.assertEqual(([], [], 1), result)
-
-    def test__sync_exchange_returns_new_docs(self):
-        doc_id, doc_rev = self.c.create_doc(simple_doc)
-        self.assertEqual([doc_id], self.c._transaction_log)
-        result = self.c._sync_exchange([], 'other-machine',
-                                       from_machine_rev=10, last_known_rev=0)
-        self.assertEqual([doc_id], self.c._transaction_log)
-        self.assertEqual(([(doc_id, doc_rev, simple_doc)], [], 1), result)
-
-    def test__sync_exchange_getting_newer_docs(self):
-        doc_id, doc_rev = self.c.create_doc(simple_doc)
-        self.assertEqual([doc_id], self.c._transaction_log)
-        new_doc = '{"key": "altval"}'
-        result = self.c._sync_exchange([(doc_id, 'test:1|z:2', new_doc)],
-                                       'other-machine', from_machine_rev=10,
-                                       last_known_rev=0)
-        self.assertEqual([doc_id, doc_id], self.c._transaction_log)
-        self.assertEqual(([], [], 2), result)
 
     def test__sync_exchange_updates_indexes(self):
         doc_id, doc_rev = self.c.create_doc(simple_doc)
@@ -386,7 +443,7 @@ class DatabaseSyncTests(DatabaseBaseTests):
         self.c1.create_index('test-idx', ['key'])
         new_doc = '{"key": "altval"}'
         doc_id, doc2_rev = self.c2.create_doc(new_doc, doc_id=doc_id)
-        self.assertEqual([doc_id], self.c1._transaction_log)
+        self.assertEqual([doc_id], self.c1._get_transaction_log())
         self.c1.sync(self.c2)
         self.assertEqual({'receive': {'docs': [(doc_id, doc1_rev)],
                                       'from_id': 'test1',
@@ -395,7 +452,7 @@ class DatabaseSyncTests(DatabaseBaseTests):
                                      'conf_docs': [(doc_id, doc2_rev)],
                                      'last_rev': 1}},
                          self.c2._last_exchange_log)
-        self.assertEqual([doc_id, doc_id], self.c1._transaction_log)
+        self.assertEqual([doc_id, doc_id], self.c1._get_transaction_log())
         self.assertEqual((doc2_rev, new_doc, True), self.c1.get_doc(doc_id))
         self.assertEqual((doc2_rev, new_doc, False), self.c2.get_doc(doc_id))
         self.assertEqual([(doc_id, doc2_rev, new_doc)],
@@ -410,7 +467,7 @@ class DatabaseSyncTests(DatabaseBaseTests):
         new_doc = '{"key": "altval"}'
         doc1_rev = self.c1.put_doc(doc_id, doc1_rev, new_doc)
         doc2_rev = self.c2.delete_doc(doc_id, doc2_rev)
-        self.assertEqual([doc_id, doc_id], self.c1._transaction_log)
+        self.assertEqual([doc_id, doc_id], self.c1._get_transaction_log())
         self.c1.sync(self.c2)
         self.assertEqual({'receive': {'docs': [(doc_id, doc1_rev)],
                                       'from_id': 'test1',
@@ -419,7 +476,8 @@ class DatabaseSyncTests(DatabaseBaseTests):
                                      'conf_docs': [(doc_id, doc2_rev)],
                                      'last_rev': 2}},
                          self.c2._last_exchange_log)
-        self.assertEqual([doc_id, doc_id, doc_id], self.c1._transaction_log)
+        self.assertEqual([doc_id, doc_id, doc_id],
+                         self.c1._get_transaction_log())
         self.assertEqual((doc2_rev, None, True), self.c1.get_doc(doc_id))
         self.assertEqual((doc2_rev, None, False), self.c2.get_doc(doc_id))
         self.assertEqual([], self.c1.get_from_index('test-idx', [('value',)]))
@@ -590,5 +648,10 @@ class DatabaseSyncTests(DatabaseBaseTests):
 
 class TestInMemoryDatabaseSync(InMemoryDatabaseMixin, DatabaseSyncTests,
                                tests.TestCase):
+    pass
+
+
+class TestSQLiteDatabase(SQLiteDatabaseMixin, DatabaseSyncTests,
+                         tests.TestCase):
     pass
 

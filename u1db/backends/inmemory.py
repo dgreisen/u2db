@@ -20,10 +20,11 @@ import re
 import simplejson
 
 import u1db
+from u1db.backends import CommonBackend
 from u1db.vectorclock import VectorClockRev
 
 
-class InMemoryDatabase(u1db.Database):
+class InMemoryDatabase(CommonBackend):
     """A database that only stores the data internally."""
 
     def __init__(self, machine_id):
@@ -48,14 +49,11 @@ class InMemoryDatabase(u1db.Database):
         self._doc_counter += 1
         return 'doc-%d' % (self._doc_counter,)
 
-    def _allocate_doc_rev(self, old_doc_rev):
-        vcr = VectorClockRev(old_doc_rev)
-        return vcr.increment(self._machine_id)
+    def _get_transaction_log(self):
+        return self._transaction_log
 
-    def create_doc(self, doc, doc_id=None):
-        if doc_id is None:
-            doc_id = self._allocate_doc_id()
-        return doc_id, self.put_doc(doc_id, None, doc)
+    def _get_db_rev(self):
+        return len(self._transaction_log)
 
     def put_doc(self, doc_id, old_doc_rev, doc):
         if doc_id is None:
@@ -80,11 +78,15 @@ class InMemoryDatabase(u1db.Database):
         self._docs[doc_id] = (new_rev, doc)
         self._transaction_log.append(doc_id)
 
-    def get_doc(self, doc_id):
+    def _get_doc(self, doc_id):
         try:
             doc_rev, doc = self._docs[doc_id]
         except KeyError:
-            return None, None, False
+            return None, None
+        return doc_rev, doc
+
+    def get_doc(self, doc_id):
+        doc_rev, doc = self._get_doc(doc_id)
         if doc == 'null':
             doc = None
         return doc_rev, doc, (doc_id in self._conflicts)
@@ -98,10 +100,7 @@ class InMemoryDatabase(u1db.Database):
 
     def resolve_doc(self, doc_id, doc, conflicted_doc_revs):
         cur_rev, cur_doc = self._docs[doc_id]
-        vcr = VectorClockRev(cur_rev)
-        for rev in conflicted_doc_revs:
-            vcr = VectorClockRev(vcr.maximize(rev))
-        new_rev = vcr.increment(self._machine_id)
+        new_rev = self._ensure_maximal_rev(cur_rev, conflicted_doc_revs)
         superseded_revs = set(conflicted_doc_revs)
         remaining_conflicts = []
         cur_conflicts = self._conflicts[doc_id]
@@ -121,6 +120,8 @@ class InMemoryDatabase(u1db.Database):
 
     def delete_doc(self, doc_id, doc_rev):
         if doc_id not in self._docs:
+            raise KeyError
+        if self._docs[doc_id][1] in ('null', None):
             raise KeyError
         new_rev = self.put_doc(doc_id, doc_rev, None)
         return new_rev
@@ -147,103 +148,10 @@ class InMemoryDatabase(u1db.Database):
         return (len(self._transaction_log),
                 set(self._transaction_log[old_db_rev:]))
 
-    def _insert_many_docs(self, docs_info):
-        """Add a bunch of documents to the local store.
-
-        This will only add entries if they supersede the local entries,
-        otherwise the doc ids will be added to conflict_ids.
-        :param docs_info: List of [(doc_id, doc_rev, doc)]
-        :return: (seen_ids, conflict_ids, num_inserted) sets of entries that
-            were seen, and what was considered conflicted and not added, and
-            the number of documents that were explictly added.
-        """
-        conflict_ids = set()
-        seen_ids = set()
-        num_inserted = 0
-        for doc_id, doc_rev, doc in docs_info:
-            cur_rev, cur_doc, _ = self.get_doc(doc_id)
-            doc_vcr = VectorClockRev(doc_rev)
-            cur_vcr = VectorClockRev(cur_rev)
-            seen_ids.add(doc_id)
-            if doc_vcr.is_newer(cur_vcr):
-                self._put_and_update_indexes(doc_id, cur_doc, doc_rev, doc)
-                num_inserted += 1
-            elif doc_rev == cur_rev:
-                # magical convergence
-                continue
-            elif cur_vcr.is_newer(doc_vcr):
-                # Don't add this to seen_ids, because we have something newer,
-                # so we should send it back, and we should not generate a
-                # conflict
-                seen_ids.remove(doc_id)
-                continue
-            else:
-                conflict_ids.add(doc_id)
-        return seen_ids, conflict_ids, num_inserted
-
-    def _insert_conflicts(self, docs_info):
-        """Record all of docs_info as conflicted documents.
-
-        Because of the 'TAKE_OTHER' semantics, any document which is marked as
-        conflicted takes docs_info as the official value.
-        This will update index definitions, etc.
-
-        :return: The number of documents inserted into the db.
-        """
-        for doc_id, doc_rev, doc in docs_info:
-            my_doc_rev, my_doc = self._docs[doc_id]
-            self._conflicts.setdefault(doc_id, []).append((my_doc_rev, my_doc))
-            self._put_and_update_indexes(doc_id, my_doc, doc_rev, doc)
-        return len(docs_info)
-
-    def _sync_exchange(self, docs_info, from_machine_id, from_machine_rev,
-                       last_known_rev):
-        seen_ids, conflict_ids, _ = self._insert_many_docs(docs_info)
-        new_docs = []
-        for doc_id in self.whats_changed(last_known_rev)[1]:
-            if doc_id in seen_ids:
-                continue
-            doc_rev, doc = self._docs[doc_id]
-            new_docs.append((doc_id, doc_rev, doc))
-        self._other_revs[from_machine_id] = from_machine_rev
-        conflicts = []
-        for doc_id in conflict_ids:
-            doc_rev, doc = self._docs[doc_id]
-            conflicts.append((doc_id, doc_rev, doc))
-        self._record_sync_info(from_machine_id, from_machine_rev)
-        self._last_exchange_log = {
-            'receive': {'docs': [(di, dr) for di, dr, _ in docs_info],
-                        'from_id': from_machine_id,
-                        'from_rev': from_machine_rev,
-                        'last_known_rev': last_known_rev},
-            'return': {'new_docs': [(di, dr) for di, dr, _ in new_docs],
-                       'conf_docs': [(di, dr) for di, dr, _ in conflicts],
-                       'last_rev': len(self._transaction_log)}
-        }
-        return new_docs, conflicts, len(self._transaction_log)
-
-    def sync(self, other, callback=None):
-        (other_machine_id, other_rev,
-         others_my_rev) = other._get_sync_info(self._machine_id)
-        docs_to_send = []
-        my_db_rev, changed_doc_ids = self.whats_changed(others_my_rev)
-        for doc_id in changed_doc_ids:
-            doc_rev, doc = self._docs[doc_id]
-            docs_to_send.append((doc_id, doc_rev, doc))
-        other_last_known_rev = self._other_revs.get(other_machine_id, 0)
-        (new_records, conflicted_records,
-         new_db_rev) = other._sync_exchange(docs_to_send, self._machine_id,
-                            my_db_rev, other_last_known_rev)
-        all_records = new_records + conflicted_records
-        _, conflict_ids, num_inserted = self._insert_many_docs(all_records)
-        conflict_docs = [r for r in all_records if r[0] in conflict_ids]
-        num_inserted += self._insert_conflicts(conflict_docs)
-        self._record_sync_info(other_machine_id, new_db_rev)
-        cur_db_rev = len(self._transaction_log)
-        if cur_db_rev == my_db_rev + num_inserted:
-            other._record_sync_info(self._machine_id,
-                                    len(self._transaction_log))
-        return my_db_rev
+    def _put_as_conflict(self, doc_id, doc_rev, doc):
+        my_doc_rev, my_doc = self._docs[doc_id]
+        self._conflicts.setdefault(doc_id, []).append((my_doc_rev, my_doc))
+        self._put_and_update_indexes(doc_id, my_doc, doc_rev, doc)
 
 
 class InMemoryIndex(object):
