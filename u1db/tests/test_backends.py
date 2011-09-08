@@ -120,18 +120,19 @@ class DatabaseTests(DatabaseBaseTests):
         self.c.put_doc(doc_id, doc_rev, '{"new": "contents"}')
         self.assertEqual((2, set([doc_id])), self.c.whats_changed())
 
-    def test_get_sync_info(self):
-        self.assertEqual(('test', 0, 0), self.c.get_sync_info('other'))
+    def test__get_sync_info(self):
+        self.assertEqual(('test', 0, 0), self.c._get_sync_info('other'))
 
     def test_put_updates_state_info(self):
-        self.assertEqual(('test', 0, 0), self.c.get_sync_info('other'))
+        self.assertEqual(('test', 0, 0), self.c._get_sync_info('other'))
         doc_id, doc_rev = self.c.create_doc(simple_doc)
-        self.assertEqual(('test', 1, 0), self.c.get_sync_info('other'))
+        self.assertEqual(('test', 1, 0), self.c._get_sync_info('other'))
 
     def test_put_state_info(self):
         self.assertEqual({}, self.c._other_revs)
         self.c.put_state_info('machine', 10)
         self.assertEqual({'machine': 10}, self.c._other_revs)
+
 
 class TestInMemoryDatabase(InMemoryDatabaseMixin, DatabaseTests,
                            tests.TestCase):
@@ -223,7 +224,7 @@ class DatabaseIndexTests(DatabaseBaseTests):
                          self.c.get_doc('doc-id'))
         self.assertEqual(['doc-id'], self.c._transaction_log)
         self.assertEqual(([], [], 1), result)
-        self.assertEqual(10, self.c.get_sync_info('machine')[-1])
+        self.assertEqual(10, self.c._get_sync_info('machine')[-1])
 
     def test__sync_exchange_refuses_conflicts(self):
         doc_id, doc_rev = self.c.create_doc(simple_doc)

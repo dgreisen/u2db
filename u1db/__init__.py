@@ -133,6 +133,23 @@ class Database(object):
         """
         raise NotImplementedError(self.resolve_doc)
 
+    def _get_sync_info(self, other_machine_id):
+        """Return information about known state.
+
+        This is not meant to be called from client code, but is part of the
+        sync api.
+
+        Return the machine_id and the current global database revision of this
+        database, and the last-seen global database revision for
+        other_machine_id
+
+        :param other_machine_id: Another machine which we might have
+            synchronized with in the past.
+        :return: (this_machine_id, this_machine_db_rev,
+                  other_machine_last_known_db_rev)o
+        """
+        raise NotImplementedError(self._get_sync_info)
+
     def _sync_exchange(self, docs_info, from_machine_id, from_machine_rev,
                        last_known_rev):
         """Incorporate the documents sent from the other machine.

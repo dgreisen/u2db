@@ -37,7 +37,7 @@ class InMemoryDatabase(u1db.Database):
         self._machine_id = machine_id
         self._last_exchange_log = None
 
-    def get_sync_info(self, other_machine_id):
+    def _get_sync_info(self, other_machine_id):
         other_rev = self._other_revs.get(other_machine_id, 0)
         return self._machine_id, len(self._transaction_log), other_rev
 
@@ -224,7 +224,7 @@ class InMemoryDatabase(u1db.Database):
 
     def sync(self, other, callback=None):
         (other_machine_id, other_rev,
-         others_my_rev) = other.get_sync_info(self._machine_id)
+         others_my_rev) = other._get_sync_info(self._machine_id)
         docs_to_send = []
         for doc_id in self.whats_changed(others_my_rev)[1]:
             doc_rev, doc = self._docs[doc_id]
