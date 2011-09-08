@@ -160,3 +160,20 @@ class SQLiteDatabase(CommonBackend):
                 cur_db_rev = db_rev
             doc_ids.add(doc_id)
         return cur_db_rev, doc_ids
+
+    def delete_doc(self, doc_id, doc_rev):
+        with self._db_handle:
+            c = self._db_handle.cursor()
+            c.execute("SELECT doc_rev, doc FROM document WHERE doc_id = ?",
+                      (doc_id,))
+            val = c.fetchone()
+            if val is None:
+                raise KeyError
+            old_doc_rev, old_doc = val
+            if old_doc_rev != doc_rev:
+                raise u1db.InvalidDocRev()
+            if old_doc is None:
+                raise KeyError
+            new_rev = self._allocate_doc_rev(old_doc_rev)
+            self._put_and_update_indexes(doc_id, old_doc, new_rev, None, c)
+        return new_rev

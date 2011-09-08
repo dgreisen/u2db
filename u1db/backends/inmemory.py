@@ -114,6 +114,8 @@ class InMemoryDatabase(CommonBackend):
     def delete_doc(self, doc_id, doc_rev):
         if doc_id not in self._docs:
             raise KeyError
+        if self._docs[doc_id][1] in ('null', None):
+            raise KeyError
         new_rev = self.put_doc(doc_id, doc_rev, None)
         return new_rev
 

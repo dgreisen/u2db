@@ -114,11 +114,18 @@ class DatabaseTests(DatabaseBaseTests):
         doc_id, doc_rev = self.c.create_doc(simple_doc)
         self.assertEqual((doc_rev, simple_doc, False), self.c.get_doc(doc_id))
         deleted_rev = self.c.delete_doc(doc_id, doc_rev)
+        self.assertNotEqual(None, deleted_rev)
         self.assertEqual((deleted_rev, None, False), self.c.get_doc(doc_id))
 
     def test_delete_doc_non_existant(self):
         self.assertRaises(KeyError,
             self.c.delete_doc, 'non-existing', 'other:1')
+
+    def test_delete_doc_already_deleted(self):
+        doc_id, doc_rev = self.c.create_doc(simple_doc)
+        new_rev = self.c.delete_doc(doc_id, doc_rev)
+        self.assertRaises(KeyError, self.c.delete_doc, doc_id, new_rev)
+        self.assertEqual((new_rev, None, False), self.c.get_doc(doc_id))
 
     def test_delete_doc_bad_rev(self):
         doc_id, doc_rev = self.c.create_doc(simple_doc)
