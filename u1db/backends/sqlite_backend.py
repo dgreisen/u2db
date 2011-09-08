@@ -212,3 +212,8 @@ class SQLiteDatabase(CommonBackend):
             return super(SQLiteDatabase, self)._compare_and_insert_doc(
                 doc_id, doc_rev, doc)
 
+    def _put_as_conflict(self, doc_id, doc_rev, doc):
+        with self._db_handle:
+            my_doc_rev, my_doc, _ = self.get_doc(doc_id)
+            # self._conflicts.setdefault(doc_id, []).append((my_doc_rev, my_doc))
+            self._put_and_update_indexes(doc_id, my_doc, doc_rev, doc)

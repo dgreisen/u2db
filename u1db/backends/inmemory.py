@@ -144,43 +144,10 @@ class InMemoryDatabase(CommonBackend):
         return (len(self._transaction_log),
                 set(self._transaction_log[old_db_rev:]))
 
-    def _insert_conflicts(self, docs_info):
-        """Record all of docs_info as conflicted documents.
-
-        Because of the 'TAKE_OTHER' semantics, any document which is marked as
-        conflicted takes docs_info as the official value.
-        This will update index definitions, etc.
-
-        :return: The number of documents inserted into the db.
-        """
-        for doc_id, doc_rev, doc in docs_info:
-            my_doc_rev, my_doc = self._docs[doc_id]
-            self._conflicts.setdefault(doc_id, []).append((my_doc_rev, my_doc))
-            self._put_and_update_indexes(doc_id, my_doc, doc_rev, doc)
-        return len(docs_info)
-
-    def sync(self, other, callback=None):
-        (other_machine_id, other_rev,
-         others_my_rev) = other._get_sync_info(self._machine_id)
-        docs_to_send = []
-        my_db_rev, changed_doc_ids = self.whats_changed(others_my_rev)
-        for doc_id in changed_doc_ids:
-            doc_rev, doc, _ = self.get_doc(doc_id)
-            docs_to_send.append((doc_id, doc_rev, doc))
-        _, _, other_last_known_rev = self._get_sync_info(other_machine_id)
-        (new_records, conflicted_records,
-         new_db_rev) = other._sync_exchange(docs_to_send, self._machine_id,
-                            my_db_rev, other_last_known_rev)
-        all_records = new_records + conflicted_records
-        _, conflict_ids, num_inserted = self._insert_many_docs(all_records)
-        conflict_docs = [r for r in all_records if r[0] in conflict_ids]
-        num_inserted += self._insert_conflicts(conflict_docs)
-        self._record_sync_info(other_machine_id, new_db_rev)
-        cur_db_rev = len(self._transaction_log)
-        if cur_db_rev == my_db_rev + num_inserted:
-            other._record_sync_info(self._machine_id,
-                                    len(self._transaction_log))
-        return my_db_rev
+    def _put_as_conflict(self, doc_id, doc_rev, doc):
+        my_doc_rev, my_doc = self._docs[doc_id]
+        self._conflicts.setdefault(doc_id, []).append((my_doc_rev, my_doc))
+        self._put_and_update_indexes(doc_id, my_doc, doc_rev, doc)
 
 
 class InMemoryIndex(object):
