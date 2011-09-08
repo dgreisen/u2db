@@ -128,8 +128,8 @@ class ConflictedDoc(Exception):
     """The document is conflicted, you must call resolve before put()"""
 
 
-class InMemoryClient(Client):
-    """A client that only stores the data internally."""
+class InMemoryDatabase(Client):
+    """A database that only stores the data internally."""
 
     def __init__(self, machine_id):
         self._transaction_log = []

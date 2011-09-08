@@ -24,14 +24,16 @@ from u1db.backends import inmemory
 
 simple_doc = '{"key": "value"}'
 
-class TestInMemoryClientBase(tests.TestCase):
+class DatabaseBaseTests(object):
+
+    def create_database(self, machine_id):
+        raise NotImplementedError(self.create_database)
 
     def setUp(self):
-        super(TestInMemoryClientBase, self).setUp()
-        self.c = inmemory.InMemoryClient('test')
+        super(DatabaseBaseTests, self).setUp()
+        self.c = self.create_database('test')
 
-
-class TestInMemoryClient(TestInMemoryClientBase):
+class DatabaseTests(DatabaseBaseTests):
 
     def test__allocate_doc_id(self):
         self.assertEqual('doc-1', self.c._allocate_doc_id())
@@ -126,8 +128,17 @@ class TestInMemoryClient(TestInMemoryClientBase):
         self.c.put_state_info('machine', 10)
         self.assertEqual({'machine': 10}, self.c._other_revs)
 
+class InMemoryDatabaseMixin(object):
 
-class TestInMemoryClientIndexes(TestInMemoryClientBase):
+    def create_database(self, machine_id):
+        return inmemory.InMemoryDatabase(machine_id)
+
+class TestInMemoryDatabase(InMemoryDatabaseMixin, DatabaseTests,
+                           tests.TestCase):
+    pass
+
+class TestInMemoryDatabaseIndexes(InMemoryDatabaseMixin, DatabaseBaseTests,
+                                  tests.TestCase):
 
     def test_create_index(self):
         self.c.create_index('test-idx', ['name'])
@@ -265,12 +276,12 @@ class TestInMemoryClientIndexes(TestInMemoryClientBase):
         self.assertEqual([], self.c.get_from_index('test-idx', [('value',)]))
 
 
-class TestInMemoryClientSync(tests.TestCase):
+class TestInMemoryDatabaseSync(tests.TestCase):
 
     def setUp(self):
-        super(TestInMemoryClientSync, self).setUp()
-        self.c1 = inmemory.InMemoryClient('test1')
-        self.c2 = inmemory.InMemoryClient('test2')
+        super(TestInMemoryDatabaseSync, self).setUp()
+        self.c1 = inmemory.InMemoryDatabase('test1')
+        self.c2 = inmemory.InMemoryDatabase('test2')
 
     def test_sync_tracks_db_rev_of_other(self):
         self.c1.sync(self.c2)
@@ -312,7 +323,7 @@ class TestInMemoryClientSync(tests.TestCase):
 
     def test_sync_ignores_convergence(self):
         doc_id, doc_rev, db_rev = self.c1.put_doc(None, None, simple_doc)
-        self.c3 = inmemory.InMemoryClient('test3')
+        self.c3 = inmemory.InMemoryDatabase('test3')
         self.c1.sync(self.c3)
         self.c2.sync(self.c3)
         self.c1.sync(self.c2)
@@ -325,7 +336,7 @@ class TestInMemoryClientSync(tests.TestCase):
 
     def test_sync_ignores_superseded(self):
         doc_id, doc_rev, _ = self.c1.put_doc(None, None, simple_doc)
-        self.c3 = inmemory.InMemoryClient('test3')
+        self.c3 = inmemory.InMemoryDatabase('test3')
         self.c1.sync(self.c3)
         self.c2.sync(self.c3)
         new_doc = '{"key": "altval"}'
@@ -410,7 +421,7 @@ class TestInMemoryClientSync(tests.TestCase):
         self.c1.create_index('test-idx', ['key'])
         self.c1.sync(self.c2)
         self.c2.create_index('test-idx', ['key'])
-        self.c3 = inmemory.InMemoryClient('test3')
+        self.c3 = inmemory.InMemoryDatabase('test3')
         self.c1.sync(self.c3)
         deleted_rev = self.c1.delete_doc(doc_id, doc1_rev)
         self.c1.sync(self.c2)
@@ -511,7 +522,7 @@ class TestInMemoryClientSync(tests.TestCase):
         self.assertEqual([(doc2_rev, new_doc2),
                           (doc1_rev, simple_doc)],
                          self.c1.get_doc_conflicts(doc_id))
-        self.c3 = inmemory.InMemoryClient('test3')
+        self.c3 = inmemory.InMemoryDatabase('test3')
         new_doc3 = '{"key": "valin3"}'
         doc_id, doc3_rev, _ = self.c3.put_doc(doc_id, None, new_doc3)
         self.c1.sync(self.c3)
@@ -531,7 +542,7 @@ class TestInMemoryClientSync(tests.TestCase):
         new_doc2 = '{"key": "valin2"}'
         doc_id, doc2_rev, _ = self.c2.put_doc(doc_id, None, new_doc2)
         self.c1.sync(self.c2)
-        self.c3 = inmemory.InMemoryClient('test3')
+        self.c3 = inmemory.InMemoryDatabase('test3')
         new_doc3 = '{"key": "valin3"}'
         doc_id, doc3_rev, _ = self.c3.put_doc(doc_id, None, new_doc3)
         self.c1.sync(self.c3)
