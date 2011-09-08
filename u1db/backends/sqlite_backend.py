@@ -66,6 +66,13 @@ class SQLiteDatabase(CommonBackend):
                       " doc_rev TEXT,"
                       " doc TEXT)"
                       )
+            c.execute("CREATE TABLE document_fields ("
+                      " doc_id TEXT,"
+                      " field_name TEXT,"
+                      " value TEXT,"
+                      " CONSTRAINT document_fields_pkey"
+                      " PRIMARY KEY (doc_id, field_name))")
+            # TODO: CREATE_INDEX document_fields(value)
             c.execute("CREATE TABLE sync_log ("
                       " machine_id TEXT PRIMARY KEY,"
                       " known_db_rev INTEGER)")
@@ -74,6 +81,12 @@ class SQLiteDatabase(CommonBackend):
                       " doc_rev TEXT,"
                       " doc TEXT,"
                   " CONSTRAINT conflicts_pkey PRIMARY KEY (doc_id, doc_rev))")
+            c.execute("CREATE TABLE index_definitions ("
+                      " name TEXT,"
+                      " offset INT,"
+                      " field TEXT,"
+                      " CONSTRAINT index_definitions_pkey"
+                      " PRIMARY KEY (name, offset))")
             c.execute("CREATE TABLE u1db_config (name TEXT, value TEXT)")
             c.execute("INSERT INTO u1db_config VALUES ('sql_schema', '0')")
 
@@ -276,4 +289,30 @@ class SQLiteDatabase(CommonBackend):
             c.executemany("DELETE FROM conflicts"
                           " WHERE doc_id=? AND doc_rev=?", deleting)
             return new_rev, self._has_conflicts(doc_id)
+
+    def create_index(self, index_name, index_expression):
+        with self._db_handle:
+            c = self._db_handle.cursor()
+            definition = [(index_name, idx, field)
+                          for idx, field in enumerate(index_expression)]
+            c.executemany("INSERT INTO index_definitions VALUES (?, ?, ?)",
+                          definition)
+
+    def list_indexes(self):
+        """Return the list of indexes and their definitions."""
+        c = self._db_handle.cursor()
+        # TODO: How do we test the ordering?
+        c.execute("SELECT name, field FROM index_definitions"
+                  " ORDER BY name, offset")
+        definitions = []
+        cur_name = None
+        for name, field in c.fetchall():
+            if cur_name != name:
+                definitions.append((name, []))
+                cur_name = name
+            definitions[-1][-1].append(field)
+        return definitions
+
+    def get_from_index(self, index_name, key_values):
+        return []
 

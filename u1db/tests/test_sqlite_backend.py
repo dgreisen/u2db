@@ -52,8 +52,10 @@ class TestSQLiteDatabase(tests.TestCase):
         # These tables must exist, though we don't care what is in them yet
         c.execute("SELECT * FROM transaction_log")
         c.execute("SELECT * FROM document")
+        c.execute("SELECT * FROM document_fields")
         c.execute("SELECT * FROM sync_log")
         c.execute("SELECT * FROM conflicts")
+        c.execute("SELECT * FROM index_definitions")
 
     def test__set_machine_id(self):
         db = sqlite_backend.SQLiteDatabase(':memory:')
@@ -76,3 +78,29 @@ class TestSQLiteDatabase(tests.TestCase):
     def test__allocate_doc_id(self):
         db = sqlite_backend.SQLiteDatabase(':memory:')
         self.assertEqual('doc-0', db._allocate_doc_id())
+
+    def test_create_index(self):
+        db = sqlite_backend.SQLiteDatabase(':memory:')
+        db.create_index('test-idx', ["key"])
+        self.assertEqual([('test-idx', ["key"])], db.list_indexes())
+
+    def test_create_index_multiple_fields(self):
+        db = sqlite_backend.SQLiteDatabase(':memory:')
+        db.create_index('test-idx', ["key", "key2"])
+        self.assertEqual([('test-idx', ["key", "key2"])], db.list_indexes())
+
+    def test_list_index_mixed(self):
+        db = sqlite_backend.SQLiteDatabase(':memory:')
+        # Make sure that we properly order the output
+        c = db._get_sqlite_handle().cursor()
+        # We intentionally insert the data in weird ordering, to make sure the
+        # query still gets it back correctly.
+        c.executemany("INSERT INTO index_definitions VALUES (?, ?, ?)",
+                      [('idx-1', 0, 'key10'),
+                       ('idx-2', 2, 'key22'),
+                       ('idx-1', 1, 'key11'),
+                       ('idx-2', 0, 'key20'),
+                       ('idx-2', 1, 'key21')])
+        self.assertEqual([('idx-1', ['key10', 'key11']),
+                          ('idx-2', ['key20', 'key21', 'key22'])],
+                         db.list_indexes())

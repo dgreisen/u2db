@@ -135,6 +135,12 @@ class InMemoryDatabase(CommonBackend):
     def delete_index(self, index_name):
         del self._indexes[index_name]
 
+    def list_indexes(self):
+        definitions = []
+        for idx in self._indexes.itervalues():
+            definitions.append((idx._name, idx._definition))
+        return definitions
+
     def get_from_index(self, index_name, key_values):
         index = self._indexes[index_name]
         doc_ids = index.lookup(key_values)

@@ -247,7 +247,8 @@ class DatabaseIndexTests(DatabaseBaseTests):
 
     def test_create_index(self):
         self.c.create_index('test-idx', ['name'])
-        self.assertEqual(['test-idx'], self.c._indexes.keys())
+        self.assertEqual([('test-idx', ['name'])],
+                         self.c.list_indexes())
 
     def test_create_index_evaluates_it(self):
         doc_id, doc_rev = self.c.create_doc(simple_doc)
