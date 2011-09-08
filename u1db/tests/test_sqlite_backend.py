@@ -53,6 +53,7 @@ class TestSQLiteDatabase(tests.TestCase):
         c.execute("SELECT * FROM transaction_log")
         c.execute("SELECT * FROM document")
         c.execute("SELECT * FROM sync_log")
+        c.execute("SELECT * FROM conflicts")
 
     def test__set_machine_id(self):
         db = sqlite_backend.SQLiteDatabase(':memory:')

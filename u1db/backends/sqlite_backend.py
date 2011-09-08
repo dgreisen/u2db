@@ -69,6 +69,11 @@ class SQLiteDatabase(CommonBackend):
             c.execute("CREATE TABLE sync_log ("
                       " machine_id TEXT PRIMARY KEY,"
                       " known_db_rev INTEGER)")
+            c.execute("CREATE TABLE conflicts ("
+                      " doc_id TEXT,"
+                      " doc_rev TEXT,"
+                      " doc TEXT,"
+                  " CONSTRAINT conflicts_pkey PRIMARY KEY (doc_id, doc_rev))")
             c.execute("CREATE TABLE u1db_config (name TEXT, value TEXT)")
             c.execute("INSERT INTO u1db_config VALUES ('sql_schema', '0')")
 
@@ -110,23 +115,40 @@ class SQLiteDatabase(CommonBackend):
         c.execute("SELECT doc_id FROM transaction_log ORDER BY db_rev")
         return [v[0] for v in c.fetchall()]
 
-    def get_doc(self, doc_id):
+    def _get_doc(self, doc_id):
+        """Get just the document content, without fancy handling."""
         c = self._db_handle.cursor()
         c.execute("SELECT doc_rev, doc FROM document WHERE doc_id = ?",
                   (doc_id,))
         val = c.fetchone()
         if val is None:
-            return None, None, False
+            return None, None
         doc_rev, doc = val
+        return doc_rev, doc
+
+    def _has_conflicts(self, doc_id):
+        c = self._db_handle.cursor()
+        c.execute("SELECT 1 FROM conflicts WHERE doc_id = ? LIMIT 1",
+                  (doc_id,))
+        val = c.fetchone()
+        if val is None:
+            return False
+        else:
+            return True
+
+    def get_doc(self, doc_id):
+        doc_rev, doc = self._get_doc(doc_id)
         if doc == 'null':
             doc = None
-        return doc_rev, doc, False # (doc_id in self._conflicts)
+        return doc_rev, doc, self._has_conflicts(doc_id)
 
     def put_doc(self, doc_id, old_doc_rev, doc):
         if doc_id is None:
             raise u1db.InvalidDocId()
         old_doc = None
         with self._db_handle:
+            if self._has_conflicts(doc_id):
+                raise u1db.ConflictedDoc()
             c = self._db_handle.cursor()
             c.execute("SELECT doc_rev, doc FROM document WHERE doc_id=?",
                       (doc_id,))
@@ -183,9 +205,22 @@ class SQLiteDatabase(CommonBackend):
                 raise u1db.InvalidDocRev()
             if old_doc is None:
                 raise KeyError
+            if self._has_conflicts(doc_id):
+                raise u1db.ConflictedDoc()
             new_rev = self._allocate_doc_rev(old_doc_rev)
             self._put_and_update_indexes(doc_id, old_doc, new_rev, None)
         return new_rev
+
+    def get_doc_conflicts(self, doc_id):
+        with self._db_handle:
+            c = self._db_handle.cursor()
+            c.execute("SELECT doc_rev, doc FROM conflicts WHERE doc_id = ?",
+                      (doc_id,))
+            conflict_docs = c.fetchall()
+            if not conflict_docs:
+                return conflict_docs
+            this_doc_rev, this_doc = self._get_doc(doc_id)
+        return [(this_doc_rev, this_doc)] + conflict_docs
 
     def _get_sync_info(self, other_machine_id):
         c = self._db_handle.cursor()
@@ -214,6 +249,8 @@ class SQLiteDatabase(CommonBackend):
 
     def _put_as_conflict(self, doc_id, doc_rev, doc):
         with self._db_handle:
-            my_doc_rev, my_doc, _ = self.get_doc(doc_id)
-            # self._conflicts.setdefault(doc_id, []).append((my_doc_rev, my_doc))
+            my_doc_rev, my_doc = self._get_doc(doc_id)
+            c = self._db_handle.cursor()
+            c.execute("INSERT INTO conflicts VALUES (?, ?, ?)",
+                      (doc_id, my_doc_rev, my_doc))
             self._put_and_update_indexes(doc_id, my_doc, doc_rev, doc)
