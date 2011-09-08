@@ -183,6 +183,12 @@ class InMemoryDatabase(u1db.Database):
         return seen_ids, conflict_ids
 
     def _insert_conflicts(self, docs_info):
+        """Record all of docs_info as conflicted documents.
+
+        Because of the 'TAKE_OTHER' semantics, any document which is marked as
+        conflicted takes docs_info as the official value.
+        This will update index definitions, etc.
+        """
         for doc_id, doc_rev, doc in docs_info:
             my_doc_rev, my_doc = self._docs[doc_id]
             self._conflicts.setdefault(doc_id, []).append((my_doc_rev, my_doc))

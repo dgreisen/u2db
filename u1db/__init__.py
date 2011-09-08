@@ -111,6 +111,14 @@ class Database(object):
         """
         raise NotImplementedError(self.create_index)
 
+    def delete_index(self, index_name):
+        """Remove a named index.
+
+        :param index_name: The name of the index we are removing
+        :return: None
+        """
+        raise NotImplementedError(self.delete_index)
+
     def get_from_index(self, index_name, key_values):
         """Return documents that match the exact keys supplied.
 
