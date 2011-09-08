@@ -32,9 +32,19 @@ class DatabaseBaseTests(object):
     def create_database(self, machine_id):
         raise NotImplementedError(self.create_database)
 
+    def close_database(self, database):
+        """Close the database that was opened by create_database.
+
+        The default implementation is a no-op.
+        """
+
     def setUp(self):
         super(DatabaseBaseTests, self).setUp()
         self.c = self.create_database('test')
+
+    def tearDown(self):
+        self.close_database(self.c)
+        super(DatabaseBaseTests, self).tearDown()
 
 
 class InMemoryDatabaseMixin(object):
