@@ -49,6 +49,9 @@ class InMemoryDatabase(CommonBackend):
         self._doc_counter += 1
         return 'doc-%d' % (self._doc_counter,)
 
+    def _get_transaction_log(self):
+        return self._transaction_log
+
     def put_doc(self, doc_id, old_doc_rev, doc):
         if doc_id is None:
             raise u1db.InvalidDocId()
@@ -141,40 +144,6 @@ class InMemoryDatabase(CommonBackend):
         return (len(self._transaction_log),
                 set(self._transaction_log[old_db_rev:]))
 
-    def _insert_many_docs(self, docs_info):
-        """Add a bunch of documents to the local store.
-
-        This will only add entries if they supersede the local entries,
-        otherwise the doc ids will be added to conflict_ids.
-        :param docs_info: List of [(doc_id, doc_rev, doc)]
-        :return: (seen_ids, conflict_ids, num_inserted) sets of entries that
-            were seen, and what was considered conflicted and not added, and
-            the number of documents that were explictly added.
-        """
-        conflict_ids = set()
-        seen_ids = set()
-        num_inserted = 0
-        for doc_id, doc_rev, doc in docs_info:
-            cur_rev, cur_doc, _ = self.get_doc(doc_id)
-            doc_vcr = VectorClockRev(doc_rev)
-            cur_vcr = VectorClockRev(cur_rev)
-            seen_ids.add(doc_id)
-            if doc_vcr.is_newer(cur_vcr):
-                self._put_and_update_indexes(doc_id, cur_doc, doc_rev, doc)
-                num_inserted += 1
-            elif doc_rev == cur_rev:
-                # magical convergence
-                continue
-            elif cur_vcr.is_newer(doc_vcr):
-                # Don't add this to seen_ids, because we have something newer,
-                # so we should send it back, and we should not generate a
-                # conflict
-                seen_ids.remove(doc_id)
-                continue
-            else:
-                conflict_ids.add(doc_id)
-        return seen_ids, conflict_ids, num_inserted
-
     def _insert_conflicts(self, docs_info):
         """Record all of docs_info as conflicted documents.
 
@@ -190,41 +159,15 @@ class InMemoryDatabase(CommonBackend):
             self._put_and_update_indexes(doc_id, my_doc, doc_rev, doc)
         return len(docs_info)
 
-    def _sync_exchange(self, docs_info, from_machine_id, from_machine_rev,
-                       last_known_rev):
-        seen_ids, conflict_ids, _ = self._insert_many_docs(docs_info)
-        new_docs = []
-        for doc_id in self.whats_changed(last_known_rev)[1]:
-            if doc_id in seen_ids:
-                continue
-            doc_rev, doc = self._docs[doc_id]
-            new_docs.append((doc_id, doc_rev, doc))
-        self._other_revs[from_machine_id] = from_machine_rev
-        conflicts = []
-        for doc_id in conflict_ids:
-            doc_rev, doc = self._docs[doc_id]
-            conflicts.append((doc_id, doc_rev, doc))
-        self._record_sync_info(from_machine_id, from_machine_rev)
-        self._last_exchange_log = {
-            'receive': {'docs': [(di, dr) for di, dr, _ in docs_info],
-                        'from_id': from_machine_id,
-                        'from_rev': from_machine_rev,
-                        'last_known_rev': last_known_rev},
-            'return': {'new_docs': [(di, dr) for di, dr, _ in new_docs],
-                       'conf_docs': [(di, dr) for di, dr, _ in conflicts],
-                       'last_rev': len(self._transaction_log)}
-        }
-        return new_docs, conflicts, len(self._transaction_log)
-
     def sync(self, other, callback=None):
         (other_machine_id, other_rev,
          others_my_rev) = other._get_sync_info(self._machine_id)
         docs_to_send = []
         my_db_rev, changed_doc_ids = self.whats_changed(others_my_rev)
         for doc_id in changed_doc_ids:
-            doc_rev, doc = self._docs[doc_id]
+            doc_rev, doc, _ = self.get_doc(doc_id)
             docs_to_send.append((doc_id, doc_rev, doc))
-        other_last_known_rev = self._other_revs.get(other_machine_id, 0)
+        _, _, other_last_known_rev = self._get_sync_info(other_machine_id)
         (new_records, conflicted_records,
          new_db_rev) = other._sync_exchange(docs_to_send, self._machine_id,
                             my_db_rev, other_last_known_rev)

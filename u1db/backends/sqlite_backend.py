@@ -105,6 +105,11 @@ class SQLiteDatabase(CommonBackend):
         db_rev = self._get_db_rev()
         return 'doc-%d' % (db_rev,)
 
+    def _get_transaction_log(self):
+        c = self._db_handle.cursor()
+        c.execute("SELECT doc_id FROM transaction_log ORDER BY db_rev")
+        return [v[0] for v in c.fetchall()]
+
     def get_doc(self, doc_id):
         c = self._db_handle.cursor()
         c.execute("SELECT doc_rev, doc FROM document WHERE doc_id = ?",
@@ -133,10 +138,11 @@ class SQLiteDatabase(CommonBackend):
                 if old_rev != old_doc_rev:
                     raise u1db.InvalidDocRev()
             new_rev = self._allocate_doc_rev(old_doc_rev)
-            self._put_and_update_indexes(doc_id, old_doc, new_rev, doc, c)
+            self._put_and_update_indexes(doc_id, old_doc, new_rev, doc)
         return new_rev
 
-    def _put_and_update_indexes(self, doc_id, old_doc, new_rev, doc, c):
+    def _put_and_update_indexes(self, doc_id, old_doc, new_rev, doc):
+        c = self._db_handle.cursor()
         # for index in self._indexes.itervalues():
         #     if old_doc is not None:
         #         index.remove_json(doc_id, old_doc)
@@ -156,7 +162,7 @@ class SQLiteDatabase(CommonBackend):
         c.execute("SELECT db_rev, doc_id FROM transaction_log"
                   " WHERE db_rev > ?", (old_db_rev,))
         results = c.fetchall()
-        cur_db_rev = 0
+        cur_db_rev = old_db_rev
         doc_ids = set()
         for db_rev, doc_id in results:
             if db_rev > cur_db_rev:
@@ -178,7 +184,7 @@ class SQLiteDatabase(CommonBackend):
             if old_doc is None:
                 raise KeyError
             new_rev = self._allocate_doc_rev(old_doc_rev)
-            self._put_and_update_indexes(doc_id, old_doc, new_rev, None, c)
+            self._put_and_update_indexes(doc_id, old_doc, new_rev, None)
         return new_rev
 
     def _get_sync_info(self, other_machine_id):
@@ -200,3 +206,8 @@ class SQLiteDatabase(CommonBackend):
             my_db_rev = self._get_db_rev()
             c.execute("INSERT OR REPLACE INTO sync_log VALUES (?, ?)",
                       (machine_id, db_rev))
+
+    def _insert_many_docs(self, docs_info):
+        with self._db_handle:
+            return super(SQLiteDatabase, self)._insert_many_docs(docs_info)
+
