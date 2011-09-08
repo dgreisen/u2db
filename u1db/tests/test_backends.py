@@ -313,8 +313,8 @@ class DatabaseSyncTests(DatabaseBaseTests):
 
     def test_sync_pulls_changes(self):
         doc_id, doc_rev = self.c2.create_doc(simple_doc)
-        self.c1.sync(self.c2)
         self.c1.create_index('test-idx', ['key'])
+        self.assertEqual((0, 1), self.c1.sync(self.c2))
         self.assertEqual((doc_rev, simple_doc, False), self.c1.get_doc(doc_id))
         self.assertEqual(1, self.c1._get_other_machine_rev(self.c2._machine_id))
         self.assertEqual(1, self.c2._get_other_machine_rev(self.c1._machine_id))
@@ -329,9 +329,9 @@ class DatabaseSyncTests(DatabaseBaseTests):
     def test_sync_ignores_convergence(self):
         doc_id, doc_rev = self.c1.create_doc(simple_doc)
         self.c3 = self.create_database('test3')
-        self.c1.sync(self.c3)
-        self.c2.sync(self.c3)
-        self.c1.sync(self.c2)
+        self.assertEqual((1, 1), self.c1.sync(self.c3))
+        self.assertEqual((0, 1), self.c2.sync(self.c3))
+        self.assertEqual((1, 1), self.c1.sync(self.c2))
         self.assertEqual({'receive': {'docs': [(doc_id, doc_rev)],
                                       'from_id': 'test1',
                                       'from_rev': 1, 'last_known_rev': 0},
