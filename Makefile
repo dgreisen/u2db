@@ -1,5 +1,5 @@
 
-.PHONY: check
+.PHONY: check build_inplace
 
-check:
-	nosetests u1dbclient
+check: 
+	cd python && $(MAKE) check
