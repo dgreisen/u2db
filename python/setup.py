@@ -57,7 +57,8 @@ synchronize them with other stores.
     kwargs["cmdclass"] = {"build_ext": build_ext}
     ext.append(Extension("u1db.backends.c_wrapper",
                          ["u1db/backends/c_wrapper.pyx",
-                          "../c/u1db.c"]))
+                          "../c/u1db.c"],
+                         include_dirs=["../c"]))
 
     setup(**kwargs)
 

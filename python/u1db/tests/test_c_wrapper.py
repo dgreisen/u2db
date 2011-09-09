@@ -12,21 +12,16 @@
 # You should have received a copy of the GNU General Public License along
 # with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-"""A Cython wrapper around the C implementation of U1DB Database backend."""
+"""Tests for the wrapper around the C implementation."""
+
+from u1db import (
+    tests,
+    )
+from u1db.backends import c_wrapper
 
 
-cdef extern from "u1db.h":
-    pass
+class TestCWrapper(tests.TestCase):
 
-
-cdef class CDatabase:
-    """A thin wrapper/shim to interact with the C implementation.
-
-    Functionality should not be written here. It is only provided as a way to
-    expose the C API to the python test suite.
-    """
-
-    cdef public object _filename
-
-    def __init__(self, filename):
-        self._filename = filename
+    def test_exists(self):
+        db = c_wrapper.CDatabase(':memory:')
+        self.assertEqual(':memory:', db._filename)
