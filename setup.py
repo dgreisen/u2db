@@ -48,6 +48,16 @@ synchronize them with other stores.
 
     from distutils.core import setup, Extension
 
+    try:
+        from Cython.Distutils import build_ext
+    except ImportError:
+        print "We require Cython to be installed."
+        return
+
+    kwargs["cmdclass"] = {"build_ext": build_ext}
+    ext.append(Extension("u1db.backends.c_wrapper",
+                         ["u1db/backends/c_wrapper.pyx"]))
+
     setup(**kwargs)
 
 if __name__ == "__main__":
