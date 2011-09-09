@@ -20,7 +20,7 @@
 
 struct _u1database
 {
-    sqlite3 *db_handle;
+    sqlite3 *sql_handle;
 };
 
 
@@ -29,10 +29,32 @@ u1db_create(const char *fname)
 {
     u1database *db = (u1database *)(calloc(1, sizeof(u1database)));
     int status;
-    status = sqlite3_open(fname, &db->db_handle);
+    status = sqlite3_open(fname, &db->sql_handle);
     return db;
 }
 
+int
+u1db__sql_close(u1database *db)
+{
+    if (db->sql_handle != NULL) {
+        // sqlite says closing a NULL handle is ok, but we don't want to trust that
+        int status;
+        status = sqlite3_close(db->sql_handle);
+        db->sql_handle = NULL;
+        return status;
+    }
+    return SQLITE_OK;
+}
+
+int 
+u1db__sql_is_open(u1database *db)
+{
+    if (db != NULL && db->sql_handle != NULL) {
+        // The handle is still open
+        return 1;
+    }
+    return 0;
+}
 
 void
 u1db_free(u1database **db)
@@ -40,7 +62,7 @@ u1db_free(u1database **db)
     if (*db == NULL) {
         return;
     }
-    sqlite3_close((*db)->db_handle);
+    u1db__sql_close(*db);
     free(*db);
     *db = NULL;
 }

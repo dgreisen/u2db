@@ -21,6 +21,8 @@ cdef extern from "u1db.h":
     ctypedef _u1database u1database
     u1database * u1db_create(char *fname)
     void u1db_free(u1database **)
+    int u1db__sql_close(u1database *)
+    int u1db__sql_is_open(u1database *)
 
 
 cdef class CDatabase:
@@ -39,3 +41,11 @@ cdef class CDatabase:
 
     def __dealloc__(self):
         u1db_free(&self._db)
+
+    def _close_sqlite_handle(self):
+        return u1db__sql_close(self._db)
+        
+    def _sql_is_open(self):
+        if self._db == NULL:
+            return True
+        return u1db__sql_is_open(self._db)

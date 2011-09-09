@@ -25,3 +25,9 @@ class TestCWrapper(tests.TestCase):
     def test_exists(self):
         db = c_wrapper.CDatabase(':memory:')
         self.assertEqual(':memory:', db._filename)
+
+    def test__is_closed(self):
+        db = c_wrapper.CDatabase(':memory:')
+        self.assertTrue(db._sql_is_open())
+        db._close_sqlite_handle()
+        self.assertFalse(db._sql_is_open())

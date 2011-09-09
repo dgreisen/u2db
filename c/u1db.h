@@ -19,7 +19,27 @@
 
 typedef struct _u1database u1database;
 
+/**
+ * The basic constructor for a new connection.
+ */
 u1database *u1db_create(const char *fname);
+
+/**
+ * Close an existing connection, freeing memory, etc.
+ * This is generally used as u1db_free(&db);
+ * After freeing the memory, we will set the pointer to NULL.
+ */
 void u1db_free(u1database **db);
+
+/**
+ * Internal api, close the underlying sql instance.
+ */
+int u1db__sql_close(u1database *db);
+
+/**
+ * Internal api, check to see if the underlying SQLite handle has been closed.
+ */
+int u1db__sql_is_open(u1database *db);
+
 
 #endif // _U1DB_H_
