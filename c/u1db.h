@@ -17,4 +17,9 @@
 #ifndef _U1DB_H_
 #define _U1DB_H_
 
+typedef struct _u1database u1database;
+
+u1database *u1db_create(const char *fname);
+void u1db_free(u1database **db);
+
 #endif // _U1DB_H_

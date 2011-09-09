@@ -16,7 +16,11 @@
 
 
 cdef extern from "u1db.h":
-    pass
+    struct _u1database:
+        pass
+    ctypedef _u1database u1database
+    u1database * u1db_create(char *fname)
+    void u1db_free(u1database **)
 
 
 cdef class CDatabase:
@@ -27,6 +31,11 @@ cdef class CDatabase:
     """
 
     cdef public object _filename
+    cdef u1database *_db
 
     def __init__(self, filename):
         self._filename = filename
+        self._db = u1db_create(self._filename)
+
+    def __dealloc__(self):
+        u1db_free(&self._db)

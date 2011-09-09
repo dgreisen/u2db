@@ -14,5 +14,29 @@
  * with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
+#include <stdlib.h>
 #include <sqlite3.h>
 #include "u1db.h"
+
+struct _u1database
+{
+    void *stuff;
+};
+
+
+u1database *
+u1db_create(const char *fname)
+{
+    return (u1database *)(calloc(1, sizeof(u1database)));
+}
+
+
+void
+u1db_free(u1database **db)
+{
+    if (*db == NULL) {
+        return;
+    }
+    free(*db);
+    *db = NULL;
+}
