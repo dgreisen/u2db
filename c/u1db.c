@@ -20,14 +20,17 @@
 
 struct _u1database
 {
-    void *stuff;
+    sqlite3 *db_handle;
 };
 
 
 u1database *
 u1db_create(const char *fname)
 {
-    return (u1database *)(calloc(1, sizeof(u1database)));
+    u1database *db = (u1database *)(calloc(1, sizeof(u1database)));
+    int status;
+    status = sqlite3_open(fname, &db->db_handle);
+    return db;
 }
 
 
@@ -37,6 +40,7 @@ u1db_free(u1database **db)
     if (*db == NULL) {
         return;
     }
+    sqlite3_close((*db)->db_handle);
     free(*db);
     *db = NULL;
 }

@@ -55,10 +55,12 @@ synchronize them with other stores.
         return
 
     kwargs["cmdclass"] = {"build_ext": build_ext}
-    ext.append(Extension("u1db.backends.c_wrapper",
-                         ["u1db/backends/c_wrapper.pyx",
-                          "../c/u1db.c"],
-                         include_dirs=["../c"]))
+    ext.append(Extension(
+        "u1db.backends.c_wrapper",
+        ["u1db/backends/c_wrapper.pyx", "../c/u1db.c"],
+        include_dirs=["../c"],
+        libraries=['sqlite3'],
+        ))
 
     setup(**kwargs)
 
