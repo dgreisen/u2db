@@ -41,5 +41,23 @@ int u1db__sql_close(u1database *db);
  */
 int u1db__sql_is_open(u1database *db);
 
+/**
+ * Internal api, run an SQL query directly.
+ */
+typedef struct _u1db_row {
+    struct _u1db_row *next;
+    int num_columns; 
+    int *column_sizes;
+    unsigned char **columns;
+} u1db_row;
+
+typedef struct _u1db_table {
+    int status;
+    u1db_row *first_row;
+} u1db_table;
+
+u1db_table *u1db__sql_run(u1database *db, const char *sql, size_t n);
+void u1db__free_table(u1db_table **table);
+
 
 #endif // _U1DB_H_
