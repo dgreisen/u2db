@@ -379,9 +379,12 @@ u1db_put_doc(u1database *db, const char *doc_id, char **doc_rev,
     int old_doc_n;
     sqlite3_stmt *statement;
 
-    if (db == NULL || doc == NULL || doc_id == NULL || doc_rev == NULL) {
+    if (db == NULL || doc == NULL || doc_rev == NULL) {
         // Bad parameter
         return -1;
+    }
+    if (doc_id == NULL) {
+        return U1DB_INVALID_DOC_ID;
     }
     sqlite3_exec(db->sql_handle, "BEGIN", 0, 0, 0);
     old_doc = NULL;
@@ -397,19 +400,21 @@ u1db_put_doc(u1database *db, const char *doc_id, char **doc_rev,
             status = 0;
         } else {
             // We were supplied a NULL doc rev, but the doc already exists
-            status = -2;
+            status = U1DB_INVALID_DOC_REV;
         }
     } else {
         if (old_doc_rev == NULL) {
-            // TODO: Handle this case
-            status = -3;
+            // TODO: Handle this case, it is probably just
+            //       U1DB_INVALID_DOC_REV, but we want a test case first.
+            // User supplied an old_doc_rev, but there is no entry in the db.
+            status = -12345;
         } else {
             if (strcmp(*doc_rev, (const char *)old_doc_rev) == 0) {
                 // The supplied doc_rev exactly matches old_doc_rev, good enough
                 status = 0;
             } else {
                 // Invalid old rev, mark it as such
-                status = -2;
+                status = U1DB_INVALID_DOC_REV;
             }
         }
     }
@@ -509,7 +514,7 @@ u1db_whats_changed(u1database *db, int *db_rev,
         if (local_db_rev > *db_rev) {
             *db_rev = local_db_rev;
         }
-        doc_id = sqlite3_column_text(statement, 1);
+        doc_id = (char *)sqlite3_column_text(statement, 1);
         cb(context, doc_id);
         status = sqlite3_step(statement);
     }

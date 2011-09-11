@@ -19,6 +19,12 @@
 
 typedef struct _u1database u1database;
 
+// put_doc() was called but the doc_rev stored in the database doesn't match
+// the one supplied.
+#define U1DB_INVALID_PARAMETER -1
+#define U1DB_INVALID_DOC_REV -2
+#define U1DB_INVALID_DOC_ID -3
+
 /**
  * The basic constructor for a new connection.
  */

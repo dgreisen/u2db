@@ -50,7 +50,11 @@ cdef extern from "u1db.h":
                      char **doc, int *n, int *has_conflicts)
     int u1db_whats_changed(u1database *db, int *db_rev,
                            int (*cb)(void *, char *doc_id), void *context)
+    int U1DB_INVALID_DOC_REV
+    int U1DB_INVALID_DOC_ID
 
+
+import u1db
 
 cdef int _add_to_set(void *context, char *doc_id):
     a_set = <object>(context)
@@ -182,13 +186,25 @@ cdef class CDatabase(object):
     def put_doc(self, doc_id, doc_rev, doc):
         cdef int status
         cdef char *c_doc_rev
+        cdef char *c_doc_id
 
-        c_doc_rev = doc_rev
-        status = u1db_put_doc(self._db, doc_id, &c_doc_rev, doc, len(doc))
+        if doc_rev is None:
+            c_doc_rev = NULL
+        else:
+            c_doc_rev = doc_rev
+        if doc_id is None:
+            c_doc_id = NULL
+        else:
+            c_doc_id = doc_id
+        status = u1db_put_doc(self._db, c_doc_id, &c_doc_rev, doc, len(doc))
         if status == 0:
             doc_rev = c_doc_rev
             free(c_doc_rev)
         else:
+            if status == U1DB_INVALID_DOC_REV:
+                raise u1db.InvalidDocRev()
+            if status == U1DB_INVALID_DOC_ID:
+                raise u1db.InvalidDocId()
             raise RuntimeError("Failed to put_doc: %d" % (status,))
         return doc_rev
 
