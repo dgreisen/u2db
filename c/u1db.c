@@ -299,9 +299,9 @@ lookup_doc(u1database *db, const char *doc_id,
         *n = 0;
         status = SQLITE_OK;
     } else if (status == SQLITE_ROW) {
-        *doc = sqlite3_column_text(*statement, 0);
-        *n = sqlite3_column_bytes(*statement, 0);
-        *doc_rev = sqlite3_column_text(*statement, 1);
+        *doc_rev = sqlite3_column_text(*statement, 0);
+        *doc = sqlite3_column_text(*statement, 1);
+        *n = sqlite3_column_bytes(*statement, 1);
         status = SQLITE_OK;
     } else { // Error
     }
@@ -333,7 +333,7 @@ write_doc(u1database *db, const char *doc_id, const char *doc_rev,
         sqlite3_finalize(statement);
         return status;
     }
-    status = sqlite3_bind_text(statement, 2, doc, n+1, SQLITE_TRANSIENT);
+    status = sqlite3_bind_text(statement, 2, doc, n, SQLITE_TRANSIENT);
     if (status != SQLITE_OK) {
         sqlite3_finalize(statement);
         return status;
@@ -418,7 +418,9 @@ int
 u1db_get_doc(u1database *db, const char *doc_id, char **doc_rev,
              char **doc, int *n, int *has_conflicts)
 {
-    int status = 0;
+    int status = 0, local_n = 0;
+    sqlite3_stmt *statement;
+    const unsigned char *local_doc_rev, *local_doc;
     if (db == NULL || doc_id == NULL || doc_rev == NULL || doc == NULL || n == NULL
         || has_conflicts == NULL) {
         // Bad Parameters
@@ -427,6 +429,24 @@ u1db_get_doc(u1database *db, const char *doc_id, char **doc_rev,
         //       to do so.
         return -1;
     }
+
+    status = lookup_doc(db, doc_id, &local_doc_rev, &local_doc, &local_n,
+                        &statement);
+    if (status == SQLITE_OK) {
+        *doc = (char *)calloc(1, local_n + 1);
+        memcpy(*doc, local_doc, local_n+1);
+        *n = local_n;
+        local_n = strlen((const char*)local_doc_rev);
+        *doc_rev = (char *)calloc(1, local_n+1);
+        memcpy(*doc_rev, local_doc_rev, local_n+1);
+        *has_conflicts = 0;
+    } else {
+        *doc_rev = NULL;
+        *doc = NULL;
+        *n = 0;
+        *has_conflicts = 0;
+    }
+    sqlite3_finalize(statement);
     return status;
 }
 

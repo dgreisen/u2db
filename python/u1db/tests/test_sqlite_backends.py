@@ -65,9 +65,12 @@ class SQLiteDatabaseTests(object):
 
     def test_create_doc(self):
         self.db._set_machine_id('test')
-        doc_id, new_rev = self.db.create_doc('{"key": "value"}')
+        doc = '{"key": "value"}'
+        doc_id, new_rev = self.db.create_doc(doc)
         self.assertNotEqual(None, doc_id)
         self.assertNotEqual(None, new_rev)
+        self.assertEqual([(doc_id, new_rev, doc)],
+            self.db._run_sql("SELECT doc_id, doc_rev, doc FROM document"))
         self.assertEqual((new_rev, simple_doc, False), self.db.get_doc(doc_id))
 
     def test_create_index(self):
