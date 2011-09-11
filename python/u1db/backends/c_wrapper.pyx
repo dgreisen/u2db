@@ -45,10 +45,12 @@ cdef extern from "u1db.h":
     int u1db_create_doc(u1database *db, char *doc, size_t n,
                         char **doc_id, char **doc_rev)
     int u1db_put_doc(u1database *db, char *doc_id, char **doc_rev,
-                     char *doc, size_t n)
+                     char *doc, int n)
+    int u1db_get_doc(u1database *db, char *doc_id, char **doc_rev,
+                     char **doc, int *n, int *has_conflicts)
 
 
-cdef class CDatabase:
+cdef class CDatabase(object):
     """A thin wrapper/shim to interact with the C implementation.
 
     Functionality should not be written here. It is only provided as a way to
@@ -57,8 +59,10 @@ cdef class CDatabase:
 
     cdef public object _filename
     cdef u1database *_db
+    cdef public object _supports_indexes
 
     def __init__(self, filename):
+        self._supports_indexes = False
         self._filename = filename
         self._db = u1db_open(self._filename)
 
@@ -173,3 +177,29 @@ cdef class CDatabase:
         else:
             raise RuntimeError("Failed to put_doc: %d" % (status,))
         return doc_rev
+
+    def get_doc(self, doc_id):
+        cdef int status, n, c_has_conflicts
+        cdef char *c_doc_rev, *c_doc
+
+        c_doc_rev = c_doc = NULL
+        has_conflicts = n = status = 0
+        status = u1db_get_doc(self._db, doc_id, &c_doc_rev, &c_doc, &n,
+                              &c_has_conflicts)
+        if status != 0:
+            raise RuntimeError("Failed to get_doc: %d" % (status,))
+        if c_has_conflicts:
+            has_conflicts = True
+        else:
+            has_conflicts = False
+        if c_doc == NULL:
+            doc = None
+        else:
+            doc = c_doc
+            free(c_doc)
+        if c_doc_rev == NULL:
+            doc_rev = None
+        else:
+            doc_rev = c_doc_rev
+            free(c_doc_rev)
+        return doc_rev, doc, has_conflicts

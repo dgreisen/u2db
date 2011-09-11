@@ -71,14 +71,20 @@ class SQLiteDatabaseTests(object):
         self.assertEqual((new_rev, simple_doc, False), self.db.get_doc(doc_id))
 
     def test_create_index(self):
+        if not self.db._supports_indexes:
+            self.skipTest('db %s does not support indexes' % (self.db,))
         self.db.create_index('test-idx', ["key"])
         self.assertEqual([('test-idx', ["key"])], self.db.list_indexes())
 
     def test_create_index_multiple_fields(self):
+        if not self.db._supports_indexes:
+            self.skipTest('db %s does not support indexes' % (self.db,))
         self.db.create_index('test-idx', ["key", "key2"])
         self.assertEqual([('test-idx', ["key", "key2"])], self.db.list_indexes())
 
     def test__get_index_definition(self):
+        if not self.db._supports_indexes:
+            self.skipTest('db %s does not support indexes' % (self.db,))
         self.db.create_index('test-idx', ["key", "key2"])
         # TODO: How would you test that an index is getting used for an SQL
         #       request?
@@ -86,6 +92,8 @@ class SQLiteDatabaseTests(object):
                          self.db._get_index_definition('test-idx'))
 
     def test_create_extracts_fields(self):
+        if not self.db._supports_indexes:
+            self.skipTest('db %s does not support indexes' % (self.db,))
         doc1_id, doc1_rev = self.db.create_doc('{"key1": "val1", "key2": "val2"}')
         doc2_id, doc2_rev = self.db.create_doc('{"key1": "valx", "key2": "valy"}')
         c = self.db._get_sqlite_handle().cursor()
@@ -98,6 +106,8 @@ class SQLiteDatabaseTests(object):
                          ], c.fetchall())
 
     def test_put_updates_fields(self):
+        if not self.db._supports_indexes:
+            self.skipTest('db %s does not support indexes' % (self.db,))
         doc1_id, doc1_rev = self.db.create_doc('{"key1": "val1", "key2": "val2"}')
         doc2_rev = self.db.put_doc(doc1_id, doc1_rev,
                         '{"key1": "val1", "key2": "valy"}')

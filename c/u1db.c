@@ -258,7 +258,7 @@ handle_row(sqlite3_stmt *statement, u1db_row **row)
 }
 
 int
-u1db_create_doc(u1database *db, const char *doc, size_t n, char **doc_id,
+u1db_create_doc(u1database *db, const char *doc, int n, char **doc_id,
                 char **doc_rev)
 {
     if (db == NULL || doc == NULL || doc_id == NULL || doc_rev == NULL) {
@@ -356,7 +356,7 @@ write_doc(u1database *db, const char *doc_id, const char *doc_rev,
 
 int
 u1db_put_doc(u1database *db, const char *doc_id, char **doc_rev,
-             const char *doc, size_t n)
+             const char *doc, int n)
 {
     const unsigned char *old_doc, *old_doc_rev;
     int status;
@@ -367,10 +367,12 @@ u1db_put_doc(u1database *db, const char *doc_id, char **doc_rev,
         // Bad parameter
         return -1;
     }
+    sqlite3_exec(db->sql_handle, "BEGIN", 0, 0, 0);
     old_doc = NULL;
     status = lookup_doc(db, doc_id, &old_doc_rev, &old_doc, &old_doc_n, &statement);
     if (status != SQLITE_OK) {
         sqlite3_finalize(statement);
+        sqlite3_exec(db->sql_handle, "ROLLBACK", 0, 0, 0);
         return status;
     }
     if (*doc_rev == NULL) {
@@ -396,19 +398,25 @@ u1db_put_doc(u1database *db, const char *doc_id, char **doc_rev,
         }
     }
     sqlite3_finalize(statement);
-    if (status == 0) {
+    if (status == SQLITE_OK) {
         // We are ok to proceed, allocating a new document revision, and
         // storing the document
         *doc_rev = (char *)calloc(1, 128);
         memcpy(*doc_rev, "test:1", 6);
-        status = write_doc(db, doc_id, doc_rev, doc, n, (old_doc != NULL));
+        status = write_doc(db, doc_id, *doc_rev, doc, n, (old_doc != NULL));
+        if (status == SQLITE_OK) {
+            sqlite3_exec(db->sql_handle, "COMMIT", 0, 0, 0);
+        }
+    }
+    if (status != SQLITE_OK) {
+        sqlite3_exec(db->sql_handle, "ROLLBACK", 0, 0, 0);
     }
     return status;
 }
 
 int
 u1db_get_doc(u1database *db, const char *doc_id, char **doc_rev,
-             char **doc, size_t *n, int *has_conflicts)
+             char **doc, int *n, int *has_conflicts)
 {
     int status = 0;
     if (db == NULL || doc_id == NULL || doc_rev == NULL || doc == NULL || n == NULL

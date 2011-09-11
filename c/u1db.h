@@ -52,7 +52,7 @@ int u1db_get_machine_id(u1database *db, char **machine_id);
  * @param doc_rev: The document revision. Callers are responsible for freeing
  *      the information.
  */
-int u1db_create_doc(u1database *db, const char *doc, size_t n, char **doc_id,
+int u1db_create_doc(u1database *db, const char *doc, int n, char **doc_id,
                     char **doc_rev);
 
 /**
@@ -69,7 +69,7 @@ int u1db_create_doc(u1database *db, const char *doc, size_t n, char **doc_id,
  * @param n: The number of bytes in doc
  */
 int u1db_put_doc(u1database *db, const char *doc_id, char **doc_rev,
-                 const char *doc, size_t n);
+                 const char *doc, int n);
 
 /**
  * Get the document defined by the given document id.
@@ -81,7 +81,7 @@ int u1db_put_doc(u1database *db, const char *doc_id, char **doc_rev,
  * @param has_conflicts (OUT) Are there conflicts present for this document?
  */
 int u1db_get_doc(u1database *db, const char *doc_id, char **doc_rev,
-                 char **doc, size_t *n, int *has_conflicts);
+                 char **doc, int *n, int *has_conflicts);
 
 /**
  * Internal API, Get the global database rev. If a negative number is returned,

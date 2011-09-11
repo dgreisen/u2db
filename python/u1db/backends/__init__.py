@@ -20,6 +20,10 @@ from u1db.vectorclock import VectorClockRev
 
 class CommonBackend(u1db.Database):
 
+    # This is a test-suite flag. It hints to the test suite that a given
+    # implementation doesn't support indexes, so those tests should be skipped
+    _supports_indexes = True
+
     def _allocate_doc_id(self):
         """Generate a unique identifier for this document."""
         raise NotImplementedError(self._allocate_doc_id)
