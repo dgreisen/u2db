@@ -15,6 +15,7 @@
  */
 
 #include <string.h>
+#include <stdio.h>
 #include <stdlib.h>
 #include <sqlite3.h>
 #include "u1db.h"
@@ -254,6 +255,171 @@ handle_row(sqlite3_stmt *statement, u1db_row **row)
         memcpy(new_row->columns[i], text, num_bytes+1);
     }
     return SQLITE_OK;
+}
+
+int
+u1db_create_doc(u1database *db, const char *doc, size_t n, char **doc_id,
+                char **doc_rev)
+{
+    if (db == NULL || doc == NULL || doc_id == NULL || doc_rev == NULL) {
+        // Bad parameter
+        return -1;
+    }
+    if (*doc_id == NULL) {
+        *doc_id = u1db__allocate_doc_id(db);
+    }
+    return u1db_put_doc(db, *doc_id, doc_rev, doc, n);
+}
+
+
+// Lookup the contents for doc_id. We return the statement object, since it
+// defines the lifetimes of doc and doc_rev. Callers should then finalize
+// statement when they are done with them. 
+static int
+lookup_doc(u1database *db, const char *doc_id,
+           const unsigned char **doc_rev, const unsigned char **doc, int *n,
+           sqlite3_stmt **statement)
+{
+    int status;
+
+    status = sqlite3_prepare_v2(db->sql_handle,
+        "SELECT doc_rev, doc FROM document WHERE doc_id = ?", -1,
+        statement, NULL);
+    if (status != SQLITE_OK) {
+        return status;
+    }
+    status = sqlite3_bind_text(*statement, 1, doc_id, -1, SQLITE_TRANSIENT);
+    if (status != SQLITE_OK) {
+        return status;
+    }
+    status = sqlite3_step(*statement);
+    if (status == SQLITE_DONE) {
+        *doc_rev = NULL;
+        *doc = NULL;
+        *n = 0;
+        status = SQLITE_OK;
+    } else if (status == SQLITE_ROW) {
+        *doc = sqlite3_column_text(*statement, 0);
+        *n = sqlite3_column_bytes(*statement, 0);
+        *doc_rev = sqlite3_column_text(*statement, 1);
+        status = SQLITE_OK;
+    } else { // Error
+    }
+    return status;
+}
+
+// Insert the document into the table, we've already done the safety checks
+static int
+write_doc(u1database *db, const char *doc_id, const char *doc_rev,
+          const char *doc, int n, int is_update)
+{
+    sqlite3_stmt *statement;
+    int status;
+
+    if (is_update) {
+        status = sqlite3_prepare_v2(db->sql_handle, 
+            "UPDATE document SET doc_rev = ?, doc = ? WHERE doc_id = ?", -1,
+            &statement, NULL); 
+    } else {
+        status = sqlite3_prepare_v2(db->sql_handle, 
+            "INSERT INTO document (doc_rev, doc, doc_id) VALUES (?, ?, ?)", -1,
+            &statement, NULL); 
+    }
+    if (status != SQLITE_OK) {
+        return status;
+    }
+    status = sqlite3_bind_text(statement, 1, doc_rev, -1, SQLITE_TRANSIENT);
+    if (status != SQLITE_OK) {
+        sqlite3_finalize(statement);
+        return status;
+    }
+    status = sqlite3_bind_text(statement, 2, doc, n+1, SQLITE_TRANSIENT);
+    if (status != SQLITE_OK) {
+        sqlite3_finalize(statement);
+        return status;
+    }
+    status = sqlite3_bind_text(statement, 3, doc_id, -1, SQLITE_TRANSIENT);
+    if (status != SQLITE_OK) {
+        sqlite3_finalize(statement);
+        return status;
+    }
+    do {
+        status = sqlite3_step(statement);
+    } while (status == SQLITE_ROW);
+    if (status == SQLITE_DONE) {
+        status = SQLITE_OK;
+    }
+    sqlite3_finalize(statement);
+    // TODO: Update the transaction_log table
+    return status;
+}
+
+int
+u1db_put_doc(u1database *db, const char *doc_id, char **doc_rev,
+             const char *doc, size_t n)
+{
+    const unsigned char *old_doc, *old_doc_rev;
+    int status;
+    int old_doc_n;
+    sqlite3_stmt *statement;
+
+    if (db == NULL || doc == NULL || doc_id == NULL || doc_rev == NULL) {
+        // Bad parameter
+        return -1;
+    }
+    old_doc = NULL;
+    status = lookup_doc(db, doc_id, &old_doc_rev, &old_doc, &old_doc_n, &statement);
+    if (status != SQLITE_OK) {
+        sqlite3_finalize(statement);
+        return status;
+    }
+    if (*doc_rev == NULL) {
+        if (old_doc_rev == NULL) {
+            // We are creating a new document from scratch. No problem.
+            status = 0;
+        } else {
+            // We were supplied a NULL doc rev, but the doc already exists
+            status = -2;
+        }
+    } else {
+        if (old_doc_rev == NULL) {
+            // TODO: Handle this case
+            status = -3;
+        } else {
+            if (strcmp(*doc_rev, (const char *)old_doc_rev) == 0) {
+                // The supplied doc_rev exactly matches old_doc_rev, good enough
+                status = 0;
+            } else {
+                // Invalid old rev, mark it as such
+                status = -2;
+            }
+        }
+    }
+    sqlite3_finalize(statement);
+    if (status == 0) {
+        // We are ok to proceed, allocating a new document revision, and
+        // storing the document
+        *doc_rev = (char *)calloc(1, 128);
+        memcpy(*doc_rev, "test:1", 6);
+        status = write_doc(db, doc_id, doc_rev, doc, n, (old_doc != NULL));
+    }
+    return status;
+}
+
+int
+u1db_get_doc(u1database *db, const char *doc_id, char **doc_rev,
+             char **doc, size_t *n, int *has_conflicts)
+{
+    int status = 0;
+    if (db == NULL || doc_id == NULL || doc_rev == NULL || doc == NULL || n == NULL
+        || has_conflicts == NULL) {
+        // Bad Parameters
+        // TODO: we could handle has_conflicts == NULL meaning that the caller
+        //       is ignoring conflicts, but we don't want to make it *too* easy
+        //       to do so.
+        return -1;
+    }
+    return status;
 }
 
 int

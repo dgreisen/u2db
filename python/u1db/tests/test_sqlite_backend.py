@@ -51,3 +51,21 @@ class TestSQLiteDatabase(tests.TestCase):
         db._close_sqlite_handle()
         self.assertEqual('foo', db._machine_id)
 
+    def test_list_index_mixed(self):
+        # TODO: Rewrite this test so that it can work against the CWrapper.
+        #       Most likely this means doing the value bindings ourselves.
+        db = sqlite_backend.SQLiteDatabase(':memory:')
+        # Make sure that we properly order the output
+        c = db._get_sqlite_handle().cursor()
+        # We intentionally insert the data in weird ordering, to make sure the
+        # query still gets it back correctly.
+        c.executemany("INSERT INTO index_definitions VALUES (?, ?, ?)",
+                      [('idx-1', 0, 'key10'),
+                       ('idx-2', 2, 'key22'),
+                       ('idx-1', 1, 'key11'),
+                       ('idx-2', 0, 'key20'),
+                       ('idx-2', 1, 'key21')])
+        self.assertEqual([('idx-1', ['key10', 'key11']),
+                          ('idx-2', ['key20', 'key21', 'key22'])],
+                         db.list_indexes())
+

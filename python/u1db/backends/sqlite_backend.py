@@ -174,6 +174,8 @@ class SQLiteDatabase(CommonBackend):
             val = c.fetchone()
             if val is None:
                 old_rev = old_doc = None
+                # XXX: We aren't failing if we are passed old_doc_rev != None,
+                #      but the actual data stored is None
             else:
                 old_rev, old_doc = val
                 if old_rev != old_doc_rev:

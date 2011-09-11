@@ -1,2 +1,3 @@
 build
 python/u1db/backends/c_wrapper.c
+python/core

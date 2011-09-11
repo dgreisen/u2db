@@ -42,6 +42,10 @@ cdef extern from "u1db.h":
     u1db_table *u1db__sql_run(u1database *, char *sql, size_t n)
     void u1db__free_table(u1db_table **table)
     void free(void *)
+    int u1db_create_doc(u1database *db, char *doc, size_t n,
+                        char **doc_id, char **doc_rev)
+    int u1db_put_doc(u1database *db, char *doc_id, char **doc_rev,
+                     char *doc, size_t n)
 
 
 cdef class CDatabase:
@@ -131,3 +135,41 @@ cdef class CDatabase:
             return res
         finally:
             u1db__free_table(&tbl)
+
+    def create_doc(self, doc, doc_id=None):
+        cdef int status
+        cdef char *c_doc_id, *c_doc_rev
+
+        if doc_id is not None:
+            c_doc_id = doc_id
+        else:
+            c_doc_id = NULL
+        c_doc_rev = NULL
+        status = u1db_create_doc(self._db, doc, len(doc),
+                                 &c_doc_id, &c_doc_rev)
+        if status != 0:
+            raise RuntimeError('Failed to create_doc: %d' % (status,))
+        # TODO: Handle the free() calls
+        if c_doc_id == NULL:
+            doc_id = None
+        elif doc_id is None:
+            doc_id = c_doc_id
+            free(c_doc_id)
+        if c_doc_rev == NULL:
+            doc_rev = None
+        else:
+            doc_rev = c_doc_rev
+        return doc_id, doc_rev
+
+    def put_doc(self, doc_id, doc_rev, doc):
+        cdef int status
+        cdef char *c_doc_rev
+
+        c_doc_rev = doc_rev
+        status = u1db_put_doc(self._db, doc_id, &c_doc_rev, doc, len(doc))
+        if status == 0:
+            doc_rev = c_doc_rev
+            free(c_doc_rev)
+        else:
+            raise RuntimeError("Failed to put_doc: %d" % (status,))
+        return doc_rev

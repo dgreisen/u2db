@@ -42,6 +42,48 @@ int u1db_set_machine_id(u1database *db, const char *machine_id);
 int u1db_get_machine_id(u1database *db, char **machine_id);
 
 /**
+ * Create a new document.
+ *
+ * @param doc: The JSON string representing the document.
+ * @param n: The number of bytes in doc
+ * @param doc_id: A string identifying the document. If the value supplied is
+ *      NULL, then a new doc_id will be generated. Callers are responsible for
+ *      then freeing the returned string.
+ * @param doc_rev: The document revision. Callers are responsible for freeing
+ *      the information.
+ */
+int u1db_create_doc(u1database *db, const char *doc, size_t n, char **doc_id,
+                    char **doc_rev);
+
+/**
+ * Put new document content for the given document identifier.
+ *
+ * @param doc_id: A string identifying the document. If the value supplied is
+ *      NULL, then a new doc_id will be generated. Callers are responsible for
+ *      then freeing the returned string.
+ * @param doc_rev: The document revision. This should contain the revision that
+ *      is being replaced, and it will be filled in with the new document revision.
+ *      The new revision will be malloced(), callers are responsible for
+ *      calling free.
+ * @param doc: The JSON string representing the document.
+ * @param n: The number of bytes in doc
+ */
+int u1db_put_doc(u1database *db, const char *doc_id, char **doc_rev,
+                 const char *doc, size_t n);
+
+/**
+ * Get the document defined by the given document id.
+ *
+ * @param doc_id (IN) The document we are looking for
+ * @param doc_rev (OUT) The final document revision. Callers must free the memory
+ * @param doc     (OUT) Callers are responsible for freeing the memory
+ * @param n       (OUT) Number of bytes for doc
+ * @param has_conflicts (OUT) Are there conflicts present for this document?
+ */
+int u1db_get_doc(u1database *db, const char *doc_id, char **doc_rev,
+                 char **doc, size_t *n, int *has_conflicts);
+
+/**
  * Internal API, Get the global database rev. If a negative number is returned,
  * an error occured.
  */
