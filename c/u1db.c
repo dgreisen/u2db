@@ -386,12 +386,15 @@ u1db_put_doc(u1database *db, const char *doc_id, char **doc_rev,
     if (doc_id == NULL) {
         return U1DB_INVALID_DOC_ID;
     }
-    sqlite3_exec(db->sql_handle, "BEGIN", 0, 0, 0);
+    status = sqlite3_exec(db->sql_handle, "BEGIN", NULL, NULL, NULL);
+    if (status != SQLITE_OK) {
+        return status;
+    }
     old_doc = NULL;
     status = lookup_doc(db, doc_id, &old_doc_rev, &old_doc, &old_doc_n, &statement);
     if (status != SQLITE_OK) {
         sqlite3_finalize(statement);
-        sqlite3_exec(db->sql_handle, "ROLLBACK", 0, 0, 0);
+        sqlite3_exec(db->sql_handle, "ROLLBACK", NULL, NULL, NULL);
         return status;
     }
     if (*doc_rev == NULL) {
@@ -426,11 +429,11 @@ u1db_put_doc(u1database *db, const char *doc_id, char **doc_rev,
         memcpy(*doc_rev, "test:1", 6);
         status = write_doc(db, doc_id, *doc_rev, doc, n, (old_doc != NULL));
         if (status == SQLITE_OK) {
-            sqlite3_exec(db->sql_handle, "COMMIT", 0, 0, 0);
+            status = sqlite3_exec(db->sql_handle, "COMMIT", NULL, NULL, NULL);
         }
     }
     if (status != SQLITE_OK) {
-        sqlite3_exec(db->sql_handle, "ROLLBACK", 0, 0, 0);
+        sqlite3_exec(db->sql_handle, "ROLLBACK", NULL, NULL, NULL);
     }
     return status;
 }
@@ -483,6 +486,50 @@ u1db_get_doc(u1database *db, const char *doc_id, char **doc_rev,
     }
 finish:
     sqlite3_finalize(statement);
+    return status;
+}
+
+int
+u1db_delete_doc(u1database *db, const char *doc_id, char **doc_rev)
+{
+    int status, n;
+    sqlite3_stmt *statement;
+    const unsigned char *cur_doc_rev, *doc;
+
+    if (db == NULL || doc_id == NULL || doc_rev == NULL || *doc_rev == NULL) {
+        return U1DB_INVALID_PARAMETER;
+    }
+    status = sqlite3_exec(db->sql_handle, "BEGIN", NULL, NULL, NULL);
+    if (status != SQLITE_OK) {
+        return status;
+    }
+    status = lookup_doc(db, doc_id, &cur_doc_rev, &doc, &n, &statement);
+    if (status != SQLITE_OK) {
+        sqlite3_finalize(statement);
+        sqlite3_exec(db->sql_handle, "ROLLBACK", NULL, NULL, NULL);
+        return status;
+    }
+    if (cur_doc_rev == NULL) {
+        // Can't delete a doc that doesn't exist
+        sqlite3_exec(db->sql_handle, "ROLLBACK", NULL, NULL, NULL);
+        return U1DB_INVALID_DOC_ID;
+    }
+    if (strcmp((const char *)cur_doc_rev, *doc_rev) != 0) {
+        // The saved document revision doesn't match
+        sqlite3_exec(db->sql_handle, "ROLLBACK", NULL, NULL, NULL);
+        return U1DB_INVALID_DOC_REV;
+    }
+    // TODO: Handle conflicts
+
+    // TODO: Implement VectorClockRev
+    *doc_rev = (char *)calloc(1, 128);
+    memcpy(*doc_rev, "test:2", 6);
+    status = write_doc(db, doc_id, *doc_rev, NULL, 0, 1);
+    if (status != SQLITE_OK) {
+        sqlite3_exec(db->sql_handle, "ROLLBACK", NULL, NULL, NULL);
+    } else {
+        status = sqlite3_exec(db->sql_handle, "COMMIT", NULL, NULL, NULL);
+    }
     return status;
 }
 
@@ -571,6 +618,7 @@ u1db__allocate_doc_id(u1database *db)
 u1db_table *
 u1db__sql_run(u1database *db, const char *sql, size_t n)
 {
+    // TODO: This could be simplified *a lot* by using sqlite3_exec
     int status, do_continue;
     u1db_table *result = NULL;
     u1db_row *cur_row = NULL;
@@ -645,7 +693,6 @@ u1db__sync_get_machine_info(u1database *db, const char *other_machine_id,
                             int *my_db_rev)
 {
     int status;
-    int db_rev;
     sqlite3_stmt *statement;
 
     if (db == NULL || other_machine_id == NULL || other_db_rev == NULL) {

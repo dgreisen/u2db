@@ -48,6 +48,7 @@ cdef extern from "u1db.h":
                      char *doc, int n)
     int u1db_get_doc(u1database *db, char *doc_id, char **doc_rev,
                      char **doc, int *n, int *has_conflicts)
+    int u1db_delete_doc(u1database *db, char *doc_id, char **doc_rev)
     int u1db_whats_changed(u1database *db, int *db_rev,
                            int (*cb)(void *, char *doc_id), void *context)
     int u1db__sync_get_machine_info(u1database *db, char *other_machine_id,
@@ -242,6 +243,20 @@ cdef class CDatabase(object):
             doc_rev = c_doc_rev
             free(c_doc_rev)
         return doc_rev, doc, has_conflicts
+
+    def delete_doc(self, doc_id, doc_rev):
+        cdef int status
+        cdef char *c_doc_rev
+
+        status = u1db_delete_doc(self._db, doc_id, &c_doc_rev);
+        if status != U1DB_OK:
+            if status == U1DB_INVALID_DOC_REV:
+                raise u1db.InvalidDocRev()
+            elif status == U1DB_INVALID_DOC_ID:
+                raise KeyError
+            raise RuntimeError("Failed to delete_doc: %d" % (status,))
+        doc_rev = c_doc_rev
+        return doc_rev
 
     def whats_changed(self, db_rev=0):
         cdef int status, c_db_rev

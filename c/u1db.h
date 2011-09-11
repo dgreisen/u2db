@@ -91,6 +91,17 @@ int u1db_get_doc(u1database *db, const char *doc_id, char **doc_rev,
                  char **doc, int *n, int *has_conflicts);
 
 /**
+ * Mark a document as deleted.
+ *
+ * @param doc_id (IN) The document we want to delete.
+ * @param doc_rev (IN/OUT) The rev of the document we are deleting, must match
+ *                the stored value, or the delete will fail. Will be updated
+ *                to point at the new document revision (for the delete),
+ *                callers must free the memory.
+ */
+int u1db_delete_doc(u1database *db, const char *doc_id, char **doc_rev);
+
+/**
  * Get the document defined by the given document id.
  *
  * @param db_rev The global database revision to start at. You can pass '0' to
