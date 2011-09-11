@@ -748,3 +748,42 @@ u1db__sync_get_machine_info(u1database *db, const char *other_machine_id,
     sqlite3_finalize(statement);
     return status;
 }
+
+int
+u1db__sync_record_machine_info(u1database *db, const char *machine_id,
+                               int db_rev)
+{
+    int status;
+    sqlite3_stmt *statement;
+    if (db == NULL || machine_id == NULL) {
+        return U1DB_INVALID_PARAMETER;
+    }
+    status = sqlite3_exec(db->sql_handle, "BEGIN", NULL, NULL, NULL);
+    if (status != SQLITE_OK) {
+        return status;
+    }
+    status = sqlite3_prepare_v2(db->sql_handle,
+        "INSERT OR REPLACE INTO sync_log VALUES (?, ?)", -1,
+        &statement, NULL);
+    if (status != SQLITE_OK) {
+        return status;
+    }
+    status = sqlite3_bind_text(statement, 1, machine_id, -1, SQLITE_TRANSIENT);
+    if (status != SQLITE_OK) {
+        sqlite3_finalize(statement);
+        sqlite3_exec(db->sql_handle, "ROLLBACK", NULL, NULL, NULL);
+        return status;
+    }
+    status = sqlite3_bind_int(statement, 2, db_rev);
+    if (status != SQLITE_OK) {
+        sqlite3_finalize(statement);
+        sqlite3_exec(db->sql_handle, "ROLLBACK", NULL, NULL, NULL);
+        return status;
+    }
+    status = sqlite3_step(statement);
+    if (status == SQLITE_DONE) {
+        status = SQLITE_OK;
+    }
+    sqlite3_finalize(statement);
+    return status;
+}

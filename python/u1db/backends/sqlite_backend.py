@@ -272,7 +272,6 @@ class SQLiteDatabase(CommonBackend):
     def _record_sync_info(self, machine_id, db_rev):
         with self._db_handle:
             c = self._db_handle.cursor()
-            my_db_rev = self._get_db_rev()
             c.execute("INSERT OR REPLACE INTO sync_log VALUES (?, ?)",
                       (machine_id, db_rev))
 

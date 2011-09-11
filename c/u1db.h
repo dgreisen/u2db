@@ -167,4 +167,6 @@ int u1db__sync_get_machine_info(u1database *db, const char *other_machine_id,
                             int *other_db_rev, char **my_machine_id,
                             int *my_db_rev);
 
+int u1db__sync_record_machine_info(u1database *db, const char *machine_id,
+                                   int db_rev);
 #endif // _U1DB_H_

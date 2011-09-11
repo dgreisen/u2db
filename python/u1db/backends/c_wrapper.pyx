@@ -54,6 +54,8 @@ cdef extern from "u1db.h":
     int u1db__sync_get_machine_info(u1database *db, char *other_machine_id,
                                     int *other_db_rev, char **my_machine_id,
                                     int *my_db_rev)
+    int u1db__sync_record_machine_info(u1database *db, char *machine_id,
+                                       int db_rev)
     int U1DB_OK
     int U1DB_INVALID_DOC_REV
     int U1DB_INVALID_DOC_ID
@@ -295,3 +297,10 @@ cdef class CDatabase(object):
         if status != U1DB_OK:
             raise RuntimeError("Failed to _get_sync_info: %d" % (status,))
         return (my_machine_id, my_db_rev, other_db_rev)
+
+    def _record_sync_info(self, machine_id, db_rev):
+        cdef int status
+
+        status = u1db__sync_record_machine_info(self._db, machine_id, db_rev)
+        if status != U1DB_OK:
+            raise RuntimeError("Failed to _record_sync_info: %d" % (status,))
