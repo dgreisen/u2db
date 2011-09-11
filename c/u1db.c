@@ -343,14 +343,30 @@ write_doc(u1database *db, const char *doc_id, const char *doc_rev,
         sqlite3_finalize(statement);
         return status;
     }
-    do {
-        status = sqlite3_step(statement);
-    } while (status == SQLITE_ROW);
+    status = sqlite3_step(statement);
     if (status == SQLITE_DONE) {
         status = SQLITE_OK;
     }
     sqlite3_finalize(statement);
-    // TODO: Update the transaction_log table
+    if (status != SQLITE_OK) {
+        return status;
+    }
+    status = sqlite3_prepare_v2(db->sql_handle, 
+        "INSERT INTO transaction_log(doc_id) VALUES (?)", -1,
+        &statement, NULL);
+    if (status != SQLITE_OK) {
+        return status;
+    }
+    status = sqlite3_bind_text(statement, 1, doc_id, -1, SQLITE_TRANSIENT);
+    if (status != SQLITE_OK) {
+        sqlite3_finalize(statement);
+        return status;
+    }
+    status = sqlite3_step(statement);
+    if (status == SQLITE_DONE) {
+        status = SQLITE_OK;
+    }
+    sqlite3_finalize(statement);
     return status;
 }
 
@@ -464,6 +480,46 @@ finish:
     sqlite3_finalize(statement);
     return status;
 }
+
+int
+u1db_whats_changed(u1database *db, int *db_rev,
+                   int (*cb)(void *, char *doc_id), void *context)
+{
+    int status;
+    sqlite3_stmt *statement;
+    if (db == NULL || db_rev == NULL || cb == NULL) {
+        return -1; // Bad parameters
+    }
+    status = sqlite3_prepare_v2(db->sql_handle,
+        "SELECT db_rev, doc_id FROM transaction_log WHERE db_rev > ?", -1,
+        &statement, NULL);
+    if (status != SQLITE_OK) {
+        return status;
+    }
+    status = sqlite3_bind_int(statement, 1, *db_rev);
+    if (status != SQLITE_OK) {
+        sqlite3_finalize(statement);
+        return status;
+    }
+    status = sqlite3_step(statement);
+    while (status == SQLITE_ROW) {
+        int local_db_rev;
+        char *doc_id;
+        local_db_rev = sqlite3_column_int(statement, 0);
+        if (local_db_rev > *db_rev) {
+            *db_rev = local_db_rev;
+        }
+        doc_id = sqlite3_column_text(statement, 1);
+        cb(context, doc_id);
+        status = sqlite3_step(statement);
+    }
+    if (status == SQLITE_DONE) {
+        status = SQLITE_OK;
+    }
+    sqlite3_finalize(statement);
+    return status;
+}
+
 
 int
 u1db__get_db_rev(u1database *db)

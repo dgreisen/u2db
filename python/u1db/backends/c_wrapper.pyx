@@ -48,6 +48,20 @@ cdef extern from "u1db.h":
                      char *doc, int n)
     int u1db_get_doc(u1database *db, char *doc_id, char **doc_rev,
                      char **doc, int *n, int *has_conflicts)
+    int u1db_whats_changed(u1database *db, int *db_rev,
+                           int (*cb)(void *, char *doc_id), void *context)
+
+
+cdef struct _set_context:
+    void * the_set
+
+cdef int _add_to_set(void *context, char *doc_id):
+    cdef _set_context *ctx
+
+    ctx = <_set_context*>(context)
+    a_set = <object>ctx.the_set
+    doc = doc_id
+    a_set.add(doc)
 
 
 cdef class CDatabase(object):
@@ -203,3 +217,16 @@ cdef class CDatabase(object):
             doc_rev = c_doc_rev
             free(c_doc_rev)
         return doc_rev, doc, has_conflicts
+
+    def whats_changed(self, db_rev=0):
+        cdef int status, c_db_rev
+        cdef _set_context ctx
+
+        ctx = _set_context()
+        a_set = set()
+        ctx.the_set = <void *>a_set
+        c_db_rev = db_rev
+        status = u1db_whats_changed(self._db, &c_db_rev, _add_to_set, <void *>&ctx)
+        if status != 0:
+            raise RuntimeError("Failed to call whats_changed: %d" % (status,))
+        return c_db_rev, a_set

@@ -84,6 +84,25 @@ int u1db_get_doc(u1database *db, const char *doc_id, char **doc_rev,
                  char **doc, int *n, int *has_conflicts);
 
 /**
+ * Get the document defined by the given document id.
+ *
+ * @param db_rev The global database revision to start at. You can pass '0' to
+ *               get all changes in the database. The integer will be updated
+ *               to point at the current db_rev.
+ * @param cb     A callback function. This will be called passing in 'context',
+ *               and a document identifier for each document that has been modified.
+ *               The doc_id string is transient, so callers must copy it to
+ *               their own memory if they want to keep it.
+ *               If a document is changed more than once, it is currently
+ *               undefined whether this will call cb() once per change, or just
+ *               once per doc_id.
+ * @param context Opaque context, passed back to the caller.
+ */
+int u1db_whats_changed(u1database *db, int *db_rev,
+                       int (*cb)(void *, char *doc_id), void *context);
+
+
+/**
  * Internal API, Get the global database rev. If a negative number is returned,
  * an error occured.
  */
