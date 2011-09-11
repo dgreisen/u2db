@@ -39,6 +39,12 @@ class SQLiteDatabase(CommonBackend):
         """
         return self._db_handle
 
+    def _run_sql(self, sql):
+        """Run an sql query against the database, and return results."""
+        c = self._db_handle.cursor()
+        c.execute(sql)
+        return c.fetchall()
+
     def _close_sqlite_handle(self):
         """Release access to the underlying sqlite database."""
         self._db_handle.close()

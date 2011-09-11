@@ -22,15 +22,77 @@
 struct _u1database
 {
     sqlite3 *sql_handle;
+    char *machine_id;
 };
 
+static const char *table_definitions[] = {
+    "CREATE TABLE transaction_log ("
+    " db_rev INTEGER PRIMARY KEY AUTOINCREMENT,"
+    " doc_id TEXT)",
+    "CREATE TABLE document ("
+    " doc_id TEXT PRIMARY KEY,"
+    " doc_rev TEXT,"
+    " doc TEXT)",
+    "CREATE TABLE document_fields ("
+    " doc_id TEXT,"
+    " field_name TEXT,"
+    " value TEXT,"
+    " CONSTRAINT document_fields_pkey"
+    " PRIMARY KEY (doc_id, field_name))",
+    "CREATE TABLE sync_log ("
+    " machine_id TEXT PRIMARY KEY,"
+    " known_db_rev INTEGER)",
+    "CREATE TABLE conflicts ("
+    " doc_id TEXT,"
+    " doc_rev TEXT,"
+    " doc TEXT,"
+    " CONSTRAINT conflicts_pkey PRIMARY KEY (doc_id, doc_rev))",
+    "CREATE TABLE index_definitions ("
+    " name TEXT,"
+    " offset INT,"
+    " field TEXT,"
+    " CONSTRAINT index_definitions_pkey"
+    " PRIMARY KEY (name, offset))",
+    "CREATE TABLE u1db_config (name TEXT, value TEXT)",
+    "INSERT INTO u1db_config VALUES ('sql_schema', '0')",
+};
+
+static int
+initialize(u1database *db)
+{
+    sqlite3_stmt *statement;
+    int i, status, final_status;
+
+    for(i = 0; i < sizeof(table_definitions)/sizeof(char*); i++) {
+        status = sqlite3_prepare_v2(db->sql_handle,
+            table_definitions[i], -1, &statement, NULL);
+        if(status != SQLITE_OK) {
+            return status;
+        }
+        status = sqlite3_step(statement);
+        final_status = sqlite3_finalize(statement);
+        if(status != SQLITE_DONE) {
+            return status;
+        }
+        if(final_status != SQLITE_OK) {
+            return final_status;
+        }
+    }
+    return SQLITE_OK;
+}
 
 u1database *
-u1db_create(const char *fname)
+u1db_open(const char *fname)
 {
     u1database *db = (u1database *)(calloc(1, sizeof(u1database)));
     int status;
     status = sqlite3_open(fname, &db->sql_handle);
+    if(status != SQLITE_OK) {
+        // What do we do here?
+        free(db);
+        return NULL;
+    }
+    initialize(db);
     return db;
 }
 
@@ -60,12 +122,94 @@ u1db__sql_is_open(u1database *db)
 void
 u1db_free(u1database **db)
 {
-    if (*db == NULL) {
+    if (db == NULL || *db == NULL) {
         return;
     }
+    free((*db)->machine_id);
     u1db__sql_close(*db);
     free(*db);
     *db = NULL;
+}
+
+int
+u1db_set_machine_id(u1database *db, const char *machine_id)
+{
+    sqlite3_stmt *statement;
+    int status, final_status, num_bytes;
+    status = sqlite3_prepare_v2(db->sql_handle,
+        "INSERT INTO u1db_config VALUES (?, ?)", -1,
+        &statement, NULL); 
+    if (status != SQLITE_OK) {
+        return status;
+    }
+    status = sqlite3_bind_text(statement, 1, "machine_id", -1, SQLITE_STATIC);
+    if (status != SQLITE_OK) {
+        sqlite3_finalize(statement);
+        return status;
+    }
+    status = sqlite3_bind_text(statement, 2, machine_id, -1, SQLITE_TRANSIENT);
+    if (status != SQLITE_OK) {
+        sqlite3_finalize(statement);
+        return status;
+    }
+    status = sqlite3_step(statement);
+    final_status = sqlite3_finalize(statement);
+    if (status != SQLITE_DONE) {
+        return status;
+    }
+    if (final_status != SQLITE_OK) {
+        return final_status;
+    }
+    // If we got this far, then machine_id has been properly set. Copy it
+    if (db->machine_id != NULL) {
+        free(db->machine_id);
+    }
+    num_bytes = strlen(machine_id);
+    db->machine_id = (char *)calloc(1, num_bytes + 1);
+    memcpy(db->machine_id, machine_id, num_bytes + 1);
+    return 0;
+}
+
+int
+u1db_get_machine_id(u1database *db, char **machine_id)
+{
+    sqlite3_stmt *statement;
+    int status, num_bytes;
+    const unsigned char *text;
+    if (db->machine_id != NULL) {
+        *machine_id = db->machine_id;
+        return SQLITE_OK;
+    }
+    status = sqlite3_prepare_v2(db->sql_handle,
+        "SELECT value FROM u1db_config WHERE name = 'machine_id'", -1,
+        &statement, NULL);
+    if(status != SQLITE_OK) {
+        *machine_id = "Failed to prepare statement";
+        return status;
+    }
+    status = sqlite3_step(statement);
+    if(status != SQLITE_ROW) {
+        // TODO: Check return for failures
+        sqlite3_finalize(statement);
+        if (status == SQLITE_DONE) {
+            // No machine_id set yet
+            *machine_id = NULL;
+            return SQLITE_OK;
+        }
+        *machine_id = "Failed to step prepared statement";
+        return status;
+    }
+    if(sqlite3_column_count(statement) != 1) {
+        sqlite3_finalize(statement);
+        *machine_id = "incorrect column count";
+        return status;
+    }
+    text = sqlite3_column_text(statement, 0);
+    num_bytes = sqlite3_column_bytes(statement, 0);
+    db->machine_id = (char *)calloc(1, num_bytes + 1);
+    memcpy(db->machine_id, text, num_bytes+1);
+    *machine_id = db->machine_id;
+    return SQLITE_OK;
 }
 
 static int
@@ -75,7 +219,7 @@ handle_row(sqlite3_stmt *statement, u1db_row **row)
     // first-pass over the data and determine total size, and fit all that into
     // a single calloc call.
     u1db_row *new_row;
-    unsigned char *text;
+    const unsigned char *text;
     int num_bytes, i;
 
     new_row = (u1db_row *)calloc(1, sizeof(u1db_row));
@@ -93,8 +237,8 @@ handle_row(sqlite3_stmt *statement, u1db_row **row)
     if (new_row->column_sizes == NULL) {
         return SQLITE_NOMEM;
     }
-    new_row->columns = (unsigned char*)calloc(new_row->num_columns,
-                                              sizeof(unsigned char *));
+    new_row->columns = (unsigned char**)calloc(new_row->num_columns,
+                                               sizeof(unsigned char *));
     if (new_row->columns == NULL) {
         return SQLITE_NOMEM;
     }

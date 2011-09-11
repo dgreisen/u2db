@@ -35,6 +35,6 @@ class TestCWrapper(tests.TestCase):
     def test__run_sql(self):
         db = c_wrapper.CDatabase(':memory:')
         self.assertTrue(db._sql_is_open())
-        self.assertEqual((0, []), db._run_sql('CREATE TABLE test (id INTEGER)'))
-        self.assertEqual((0, []), db._run_sql('INSERT INTO test VALUES (1)'))
-        self.assertEqual((0, [['1']]), db._run_sql('SELECT * FROM test'))
+        self.assertEqual([], db._run_sql('CREATE TABLE test (id INTEGER)'))
+        self.assertEqual([], db._run_sql('INSERT INTO test VALUES (1)'))
+        self.assertEqual([('1',)], db._run_sql('SELECT * FROM test'))

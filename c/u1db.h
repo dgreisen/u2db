@@ -22,7 +22,7 @@ typedef struct _u1database u1database;
 /**
  * The basic constructor for a new connection.
  */
-u1database *u1db_create(const char *fname);
+u1database *u1db_open(const char *fname);
 
 /**
  * Close an existing connection, freeing memory, etc.
@@ -30,6 +30,16 @@ u1database *u1db_create(const char *fname);
  * After freeing the memory, we will set the pointer to NULL.
  */
 void u1db_free(u1database **db);
+
+/**
+ * Set the machine_id defined for this database.
+ */
+int u1db_set_machine_id(u1database *db, const char *machine_id);
+
+/**
+ * Get the machine_id defined for this database.
+ */
+int u1db_get_machine_id(u1database *db, char **machine_id);
 
 /**
  * Internal api, close the underlying sql instance.

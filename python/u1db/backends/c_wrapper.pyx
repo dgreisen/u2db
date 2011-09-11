@@ -31,8 +31,10 @@ cdef extern from "u1db.h":
         int status
         u1db_row *first_row
 
-    u1database * u1db_create(char *fname)
+    u1database * u1db_open(char *fname)
     void u1db_free(u1database **)
+    int u1db_set_machine_id(u1database *, char *machine_id)
+    int u1db_get_machine_id(u1database *, char **machine_id)
     int u1db__sql_close(u1database *)
     int u1db__sql_is_open(u1database *)
     u1db_table *u1db__sql_run(u1database *, char *sql, size_t n)
@@ -51,7 +53,7 @@ cdef class CDatabase:
 
     def __init__(self, filename):
         self._filename = filename
-        self._db = u1db_create(self._filename)
+        self._db = u1db_open(self._filename)
 
     def __dealloc__(self):
         u1db_free(&self._db)
@@ -63,6 +65,29 @@ cdef class CDatabase:
         if self._db == NULL:
             return True
         return u1db__sql_is_open(self._db)
+
+    property _machine_id:
+        def __get__(self):
+            cdef char * val
+            cdef int status
+            status = u1db_get_machine_id(self._db, &val)
+            if status != 0:
+                if val != NULL:
+                    err = str(val)
+                else:
+                    err = "<unknown>"
+                raise RuntimeError("Failed to get_machine_id: %d %s"
+                                   % (status, err))
+            if val == NULL:
+                return None
+            return str(val)
+
+    def _set_machine_id(self, machine_id):
+        cdef int status
+        status = u1db_set_machine_id(self._db, machine_id)
+        if status != 0:
+            raise RuntimeError('Machine_id could not be set to %s, error: %d'
+                               % (machine_id, status))
 
     def _run_sql(self, sql):
         cdef u1db_table *tbl
@@ -83,11 +108,11 @@ cdef class CDatabase:
             cur_row = tbl.first_row
             while cur_row != NULL:
                 row = []
-                res.append(row)
                 for i from 0 <= i < cur_row.num_columns:
                     row.append(PyString_FromStringAndSize(
                         <char*>(cur_row.columns[i]), cur_row.column_sizes[i]))
+                res.append(tuple(row))
                 cur_row = cur_row.next
-            return tbl.status, res
+            return res
         finally:
             u1db__free_table(&tbl)
