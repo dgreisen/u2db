@@ -183,7 +183,7 @@ cdef class CDatabase(object):
         cdef char *c_doc_rev, *c_doc
 
         c_doc_rev = c_doc = NULL
-        has_conflicts = n = status = 0
+        c_has_conflicts = n = status = 0
         status = u1db_get_doc(self._db, doc_id, &c_doc_rev, &c_doc, &n,
                               &c_has_conflicts)
         if status != 0:

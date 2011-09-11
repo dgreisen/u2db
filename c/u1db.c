@@ -433,12 +433,26 @@ u1db_get_doc(u1database *db, const char *doc_id, char **doc_rev,
     status = lookup_doc(db, doc_id, &local_doc_rev, &local_doc, &local_n,
                         &statement);
     if (status == SQLITE_OK) {
+        if (local_doc_rev == NULL) {
+            *doc_rev = NULL;
+            *doc = NULL;
+            *has_conflicts = 0;
+            goto finish;
+        }
         *doc = (char *)calloc(1, local_n + 1);
-        memcpy(*doc, local_doc, local_n+1);
+        if (*doc == NULL) {
+            status = SQLITE_NOMEM;
+            goto finish;
+        }
+        memcpy(*doc, local_doc, local_n);
         *n = local_n;
         local_n = strlen((const char*)local_doc_rev);
         *doc_rev = (char *)calloc(1, local_n+1);
-        memcpy(*doc_rev, local_doc_rev, local_n+1);
+        if (*doc_rev == NULL) {
+            status = SQLITE_NOMEM;
+            goto finish;
+        }
+        memcpy(*doc_rev, local_doc_rev, local_n);
         *has_conflicts = 0;
     } else {
         *doc_rev = NULL;
@@ -446,6 +460,7 @@ u1db_get_doc(u1database *db, const char *doc_id, char **doc_rev,
         *n = 0;
         *has_conflicts = 0;
     }
+finish:
     sqlite3_finalize(statement);
     return status;
 }

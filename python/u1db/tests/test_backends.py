@@ -21,6 +21,7 @@ from u1db import (
     vectorclock,
     )
 from u1db.backends import (
+    c_wrapper,
     inmemory,
     sqlite_backend,
     )
@@ -59,6 +60,14 @@ class SQLiteDatabaseMixin(object):
 
     def create_database(self, machine_id):
         db = sqlite_backend.SQLiteDatabase(':memory:')
+        db._set_machine_id(machine_id)
+        return db
+
+
+class CDatabaseMixin(object):
+
+    def create_database(self, machine_id):
+        db = c_wrapper.CDatabase(':memory:')
         db._set_machine_id(machine_id)
         return db
 
@@ -236,8 +245,11 @@ class TestInMemoryDatabase(InMemoryDatabaseMixin, DatabaseTests,
     pass
 
 
-class TestSQLiteDatabase(SQLiteDatabaseMixin, DatabaseTests,
-                         tests.TestCase):
+class TestSQLiteDatabase(SQLiteDatabaseMixin, DatabaseTests, tests.TestCase):
+    pass
+
+
+class TestZZZCDatabase(CDatabaseMixin, DatabaseTests, tests.TestCase):
     pass
 
 
@@ -343,6 +355,11 @@ class TestInMemoryDatabaseIndexes(InMemoryDatabaseMixin, DatabaseIndexTests,
 class TestSQLiteDatabaseIndexes(SQLiteDatabaseMixin, DatabaseIndexTests,
                                 tests.TestCase):
     pass
+
+
+# class TestCDatabaseIndexes(CDatabaseMixin, DatabaseIndexTests,
+#                            tests.TestCase):
+#     pass
 
 
 class DatabaseSyncTests(DatabaseBaseTests):
@@ -657,7 +674,11 @@ class TestInMemoryDatabaseSync(InMemoryDatabaseMixin, DatabaseSyncTests,
     pass
 
 
-class TestSQLiteDatabase(SQLiteDatabaseMixin, DatabaseSyncTests,
-                         tests.TestCase):
+class TestSQLiteDatabaseSync(SQLiteDatabaseMixin, DatabaseSyncTests,
+                             tests.TestCase):
     pass
 
+
+# class TestCDatabaseSync(CDatabaseMixin, DatabaseSyncTests,
+#                         tests.TestCase):
+#     pass
