@@ -42,6 +42,18 @@ int u1db_set_machine_id(u1database *db, const char *machine_id);
 int u1db_get_machine_id(u1database *db, char **machine_id);
 
 /**
+ * Internal API, Get the global database rev. If a negative number is returned,
+ * an error occured.
+ */
+int u1db__get_db_rev(u1database *db);
+
+/**
+ * Internal API, Allocate a new document id, for cases when callers do not
+ * supply their own. Callers of this API are expected to free the result.
+ */
+char *u1db__allocate_doc_id(u1database *db);
+
+/**
  * Internal api, close the underlying sql instance.
  */
 int u1db__sql_close(u1database *db);

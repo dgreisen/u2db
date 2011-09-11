@@ -35,10 +35,13 @@ cdef extern from "u1db.h":
     void u1db_free(u1database **)
     int u1db_set_machine_id(u1database *, char *machine_id)
     int u1db_get_machine_id(u1database *, char **machine_id)
+    int u1db__get_db_rev(u1database *)
+    char *u1db__allocate_doc_id(u1database *)
     int u1db__sql_close(u1database *)
     int u1db__sql_is_open(u1database *)
     u1db_table *u1db__sql_run(u1database *, char *sql, size_t n)
     void u1db__free_table(u1db_table **table)
+    void free(void *)
 
 
 cdef class CDatabase:
@@ -88,6 +91,18 @@ cdef class CDatabase:
         if status != 0:
             raise RuntimeError('Machine_id could not be set to %s, error: %d'
                                % (machine_id, status))
+
+    def _allocate_doc_id(self):
+        cdef char *val
+        val = u1db__allocate_doc_id(self._db)
+        if val == NULL:
+            raise RuntimeError("Failed to allocate document id")
+        s = str(val)
+        free(val)
+        return s
+
+    def _get_db_rev(self):
+        return u1db__get_db_rev(self._db)
 
     def _run_sql(self, sql):
         cdef u1db_table *tbl

@@ -256,6 +256,55 @@ handle_row(sqlite3_stmt *statement, u1db_row **row)
     return SQLITE_OK;
 }
 
+int
+u1db__get_db_rev(u1database *db)
+{
+    int status, rev_num;
+    sqlite3_stmt *statement;
+    if (db == NULL) {
+        return -1;
+    }
+    status = sqlite3_prepare_v2(db->sql_handle,
+        "SELECT max(db_rev) FROM transaction_log", -1,
+        &statement, NULL);
+    if (status != SQLITE_OK) {
+        return -status;
+    }
+    status = sqlite3_step(statement);
+    if (status != SQLITE_ROW) {
+        sqlite3_finalize(statement);
+        if (status == SQLITE_DONE) {
+            return 0;
+        }
+        return -status;
+    }
+    if(sqlite3_column_count(statement) != 1) {
+        sqlite3_finalize(statement);
+        return -1;
+    }
+    rev_num = sqlite3_column_int(statement, 0);
+    status = sqlite3_finalize(statement);
+    if (status != SQLITE_OK) {
+        return -status;
+    }
+    return status;
+}
+
+char *
+u1db__allocate_doc_id(u1database *db)
+{
+    int db_rev;
+    char *buf;
+    db_rev = u1db__get_db_rev(db);
+    if(db_rev < 0) {
+        // There was an error.
+        return NULL;
+    }
+    buf = (char *)calloc(1, 128);
+    snprintf(buf, 128, "doc-%d", db_rev);
+    return buf;
+}
+
 u1db_table *
 u1db__sql_run(u1database *db, const char *sql, size_t n)
 {
