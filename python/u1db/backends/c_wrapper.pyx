@@ -52,16 +52,16 @@ cdef extern from "u1db.h":
                            int (*cb)(void *, char *doc_id), void *context)
 
 
-cdef struct _set_context:
-    void * the_set
-
 cdef int _add_to_set(void *context, char *doc_id):
-    cdef _set_context *ctx
-
-    ctx = <_set_context*>(context)
-    a_set = <object>ctx.the_set
+    a_set = <object>(context)
     doc = doc_id
     a_set.add(doc)
+
+
+cdef int _append_to_list(void *context, char *doc_id):
+    a_list = <object>context
+    doc = doc_id
+    a_list.append(doc)
 
 
 cdef class CDatabase(object):
@@ -220,13 +220,23 @@ cdef class CDatabase(object):
 
     def whats_changed(self, db_rev=0):
         cdef int status, c_db_rev
-        cdef _set_context ctx
 
-        ctx = _set_context()
         a_set = set()
-        ctx.the_set = <void *>a_set
         c_db_rev = db_rev
-        status = u1db_whats_changed(self._db, &c_db_rev, _add_to_set, <void *>&ctx)
+        status = u1db_whats_changed(self._db, &c_db_rev, _add_to_set, <void*>a_set)
         if status != 0:
             raise RuntimeError("Failed to call whats_changed: %d" % (status,))
         return c_db_rev, a_set
+
+    def _get_transaction_log(self):
+        cdef int status, c_db_rev
+
+        c_db_rev = 0;
+        # For now, whats_changed does a callback for every item, so we can use
+        # it to inspect the transaction log.
+        a_list = []
+        status = u1db_whats_changed(self._db, &c_db_rev, _append_to_list,
+                                    <void*>a_list)
+        if status != 0:
+            raise RuntimeError("Failed to call whats_changed: %d" % (status,))
+        return a_list
