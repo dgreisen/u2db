@@ -19,9 +19,10 @@
 
 typedef struct _u1database u1database;
 
+#define U1DB_OK 0
+#define U1DB_INVALID_PARAMETER -1
 // put_doc() was called but the doc_rev stored in the database doesn't match
 // the one supplied.
-#define U1DB_INVALID_PARAMETER -1
 #define U1DB_INVALID_DOC_REV -2
 #define U1DB_INVALID_DOC_ID -3
 
@@ -109,10 +110,9 @@ int u1db_whats_changed(u1database *db, int *db_rev,
 
 
 /**
- * Internal API, Get the global database rev. If a negative number is returned,
- * an error occured.
+ * Internal API, Get the global database rev.
  */
-int u1db__get_db_rev(u1database *db);
+int u1db__get_db_rev(u1database *db, int *db_rev);
 
 /**
  * Internal API, Allocate a new document id, for cases when callers do not
@@ -148,5 +148,12 @@ typedef struct _u1db_table {
 u1db_table *u1db__sql_run(u1database *db, const char *sql, size_t n);
 void u1db__free_table(u1db_table **table);
 
+
+/**
+ * Internal sync api, get the stored information about another machine.
+ */
+int u1db__sync_get_machine_info(u1database *db, const char *other_machine_id,
+                            int *other_db_rev, char **my_machine_id,
+                            int *my_db_rev);
 
 #endif // _U1DB_H_

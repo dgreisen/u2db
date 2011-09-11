@@ -527,46 +527,39 @@ u1db_whats_changed(u1database *db, int *db_rev,
 
 
 int
-u1db__get_db_rev(u1database *db)
+u1db__get_db_rev(u1database *db, int *db_rev)
 {
-    int status, rev_num;
+    int status;
     sqlite3_stmt *statement;
-    if (db == NULL) {
-        return -1;
+    if (db == NULL || db_rev == NULL) {
+        return U1DB_INVALID_PARAMETER;
     }
     status = sqlite3_prepare_v2(db->sql_handle,
         "SELECT max(db_rev) FROM transaction_log", -1,
         &statement, NULL);
     if (status != SQLITE_OK) {
-        return -status;
+        return status;
     }
     status = sqlite3_step(statement);
-    if (status != SQLITE_ROW) {
-        sqlite3_finalize(statement);
-        if (status == SQLITE_DONE) {
-            return 0;
-        }
-        return -status;
+    if (status == SQLITE_DONE) {
+        // No records, we are at rev 0
+        status = SQLITE_OK;
+        *db_rev = 0;
+    } else if (status == SQLITE_ROW) {
+        status = SQLITE_OK;
+        *db_rev = sqlite3_column_int(statement, 0);
     }
-    if(sqlite3_column_count(statement) != 1) {
-        sqlite3_finalize(statement);
-        return -1;
-    }
-    rev_num = sqlite3_column_int(statement, 0);
-    status = sqlite3_finalize(statement);
-    if (status != SQLITE_OK) {
-        return -status;
-    }
+    sqlite3_finalize(statement);
     return status;
 }
 
 char *
 u1db__allocate_doc_id(u1database *db)
 {
-    int db_rev;
+    int db_rev, status;
     char *buf;
-    db_rev = u1db__get_db_rev(db);
-    if(db_rev < 0) {
+    status = u1db__get_db_rev(db, &db_rev);
+    if(status != U1DB_OK) {
         // There was an error.
         return NULL;
     }
@@ -644,4 +637,48 @@ u1db__free_table(u1db_table **table)
     (*table)->first_row = NULL;
     free(*table);
     *table = NULL;
+}
+
+int
+u1db__sync_get_machine_info(u1database *db, const char *other_machine_id,
+                            int *other_db_rev, char **my_machine_id,
+                            int *my_db_rev)
+{
+    int status;
+    int db_rev;
+    sqlite3_stmt *statement;
+
+    if (db == NULL || other_machine_id == NULL || other_db_rev == NULL) {
+        return U1DB_INVALID_PARAMETER;
+    }
+    status = u1db_get_machine_id(db, my_machine_id);
+    if (status != U1DB_OK) {
+        return status;
+    }
+    status = u1db__get_db_rev(db, my_db_rev);
+    if (status != U1DB_OK) {
+        return status;
+    }
+    status = sqlite3_prepare_v2(db->sql_handle,
+        "SELECT known_db_rev FROM sync_log WHERE machine_id = ?", -1,
+        &statement, NULL);
+    if (status != SQLITE_OK) {
+        return status;
+    }
+    status = sqlite3_bind_text(statement, 1, other_machine_id, -1,
+                               SQLITE_TRANSIENT);
+    if (status != SQLITE_OK) {
+        sqlite3_finalize(statement);
+        return status;
+    }
+    status = sqlite3_step(statement);
+    if (status == SQLITE_DONE) {
+        status = SQLITE_OK;
+        *other_db_rev = 0;
+    } else if (status == SQLITE_ROW) {
+        *other_db_rev = sqlite3_column_int(statement, 0);
+        status = SQLITE_OK;
+    }
+    sqlite3_finalize(statement);
+    return status;
 }

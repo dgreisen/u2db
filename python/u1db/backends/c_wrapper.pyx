@@ -35,7 +35,7 @@ cdef extern from "u1db.h":
     void u1db_free(u1database **)
     int u1db_set_machine_id(u1database *, char *machine_id)
     int u1db_get_machine_id(u1database *, char **machine_id)
-    int u1db__get_db_rev(u1database *)
+    int u1db__get_db_rev(u1database *, int *db_rev)
     char *u1db__allocate_doc_id(u1database *)
     int u1db__sql_close(u1database *)
     int u1db__sql_is_open(u1database *)
@@ -50,6 +50,10 @@ cdef extern from "u1db.h":
                      char **doc, int *n, int *has_conflicts)
     int u1db_whats_changed(u1database *db, int *db_rev,
                            int (*cb)(void *, char *doc_id), void *context)
+    int u1db__sync_get_machine_info(u1database *db, char *other_machine_id,
+                                    int *other_db_rev, char **my_machine_id,
+                                    int *my_db_rev)
+    int U1DB_OK
     int U1DB_INVALID_DOC_REV
     int U1DB_INVALID_DOC_ID
 
@@ -128,7 +132,12 @@ cdef class CDatabase(object):
         return s
 
     def _get_db_rev(self):
-        return u1db__get_db_rev(self._db)
+        cdef int db_rev, status
+
+        status = u1db__get_db_rev(self._db, &db_rev)
+        if status != 0:
+            raise RuntimeError('Failed to _get_db_rev: %d' % (status,))
+        return db_rev
 
     def _run_sql(self, sql):
         cdef u1db_table *tbl
@@ -256,3 +265,14 @@ cdef class CDatabase(object):
         if status != 0:
             raise RuntimeError("Failed to call whats_changed: %d" % (status,))
         return a_list
+
+    def _get_sync_info(self, other_machine_id):
+        cdef int status, my_db_rev, other_db_rev
+        cdef char *my_machine_id
+
+        status = u1db__sync_get_machine_info(self._db, other_machine_id,
+                                             &other_db_rev, &my_machine_id,
+                                             &my_db_rev)
+        if status != U1DB_OK:
+            raise RuntimeError("Failed to _get_sync_info: %d" % (status,))
+        return (my_machine_id, my_db_rev, other_db_rev)
