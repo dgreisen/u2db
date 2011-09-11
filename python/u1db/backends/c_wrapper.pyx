@@ -180,6 +180,8 @@ cdef class CDatabase(object):
         status = u1db_create_doc(self._db, doc, len(doc),
                                  &c_doc_id, &c_doc_rev)
         if status != 0:
+            if status == U1DB_INVALID_DOC_REV:
+                raise u1db.InvalidDocRev()
             raise RuntimeError('Failed to create_doc: %d' % (status,))
         # TODO: Handle the free() calls
         if c_doc_id == NULL:
@@ -248,10 +250,12 @@ cdef class CDatabase(object):
         cdef int status
         cdef char *c_doc_rev
 
+        c_doc_rev = doc_rev;
         status = u1db_delete_doc(self._db, doc_id, &c_doc_rev);
         if status != U1DB_OK:
             if status == U1DB_INVALID_DOC_REV:
-                raise u1db.InvalidDocRev()
+                raise u1db.InvalidDocRev("Failed to delete %s %s, %s"
+                                         % (doc_id, doc_rev, c_doc_rev))
             elif status == U1DB_INVALID_DOC_ID:
                 raise KeyError
             raise RuntimeError("Failed to delete_doc: %d" % (status,))

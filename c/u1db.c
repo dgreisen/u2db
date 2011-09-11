@@ -300,8 +300,15 @@ lookup_doc(u1database *db, const char *doc_id,
         status = SQLITE_OK;
     } else if (status == SQLITE_ROW) {
         *doc_rev = sqlite3_column_text(*statement, 0);
-        *doc = sqlite3_column_text(*statement, 1);
-        *n = sqlite3_column_bytes(*statement, 1);
+        // fprintf(stderr, "column_type: %d\n", sqlite3_column_type(*statement, 1));
+        if (sqlite3_column_type(*statement, 1) == SQLITE_NULL) {
+            // fprintf(stderr, "column_type: NULL\n");
+            *doc = NULL;
+            *n = 0;
+        } else {
+            *doc = sqlite3_column_text(*statement, 1);
+            *n = sqlite3_column_bytes(*statement, 1);
+        }
         status = SQLITE_OK;
     } else { // Error
     }
@@ -333,7 +340,11 @@ write_doc(u1database *db, const char *doc_id, const char *doc_rev,
         sqlite3_finalize(statement);
         return status;
     }
-    status = sqlite3_bind_text(statement, 2, doc, n, SQLITE_TRANSIENT);
+    if (doc == NULL) {
+        status = sqlite3_bind_null(statement, 2);
+    } else {
+        status = sqlite3_bind_text(statement, 2, doc, n, SQLITE_TRANSIENT);
+    }
     if (status != SQLITE_OK) {
         sqlite3_finalize(statement);
         return status;
@@ -463,13 +474,18 @@ u1db_get_doc(u1database *db, const char *doc_id, char **doc_rev,
             *has_conflicts = 0;
             goto finish;
         }
-        *doc = (char *)calloc(1, local_n + 1);
-        if (*doc == NULL) {
-            status = SQLITE_NOMEM;
-            goto finish;
+        if (local_doc == NULL) {
+            *doc = NULL;
+            *n = 0;
+        } else {
+            *doc = (char *)calloc(1, local_n + 1);
+            if (*doc == NULL) {
+                status = SQLITE_NOMEM;
+                goto finish;
+            }
+            memcpy(*doc, local_doc, local_n);
+            *n = local_n;
         }
-        memcpy(*doc, local_doc, local_n);
-        *n = local_n;
         local_n = strlen((const char*)local_doc_rev);
         *doc_rev = (char *)calloc(1, local_n+1);
         if (*doc_rev == NULL) {
@@ -509,17 +525,20 @@ u1db_delete_doc(u1database *db, const char *doc_id, char **doc_rev)
         sqlite3_exec(db->sql_handle, "ROLLBACK", NULL, NULL, NULL);
         return status;
     }
-    if (cur_doc_rev == NULL) {
+    if (cur_doc_rev == NULL || doc == NULL) {
         // Can't delete a doc that doesn't exist
         sqlite3_exec(db->sql_handle, "ROLLBACK", NULL, NULL, NULL);
+        sqlite3_finalize(statement);
         return U1DB_INVALID_DOC_ID;
     }
     if (strcmp((const char *)cur_doc_rev, *doc_rev) != 0) {
         // The saved document revision doesn't match
         sqlite3_exec(db->sql_handle, "ROLLBACK", NULL, NULL, NULL);
+        sqlite3_finalize(statement);
         return U1DB_INVALID_DOC_REV;
     }
     // TODO: Handle conflicts
+    sqlite3_finalize(statement);
 
     // TODO: Implement VectorClockRev
     *doc_rev = (char *)calloc(1, 128);

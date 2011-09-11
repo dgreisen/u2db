@@ -150,9 +150,9 @@ class DatabaseTests(DatabaseBaseTests):
 
     def test_delete_updates_transaction_log(self):
         doc_id, doc_rev = self.c.create_doc(simple_doc)
-        db_rev, _ = self.c.whats_changed()
+        self.assertEqual((1, set([doc_id])), self.c.whats_changed())
         self.c.delete_doc(doc_id, doc_rev)
-        self.assertEqual((2, set([doc_id])), self.c.whats_changed(db_rev))
+        self.assertEqual((2, set([doc_id])), self.c.whats_changed(1))
 
     def test_whats_changed_initial_database(self):
         self.assertEqual((0, set()), self.c.whats_changed())
