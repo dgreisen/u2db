@@ -80,6 +80,7 @@ cdef extern from "u1db.h":
 
     u1db_vectorclock *u1db__vectorclock_from_str(char *s)
     void u1db__free_vectorclock(u1db_vectorclock **clock)
+    int u1db__vectorclock_increment(u1db_vectorclock *clock, char *machine_id)
     int U1DB_OK
     int U1DB_INVALID_DOC_REV
     int U1DB_INVALID_DOC_ID
@@ -380,3 +381,10 @@ cdef class VectorClock:
 
     def __dealloc__(self):
         u1db__free_vectorclock(&self._clock)
+
+    def increment(self, machine_id):
+        cdef int status
+
+        status = u1db__vectorclock_increment(self._clock, machine_id)
+        if status != U1DB_OK:
+            raise RuntimeError("Failed to increment: %d" % (status,))

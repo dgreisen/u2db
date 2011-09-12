@@ -905,6 +905,12 @@ u1db_vectorclock *u1db__vectorclock_from_str(const char *s)
     // Now walk through it again, looking for the machine:count pairs
     cur = s;
     for (i = 0; i < res->num_items; i++) {
+        if (cur >= end) {
+            // Ran off the end. Most likely indicates a trailing | that isn't
+            // followed by content.
+            u1db__free_vectorclock(&res);
+            return NULL;
+        }
         pipe = memchr(cur, '|', end-cur);
         if (pipe == NULL) {
             // We assume the rest of the string is what we want
@@ -923,9 +929,43 @@ u1db_vectorclock *u1db__vectorclock_from_str(const char *s)
             return NULL;
         }
         cur = pipe + 1;
-        if (cur >= end) {
-            // Ran out of space, fail!
-        }
     }
     return res;
 }
+
+int
+u1db__vectorclock_increment(u1db_vectorclock *clock, const char *machine_id)
+{
+    int i, cmp;
+    u1db_vectorclock_item *new_buf;
+    if (clock == NULL || machine_id == NULL) {
+        return U1DB_INVALID_PARAMETER;
+    }
+    for (i = 0; i < clock->num_items; ++i) {
+        cmp = strcmp(machine_id, clock->items[i].machine_id);
+        if (cmp == 0) {
+            // We found the entry
+            clock->items[i].db_rev++;
+            return U1DB_OK;
+        } else if (cmp < 0) {
+            // machine_id would come right before items[i] if it was present.
+            // So we break, and insert it here
+            break;
+        }
+    }
+    // If we got here, then 'i' points at the location where we want to insert
+    // a new entry.
+    new_buf = (u1db_vectorclock_item*)realloc(clock->items,
+        sizeof(u1db_vectorclock_item) * (clock->num_items + 1));
+    if (new_buf == NULL) {
+        return SQLITE_NOMEM;
+    }
+    clock->items = new_buf;
+    clock->num_items++;
+    memmove(&clock->items[i + 1], &clock->items[i],
+            sizeof(u1db_vectorclock_item) * (clock->num_items - i - 1));
+    clock->items[i].machine_id = strdup(machine_id);
+    clock->items[i].db_rev = 1;
+    return U1DB_OK;
+}
+

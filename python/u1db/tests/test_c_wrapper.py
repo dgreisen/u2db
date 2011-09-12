@@ -60,6 +60,8 @@ class TestVectorClock(tests.TestCase):
         self.assertEqual('VectorClock(None)',
                          repr(c_wrapper.VectorClock('y:1||')))
         self.assertEqual('VectorClock(None)',
+                         repr(c_wrapper.VectorClock('y:1|')))
+        self.assertEqual('VectorClock(None)',
                          repr(c_wrapper.VectorClock('y:1|x:2|')))
         self.assertEqual('VectorClock(None)',
                          repr(c_wrapper.VectorClock('y:1|x:2|:')))
@@ -79,3 +81,30 @@ class TestVectorClock(tests.TestCase):
                          repr(c_wrapper.VectorClock('test:1|z:2')))
         self.assertEqual('VectorClock(ab:1|bc:2|cd:3|de:4|ef:5)',
                      repr(c_wrapper.VectorClock('ab:1|bc:2|cd:3|de:4|ef:5')))
+
+    def test_increment(self):
+        vc = c_wrapper.VectorClock('test:1')
+        vc.increment('test')
+        self.assertEqual('VectorClock(test:2)', repr(vc))
+
+    def test_increment_with_multi(self):
+        vc = c_wrapper.VectorClock('a:1|ab:2')
+        vc.increment('a')
+        self.assertEqual('VectorClock(a:2|ab:2)', repr(vc))
+        vc.increment('ab')
+        self.assertEqual('VectorClock(a:2|ab:3)', repr(vc))
+
+    def test_increment_insert_new_id(self):
+        vc = c_wrapper.VectorClock('a:1|ab:2')
+        vc.increment('aa')
+        self.assertEqual('VectorClock(a:1|aa:1|ab:2)', repr(vc))
+
+    def test_increment_first_id(self):
+        vc = c_wrapper.VectorClock('b:2')
+        vc.increment('a')
+        self.assertEqual('VectorClock(a:1|b:2)', repr(vc))
+
+    def test_increment_append_id(self):
+        vc = c_wrapper.VectorClock('b:2')
+        vc.increment('c')
+        self.assertEqual('VectorClock(b:2|c:1)', repr(vc))

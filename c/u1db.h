@@ -215,5 +215,7 @@ typedef struct _u1db_vectorclock {
 u1db_vectorclock *u1db__vectorclock_from_str(const char *s);
 
 void u1db__free_vectorclock(u1db_vectorclock **clock);
+int u1db__vectorclock_increment(u1db_vectorclock *clock,
+                                const char *machine_id);
 
 #endif // _U1DB_H_
