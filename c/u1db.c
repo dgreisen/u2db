@@ -969,3 +969,120 @@ u1db__vectorclock_increment(u1db_vectorclock *clock, const char *machine_id)
     return U1DB_OK;
 }
 
+struct inserts_needed {
+    struct inserts_needed *next;
+    int other_offset;
+    int clock_offset;
+};
+
+void
+free_inserts(struct inserts_needed **chain)
+{
+    struct inserts_needed *cur, *next;
+    if (chain == NULL || *chain == NULL) {
+        return;
+    }
+    cur = *chain;
+    while (cur != NULL) {
+        next = cur->next;
+        free(cur);
+        cur = next;
+    }
+    *chain = NULL;
+}
+
+int
+u1db__vectorclock_maximize(u1db_vectorclock *clock, u1db_vectorclock *other)
+{
+    int ci, oi, cmp;
+    int num_inserts, move_to_end, num_to_move, item_size;
+    struct inserts_needed *needed = NULL, *next = NULL;
+    u1db_vectorclock_item *new_buf;
+
+    if (clock == NULL || other == NULL) {
+        return U1DB_INVALID_PARAMETER;
+    }
+    num_inserts = ci = oi = 0;
+    // First pass, walk both lists, determining what items need to be inserted
+    while (oi < other->num_items) {
+        if (ci >= clock->num_items) {
+            // We have already walked all of clock, so everything in other
+            // gets appended
+            next = (struct inserts_needed *)calloc(1, sizeof(struct inserts_needed));
+            next->next = needed;
+            needed = next;
+            // We need the final offset, after everything has been moved.
+            next->clock_offset = ci + num_inserts;
+            next->other_offset = oi;
+            num_inserts++;
+            oi++;
+            continue;
+        }
+        cmp = strcmp(clock->items[ci].machine_id, other->items[oi].machine_id);
+        if (cmp == 0) {
+            // These machines are the same, take the 'max' value:
+            if (clock->items[ci].db_rev < other->items[oi].db_rev) {
+                clock->items[ci].db_rev = other->items[oi].db_rev;
+            }
+            ci++;
+            oi++;
+            continue;
+        } else if (cmp < 0) {
+            // clock[ci] comes before other[oi], so step clock
+            ci++;
+        } else {
+            // oi comes before ci, so it needs to be inserted
+            next = (struct inserts_needed *)calloc(1, sizeof(struct inserts_needed));
+            next->next = needed;
+            needed = next;
+            next->clock_offset = ci + num_inserts;
+            next->other_offset = oi;
+            num_inserts++;
+            oi++;
+        }
+    }
+    if (num_inserts == 0) {
+        // Nothing more to do
+        return U1DB_OK;
+    }
+    // Now we need to expand the clock array, and start shuffling the data
+    // around
+    item_size = sizeof(u1db_vectorclock_item);
+    new_buf = (u1db_vectorclock_item *)realloc(clock->items,
+                item_size * (clock->num_items + num_inserts));
+    if (new_buf == NULL) {
+        free_inserts(&needed);
+        return SQLITE_NOMEM;
+    }
+    clock->items = new_buf;
+    clock->num_items += num_inserts;
+    next = needed;
+    move_to_end = clock->num_items - 1;
+    // Imagine we have 3 inserts, into an initial list 5-wide.
+    // a c e g h, inserting b f i
+    // Final length is 8,
+    // i should have ci=7, num_inserts = 3
+    // f should have ci=4, num_inserts = 2
+    // b should have ci=1, num_inserts = 1
+    // First step, we want to move 0 items, and just insert i at the end (7)
+    // Second step, we want to move g & h from 3 4, to be at 5 6, and then
+    // insert f into 4
+    // Third step, we move c & e from 1 2 to 2 3 and insert b at 1
+    while (next != NULL) {
+        num_to_move = move_to_end - next->clock_offset;
+        if (num_to_move > 0) {
+            memmove(&clock->items[next->clock_offset + 1],
+                    &clock->items[next->clock_offset - num_inserts + 1],
+                    item_size * num_to_move);
+        }
+        clock->items[next->clock_offset].machine_id = strdup(
+            other->items[next->other_offset].machine_id);
+        clock->items[next->clock_offset].db_rev = 
+            other->items[next->other_offset].db_rev;
+        num_inserts--;
+        move_to_end = next->clock_offset - 1;
+        next = next->next;
+    }
+    free_inserts(&needed);
+    return U1DB_OK;
+}

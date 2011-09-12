@@ -108,3 +108,27 @@ class TestVectorClock(tests.TestCase):
         vc = c_wrapper.VectorClock('b:2')
         vc.increment('c')
         self.assertEqual('VectorClock(b:2|c:1)', repr(vc))
+
+    def test_maximize_noop(self):
+        vc1 = c_wrapper.VectorClock('a:2')
+        vc2 = c_wrapper.VectorClock('a:1')
+        vc1.maximize(vc2)
+        self.assertEqual('VectorClock(a:2)', repr(vc1))
+
+    def test_maximize_increasing(self):
+        vc1 = c_wrapper.VectorClock('a:1')
+        vc2 = c_wrapper.VectorClock('a:3')
+        vc1.maximize(vc2)
+        self.assertEqual('VectorClock(a:3)', repr(vc1))
+
+    def test_maximize_mixing(self):
+        vc1 = c_wrapper.VectorClock('a:1')
+        vc2 = c_wrapper.VectorClock('b:3')
+        vc1.maximize(vc2)
+        self.assertEqual('VectorClock(a:1|b:3)', repr(vc1))
+
+    def test_maximize_twisting(self):
+        vc1 = c_wrapper.VectorClock('a:1|c:2|e:3')
+        vc2 = c_wrapper.VectorClock('b:3|d:4|f:5')
+        vc1.maximize(vc2)
+        self.assertEqual('VectorClock(a:1|b:3|c:2|d:4|e:3|f:5)', repr(vc1))

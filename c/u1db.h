@@ -218,4 +218,6 @@ void u1db__free_vectorclock(u1db_vectorclock **clock);
 int u1db__vectorclock_increment(u1db_vectorclock *clock,
                                 const char *machine_id);
 
+int u1db__vectorclock_maximize(u1db_vectorclock *clock,
+                               u1db_vectorclock *other);
 #endif // _U1DB_H_

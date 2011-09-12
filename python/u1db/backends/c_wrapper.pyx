@@ -81,6 +81,8 @@ cdef extern from "u1db.h":
     u1db_vectorclock *u1db__vectorclock_from_str(char *s)
     void u1db__free_vectorclock(u1db_vectorclock **clock)
     int u1db__vectorclock_increment(u1db_vectorclock *clock, char *machine_id)
+    int u1db__vectorclock_maximize(u1db_vectorclock *clock,
+                                   u1db_vectorclock *other)
     int U1DB_OK
     int U1DB_INVALID_DOC_REV
     int U1DB_INVALID_DOC_ID
@@ -388,3 +390,12 @@ cdef class VectorClock:
         status = u1db__vectorclock_increment(self._clock, machine_id)
         if status != U1DB_OK:
             raise RuntimeError("Failed to increment: %d" % (status,))
+
+    def maximize(self, vc):
+        cdef int status
+        cdef VectorClock other
+
+        other = vc
+        status = u1db__vectorclock_maximize(self._clock, other._clock)
+        if status != U1DB_OK:
+            raise RuntimeError("Failed to maximize: %d" % (status,))
