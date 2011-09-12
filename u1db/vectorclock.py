@@ -18,6 +18,15 @@
 
 
 class VectorClockRev(object):
+    """Track vector clocks for multiple machine ids.
+
+    This allows simple comparison to determine if one VectorClockRev is
+    newer/older/in-conflict-with another VectorClockRev without having to
+    examine history. Every machine has a strictly increasing revision. When
+    creating a new revision, they include all revisions for all other machines
+    which the new revision dominates, and increment their own revision to
+    something greater than the current value.
+    """
 
     def __init__(self, value):
         self._value = value
