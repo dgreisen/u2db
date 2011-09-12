@@ -167,6 +167,53 @@ int u1db__sync_get_machine_info(u1database *db, const char *other_machine_id,
                             int *other_db_rev, char **my_machine_id,
                             int *my_db_rev);
 
+/**
+ * Internal sync api, store information about another machine.
+ */
 int u1db__sync_record_machine_info(u1database *db, const char *machine_id,
                                    int db_rev);
+
+typedef struct _u1db_record {
+    struct _u1db_record *next;
+    char *doc_id;
+    char *doc_rev;
+    char *doc;
+} u1db_record;
+
+/**
+ * Internal sync api, exchange sync records.
+ */
+int u1db__sync_exchange(u1database *db, const char *from_machine_id,
+                        int from_db_rev, int last_known_rev,
+                        u1db_record *from_records, u1db_record **new_records,
+                        u1db_record **conflict_records);
+
+/**
+ * Allocate a new u1db_record, and copy all records over.
+ */
+u1db_record *u1db__create_record(const char *doc_id, const char *doc_rev,
+                                 const char *doc);
+
+u1db_record *u1db__copy_record(u1db_record *src);
+
+/**
+ * Free a linked list of records. All linked records will be freed, including
+ * all memory referenced from them.
+ */
+void u1db__free_records(u1db_record **record);
+
+typedef struct _u1db_vectorclock_item {
+    char *machine_id;
+    int db_rev;
+} u1db_vectorclock_item;
+
+typedef struct _u1db_vectorclock {
+    int num_items;
+    u1db_vectorclock_item *items;
+} u1db_vectorclock;
+
+u1db_vectorclock *u1db__vectorclock_from_str(const char *s);
+
+void u1db__free_vectorclock(u1db_vectorclock **clock);
+
 #endif // _U1DB_H_

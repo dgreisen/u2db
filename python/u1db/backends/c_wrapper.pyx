@@ -31,6 +31,20 @@ cdef extern from "u1db.h":
         int status
         u1db_row *first_row
 
+    ctypedef struct u1db_record:
+        u1db_record *next
+        char *doc_id
+        char *doc_rev
+        char *doc
+
+    ctypedef struct u1db_vectorclock_item:
+        char *machine_id
+        int db_rev
+
+    ctypedef struct u1db_vectorclock:
+        int num_items
+        u1db_vectorclock_item *items
+
     u1database * u1db_open(char *fname)
     void u1db_free(u1database **)
     int u1db_set_machine_id(u1database *, char *machine_id)
@@ -41,6 +55,7 @@ cdef extern from "u1db.h":
     int u1db__sql_is_open(u1database *)
     u1db_table *u1db__sql_run(u1database *, char *sql, size_t n)
     void u1db__free_table(u1db_table **table)
+    void *calloc(size_t, size_t)
     void free(void *)
     int u1db_create_doc(u1database *db, char *doc, size_t n,
                         char **doc_id, char **doc_rev)
@@ -56,6 +71,15 @@ cdef extern from "u1db.h":
                                     int *my_db_rev)
     int u1db__sync_record_machine_info(u1database *db, char *machine_id,
                                        int db_rev)
+    int u1db__sync_exchange(u1database *db, char *from_machine_id,
+                            int from_db_rev, int last_known_rev,
+                            u1db_record *from_records, u1db_record **new_records,
+                            u1db_record **conflict_records)
+    u1db_record *u1db__create_record(char *doc_id, char *doc_rev, char *doc)
+    void u1db__free_records(u1db_record **)
+
+    u1db_vectorclock *u1db__vectorclock_from_str(char *s)
+    void u1db__free_vectorclock(u1db_vectorclock **clock)
     int U1DB_OK
     int U1DB_INVALID_DOC_REV
     int U1DB_INVALID_DOC_ID
@@ -85,6 +109,7 @@ cdef class CDatabase(object):
     cdef public object _filename
     cdef u1database *_db
     cdef public object _supports_indexes
+    cdef public object _last_exchange_log
 
     def __init__(self, filename):
         self._supports_indexes = False
@@ -304,3 +329,54 @@ cdef class CDatabase(object):
         status = u1db__sync_record_machine_info(self._db, machine_id, db_rev)
         if status != U1DB_OK:
             raise RuntimeError("Failed to _record_sync_info: %d" % (status,))
+
+    def _sync_exchange(self, docs_info, from_machine_id, from_machine_rev,
+                       last_known_rev):
+        cdef int status
+        cdef u1db_record *from_records, *next_record
+        cdef u1db_record *new_records, *conflict_records
+
+        from_records = next_record = NULL
+        for doc_id, doc_rev, doc in reversed(docs_info):
+            next_record = u1db__create_record(doc_id, doc_rev, doc)
+            next_record.next = from_records
+            from_records = next_record
+        new_records = conflict_records = NULL
+        status = u1db__sync_exchange(self._db, from_machine_id,
+            from_machine_rev, last_known_rev,
+            from_records, &new_records, &conflict_records)
+        u1db__free_records(&from_records)
+        if status != U1DB_OK:
+            raise RuntimeError("Failed to _sync_exchange: %d" % (status,))
+
+
+cdef class VectorClock:
+
+    cdef u1db_vectorclock *_clock
+
+    def __init__(self, s):
+        self._clock = u1db__vectorclock_from_str(s)
+
+    def __repr__(self):
+        cdef int i
+        d = self.as_dict()
+        if d is None:
+            return '%s(None)' % (self.__class__.__name__,)
+        res = []
+        for i from 0 <= i < self._clock.num_items:
+            res.append('%s:%d' % (self._clock.items[i].machine_id,
+                                  self._clock.items[i].db_rev))
+        return '%s(%s)' % (self.__class__.__name__, '|'.join(res))
+
+    def as_dict(self):
+        cdef u1db_vectorclock *cur
+        cdef int i
+        if self._clock == NULL:
+            return None
+        res = {}
+        for i from 0 <= i < self._clock.num_items:
+            res[self._clock.items[i].machine_id] = self._clock.items[i].db_rev
+        return res
+
+    def __dealloc__(self):
+        u1db__free_vectorclock(&self._clock)

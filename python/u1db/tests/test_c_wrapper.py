@@ -38,3 +38,44 @@ class TestCWrapper(tests.TestCase):
         self.assertEqual([], db._run_sql('CREATE TABLE test (id INTEGER)'))
         self.assertEqual([], db._run_sql('INSERT INTO test VALUES (1)'))
         self.assertEqual([('1',)], db._run_sql('SELECT * FROM test'))
+
+
+class TestVectorClock(tests.TestCase):
+
+    def test_parse_empty(self):
+        self.assertEqual('VectorClock()',
+                         repr(c_wrapper.VectorClock('')))
+
+    def test_parse_invalid(self):
+        self.assertEqual('VectorClock(None)',
+                         repr(c_wrapper.VectorClock('x')))
+        self.assertEqual('VectorClock(None)',
+                         repr(c_wrapper.VectorClock('x:a')))
+        self.assertEqual('VectorClock(None)',
+                         repr(c_wrapper.VectorClock('y:1|x:a')))
+        self.assertEqual('VectorClock(None)',
+                         repr(c_wrapper.VectorClock('x:a|y:1')))
+        self.assertEqual('VectorClock(None)',
+                         repr(c_wrapper.VectorClock('y:1|x:2a')))
+        self.assertEqual('VectorClock(None)',
+                         repr(c_wrapper.VectorClock('y:1||')))
+        self.assertEqual('VectorClock(None)',
+                         repr(c_wrapper.VectorClock('y:1|x:2|')))
+        self.assertEqual('VectorClock(None)',
+                         repr(c_wrapper.VectorClock('y:1|x:2|:')))
+        self.assertEqual('VectorClock(None)',
+                         repr(c_wrapper.VectorClock('y:1|x:2|m:')))
+        self.assertEqual('VectorClock(None)',
+                         repr(c_wrapper.VectorClock('y:1|x:|m:3')))
+        self.assertEqual('VectorClock(None)',
+                         repr(c_wrapper.VectorClock('y:1|:|m:3')))
+
+    def test_parse_single(self):
+        self.assertEqual('VectorClock(test:1)',
+                         repr(c_wrapper.VectorClock('test:1')))
+
+    def test_parse_multi(self):
+        self.assertEqual('VectorClock(test:1|z:2)',
+                         repr(c_wrapper.VectorClock('test:1|z:2')))
+        self.assertEqual('VectorClock(ab:1|bc:2|cd:3|de:4|ef:5)',
+                     repr(c_wrapper.VectorClock('ab:1|bc:2|cd:3|de:4|ef:5')))

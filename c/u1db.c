@@ -787,3 +787,145 @@ u1db__sync_record_machine_info(u1database *db, const char *machine_id,
     sqlite3_finalize(statement);
     return status;
 }
+
+static int
+u1db__insert_records(u1database *db, u1db_record *records)
+{
+    return U1DB_INVALID_PARAMETER;
+}
+
+int
+u1db__sync_exchange(u1database *db, const char *from_machine_id,
+                    int from_db_rev, int last_known_rev,
+                    u1db_record *from_records, u1db_record **new_records,
+                    u1db_record **conflict_records)
+{
+    if (db == NULL || from_machine_id == NULL || new_records == NULL
+        || conflict_records == NULL) {
+        return U1DB_INVALID_PARAMETER;
+    }
+    return U1DB_INVALID_PARAMETER;
+}
+
+u1db_record *
+u1db__create_record(const char *doc_id, const char *doc_rev, const char *doc)
+{
+    // TODO: If we wanted, we could allocate one large block, and then point
+    //       the arrays to the right locations therein.
+    u1db_record *record;
+    record = (u1db_record *)calloc(1, sizeof(u1db_record));
+    if (record == NULL) {
+        return NULL;
+    }
+    record->doc_id = strdup(doc_id);
+    record->doc_rev = strdup(doc_rev);
+    if (doc == NULL) {
+        record->doc = NULL;
+    } else {
+        record->doc = strdup(doc);
+    }
+    return record;
+}
+
+u1db_record *
+u1db__copy_record(u1db_record *src)
+{
+    if (src == NULL) {
+        return NULL;
+    }
+    return u1db__create_record(src->doc_id, src->doc_rev, src->doc);
+}
+
+void u1db__free_records(u1db_record **record)
+{
+    u1db_record *cur, *last;
+    if (record == NULL || *record == NULL) {
+        return;
+    }
+    cur = *record;
+    while (cur != NULL) {
+        last = cur;
+        cur = cur->next;
+        free(last->doc_id);
+        free(last->doc_rev);
+        if (last->doc != NULL) {
+            free(last->doc);
+        }
+        free(last);
+    }
+    *record = NULL;
+}
+
+void u1db__free_vectorclock(u1db_vectorclock **clock)
+{
+    int i;
+    char *machine_id;
+    if (clock == NULL || *clock == NULL) {
+        return;
+    }
+    if ((*clock)->items != NULL) {
+        for (i = 0; i < (*clock)->num_items; i++) {
+            machine_id = (*clock)->items[i].machine_id;
+            if (machine_id != NULL) {
+                free(machine_id);
+            }
+        }
+    }
+    free((*clock)->items);
+    free(*clock);
+    *clock = NULL;
+}
+
+u1db_vectorclock *u1db__vectorclock_from_str(const char *s)
+{
+    u1db_vectorclock *res = NULL;
+    int i;
+    const char *cur, *colon, *pipe, *end;
+    char *last_digit;
+    end = s + strlen(s);
+    res = (u1db_vectorclock *)calloc(1, sizeof(u1db_vectorclock));
+    if (res == NULL) {
+        return NULL;
+    }
+    if ((end - s) == 0) {
+        // Empty string, no items
+        res->items = NULL;
+        res->num_items = 0;
+        return res;
+    }
+    // Count the number of '|' symbols, and allocate buffers for it
+    res->num_items = 1;
+    for (cur = s; cur < end; cur++) {
+        if (*cur == '|') {
+            res->num_items += 1;
+        }
+    }
+    res->items = (u1db_vectorclock_item*)calloc(res->num_items,
+                                        sizeof(u1db_vectorclock_item));
+    // Now walk through it again, looking for the machine:count pairs
+    cur = s;
+    for (i = 0; i < res->num_items; i++) {
+        pipe = memchr(cur, '|', end-cur);
+        if (pipe == NULL) {
+            // We assume the rest of the string is what we want
+            pipe = end;
+        }
+        colon = memchr(cur, ':', pipe-cur);
+        if (colon == NULL || (colon - cur) == 0 || (pipe - colon) == 1) {
+            // Either, no colon, no machine_id, or no digits
+            u1db__free_vectorclock(&res);
+            return NULL;
+        }
+        res->items[i].machine_id = strndup(cur, colon-cur);
+        res->items[i].db_rev = strtol(colon+1, &last_digit, 10);
+        if (last_digit != pipe) {
+            u1db__free_vectorclock(&res);
+            return NULL;
+        }
+        cur = pipe + 1;
+        if (cur >= end) {
+            // Ran out of space, fail!
+        }
+    }
+    return res;
+}
