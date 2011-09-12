@@ -432,17 +432,39 @@ u1db_put_doc(u1database *db, const char *doc_id, char **doc_rev,
             }
         }
     }
-    sqlite3_finalize(statement);
     if (status == SQLITE_OK) {
         // We are ok to proceed, allocating a new document revision, and
         // storing the document
-        *doc_rev = (char *)calloc(1, 128);
-        memcpy(*doc_rev, "test:1", 6);
-        status = write_doc(db, doc_id, *doc_rev, doc, n, (old_doc != NULL));
+        u1db_vectorclock *vc;
+        char *machine_id, *new_rev;
+
+        if (old_doc_rev == NULL) {
+            vc = u1db__vectorclock_from_str("");
+            if (vc == NULL) {
+                fprintf(stderr, "Failed to create VectorClockRev from \"\"");
+            }
+        } else {
+            vc = u1db__vectorclock_from_str((char *)old_doc_rev);
+            if (vc == NULL) {
+                fprintf(stderr, "Failed to create VectorClockRev from %s",
+                        old_doc_rev);
+            }
+        }
+        if (vc == NULL) { goto finish; }
+        status = u1db_get_machine_id(db, &machine_id);
+        if (status != U1DB_OK) { goto finish; }
+        status = u1db__vectorclock_increment(vc, machine_id);
+        if (status != U1DB_OK) { goto finish; }
+        status = u1db__vectorclock_as_str(vc, &new_rev);
+        if (status != U1DB_OK) { goto finish; }
+        *doc_rev = new_rev;
+        status = write_doc(db, doc_id, new_rev, doc, n, (old_doc != NULL));
         if (status == SQLITE_OK) {
             status = sqlite3_exec(db->sql_handle, "COMMIT", NULL, NULL, NULL);
         }
     }
+finish:
+    sqlite3_finalize(statement);
     if (status != SQLITE_OK) {
         sqlite3_exec(db->sql_handle, "ROLLBACK", NULL, NULL, NULL);
     }
@@ -1084,5 +1106,42 @@ u1db__vectorclock_maximize(u1db_vectorclock *clock, u1db_vectorclock *other)
         next = next->next;
     }
     free_inserts(&needed);
+    return U1DB_OK;
+}
+
+int
+u1db__vectorclock_as_str(u1db_vectorclock *clock, char **result)
+{
+    int buf_size, i, val, count;
+    char *cur, *fmt;
+    // Quick pass, to determine the buffer size:
+    buf_size = 0;
+    if (clock == NULL || result == NULL) {
+        return U1DB_INVALID_PARAMETER;
+    }
+    for (i = 0; i < clock->num_items; i++) {
+        buf_size += strlen(clock->items[i].machine_id);
+        buf_size += 2; // ':' and possible '|'
+        val = clock->items[i].db_rev;
+        do {
+            // divide by 8 is close to divide by 10, to get the number of
+            // binary digits we will need to represent the decimal form
+            val >>= 3;
+            buf_size++;
+        } while (val > 0);
+    }
+    cur = (char *)calloc(1, buf_size);
+    *result = cur;
+    for (i = 0; i < clock->num_items; i++) {
+        if (i == 0) {
+            fmt = "%s:%d";
+        } else {
+            fmt = "|%s:%d";
+        }
+        count = snprintf(cur, buf_size, fmt, clock->items[i].machine_id,
+                         clock->items[i].db_rev);
+        cur += count;
+        buf_size -= count;
+    }
     return U1DB_OK;
 }

@@ -220,4 +220,5 @@ int u1db__vectorclock_increment(u1db_vectorclock *clock,
 
 int u1db__vectorclock_maximize(u1db_vectorclock *clock,
                                u1db_vectorclock *other);
+int u1db__vectorclock_as_str(u1db_vectorclock *clock, char **result);
 #endif // _U1DB_H_

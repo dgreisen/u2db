@@ -83,6 +83,7 @@ cdef extern from "u1db.h":
     int u1db__vectorclock_increment(u1db_vectorclock *clock, char *machine_id)
     int u1db__vectorclock_maximize(u1db_vectorclock *clock,
                                    u1db_vectorclock *other)
+    int u1db__vectorclock_as_str(u1db_vectorclock *clock, char **result)
     int U1DB_OK
     int U1DB_INVALID_DOC_REV
     int U1DB_INVALID_DOC_ID
@@ -361,15 +362,14 @@ cdef class VectorClock:
         self._clock = u1db__vectorclock_from_str(s)
 
     def __repr__(self):
-        cdef int i
-        d = self.as_dict()
-        if d is None:
+        cdef int status
+        cdef char *res
+        if self._clock == NULL:
             return '%s(None)' % (self.__class__.__name__,)
-        res = []
-        for i from 0 <= i < self._clock.num_items:
-            res.append('%s:%d' % (self._clock.items[i].machine_id,
-                                  self._clock.items[i].db_rev))
-        return '%s(%s)' % (self.__class__.__name__, '|'.join(res))
+        status = u1db__vectorclock_as_str(self._clock, &res)
+        if status != U1DB_OK:
+            return '%s(<failure: %d>)' % (status,)
+        return '%s(%s)' % (self.__class__.__name__, res)
 
     def as_dict(self):
         cdef u1db_vectorclock *cur
