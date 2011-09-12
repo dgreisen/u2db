@@ -19,7 +19,6 @@ from sqlite3 import dbapi2
 
 import u1db
 from u1db.backends import CommonBackend
-from u1db.vectorclock import VectorClockRev
 
 
 class SQLiteDatabase(CommonBackend):
