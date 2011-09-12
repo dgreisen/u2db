@@ -40,7 +40,7 @@ class VectorClockRev(object):
 
     def _expand(self, value):
         result = {}
-        if value is None:
+        if not value:
             return result
         for machine_info in value.split('|'):
             machine_id, counter = machine_info.split(':')

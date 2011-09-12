@@ -84,6 +84,9 @@ cdef extern from "u1db.h":
     int u1db__vectorclock_maximize(u1db_vectorclock *clock,
                                    u1db_vectorclock *other)
     int u1db__vectorclock_as_str(u1db_vectorclock *clock, char **result)
+    int u1db__vectorclock_is_newer(u1db_vectorclock *maybe_newer,
+                                   u1db_vectorclock *older)
+
     int U1DB_OK
     int U1DB_INVALID_DOC_REV
     int U1DB_INVALID_DOC_ID
@@ -354,12 +357,18 @@ cdef class CDatabase(object):
             raise RuntimeError("Failed to _sync_exchange: %d" % (status,))
 
 
-cdef class VectorClock:
+cdef class VectorClockRev:
 
     cdef u1db_vectorclock *_clock
 
     def __init__(self, s):
-        self._clock = u1db__vectorclock_from_str(s)
+        if s is None:
+            self._clock = u1db__vectorclock_from_str(NULL)
+        else:
+            self._clock = u1db__vectorclock_from_str(s)
+
+    def __dealloc__(self):
+        u1db__free_vectorclock(&self._clock)
 
     def __repr__(self):
         cdef int status
@@ -381,8 +390,19 @@ cdef class VectorClock:
             res[self._clock.items[i].machine_id] = self._clock.items[i].db_rev
         return res
 
-    def __dealloc__(self):
-        u1db__free_vectorclock(&self._clock)
+    def as_str(self):
+        cdef int status
+        cdef char *res
+
+        status = u1db__vectorclock_as_str(self._clock, &res)
+        if status != U1DB_OK:
+            raise RuntimeError("Failed to VectorClockRev.as_str(): %d" % (status,))
+        if res == NULL:
+            s = None
+        else:
+            s = res
+            free(res)
+        return s
 
     def increment(self, machine_id):
         cdef int status
@@ -391,11 +411,24 @@ cdef class VectorClock:
         if status != U1DB_OK:
             raise RuntimeError("Failed to increment: %d" % (status,))
 
-    def maximize(self, vc):
+    def maximize(self, vcr):
         cdef int status
-        cdef VectorClock other
+        cdef VectorClockRev other
 
-        other = vc
+        other = vcr
         status = u1db__vectorclock_maximize(self._clock, other._clock)
         if status != U1DB_OK:
             raise RuntimeError("Failed to maximize: %d" % (status,))
+
+    def is_newer(self, vcr):
+        cdef int is_newer
+        cdef VectorClockRev other
+
+        other = vcr
+        is_newer = u1db__vectorclock_is_newer(self._clock, other._clock)
+        if is_newer == 0:
+            return False
+        elif is_newer == 1:
+            return True
+        else:
+            raise RuntimeError("Failed to is_newer: %d" % (is_newer,))

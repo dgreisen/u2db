@@ -438,18 +438,7 @@ u1db_put_doc(u1database *db, const char *doc_id, char **doc_rev,
         u1db_vectorclock *vc;
         char *machine_id, *new_rev;
 
-        if (old_doc_rev == NULL) {
-            vc = u1db__vectorclock_from_str("");
-            if (vc == NULL) {
-                fprintf(stderr, "Failed to create VectorClockRev from \"\"");
-            }
-        } else {
-            vc = u1db__vectorclock_from_str((char *)old_doc_rev);
-            if (vc == NULL) {
-                fprintf(stderr, "Failed to create VectorClockRev from %s",
-                        old_doc_rev);
-            }
-        }
+        vc = u1db__vectorclock_from_str((char*)old_doc_rev);
         if (vc == NULL) { goto finish; }
         status = u1db_get_machine_id(db, &machine_id);
         if (status != U1DB_OK) { goto finish; }
@@ -913,6 +902,9 @@ u1db_vectorclock *u1db__vectorclock_from_str(const char *s)
     int i;
     const char *cur, *colon, *pipe, *end;
     char *last_digit;
+    if (s == NULL) {
+        s = "";
+    }
     end = s + strlen(s);
     res = (u1db_vectorclock *)calloc(1, sizeof(u1db_vectorclock));
     if (res == NULL) {
@@ -1108,7 +1100,7 @@ u1db__vectorclock_maximize(u1db_vectorclock *clock, u1db_vectorclock *other)
         }
         clock->items[next->clock_offset].machine_id = strdup(
             other->items[next->other_offset].machine_id);
-        clock->items[next->clock_offset].db_rev = 
+        clock->items[next->clock_offset].db_rev =
             other->items[next->other_offset].db_rev;
         num_inserts--;
         move_to_end = next->clock_offset - 1;
@@ -1125,8 +1117,14 @@ u1db__vectorclock_as_str(u1db_vectorclock *clock, char **result)
     char *cur, *fmt;
     // Quick pass, to determine the buffer size:
     buf_size = 0;
-    if (clock == NULL || result == NULL) {
+    if (result == NULL) {
         return U1DB_INVALID_PARAMETER;
+    }
+    if (clock == NULL) {
+        // Allocate space for the empty string
+        cur = (char *)calloc(1, 1);
+        *result = cur;
+        return U1DB_OK;
     }
     for (i = 0; i < clock->num_items; i++) {
         buf_size += strlen(clock->items[i].machine_id);
@@ -1159,4 +1157,55 @@ int
 u1db__vectorclock_is_newer(u1db_vectorclock *maybe_newer,
                            u1db_vectorclock *older)
 {
+    int ci, oi, cmp, is_newer, n_db_rev, o_db_rev;
+    if (maybe_newer == NULL || maybe_newer->num_items == 0) {
+        // NULL is never newer
+        return 0;
+    }
+    if (older == NULL || older->num_items == 0) {
+        // This is not NULL, so it should be newer, we may need to check if
+        // self is the empty string, though.
+        return 1;
+    }
+    ci = oi = 0;
+    is_newer = 0;
+    // First pass, walk both lists, determining what items need to be inserted
+    while (oi < older->num_items && ci < maybe_newer->num_items) {
+        cmp = strcmp(maybe_newer->items[ci].machine_id,
+                     older->items[oi].machine_id);
+        if (cmp == 0) {
+            // Both clocks have the same machine, see if one is newer
+            n_db_rev = maybe_newer->items[ci].db_rev;
+            o_db_rev = older->items[ci].db_rev;
+            if (n_db_rev < o_db_rev) {
+                // At least one entry in older is newer than this
+                return 0;
+            } else if (n_db_rev > o_db_rev) {
+                // If we have no conflicts, this is strictly newer
+                is_newer = 1;
+            }
+            ci++;
+            oi++;
+            continue;
+        } else if (cmp < 0) {
+            // maybe_newer has an entry that older doesn't have, which would
+            // make it newer
+            is_newer = 1;
+            ci++;
+        } else {
+            // older has an entry that maybe_newer doesn't have, so we must
+            // not be strictly newer
+            return 0;
+        }
+    }
+    if (oi == older->num_items && ci < maybe_newer->num_items) {
+        // ci has an entry that older doesn't have, it is newer
+        is_newer = 1;
+    }
+    if (oi < older->num_items) {
+        // We didn't walk all of older, which means it has an entry which ci
+        // doesn't have, and thus maybe_newer is not strictly newer
+        return 0;
+    }
+    return is_newer;
 }

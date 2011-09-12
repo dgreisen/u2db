@@ -220,6 +220,10 @@ int u1db__vectorclock_increment(u1db_vectorclock *clock,
 
 int u1db__vectorclock_maximize(u1db_vectorclock *clock,
                                u1db_vectorclock *other);
+/**
+ * Return a null-terminated string representation for this vector clock.
+ * Callers must take care to free() the result.
+ */
 int u1db__vectorclock_as_str(u1db_vectorclock *clock, char **result);
 int u1db__vectorclock_is_newer(u1db_vectorclock *maybe_newer,
                                u1db_vectorclock *older);

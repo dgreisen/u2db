@@ -17,6 +17,7 @@
 from u1db import (
     tests,
     )
+from u1db.tests import test_vectorclock
 from u1db.backends import c_wrapper
 
 
@@ -40,95 +41,98 @@ class TestCWrapper(tests.TestCase):
         self.assertEqual([('1',)], db._run_sql('SELECT * FROM test'))
 
 
-class TestVectorClock(tests.TestCase):
+class TestVectorClock(test_vectorclock.TestVectorClockRev):
+
+    def create_vcr(self, rev):
+        return c_wrapper.VectorClockRev(rev)
 
     def test_parse_empty(self):
-        self.assertEqual('VectorClock()',
-                         repr(c_wrapper.VectorClock('')))
+        self.assertEqual('VectorClockRev()',
+                         repr(self.create_vcr('')))
 
     def test_parse_invalid(self):
-        self.assertEqual('VectorClock(None)',
-                         repr(c_wrapper.VectorClock('x')))
-        self.assertEqual('VectorClock(None)',
-                         repr(c_wrapper.VectorClock('x:a')))
-        self.assertEqual('VectorClock(None)',
-                         repr(c_wrapper.VectorClock('y:1|x:a')))
-        self.assertEqual('VectorClock(None)',
-                         repr(c_wrapper.VectorClock('x:a|y:1')))
-        self.assertEqual('VectorClock(None)',
-                         repr(c_wrapper.VectorClock('y:1|x:2a')))
-        self.assertEqual('VectorClock(None)',
-                         repr(c_wrapper.VectorClock('y:1||')))
-        self.assertEqual('VectorClock(None)',
-                         repr(c_wrapper.VectorClock('y:1|')))
-        self.assertEqual('VectorClock(None)',
-                         repr(c_wrapper.VectorClock('y:1|x:2|')))
-        self.assertEqual('VectorClock(None)',
-                         repr(c_wrapper.VectorClock('y:1|x:2|:')))
-        self.assertEqual('VectorClock(None)',
-                         repr(c_wrapper.VectorClock('y:1|x:2|m:')))
-        self.assertEqual('VectorClock(None)',
-                         repr(c_wrapper.VectorClock('y:1|x:|m:3')))
-        self.assertEqual('VectorClock(None)',
-                         repr(c_wrapper.VectorClock('y:1|:|m:3')))
+        self.assertEqual('VectorClockRev(None)',
+                         repr(self.create_vcr('x')))
+        self.assertEqual('VectorClockRev(None)',
+                         repr(self.create_vcr('x:a')))
+        self.assertEqual('VectorClockRev(None)',
+                         repr(self.create_vcr('y:1|x:a')))
+        self.assertEqual('VectorClockRev(None)',
+                         repr(self.create_vcr('x:a|y:1')))
+        self.assertEqual('VectorClockRev(None)',
+                         repr(self.create_vcr('y:1|x:2a')))
+        self.assertEqual('VectorClockRev(None)',
+                         repr(self.create_vcr('y:1||')))
+        self.assertEqual('VectorClockRev(None)',
+                         repr(self.create_vcr('y:1|')))
+        self.assertEqual('VectorClockRev(None)',
+                         repr(self.create_vcr('y:1|x:2|')))
+        self.assertEqual('VectorClockRev(None)',
+                         repr(self.create_vcr('y:1|x:2|:')))
+        self.assertEqual('VectorClockRev(None)',
+                         repr(self.create_vcr('y:1|x:2|m:')))
+        self.assertEqual('VectorClockRev(None)',
+                         repr(self.create_vcr('y:1|x:|m:3')))
+        self.assertEqual('VectorClockRev(None)',
+                         repr(self.create_vcr('y:1|:|m:3')))
 
     def test_parse_single(self):
-        self.assertEqual('VectorClock(test:1)',
-                         repr(c_wrapper.VectorClock('test:1')))
+        self.assertEqual('VectorClockRev(test:1)',
+                         repr(self.create_vcr('test:1')))
 
     def test_parse_multi(self):
-        self.assertEqual('VectorClock(test:1|z:2)',
-                         repr(c_wrapper.VectorClock('test:1|z:2')))
-        self.assertEqual('VectorClock(ab:1|bc:2|cd:3|de:4|ef:5)',
-                     repr(c_wrapper.VectorClock('ab:1|bc:2|cd:3|de:4|ef:5')))
+        self.assertEqual('VectorClockRev(test:1|z:2)',
+                         repr(self.create_vcr('test:1|z:2')))
+        self.assertEqual('VectorClockRev(ab:1|bc:2|cd:3|de:4|ef:5)',
+                     repr(self.create_vcr('ab:1|bc:2|cd:3|de:4|ef:5')))
 
     def test_increment(self):
-        vc = c_wrapper.VectorClock('test:1')
+        vc = self.create_vcr('test:1')
         vc.increment('test')
-        self.assertEqual('VectorClock(test:2)', repr(vc))
+        self.assertEqual('VectorClockRev(test:2)', repr(vc))
 
     def test_increment_with_multi(self):
-        vc = c_wrapper.VectorClock('a:1|ab:2')
+        vc = self.create_vcr('a:1|ab:2')
         vc.increment('a')
-        self.assertEqual('VectorClock(a:2|ab:2)', repr(vc))
+        self.assertEqual('VectorClockRev(a:2|ab:2)', repr(vc))
         vc.increment('ab')
-        self.assertEqual('VectorClock(a:2|ab:3)', repr(vc))
+        self.assertEqual('VectorClockRev(a:2|ab:3)', repr(vc))
 
     def test_increment_insert_new_id(self):
-        vc = c_wrapper.VectorClock('a:1|ab:2')
+        vc = self.create_vcr('a:1|ab:2')
         vc.increment('aa')
-        self.assertEqual('VectorClock(a:1|aa:1|ab:2)', repr(vc))
+        self.assertEqual('VectorClockRev(a:1|aa:1|ab:2)', repr(vc))
 
     def test_increment_first_id(self):
-        vc = c_wrapper.VectorClock('b:2')
+        vc = self.create_vcr('b:2')
         vc.increment('a')
-        self.assertEqual('VectorClock(a:1|b:2)', repr(vc))
+        self.assertEqual('VectorClockRev(a:1|b:2)', repr(vc))
 
     def test_increment_append_id(self):
-        vc = c_wrapper.VectorClock('b:2')
+        vc = self.create_vcr('b:2')
         vc.increment('c')
-        self.assertEqual('VectorClock(b:2|c:1)', repr(vc))
+        self.assertEqual('VectorClockRev(b:2|c:1)', repr(vc))
 
     def test_maximize_noop(self):
-        vc1 = c_wrapper.VectorClock('a:2')
-        vc2 = c_wrapper.VectorClock('a:1')
+        vc1 = self.create_vcr('a:2')
+        vc2 = self.create_vcr('a:1')
         vc1.maximize(vc2)
-        self.assertEqual('VectorClock(a:2)', repr(vc1))
+        self.assertEqual('VectorClockRev(a:2)', repr(vc1))
 
     def test_maximize_increasing(self):
-        vc1 = c_wrapper.VectorClock('a:1')
-        vc2 = c_wrapper.VectorClock('a:3')
+        vc1 = self.create_vcr('a:1')
+        vc2 = self.create_vcr('a:3')
         vc1.maximize(vc2)
-        self.assertEqual('VectorClock(a:3)', repr(vc1))
+        self.assertEqual('VectorClockRev(a:3)', repr(vc1))
 
     def test_maximize_mixing(self):
-        vc1 = c_wrapper.VectorClock('a:1')
-        vc2 = c_wrapper.VectorClock('b:3')
+        vc1 = self.create_vcr('a:1')
+        vc2 = self.create_vcr('b:3')
         vc1.maximize(vc2)
-        self.assertEqual('VectorClock(a:1|b:3)', repr(vc1))
+        self.assertEqual('VectorClockRev(a:1|b:3)', repr(vc1))
 
     def test_maximize_twisting(self):
-        vc1 = c_wrapper.VectorClock('a:1|c:2|e:3')
-        vc2 = c_wrapper.VectorClock('b:3|d:4|f:5')
+        vc1 = self.create_vcr('a:1|c:2|e:3')
+        vc2 = self.create_vcr('b:3|d:4|f:5')
         vc1.maximize(vc2)
-        self.assertEqual('VectorClock(a:1|b:3|c:2|d:4|e:3|f:5)', repr(vc1))
+        self.assertEqual('VectorClockRev(a:1|b:3|c:2|d:4|e:3|f:5)', repr(vc1))
