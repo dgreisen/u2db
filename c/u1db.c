@@ -811,8 +811,17 @@ u1db__sync_record_machine_info(u1database *db, const char *machine_id,
 }
 
 static int
-u1db__insert_records(u1database *db, u1db_record *records)
+compare_and_insert_doc(u1database *db, const char *doc_rev, const char *doc)
 {
+    return U1DB_INVALID_PARAMETER;
+}
+
+static int
+insert_records(u1database *db, u1db_record *records)
+{
+    if (db == NULL || records == NULL) {
+        return U1DB_INVALID_PARAMETER;
+    }
     return U1DB_INVALID_PARAMETER;
 }
 
@@ -1144,4 +1153,10 @@ u1db__vectorclock_as_str(u1db_vectorclock *clock, char **result)
         buf_size -= count;
     }
     return U1DB_OK;
+}
+
+int
+u1db__vectorclock_is_newer(u1db_vectorclock *maybe_newer,
+                           u1db_vectorclock *older)
+{
 }
