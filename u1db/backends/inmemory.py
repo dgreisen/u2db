@@ -19,7 +19,6 @@ import simplejson
 
 import u1db
 from u1db.backends import CommonBackend
-from u1db.vectorclock import VectorClockRev
 
 
 class InMemoryDatabase(CommonBackend):
