@@ -26,7 +26,8 @@ class CommonBackend(u1db.Database):
 
     def _allocate_doc_rev(self, old_doc_rev):
         vcr = VectorClockRev(old_doc_rev)
-        return vcr.increment(self._machine_id)
+        vcr.increment(self._machine_id)
+        return vcr.as_str()
 
     def _get_db_rev(self):
         raise NotImplementedError(self._get_db_rev)
@@ -173,5 +174,6 @@ class CommonBackend(u1db.Database):
     def _ensure_maximal_rev(self, cur_rev, extra_revs):
         vcr = VectorClockRev(cur_rev)
         for rev in extra_revs:
-            vcr = VectorClockRev(vcr.maximize(rev))
-        return vcr.increment(self._machine_id)
+            vcr.maximize(VectorClockRev(rev))
+        vcr.increment(self._machine_id)
+        return vcr.as_str()

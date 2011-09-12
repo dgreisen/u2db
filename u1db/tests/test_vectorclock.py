@@ -40,21 +40,14 @@ class TestVectorClockRev(tests.TestCase):
         self.assertIsConflicted('test:1|other:1', 'other:2')
         self.assertIsConflicted('test:1', 'test:1')
 
-    def test__expand_None(self):
+    def test_None(self):
         vcr = vectorclock.VectorClockRev(None)
-        self.assertEqual({}, vcr._expand())
-        vcr = vectorclock.VectorClockRev('')
-        self.assertEqual({}, vcr._expand())
-
-    def test__expand(self):
-        vcr = vectorclock.VectorClockRev('test:1')
-        self.assertEqual({'test': 1}, vcr._expand())
-        vcr = vectorclock.VectorClockRev('other:2|test:1')
-        self.assertEqual({'other': 2, 'test': 1}, vcr._expand())
+        self.assertEqual('', vcr.as_str())
 
     def assertIncrement(self, original, machine_id, after_increment):
         vcr = vectorclock.VectorClockRev(original)
-        self.assertEqual(after_increment, vcr.increment(machine_id))
+        vcr.increment(machine_id)
+        self.assertEqual(after_increment, vcr.as_str())
 
     def test_increment(self):
         self.assertIncrement(None, 'test', 'test:1')
@@ -62,10 +55,14 @@ class TestVectorClockRev(tests.TestCase):
         self.assertIncrement('other:1', 'test', 'other:1|test:1')
 
     def assertMaximize(self, rev1, rev2, maximized):
-        self.assertEqual(maximized,
-                         vectorclock.VectorClockRev(rev1).maximize(rev2))
-        self.assertEqual(maximized,
-                         vectorclock.VectorClockRev(rev2).maximize(rev1))
+        vcr1 = vectorclock.VectorClockRev(rev1)
+        vcr2 = vectorclock.VectorClockRev(rev2)
+        vcr1.maximize(vcr2)
+        self.assertEqual(maximized, vcr1.as_str())
+        # reset vcr1 to maximize the other way
+        vcr1 = vectorclock.VectorClockRev(rev1)
+        vcr2.maximize(vcr1)
+        self.assertEqual(maximized, vcr2.as_str())
 
     def test_maximize(self):
         self.assertMaximize(None, None, '')

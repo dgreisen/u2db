@@ -2,4 +2,4 @@
 .PHONY: check
 
 check:
-	nosetests u1dbclient
+	nosetests u1db

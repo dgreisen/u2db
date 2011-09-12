@@ -15,8 +15,6 @@
 """VectorClockRev helper class."""
 
 
-
-
 class VectorClockRev(object):
     """Track vector clocks for multiple machine ids.
 
@@ -29,16 +27,22 @@ class VectorClockRev(object):
     """
 
     def __init__(self, value):
-        self._value = value
+        self._values = self._expand(value)
 
     def __repr__(self):
-        return '%s(%s)' % (self.__class__.__name__, self._value)
+        s = self.as_str()
+        return '%s(%s)' % (self.__class__.__name__, s)
 
-    def _expand(self):
-        if not self._value:
-            return {}
+    def as_str(self):
+        s = '|'.join(['%s:%d' % (m,r) for m,r
+                      in sorted(self._values.items())])
+        return s
+
+    def _expand(self, value):
         result = {}
-        for machine_info in self._value.split('|'):
+        if value is None:
+            return result
+        for machine_info in value.split('|'):
             machine_id, counter = machine_info.split(':')
             counter = int(counter)
             result[machine_id] = counter
@@ -47,14 +51,13 @@ class VectorClockRev(object):
     def is_newer(self, other):
         """Is this VectorClockRev strictly newer than other.
         """
-        if self._value is None:
+        if not self._values:
             return False
-        if other._value is None:
+        if not other._values:
             return True
-        this_expand = self._expand()
-        other_expand = other._expand()
         this_is_newer = False
-        for key, value in this_expand.iteritems():
+        other_expand = dict(other._values)
+        for key, value in self._values.iteritems():
             if key in other_expand:
                 other_value = other_expand.pop(key)
                 if other_value > value:
@@ -72,21 +75,13 @@ class VectorClockRev(object):
 
         :return: A string representing the new vector clock value
         """
-        expanded = self._expand()
-        expanded[machine_id] = expanded.get(machine_id, 0) + 1
-        result = ['%s:%d' % (m, c) for m, c in sorted(expanded.items())]
-        return '|'.join(result)
+        self._values[machine_id] = self._values.get(machine_id, 0) + 1
 
-    def maximize(self, other_rev):
-        other_vcr = VectorClockRev(other_rev)
-        this_exp = self._expand()
-        other_exp = other_vcr._expand()
-        for machine_id, counter in other_exp.iteritems():
-            if machine_id not in this_exp:
-                this_exp[machine_id] = counter
+    def maximize(self, other_vcr):
+        for machine_id, counter in other_vcr._values.iteritems():
+            if machine_id not in self._values:
+                self._values[machine_id] = counter
             else:
-                this_counter = this_exp[machine_id]
+                this_counter = self._values[machine_id]
                 if this_counter < counter:
-                    this_exp[machine_id] = counter
-        result = ['%s:%d' % (m, c) for m, c in sorted(this_exp.items())]
-        return '|'.join(result)
+                    self._values[machine_id] = counter
