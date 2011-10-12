@@ -14,6 +14,8 @@
  * with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
+#include "compat.h"
+
 #include <string.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -95,6 +97,19 @@ u1db_open(const char *fname)
     }
     initialize(db);
     return db;
+}
+
+// Windows doesn't have strndup, so we fake one
+char *_win32_strndup(const char *s, size_t n)
+{
+    char *out;
+    out = (char*)malloc(n+1);
+    if (out == NULL) {
+        return NULL;
+    }
+    memcpy(out, s, n);
+    out[n] = '\0';
+    return out;
 }
 
 int
