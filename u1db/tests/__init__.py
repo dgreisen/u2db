@@ -16,3 +16,4 @@
 
 
 from unittest import TestCase
+from testscenarios import TestWithScenarios

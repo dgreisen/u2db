@@ -25,22 +25,22 @@ from u1db.backends import sqlite_backend
 simple_doc = '{"key": "value"}'
 
 
-class TestSQLiteDatabase(tests.TestCase):
+class TestSQLiteExpandedDatabase(tests.TestCase):
 
     def test_create_database(self):
-        db = sqlite_backend.SQLiteDatabase(':memory:')
+        db = sqlite_backend.SQLiteExpandedDatabase(':memory:')
         raw_db = db._get_sqlite_handle()
         self.assertNotEqual(None, raw_db)
 
     def test__close_sqlite_handle(self):
-        db = sqlite_backend.SQLiteDatabase(':memory:')
+        db = sqlite_backend.SQLiteExpandedDatabase(':memory:')
         raw_db = db._get_sqlite_handle()
         db._close_sqlite_handle()
         self.assertRaises(dbapi2.ProgrammingError,
             raw_db.cursor)
 
     def test_create_database_initializes_schema(self):
-        db = sqlite_backend.SQLiteDatabase(':memory:')
+        db = sqlite_backend.SQLiteExpandedDatabase(':memory:')
         raw_db = db._get_sqlite_handle()
         c = raw_db.cursor()
         c.execute("SELECT * FROM u1db_config")
@@ -56,7 +56,7 @@ class TestSQLiteDatabase(tests.TestCase):
         c.execute("SELECT * FROM index_definitions")
 
     def test__set_machine_id(self):
-        db = sqlite_backend.SQLiteDatabase(':memory:')
+        db = sqlite_backend.SQLiteExpandedDatabase(':memory:')
         self.assertEqual(None, db._real_machine_id)
         self.assertEqual(None, db._machine_id)
         db._set_machine_id('foo')
@@ -69,26 +69,26 @@ class TestSQLiteDatabase(tests.TestCase):
         self.assertEqual('foo', db._machine_id)
 
     def test__get_db_rev(self):
-        db = sqlite_backend.SQLiteDatabase(':memory:')
+        db = sqlite_backend.SQLiteExpandedDatabase(':memory:')
         db._set_machine_id('foo')
         self.assertEqual(0, db._get_db_rev())
 
     def test__allocate_doc_id(self):
-        db = sqlite_backend.SQLiteDatabase(':memory:')
+        db = sqlite_backend.SQLiteExpandedDatabase(':memory:')
         self.assertEqual('doc-0', db._allocate_doc_id())
 
     def test_create_index(self):
-        db = sqlite_backend.SQLiteDatabase(':memory:')
+        db = sqlite_backend.SQLiteExpandedDatabase(':memory:')
         db.create_index('test-idx', ["key"])
         self.assertEqual([('test-idx', ["key"])], db.list_indexes())
 
     def test_create_index_multiple_fields(self):
-        db = sqlite_backend.SQLiteDatabase(':memory:')
+        db = sqlite_backend.SQLiteExpandedDatabase(':memory:')
         db.create_index('test-idx', ["key", "key2"])
         self.assertEqual([('test-idx', ["key", "key2"])], db.list_indexes())
 
     def test__get_index_definition(self):
-        db = sqlite_backend.SQLiteDatabase(':memory:')
+        db = sqlite_backend.SQLiteExpandedDatabase(':memory:')
         db.create_index('test-idx', ["key", "key2"])
         # TODO: How would you test that an index is getting used for an SQL
         #       request?
@@ -96,7 +96,7 @@ class TestSQLiteDatabase(tests.TestCase):
                          db._get_index_definition('test-idx'))
 
     def test_list_index_mixed(self):
-        db = sqlite_backend.SQLiteDatabase(':memory:')
+        db = sqlite_backend.SQLiteExpandedDatabase(':memory:')
         # Make sure that we properly order the output
         c = db._get_sqlite_handle().cursor()
         # We intentionally insert the data in weird ordering, to make sure the
@@ -112,7 +112,7 @@ class TestSQLiteDatabase(tests.TestCase):
                          db.list_indexes())
 
     def test_create_extracts_fields(self):
-        db = sqlite_backend.SQLiteDatabase(':memory:')
+        db = sqlite_backend.SQLiteExpandedDatabase(':memory:')
         doc1_id, doc1_rev = db.create_doc('{"key1": "val1", "key2": "val2"}')
         doc2_id, doc2_rev = db.create_doc('{"key1": "valx", "key2": "valy"}')
         c = db._get_sqlite_handle().cursor()
@@ -125,7 +125,7 @@ class TestSQLiteDatabase(tests.TestCase):
                          ], c.fetchall())
 
     def test_put_updates_fields(self):
-        db = sqlite_backend.SQLiteDatabase(':memory:')
+        db = sqlite_backend.SQLiteExpandedDatabase(':memory:')
         doc1_id, doc1_rev = db.create_doc('{"key1": "val1", "key2": "val2"}')
         doc2_rev = db.put_doc(doc1_id, doc1_rev, '{"key1": "val1", "key2": "valy"}')
         c = db._get_sqlite_handle().cursor()

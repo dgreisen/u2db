@@ -29,7 +29,7 @@ from u1db.backends import (
 simple_doc = '{"key": "value"}'
 
 
-class DatabaseBaseTests(object):
+class DatabaseBaseTests(tests.TestCase):
 
     def create_database(self, machine_id):
         raise NotImplementedError(self.create_database)
@@ -52,18 +52,32 @@ class DatabaseBaseTests(object):
 class InMemoryDatabaseMixin(object):
 
     def create_database(self, machine_id):
-        return inmemory.InMemoryDatabase(machine_id)
+        return create_in_memory(machine_id)
 
 
-class SQLiteDatabaseMixin(object):
+def create_in_memory(machine_id):
+    return inmemory.InMemoryDatabase(machine_id)
+
+
+def create_sqlite_expanded(machine_id):
+    db = sqlite_backend.SQLiteExpandedDatabase(':memory:')
+    db._set_machine_id(machine_id)
+    return db
+
+
+class SQLiteExpandedDatabaseMixin(object):
 
     def create_database(self, machine_id):
-        db = sqlite_backend.SQLiteDatabase(':memory:')
-        db._set_machine_id(machine_id)
-        return db
+        return create_sqlite_expanded(machine_id)
 
 
 class DatabaseTests(DatabaseBaseTests):
+
+    create_database = None
+    scenarios = [
+        ('inmemory', {'create_database': create_in_memory}),
+        ('sql_expanded', {'create_database': create_sqlite_expanded}),
+        ]
 
     def test_create_doc_allocating_doc_id(self):
         doc_id, new_rev = self.c.create_doc(simple_doc)
@@ -231,14 +245,14 @@ class DatabaseTests(DatabaseBaseTests):
         self.assertEqual(([], [], 2), result)
 
 
-class TestInMemoryDatabase(InMemoryDatabaseMixin, DatabaseTests,
-                           tests.TestCase):
-    pass
-
-
-class TestSQLiteDatabase(SQLiteDatabaseMixin, DatabaseTests,
-                         tests.TestCase):
-    pass
+# class TestInMemoryDatabase(InMemoryDatabaseMixin, DatabaseTests,
+#                            tests.TestCase):
+#     pass
+# 
+# 
+# class TestSQLiteExpandedDatabase(SQLiteExpandedDatabaseMixin, DatabaseTests,
+#                                  tests.TestCase):
+#     pass
 
 
 class DatabaseIndexTests(DatabaseBaseTests):
@@ -340,8 +354,8 @@ class TestInMemoryDatabaseIndexes(InMemoryDatabaseMixin, DatabaseIndexTests,
     pass
 
 
-class TestSQLiteDatabaseIndexes(SQLiteDatabaseMixin, DatabaseIndexTests,
-                                tests.TestCase):
+class TestSQLiteExpandedDatabaseIndexes(SQLiteExpandedDatabaseMixin,
+    DatabaseIndexTests, tests.TestCase):
     pass
 
 
@@ -657,7 +671,12 @@ class TestInMemoryDatabaseSync(InMemoryDatabaseMixin, DatabaseSyncTests,
     pass
 
 
-class TestSQLiteDatabase(SQLiteDatabaseMixin, DatabaseSyncTests,
-                         tests.TestCase):
+class TestSQLiteExpandedDatabase(SQLiteExpandedDatabaseMixin,
+                                 DatabaseSyncTests, tests.TestCase):
     pass
 
+
+def load_tests(loader, standard_tests, pattern):
+    print 'load_tests called'
+    import unittest
+    return unittest.TestSuite()

@@ -176,30 +176,12 @@ class SQLiteDatabase(CommonBackend):
         return new_rev
 
     def _put_and_update_indexes(self, doc_id, old_doc, new_rev, doc):
-        c = self._db_handle.cursor()
-        # for index in self._indexes.itervalues():
-        #     if old_doc is not None:
-        #         index.remove_json(doc_id, old_doc)
-        #     if doc not in (None, 'null'):
-        #         index.add_json(doc_id, doc)
-        if doc:
-            raw_doc = simplejson.loads(doc)
-        else:
-            raw_doc = {}
-        if old_doc:
-            c.execute("UPDATE document SET doc_rev=?, doc=? WHERE doc_id = ?",
-                      (new_rev, doc, doc_id))
-            c.execute("DELETE FROM document_fields WHERE doc_id = ?",
-                      (doc_id,))
-        else:
-            c.execute("INSERT INTO document VALUES (?, ?, ?)",
-                      (doc_id, new_rev, doc))
-        values = [(doc_id, field_name, value) for field_name, value in
-                  raw_doc.iteritems()]
-        c.executemany("INSERT INTO document_fields VALUES (?, ?, ?)",
-                      values)
-        c.execute("INSERT INTO transaction_log(doc_id) VALUES (?)",
-                  (doc_id,))
+        """Actually insert a document into the database.
+
+        This both updates the existing documents content, and any indexes that
+        refer to this document.
+        """
+        raise NotImplementedError(self._put_and_update_indexes)
 
     def whats_changed(self, old_db_rev=0):
         c = self._db_handle.cursor()
@@ -366,3 +348,37 @@ class SQLiteDatabase(CommonBackend):
             c = self._db_handle.cursor()
             c.execute("DELETE FROM index_definitions WHERE name = ?",
                       (index_name,))
+
+
+class SQLiteExpandedDatabase(SQLiteDatabase):
+    """An SQLite Backend that expands documents into a document_field table.
+
+    It stores the raw document text in document.doc, but also puts the
+    individual fields into document_fields.
+    """
+
+    def _put_and_update_indexes(self, doc_id, old_doc, new_rev, doc):
+        c = self._db_handle.cursor()
+        if doc:
+            raw_doc = simplejson.loads(doc)
+        else:
+            raw_doc = {}
+        if old_doc:
+            c.execute("UPDATE document SET doc_rev=?, doc=? WHERE doc_id = ?",
+                      (new_rev, doc, doc_id))
+            c.execute("DELETE FROM document_fields WHERE doc_id = ?",
+                      (doc_id,))
+        else:
+            c.execute("INSERT INTO document VALUES (?, ?, ?)",
+                      (doc_id, new_rev, doc))
+        values = [(doc_id, field_name, value) for field_name, value in
+                  raw_doc.iteritems()]
+        c.executemany("INSERT INTO document_fields VALUES (?, ?, ?)",
+                      values)
+        c.execute("INSERT INTO transaction_log(doc_id) VALUES (?)",
+                  (doc_id,))
+
+
+class SQLitePartialExpandDatabase(SQLiteDatabase):
+    """Similar to SQLiteExpandedDatabase, but only indexed fields are expanded.
+    """
