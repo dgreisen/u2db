@@ -1,0 +1,270 @@
+=============
+SQLite Schema
+=============
+
+This is a discussion about how we can lay out the SQLite database to hold the
+documents that we store. There are a few alternatives, and we still need some
+benchmarking, etc, to decide among them.
+
+Indexing
+========
+
+We want to have a way for users to define custom indexes on their documents.
+So that they can, for example, find all users named John in their address book.
+The question then becomes how we want to implement these indexes. At a high
+level, the index creation API looks like::
+
+    CREATE_INDEX(db, index_name, index_expressions)
+
+The naming is to give a handle for the index (possibly to only allow you to
+query off of a specific index name). The expressions are the interesting part.
+It is intended to be a list of fields, and possibly mappings on those fields.
+Something like::
+
+    CREATE_INDEX(mydb, "myindex", ["field", "other.subfield", "number(third)"]) 
+
+
+Expanded Fields
+---------------
+
+One option is to create a ``document_fields`` table, which has the decomposed
+document strings. Something of the form::
+
+    CREATE TABLE document_fields (
+        doc_id TEXT,
+        field_name TEXT,
+        value TEXT,
+        CONSTRAINT document_fields_pkey PRIMARY KEY (doc_id, field_name)
+    );
+
+So if you had two documents of the form::
+
+    {"lastname": "meinel", "firstname": "john"}
+    {"lastname": "pedroni", "firstname": "samuele"}
+
+You would end up with the entries::
+
+    doc_id  field_name  value
+    xxx     lastname    meinel
+    xxx     firstname   john
+    yyy     lastname    pedroni
+    yyy     firstname   samuele
+
+Then if you want to match an index query, you essentially have to join
+that table against itself, for each entry that you want to match. Eg::
+
+    create_index('name', ('lastname', 'firstname'))
+    get_from_index('name', [('meinel', 'john'), ('pedroni', 'samuele')])
+
+Becomes::
+
+     SELECT d.doc_id, d.doc_rev, d.doc
+       FROM document d, document_fields d0, document_fields d1
+      WHERE d.doc_id = d0.doc_id
+            AND d0.field_name = 'lastname'
+            AND d0.value = 'meinel'
+            AND d.doc_id = d1.doc_id
+            AND d1.field_name = 'firstname'
+            AND d1.value = 'john';
+     SELECT d.doc_id, d.doc_rev, d.doc
+       FROM document d, document_fields d0, document_fields d1
+      WHERE d.doc_id = d0.doc_id
+            AND d0.field_name = 'lastname'
+            AND d0.value = 'pedroni'
+            AND d.doc_id = d1.doc_id
+            AND d1.field_name = 'firstname'
+            AND d1.value = 'samuele';
+
+We still need to work out if that particular SQLite syntax is the best, because
+SQLite doesn't rewrite queries like Postgres. (See EXPLAIN and especially
+EXPLAIN QUERY PLAN for ways of understanding what SQLite is doing, though
+recent docs hint that sqlite can do some reordering.)
+
+I don't believe it is possible to cheat and try to query for both index matches
+in one request. This is because you could have the document::
+
+    {"lastname": "pedroni", "firstname": "john"}
+
+Which you don't want to match.
+
+We also may need another index on this table, something like::
+
+    CREATE INDEX document_fields_field_value
+           ON document_fields (field_name, value);
+
+And then possibly rewriting the query as::
+
+    SELECT d.doc_id, d.doc_rev, d.doc
+      FROM document_fields d0, document_fields d1, document d
+     WHERE d0.field_name = 'lastname'
+           AND d0.value = 'pedroni'
+           AND d0.doc_id = d1.doc_id
+           AND d1.field_name = 'firstname'
+           AND d1.value = 'samuele';
+           AND d.doc_id = d1.doc_id
+
+Discussion
+~~~~~~~~~~
+
+SQLite's document about its query planner:
+http://www.sqlite.org/optoverview.html
+
+1) We don't have a way to query for multiple keys concurrently. It
+   seems a shame to have to do a loop in the caller.
+
+2) Joining the table against itself to get "AND" semantics is a bit
+   ugly. It would be possible to change the loop slicing, and look
+   for all doc_ids with lastname 'pedroni' or 'meinel' before checking
+   for all doc_ids with firstname 'john' or 'samuele'. You would need to
+   somehow handle filtering out "pedroni, john".
+
+3) It isn't hard to map nested fields into this structure. And you have
+   the nice property that you don't have to change the data to add/remove an
+   index.
+   
+4) One downside is when only a subset of the fields are indexed, all fields
+   still end up expanded in the table. A possible balance is that you only put
+   fields in this table that exist in a U1DB index. It means that
+   'create_index' would have to walk over all the docs again, pulling out any
+   fields that weren't already in the table.
+
+   However if two indexes share a field, you don't have to add that content
+   twice. Eg, you have ``create_index('name', ['lastname', 'firstname'])`` and
+   ``create_index('last', ['lastname'])`` you can share all the 'lastname'
+   fields.
+
+5) It isn't 100% clear how we handle mapped fields in this structure. Something
+   like ``lower(lastname)``. It is possible that we could only support the set
+   of mappings that we can do with SQL on the live data. However, that will
+   mean we probably get O(N) performance rather than O(log N) from the indexes.
+   (Specifically, sqlite has to apply the mapping to every row to see if that
+   mapping results in something that would match, versus a strict text
+   matching.)
+
+6) We probably get decent results for prefix matches. However, SQLite doesn't
+   seem to support turning "SELECT * FROM table WHERE value LIKE 'p%'" into an
+   index query. Even though value is in a btree, it doesn't use it. However,
+   you could use >= and < to get a range query. Something like::
+   
+        SELECT * FROM table WHERE value >= 'p' AND value < 'q'
+
+   Since sqlite supports closed and open ended ranges, we don't have to play
+   tricks with ZZZ values.
+
+   Further note, SQL defines LIKE to be case-insensitive by default. If we
+   change it with ``PRAGMA case_sensitive_like=ON``, then the "LIKE 'p%'"
+   version of the query does get turned into an index query.
+
+7) ``ORDER BY`` seems unclear for these queries, but it isn't well defined by
+   the API spec, either.
+
+
+Table per index
+---------------
+
+It would be possible to create a table at ``create_index`` time.
+
+Something like::
+
+    create_index('name', ('lastname', 'firstname'))
+
+Gets mapped into::
+
+    CREATE TABLE idx_name (doc_id PRIMARY KEY, col1 TEXT, col2 TEXT)
+    CREATE INDEX idx_name_idx ON idx_name(col1, col2)
+    INSERT INTO idx_name VALUES ("xxx", "meinel", "john")
+    INSERT INTO idx_name VALUES ("yyy", "pedroni", "samuele")
+
+The nice thing is that you get a real SQL btree index over just the contents
+you care about. And then::
+
+    get_from_index('name', [('meinel', 'john'), ('pedroni', 'samuele')])
+
+Is mapped into::
+
+    SELECT d.doc_id, d.doc_rev, d.doc
+      FROM document d, idx_name
+     WHERE (value1 = 'meinel' AND value2 = 'john')
+        OR (value1 = 'pedroni' AND value2 = 'samuele');
+
+It might be just as efficient to just loop and do a simpler WHERE clause.
+
+Discussion
+~~~~~~~~~~
+
+1) Needs benchmarking, but is likely to be faster to do queries. Any given
+   index has all of its data localized, and split out from other data.
+
+2) The index we create perfectly supports the prefix searching we want to
+   support.
+
+3) ``put_doc`` needs to update every index table. So inserting a new document
+   becomes O(num_indexes).
+
+4) Data isn't shared between indexes. I imagine on-disk size will probably be
+   bigger.
+
+5) 
+
+
+Document Tables
+---------------
+
+We could create an arbitrarily-wide document table, that stored each field as a
+separate column. Creating an index then creates the associated SQL index across
+those fields.
+
+Discussion
+~~~~~~~~~~
+
+1) The main issue is that inserting a new document can potentially add all new
+   fields. Which means you have to do something like "ALTER TABLE ADD COLUMN".
+   And then all the documents that don't have that field just get a NULL entry
+   there.
+
+2) The good is that it is roughly how SQL wants to act (caveat the data isn't
+   normalized.) Documents themselves are stored only one time, and you don't do
+   extra work to maintain the indexes.
+
+
+Mapped Index Table
+------------------
+
+Instead of having a ``document_fields`` table, we instead have a index table.
+Sort of the idea we had for cassandra. You then apply a mapping function to the
+data, and use the result as your values. For example::
+
+    CREATE TABLE indexed_data AS (
+        index_name TEXT,
+        mapped_value TEXT,
+        doc_id TEXT,
+        CONSTRAINT indexed_data_pkey PRIMARY KEY (index_name, mapped_value)
+    );
+    INSERT INTO indexed_data VALUES ('name', 'meinel\x01john', 'doc1')
+    INSERT INTO indexed_data VALUES ('name', 'pedroni\x01samuele', 'doc2')
+
+    SELECT d.doc_id, d.doc_rev, d.doc
+      FROM indexed_data i, documents d
+     WHERE i.doc_id = d.doc_id
+       AND i.index_name = 'name'
+       AND i.mapped_value = 'meinel\x01john';
+
+Or even::
+
+     AND i.mapped_value IN ('meinel\x01john', 'pedroni\x01samuele')
+
+Discussion
+~~~~~~~~~~
+
+1) Overall, closer in theory to `Table Per Index`_ than `Expanded Fields`_.
+   ``put_doc`` is also O(indexes), and you store the actual content multiple
+   times.
+2) You need delimiters that are safe. This should actually be fine if we assume
+   the documents are JSON, since the text representation of JSON can't have
+   control characters, etc.
+
+3) We can still do prefix lookups on the data, though we have to take a bit
+   more care in how we map things.
+
+4) It is easier to write the multi-entry request form.
+
