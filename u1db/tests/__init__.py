@@ -15,4 +15,6 @@
 """Test infrastructure for U1DB Client"""
 
 
-from unittest import TestCase
+from testtools import TestCase
+from testscenarios import TestWithScenarios
+

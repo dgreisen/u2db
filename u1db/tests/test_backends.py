@@ -29,10 +29,24 @@ from u1db.backends import (
 simple_doc = '{"key": "value"}'
 
 
-class DatabaseBaseTests(object):
+def create_memory_database(machine_id):
+    return inmemory.InMemoryDatabase(machine_id)
 
-    def create_database(self, machine_id):
-        raise NotImplementedError(self.create_database)
+
+def create_sqlite_database(machine_id):
+    db = sqlite_backend.SQLiteDatabase(':memory:')
+    db._set_machine_id(machine_id)
+    return db
+
+
+class DatabaseBaseTests(tests.TestWithScenarios):
+
+    create_database = None
+    scenarios = [
+        ('mem', {'create_database': create_memory_database}),
+        ('sqlite', {'create_database': create_sqlite_database}),
+        ]
+
 
     def close_database(self, database):
         """Close the database that was opened by create_database.
@@ -52,15 +66,13 @@ class DatabaseBaseTests(object):
 class InMemoryDatabaseMixin(object):
 
     def create_database(self, machine_id):
-        return inmemory.InMemoryDatabase(machine_id)
+        return create_memory_database(machine_id)
 
 
 class SQLiteDatabaseMixin(object):
 
     def create_database(self, machine_id):
-        db = sqlite_backend.SQLiteDatabase(':memory:')
-        db._set_machine_id(machine_id)
-        return db
+        return create_sqlite_database(machine_id)
 
 
 class DatabaseTests(DatabaseBaseTests):
@@ -231,14 +243,14 @@ class DatabaseTests(DatabaseBaseTests):
         self.assertEqual(([], [], 2), result)
 
 
-class TestInMemoryDatabase(InMemoryDatabaseMixin, DatabaseTests,
-                           tests.TestCase):
-    pass
-
-
-class TestSQLiteDatabase(SQLiteDatabaseMixin, DatabaseTests,
-                         tests.TestCase):
-    pass
+# class TestInMemoryDatabase(InMemoryDatabaseMixin, DatabaseTests,
+#                            tests.TestCase):
+#     pass
+# 
+# 
+# class TestSQLiteDatabase(SQLiteDatabaseMixin, DatabaseTests,
+#                          tests.TestCase):
+#     pass
 
 
 class DatabaseIndexTests(DatabaseBaseTests):
@@ -335,14 +347,14 @@ class DatabaseIndexTests(DatabaseBaseTests):
         self.assertEqual([], self.c.get_from_index('test-idx', [('value',)]))
 
 
-class TestInMemoryDatabaseIndexes(InMemoryDatabaseMixin, DatabaseIndexTests,
-                                  tests.TestCase):
-    pass
-
-
-class TestSQLiteDatabaseIndexes(SQLiteDatabaseMixin, DatabaseIndexTests,
-                                tests.TestCase):
-    pass
+# class TestInMemoryDatabaseIndexes(InMemoryDatabaseMixin, DatabaseIndexTests,
+#                                   tests.TestCase):
+#     pass
+# 
+# 
+# class TestSQLiteDatabaseIndexes(SQLiteDatabaseMixin, DatabaseIndexTests,
+#                                 tests.TestCase):
+#     pass
 
 
 class DatabaseSyncTests(DatabaseBaseTests):
@@ -652,12 +664,12 @@ class DatabaseSyncTests(DatabaseBaseTests):
                          self.c1.get_doc_conflicts(doc_id))
 
 
-class TestInMemoryDatabaseSync(InMemoryDatabaseMixin, DatabaseSyncTests,
-                               tests.TestCase):
-    pass
-
-
-class TestSQLiteDatabase(SQLiteDatabaseMixin, DatabaseSyncTests,
-                         tests.TestCase):
-    pass
+# class TestInMemoryDatabaseSync(InMemoryDatabaseMixin, DatabaseSyncTests,
+#                                tests.TestCase):
+#     pass
+# 
+# 
+# class TestSQLiteDatabase(SQLiteDatabaseMixin, DatabaseSyncTests,
+#                          tests.TestCase):
+#     pass
 
