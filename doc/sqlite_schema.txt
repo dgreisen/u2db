@@ -6,6 +6,10 @@ This is a discussion about how we can lay out the SQLite database to hold the
 documents that we store. There are a few alternatives, and we still need some
 benchmarking, etc, to decide among them.
 
+
+.. contents::
+
+
 Indexing
 ========
 
@@ -122,18 +126,7 @@ http://www.sqlite.org/optoverview.html
    the nice property that you don't have to change the data to add/remove an
    index.
    
-4) One downside is when only a subset of the fields are indexed, all fields
-   still end up expanded in the table. A possible balance is that you only put
-   fields in this table that exist in a U1DB index. It means that
-   'create_index' would have to walk over all the docs again, pulling out any
-   fields that weren't already in the table.
-
-   However if two indexes share a field, you don't have to add that content
-   twice. Eg, you have ``create_index('name', ['lastname', 'firstname'])`` and
-   ``create_index('last', ['lastname'])`` you can share all the 'lastname'
-   fields.
-
-5) It isn't 100% clear how we handle mapped fields in this structure. Something
+4) It isn't 100% clear how we handle mapped fields in this structure. Something
    like ``lower(lastname)``. It is possible that we could only support the set
    of mappings that we can do with SQL on the live data. However, that will
    mean we probably get O(N) performance rather than O(log N) from the indexes.
@@ -141,7 +134,7 @@ http://www.sqlite.org/optoverview.html
    mapping results in something that would match, versus a strict text
    matching.)
 
-6) We probably get decent results for prefix matches. However, SQLite doesn't
+5) We probably get decent results for prefix matches. However, SQLite doesn't
    seem to support turning "SELECT * FROM table WHERE value LIKE 'p%'" into an
    index query. Even though value is in a btree, it doesn't use it. However,
    you could use >= and < to get a range query. Something like::
@@ -155,8 +148,35 @@ http://www.sqlite.org/optoverview.html
    change it with ``PRAGMA case_sensitive_like=ON``, then the "LIKE 'p%'"
    version of the query does get turned into an index query.
 
-7) ``ORDER BY`` seems unclear for these queries, but it isn't well defined by
+6) ``ORDER BY`` seems unclear for these queries, but it isn't well defined by
    the API spec, either.
+
+
+Partial Expanded Fields
+-----------------------
+
+Similar to `Expanded Fields`_ except instead of expanding every field into
+``document_fields``, you only expand fields that are mentioned in an index.
+
+CREATE_INDEX then needs to make sure that all fields mentioned in the index are
+put into the document_fields table for all entries. However, you don't have to
+store eg ``lastname`` values two times if you have two indexes that include
+them.
+
+Discussion
+~~~~~~~~~~
+
+
+Only Expanded Fields
+--------------------
+
+Similar to `Expanded Fields`_, except you no longer store the `doc` column in
+the original ``document`` table. This avoids storing data redundantly, with the
+expense that to get a single document you have to piece it together from lots
+of separate rows.
+
+Discussion
+~~~~~~~~~~
 
 
 Table per index
@@ -203,8 +223,6 @@ Discussion
 
 4) Data isn't shared between indexes. I imagine on-disk size will probably be
    bigger.
-
-5) 
 
 
 Document Tables
