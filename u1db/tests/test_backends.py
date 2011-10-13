@@ -14,7 +14,6 @@
 
 """The Client class for U1DB."""
 
-
 import u1db
 from u1db import (
     tests,
@@ -29,10 +28,27 @@ from u1db.backends import (
 simple_doc = '{"key": "value"}'
 
 
+def create_memory_database(machine_id):
+    return inmemory.InMemoryDatabase(machine_id)
+
+
+def create_sqlite_expanded(machine_id):
+    db = sqlite_backend.SQLiteExpandedDatabase(':memory:')
+    db._set_machine_id(machine_id)
+    return db
+
+
 class DatabaseBaseTests(tests.TestCase):
 
-    def create_database(self, machine_id):
-        raise NotImplementedError(self.create_database)
+    create_database = None
+    scenarios = [
+        ('mem', {'create_database': create_memory_database}),
+        ('sqlite', {'create_database': create_sqlite_expanded}),
+        ]
+
+
+    def shortDescription(self):
+        return self.id()
 
     def close_database(self, database):
         """Close the database that was opened by create_database.
@@ -49,35 +65,7 @@ class DatabaseBaseTests(tests.TestCase):
         super(DatabaseBaseTests, self).tearDown()
 
 
-class InMemoryDatabaseMixin(object):
-
-    def create_database(self, machine_id):
-        return create_in_memory(machine_id)
-
-
-def create_in_memory(machine_id):
-    return inmemory.InMemoryDatabase(machine_id)
-
-
-def create_sqlite_expanded(machine_id):
-    db = sqlite_backend.SQLiteExpandedDatabase(':memory:')
-    db._set_machine_id(machine_id)
-    return db
-
-
-class SQLiteExpandedDatabaseMixin(object):
-
-    def create_database(self, machine_id):
-        return create_sqlite_expanded(machine_id)
-
-
 class DatabaseTests(DatabaseBaseTests):
-
-    create_database = None
-    scenarios = [
-        ('inmemory', {'create_database': create_in_memory}),
-        ('sql_expanded', {'create_database': create_sqlite_expanded}),
-        ]
 
     def test_create_doc_allocating_doc_id(self):
         doc_id, new_rev = self.c.create_doc(simple_doc)
@@ -245,16 +233,6 @@ class DatabaseTests(DatabaseBaseTests):
         self.assertEqual(([], [], 2), result)
 
 
-# class TestInMemoryDatabase(InMemoryDatabaseMixin, DatabaseTests,
-#                            tests.TestCase):
-#     pass
-# 
-# 
-# class TestSQLiteExpandedDatabase(SQLiteExpandedDatabaseMixin, DatabaseTests,
-#                                  tests.TestCase):
-#     pass
-
-
 class DatabaseIndexTests(DatabaseBaseTests):
 
     def test_create_index(self):
@@ -347,16 +325,6 @@ class DatabaseIndexTests(DatabaseBaseTests):
         self.assertEqual([(doc_id, other_rev, new_doc)],
                          self.c.get_from_index('test-idx', [('altval',)]))
         self.assertEqual([], self.c.get_from_index('test-idx', [('value',)]))
-
-
-class TestInMemoryDatabaseIndexes(InMemoryDatabaseMixin, DatabaseIndexTests,
-                                  tests.TestCase):
-    pass
-
-
-class TestSQLiteExpandedDatabaseIndexes(SQLiteExpandedDatabaseMixin,
-    DatabaseIndexTests, tests.TestCase):
-    pass
 
 
 class DatabaseSyncTests(DatabaseBaseTests):
@@ -666,17 +634,5 @@ class DatabaseSyncTests(DatabaseBaseTests):
                          self.c1.get_doc_conflicts(doc_id))
 
 
-class TestInMemoryDatabaseSync(InMemoryDatabaseMixin, DatabaseSyncTests,
-                               tests.TestCase):
-    pass
-
-
-class TestSQLiteExpandedDatabase(SQLiteExpandedDatabaseMixin,
-                                 DatabaseSyncTests, tests.TestCase):
-    pass
-
-
-def load_tests(loader, standard_tests, pattern):
-    print 'load_tests called'
-    import unittest
-    return unittest.TestSuite()
+# Use a custom loader to apply the scenarios at load time.
+load_tests = tests.load_with_scenarios

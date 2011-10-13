@@ -2,4 +2,4 @@
 .PHONY: check
 
 check:
-	nosetests u1db
+	python -m testtools.run discover

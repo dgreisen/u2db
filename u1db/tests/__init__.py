@@ -15,5 +15,20 @@
 """Test infrastructure for U1DB Client"""
 
 
-from unittest import TestCase
-from testscenarios import TestWithScenarios
+import testscenarios
+import testtools
+
+
+TestCase = testtools.TestCase
+
+
+def load_with_scenarios(loader, standard_tests, pattern):
+    """Load the tests in a given module.
+
+    This just applies testscenarios.generate_scenarios to all the tests that
+    are present. We do it at load time rather than at run time, because it
+    plays nicer with various tools.
+    """
+    suite = loader.suiteClass()
+    suite.addTests(testscenarios.generate_scenarios(standard_tests))
+    return suite
