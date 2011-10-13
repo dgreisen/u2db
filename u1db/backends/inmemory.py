@@ -14,7 +14,6 @@
 
 """The in-memory Database class for U1DB."""
 
-import re
 import simplejson
 
 import u1db

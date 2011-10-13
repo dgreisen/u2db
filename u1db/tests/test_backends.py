@@ -32,8 +32,20 @@ def create_memory_database(machine_id):
     return inmemory.InMemoryDatabase(machine_id)
 
 
-def create_sqlite_database(machine_id):
-    db = sqlite_backend.SQLiteDatabase(':memory:')
+def create_sqlite_expanded(machine_id):
+    db = sqlite_backend.SQLiteExpandedDatabase(':memory:')
+    db._set_machine_id(machine_id)
+    return db
+
+
+def create_sqlite_partial_expanded(machine_id):
+    db = sqlite_backend.SQLitePartialExpandDatabase(':memory:')
+    db._set_machine_id(machine_id)
+    return db
+
+
+def create_sqlite_only_expanded(machine_id):
+    db = sqlite_backend.SQLiteOnlyExpandedDatabase(':memory:')
     db._set_machine_id(machine_id)
     return db
 
@@ -43,7 +55,9 @@ class DatabaseBaseTests(tests.TestCase):
     create_database = None
     scenarios = [
         ('mem', {'create_database': create_memory_database}),
-        ('sqlite', {'create_database': create_sqlite_database}),
+        ('sql_expand', {'create_database': create_sqlite_expanded}),
+        ('sql_partexpand', {'create_database': create_sqlite_partial_expanded}),
+        ('sql_onlyexpand', {'create_database': create_sqlite_only_expanded}),
         ]
 
     def close_database(self, database):

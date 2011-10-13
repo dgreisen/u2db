@@ -19,6 +19,7 @@ from sqlite3 import dbapi2
 
 import u1db
 from u1db.backends import CommonBackend
+from u1db import compat
 
 
 class SQLiteDatabase(CommonBackend):
@@ -88,6 +89,10 @@ class SQLiteDatabase(CommonBackend):
                       " PRIMARY KEY (name, offset))")
             c.execute("CREATE TABLE u1db_config (name TEXT, value TEXT)")
             c.execute("INSERT INTO u1db_config VALUES ('sql_schema', '0')")
+            self._extra_schema_init(c)
+
+    def _extra_schema_init(self, c):
+        """Add any extra fields, etc to the basic table definitions."""
 
     def _set_machine_id(self, machine_id):
         """Force the machine_id to be set."""
@@ -161,14 +166,8 @@ class SQLiteDatabase(CommonBackend):
         with self._db_handle:
             if self._has_conflicts(doc_id):
                 raise u1db.ConflictedDoc()
-            c = self._db_handle.cursor()
-            c.execute("SELECT doc_rev, doc FROM document WHERE doc_id=?",
-                      (doc_id,))
-            val = c.fetchone()
-            if val is None:
-                old_rev = old_doc = None
-            else:
-                old_rev, old_doc = val
+            old_rev, old_doc = self._get_doc(doc_id)
+            if old_rev is not None:
                 if old_rev != old_doc_rev:
                     raise u1db.InvalidDocRev()
             new_rev = self._allocate_doc_rev(old_doc_rev)
@@ -176,30 +175,12 @@ class SQLiteDatabase(CommonBackend):
         return new_rev
 
     def _put_and_update_indexes(self, doc_id, old_doc, new_rev, doc):
-        c = self._db_handle.cursor()
-        # for index in self._indexes.itervalues():
-        #     if old_doc is not None:
-        #         index.remove_json(doc_id, old_doc)
-        #     if doc not in (None, 'null'):
-        #         index.add_json(doc_id, doc)
-        if doc:
-            raw_doc = simplejson.loads(doc)
-        else:
-            raw_doc = {}
-        if old_doc:
-            c.execute("UPDATE document SET doc_rev=?, doc=? WHERE doc_id = ?",
-                      (new_rev, doc, doc_id))
-            c.execute("DELETE FROM document_fields WHERE doc_id = ?",
-                      (doc_id,))
-        else:
-            c.execute("INSERT INTO document VALUES (?, ?, ?)",
-                      (doc_id, new_rev, doc))
-        values = [(doc_id, field_name, value) for field_name, value in
-                  raw_doc.iteritems()]
-        c.executemany("INSERT INTO document_fields VALUES (?, ?, ?)",
-                      values)
-        c.execute("INSERT INTO transaction_log(doc_id) VALUES (?)",
-                  (doc_id,))
+        """Actually insert a document into the database.
+
+        This both updates the existing documents content, and any indexes that
+        refer to this document.
+        """
+        raise NotImplementedError(self._put_and_update_indexes)
 
     def whats_changed(self, old_db_rev=0):
         c = self._db_handle.cursor()
@@ -216,13 +197,9 @@ class SQLiteDatabase(CommonBackend):
 
     def delete_doc(self, doc_id, doc_rev):
         with self._db_handle:
-            c = self._db_handle.cursor()
-            c.execute("SELECT doc_rev, doc FROM document WHERE doc_id = ?",
-                      (doc_id,))
-            val = c.fetchone()
-            if val is None:
+            old_doc_rev, old_doc = self._get_doc(doc_id)
+            if old_doc_rev is None:
                 raise KeyError
-            old_doc_rev, old_doc = val
             if old_doc_rev != doc_rev:
                 raise u1db.InvalidDocRev()
             if old_doc is None:
@@ -366,3 +343,172 @@ class SQLiteDatabase(CommonBackend):
             c = self._db_handle.cursor()
             c.execute("DELETE FROM index_definitions WHERE name = ?",
                       (index_name,))
+
+
+class SQLiteExpandedDatabase(SQLiteDatabase):
+    """An SQLite Backend that expands documents into a document_field table.
+
+    It stores the raw document text in document.doc, but also puts the
+    individual fields into document_fields.
+    """
+
+    def _put_and_update_indexes(self, doc_id, old_doc, new_rev, doc):
+        c = self._db_handle.cursor()
+        if doc:
+            raw_doc = simplejson.loads(doc)
+        else:
+            raw_doc = {}
+        if old_doc:
+            c.execute("UPDATE document SET doc_rev=?, doc=? WHERE doc_id = ?",
+                      (new_rev, doc, doc_id))
+            c.execute("DELETE FROM document_fields WHERE doc_id = ?",
+                      (doc_id,))
+        else:
+            c.execute("INSERT INTO document VALUES (?, ?, ?)",
+                      (doc_id, new_rev, doc))
+        values = [(doc_id, field_name, value) for field_name, value in
+                  raw_doc.iteritems()]
+        c.executemany("INSERT INTO document_fields VALUES (?, ?, ?)",
+                      values)
+        c.execute("INSERT INTO transaction_log(doc_id) VALUES (?)",
+                  (doc_id,))
+
+
+class SQLitePartialExpandDatabase(SQLiteDatabase):
+    """Similar to SQLiteExpandedDatabase, but only indexed fields are expanded.
+    """
+
+    def _get_indexed_fields(self):
+        """Determine what fields are indexed."""
+        c = self._db_handle.cursor()
+        c.execute("SELECT field FROM index_definitions")
+        return set([x[0] for x in c.fetchall()])
+
+    def _put_and_update_indexes(self, doc_id, old_doc, new_rev, doc):
+        c = self._db_handle.cursor()
+        if doc:
+            raw_doc = simplejson.loads(doc)
+        else:
+            raw_doc = {}
+        if old_doc:
+            c.execute("UPDATE document SET doc_rev=?, doc=? WHERE doc_id = ?",
+                      (new_rev, doc, doc_id))
+            c.execute("DELETE FROM document_fields WHERE doc_id = ?",
+                      (doc_id,))
+        else:
+            c.execute("INSERT INTO document VALUES (?, ?, ?)",
+                      (doc_id, new_rev, doc))
+        indexed_fields = self._get_indexed_fields()
+        if indexed_fields:
+            # It is expected that len(indexed_fields) is shorter than
+            # len(raw_doc)
+            values = [(doc_id, field_name, raw_doc[field_name])
+                      for field_name in indexed_fields
+                      if field_name in raw_doc]
+            c.executemany("INSERT INTO document_fields VALUES (?, ?, ?)",
+                          values)
+        c.execute("INSERT INTO transaction_log(doc_id) VALUES (?)",
+                  (doc_id,))
+
+    def create_index(self, index_name, index_expression):
+        with self._db_handle:
+            c = self._db_handle.cursor()
+            cur_fields = self._get_indexed_fields()
+            definition = [(index_name, idx, field)
+                          for idx, field in enumerate(index_expression)]
+            c.executemany("INSERT INTO index_definitions VALUES (?, ?, ?)",
+                          definition)
+            new_fields = set([f for f in index_expression
+                              if f not in cur_fields])
+            if new_fields:
+                self._update_indexes(new_fields)
+
+    def _iter_all_docs(self):
+        c = self._db_handle.cursor()
+        c.execute("SELECT doc_id, doc FROM document")
+        while True:
+            next_rows = c.fetchmany()
+            if not next_rows:
+                break
+            for row in next_rows:
+                yield row
+
+    def _update_indexes(self, new_fields):
+        for doc_id, doc in self._iter_all_docs():
+            raw_doc = simplejson.loads(doc)
+            values = [(doc_id, field_name, raw_doc[field_name])
+                      for field_name in new_fields
+                      if field_name in raw_doc]
+            c = self._db_handle.cursor()
+            c.executemany("INSERT INTO document_fields VALUES (?, ?, ?)",
+                          values)
+
+
+class SQLiteOnlyExpandedDatabase(SQLiteDatabase):
+    """Documents are only stored by their fields.
+
+    Rather than storing the raw content as text, we split it into fields and
+    store it in an indexable table.
+    """
+
+    def _extra_schema_init(self, c):
+        c.execute("ALTER TABLE document_fields ADD COLUMN offset INT")
+
+    def _put_and_update_indexes(self, doc_id, old_doc, new_rev, doc):
+        c = self._db_handle.cursor()
+        if doc:
+            raw_doc = simplejson.loads(doc,
+                object_pairs_hook=compat.OrderedDict)
+            doc_content = None
+        else:
+            raw_doc = {}
+            doc_content = '<deleted>'
+        if old_doc:
+            c.execute("UPDATE document SET doc_rev=?, doc=?"
+                      " WHERE doc_id = ?", (new_rev, doc_content, doc_id))
+            c.execute("DELETE FROM document_fields WHERE doc_id = ?",
+                      (doc_id,))
+        else:
+            c.execute("INSERT INTO document VALUES (?, ?, ?)",
+                      (doc_id, new_rev, doc_content))
+        values = [(doc_id, field_name, value, idx)
+                  for idx, (field_name, value)
+                  in enumerate(raw_doc.iteritems())]
+        c.executemany("INSERT INTO document_fields VALUES (?, ?, ?, ?)",
+                      values)
+        c.execute("INSERT INTO transaction_log(doc_id) VALUES (?)",
+                  (doc_id,))
+
+    def _get_doc(self, doc_id):
+        """Get just the document content, without fancy handling."""
+        c = self._db_handle.cursor()
+        c.execute("SELECT doc_rev, doc FROM document WHERE doc_id = ?",
+                  (doc_id,))
+        val = c.fetchone()
+        if val is None:
+            return None, None
+        # TODO: There is a race condition here, where we select the document
+        #       revision info before we select the actual content fields.
+        #       We probably need a transaction (readonly) to ensure
+        #       consistency.
+        doc_rev, doc_content = val
+        if doc_content == '<deleted>':
+            return doc_rev, None
+        c.execute("SELECT field_name, value FROM document_fields"
+                  " WHERE doc_id = ? ORDER BY offset", (doc_id,))
+        # TODO: What about nested docs?
+        raw_doc = compat.OrderedDict()
+        for field, value in c.fetchall():
+            raw_doc[field] = value
+        doc = simplejson.dumps(raw_doc)
+        return doc_rev, doc
+
+    def get_from_index(self, index_name, key_values):
+        # The base implementation does all the complex index joining. But it
+        # doesn't manage to extract the actual document content correctly.
+        # To do that, we add a loop around self._get_doc
+        base = super(SQLiteOnlyExpandedDatabase, self).get_from_index(
+            index_name, key_values)
+        result = [(doc_id, doc_rev, self._get_doc(doc_id)[1])
+                  for doc_id, doc_rev, _ in base]
+        return result
