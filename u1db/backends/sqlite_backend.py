@@ -19,6 +19,7 @@ from sqlite3 import dbapi2
 
 import u1db
 from u1db.backends import CommonBackend
+from u1db import compat
 
 
 class SQLiteDatabase(CommonBackend):
@@ -88,6 +89,10 @@ class SQLiteDatabase(CommonBackend):
                       " PRIMARY KEY (name, offset))")
             c.execute("CREATE TABLE u1db_config (name TEXT, value TEXT)")
             c.execute("INSERT INTO u1db_config VALUES ('sql_schema', '0')")
+            self._extra_schema_init(c)
+
+    def _extra_schema_init(self, c):
+        """Add any extra fields, etc to the basic table definitions."""
 
     def _set_machine_id(self, machine_id):
         """Force the machine_id to be set."""
@@ -446,10 +451,14 @@ class SQLiteOnlyExpandedDatabase(SQLiteDatabase):
     store it in an indexable table.
     """
 
+    def _extra_schema_init(self, c):
+        c.execute("ALTER TABLE document_fields ADD COLUMN offset INT")
+
     def _put_and_update_indexes(self, doc_id, old_doc, new_rev, doc):
         c = self._db_handle.cursor()
         if doc:
-            raw_doc = simplejson.loads(doc)
+            raw_doc = simplejson.loads(doc,
+                object_pairs_hook=compat.OrderedDict)
             doc_content = None
         else:
             raw_doc = {}
@@ -462,9 +471,10 @@ class SQLiteOnlyExpandedDatabase(SQLiteDatabase):
         else:
             c.execute("INSERT INTO document VALUES (?, ?, ?)",
                       (doc_id, new_rev, doc_content))
-        values = [(doc_id, field_name, value) for field_name, value in
-                  raw_doc.iteritems()]
-        c.executemany("INSERT INTO document_fields VALUES (?, ?, ?)",
+        values = [(doc_id, field_name, value, idx)
+                  for idx, (field_name, value)
+                  in enumerate(raw_doc.iteritems())]
+        c.executemany("INSERT INTO document_fields VALUES (?, ?, ?, ?)",
                       values)
         c.execute("INSERT INTO transaction_log(doc_id) VALUES (?)",
                   (doc_id,))
@@ -485,9 +495,9 @@ class SQLiteOnlyExpandedDatabase(SQLiteDatabase):
         if doc_content == '<deleted>':
             return doc_rev, None
         c.execute("SELECT field_name, value FROM document_fields"
-                  " WHERE doc_id = ?", (doc_id,))
+                  " WHERE doc_id = ? ORDER BY offset", (doc_id,))
         # TODO: What about nested docs?
-        raw_doc = {}
+        raw_doc = compat.OrderedDict()
         for field, value in c.fetchall():
             raw_doc[field] = value
         doc = simplejson.dumps(raw_doc)

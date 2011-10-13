@@ -199,10 +199,8 @@ class TestSQLiteOnlyExpandedDatabase(tests.TestCase):
     def test_get_doc_reassembles_content(self):
         doc1_id, doc1_rev = self.db.create_doc(
             '{"key1": "val1", "key2": "val2"}')
-        rev, content, is_conflicted = self.db.get_doc(doc1_id)
-        self.assertEqual((doc1_rev, False), (rev, is_conflicted))
-        self.assertEqual({'key1': 'val1', 'key2': 'val2'},
-                         simplejson.loads(content))
+        self.assertEqual((doc1_rev, '{"key1": "val1", "key2": "val2"}', False),
+                         self.db.get_doc(doc1_id))
 
     def test_distinguish_deleted_from_empty_doc(self):
         doc1_id, doc1_rev = self.db.create_doc('{}')
