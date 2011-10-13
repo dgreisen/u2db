@@ -15,6 +15,7 @@
 """Test sqlite backend internals."""
 
 from sqlite3 import dbapi2
+import simplejson
 
 from u1db import (
     tests,
@@ -30,6 +31,7 @@ class TestSQLiteExpandedDatabase(tests.TestCase):
     def setUp(self):
         super(TestSQLiteExpandedDatabase, self).setUp()
         self.db = sqlite_backend.SQLiteExpandedDatabase(':memory:')
+        self.db._set_machine_id('test')
 
     def test_create_database(self):
         raw_db = self.db._get_sqlite_handle()
@@ -46,7 +48,7 @@ class TestSQLiteExpandedDatabase(tests.TestCase):
         c = raw_db.cursor()
         c.execute("SELECT * FROM u1db_config")
         config = dict([(r[0], r[1]) for r in c.fetchall()])
-        self.assertEqual({'sql_schema': '0'}, config)
+        self.assertEqual({'sql_schema': '0', 'machine_id': 'test'}, config)
 
         # These tables must exist, though we don't care what is in them yet
         c.execute("SELECT * FROM transaction_log")
@@ -57,6 +59,8 @@ class TestSQLiteExpandedDatabase(tests.TestCase):
         c.execute("SELECT * FROM index_definitions")
 
     def test__set_machine_id(self):
+        # Start from scratch, so that machine_id isn't set.
+        self.db = sqlite_backend.SQLiteExpandedDatabase(':memory:')
         self.assertEqual(None, self.db._real_machine_id)
         self.assertEqual(None, self.db._machine_id)
         self.db._set_machine_id('foo')
@@ -136,6 +140,7 @@ class TestSQLitePartialExpandDatabase(tests.TestCase):
     def setUp(self):
         super(TestSQLitePartialExpandDatabase, self).setUp()
         self.db = sqlite_backend.SQLitePartialExpandDatabase(':memory:')
+        self.db._set_machine_id('test')
 
     def test_no_indexes_no_document_fields(self):
         doc1_id, doc1_rev = self.db.create_doc(
@@ -170,3 +175,37 @@ class TestSQLitePartialExpandDatabase(tests.TestCase):
         c.execute("SELECT doc_id, field_name, value FROM document_fields"
                   " ORDER BY doc_id, field_name, value")
         self.assertEqual([(doc1_id, 'key1', 'val1')], c.fetchall())
+
+
+class TestSQLiteOnlyExpandedDatabase(tests.TestCase):
+
+    def setUp(self):
+        super(TestSQLiteOnlyExpandedDatabase, self).setUp()
+        self.db = sqlite_backend.SQLiteOnlyExpandedDatabase(':memory:')
+        self.db._set_machine_id('test')
+
+    def test_no_document_content(self):
+        doc1_id, doc1_rev = self.db.create_doc(
+            '{"key1": "val1", "key2": "val2"}')
+        c = self.db._get_sqlite_handle().cursor()
+        c.execute("SELECT doc_id, doc FROM document ORDER BY doc_id")
+        self.assertEqual([(doc1_id, None)], c.fetchall())
+        c.execute("SELECT doc_id, field_name, value FROM document_fields"
+                  " ORDER BY doc_id, field_name")
+        self.assertEqual([(doc1_id, 'key1', 'val1'),
+                          (doc1_id, 'key2', 'val2'),
+                         ], c.fetchall())
+
+    def test_get_doc_reassembles_content(self):
+        doc1_id, doc1_rev = self.db.create_doc(
+            '{"key1": "val1", "key2": "val2"}')
+        rev, content, is_conflicted = self.db.get_doc(doc1_id)
+        self.assertEqual((doc1_rev, False), (rev, is_conflicted))
+        self.assertEqual({'key1': 'val1', 'key2': 'val2'},
+                         simplejson.loads(content))
+
+    def test_distinguish_deleted_from_empty_doc(self):
+        doc1_id, doc1_rev = self.db.create_doc('{}')
+        self.assertEqual((doc1_rev, '{}', False), self.db.get_doc(doc1_id))
+        doc1_rev2 = self.db.delete_doc(doc1_id, doc1_rev)
+        self.assertEqual((doc1_rev2, None, False), self.db.get_doc(doc1_id))
