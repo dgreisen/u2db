@@ -46,10 +46,6 @@ class DatabaseBaseTests(tests.TestCase):
         ('sqlite', {'create_database': create_sqlite_database}),
         ]
 
-
-    def shortDescription(self):
-        return self.id()
-
     def close_database(self, database):
         """Close the database that was opened by create_database.
 
