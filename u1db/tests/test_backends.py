@@ -38,12 +38,19 @@ def create_sqlite_expanded(machine_id):
     return db
 
 
+def create_sqlite_partial_expanded(machine_id):
+    db = sqlite_backend.SQLitePartialExpandDatabase(':memory:')
+    db._set_machine_id(machine_id)
+    return db
+
+
 class DatabaseBaseTests(tests.TestCase):
 
     create_database = None
     scenarios = [
         ('mem', {'create_database': create_memory_database}),
-        ('sqlite', {'create_database': create_sqlite_expanded}),
+        ('sql_expand', {'create_database': create_sqlite_expanded}),
+        ('sql_partexpand', {'create_database': create_sqlite_partial_expanded}),
         ]
 
 

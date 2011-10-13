@@ -382,3 +382,68 @@ class SQLiteExpandedDatabase(SQLiteDatabase):
 class SQLitePartialExpandDatabase(SQLiteDatabase):
     """Similar to SQLiteExpandedDatabase, but only indexed fields are expanded.
     """
+
+    def _get_indexed_fields(self):
+        """Determine what fields are indexed."""
+        c = self._db_handle.cursor()
+        c.execute("SELECT field FROM index_definitions")
+        return set([x[0] for x in c.fetchall()])
+
+    def _put_and_update_indexes(self, doc_id, old_doc, new_rev, doc):
+        c = self._db_handle.cursor()
+        if doc:
+            raw_doc = simplejson.loads(doc)
+        else:
+            raw_doc = {}
+        if old_doc:
+            c.execute("UPDATE document SET doc_rev=?, doc=? WHERE doc_id = ?",
+                      (new_rev, doc, doc_id))
+            c.execute("DELETE FROM document_fields WHERE doc_id = ?",
+                      (doc_id,))
+        else:
+            c.execute("INSERT INTO document VALUES (?, ?, ?)",
+                      (doc_id, new_rev, doc))
+        indexed_fields = self._get_indexed_fields()
+        if indexed_fields:
+            # It is expected that len(indexed_fields) is shorter than
+            # len(raw_doc)
+            values = [(doc_id, field_name, raw_doc[field_name])
+                      for field_name in indexed_fields
+                      if field_name in raw_doc]
+            c.executemany("INSERT INTO document_fields VALUES (?, ?, ?)",
+                          values)
+        c.execute("INSERT INTO transaction_log(doc_id) VALUES (?)",
+                  (doc_id,))
+
+    def create_index(self, index_name, index_expression):
+        with self._db_handle:
+            c = self._db_handle.cursor()
+            cur_fields = self._get_indexed_fields()
+            definition = [(index_name, idx, field)
+                          for idx, field in enumerate(index_expression)]
+            c.executemany("INSERT INTO index_definitions VALUES (?, ?, ?)",
+                          definition)
+            new_fields = set([f for f in index_expression
+                              if f not in cur_fields])
+            if new_fields:
+                self._update_indexes(new_fields)
+
+    def _iter_all_docs(self):
+        c = self._db_handle.cursor()
+        c.execute("SELECT doc_id, doc FROM document")
+        while True:
+            next_rows = c.fetchmany()
+            if not next_rows:
+                break
+            for row in next_rows:
+                yield row
+
+    def _update_indexes(self, new_fields):
+        for doc_id, doc in self._iter_all_docs():
+            raw_doc = simplejson.loads(doc)
+            values = [(doc_id, field_name, raw_doc[field_name])
+                      for field_name in new_fields
+                      if field_name in raw_doc]
+            c = self._db_handle.cursor()
+            c.executemany("INSERT INTO document_fields VALUES (?, ?, ?)",
+                          values)
