@@ -657,7 +657,7 @@ class TestInMemoryDatabaseSync(InMemoryDatabaseMixin, DatabaseSyncTests,
     pass
 
 
-class TestSQLiteDatabase(SQLiteDatabaseMixin, DatabaseSyncTests,
-                         tests.TestCase):
+class TestSQLiteDatabaseSync(SQLiteDatabaseMixin, DatabaseSyncTests,
+                             tests.TestCase):
     pass
 
