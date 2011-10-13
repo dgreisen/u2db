@@ -14,7 +14,6 @@
 
 """The Client class for U1DB."""
 
-
 import u1db
 from u1db import (
     tests,
@@ -29,10 +28,27 @@ from u1db.backends import (
 simple_doc = '{"key": "value"}'
 
 
-class DatabaseBaseTests(object):
+def create_memory_database(machine_id):
+    return inmemory.InMemoryDatabase(machine_id)
 
-    def create_database(self, machine_id):
-        raise NotImplementedError(self.create_database)
+
+def create_sqlite_database(machine_id):
+    db = sqlite_backend.SQLiteDatabase(':memory:')
+    db._set_machine_id(machine_id)
+    return db
+
+
+class DatabaseBaseTests(tests.TestCase):
+
+    create_database = None
+    scenarios = [
+        ('mem', {'create_database': create_memory_database}),
+        ('sqlite', {'create_database': create_sqlite_database}),
+        ]
+
+
+    def shortDescription(self):
+        return self.id()
 
     def close_database(self, database):
         """Close the database that was opened by create_database.
@@ -47,20 +63,6 @@ class DatabaseBaseTests(object):
     def tearDown(self):
         self.close_database(self.c)
         super(DatabaseBaseTests, self).tearDown()
-
-
-class InMemoryDatabaseMixin(object):
-
-    def create_database(self, machine_id):
-        return inmemory.InMemoryDatabase(machine_id)
-
-
-class SQLiteDatabaseMixin(object):
-
-    def create_database(self, machine_id):
-        db = sqlite_backend.SQLiteDatabase(':memory:')
-        db._set_machine_id(machine_id)
-        return db
 
 
 class DatabaseTests(DatabaseBaseTests):
@@ -231,16 +233,6 @@ class DatabaseTests(DatabaseBaseTests):
         self.assertEqual(([], [], 2), result)
 
 
-class TestInMemoryDatabase(InMemoryDatabaseMixin, DatabaseTests,
-                           tests.TestCase):
-    pass
-
-
-class TestSQLiteDatabase(SQLiteDatabaseMixin, DatabaseTests,
-                         tests.TestCase):
-    pass
-
-
 class DatabaseIndexTests(DatabaseBaseTests):
 
     def test_create_index(self):
@@ -333,16 +325,6 @@ class DatabaseIndexTests(DatabaseBaseTests):
         self.assertEqual([(doc_id, other_rev, new_doc)],
                          self.c.get_from_index('test-idx', [('altval',)]))
         self.assertEqual([], self.c.get_from_index('test-idx', [('value',)]))
-
-
-class TestInMemoryDatabaseIndexes(InMemoryDatabaseMixin, DatabaseIndexTests,
-                                  tests.TestCase):
-    pass
-
-
-class TestSQLiteDatabaseIndexes(SQLiteDatabaseMixin, DatabaseIndexTests,
-                                tests.TestCase):
-    pass
 
 
 class DatabaseSyncTests(DatabaseBaseTests):
@@ -652,12 +634,5 @@ class DatabaseSyncTests(DatabaseBaseTests):
                          self.c1.get_doc_conflicts(doc_id))
 
 
-class TestInMemoryDatabaseSync(InMemoryDatabaseMixin, DatabaseSyncTests,
-                               tests.TestCase):
-    pass
-
-
-class TestSQLiteDatabaseSync(SQLiteDatabaseMixin, DatabaseSyncTests,
-                             tests.TestCase):
-    pass
-
+# Use a custom loader to apply the scenarios at load time.
+load_tests = tests.load_with_scenarios
