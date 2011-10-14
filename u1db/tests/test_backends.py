@@ -26,6 +26,7 @@ from u1db.backends import (
 
 
 simple_doc = '{"key": "value"}'
+nested_doc = '{"key": "value", "sub": {"doc": "underneath"}}'
 
 
 def create_memory_database(machine_id):
@@ -165,6 +166,10 @@ class DatabaseTests(DatabaseBaseTests):
         self.c.put_doc(doc_id, doc_rev, '{"new": "contents"}')
         self.assertEqual((2, set([doc_id])), self.c.whats_changed())
         self.assertEqual((2, set()), self.c.whats_changed(2))
+
+    def test_handles_nested_content(self):
+        doc_id, new_rev = self.c.create_doc(nested_doc)
+        self.assertEqual((new_rev, nested_doc, False), self.c.get_doc(doc_id))
 
     def test__get_sync_info(self):
         self.assertEqual(('test', 0, 0), self.c._get_sync_info('other'))

@@ -207,3 +207,12 @@ class TestSQLiteOnlyExpandedDatabase(tests.TestCase):
         self.assertEqual((doc1_rev, '{}', False), self.db.get_doc(doc1_id))
         doc1_rev2 = self.db.delete_doc(doc1_id, doc1_rev)
         self.assertEqual((doc1_rev2, None, False), self.db.get_doc(doc1_id))
+
+    def test_deeply_nested(self):
+        doc1_id, doc1_rev = self.db.create_doc(
+            '{"a": {"b": {"c": {"d": "x"}}}}')
+        c = self.db._get_sqlite_handle().cursor()
+        c.execute("SELECT doc_id, field_name, value FROM document_fields"
+                  " ORDER BY doc_id, field_name")
+        self.assertEqual([(doc1_id, 'a.b.c.d', 'x'),
+                         ], c.fetchall())
