@@ -286,3 +286,101 @@ Discussion
 
 4) It is easier to write the multi-entry request form.
 
+
+Benchmarks
+----------
+
+
+`Expanded Fields`_, `Partial Expanded Fields`_, and `Only Expanded Fields`_
+were all implemented, and then benchmarked relative to the pure in-memory
+database (using python dicts, etc). A database of 50k records containing
+various music metadata was used as the data source. In JSON form, this amounts
+to approximately 33MB of records.
+
+
+Import Time
+~~~~~~~~~~~
+
+The first step is how long it takes to import all of the records into the
+database.
+
+    ========= ===========   ============    =====
+    method    import time   import rec/s    size
+    ========= ===========   ============    =====
+    mem       0.941s        70,536          ?
+    expand    3m21s         248.6           137MB
+    *partial* *2m16s*       *365.7*         *52MB*
+    only-exp  3m10s         262.8           91MB
+    ========= ===========   ============    =====
+
+Basically, `Only Expanded Fields`_ suffers a bit from bloat. Probably caused by
+indexing the values. `Expanded Fields`_ then duplicates the data on top of the
+indexed fields.
+
+
+Create Index Time
+~~~~~~~~~~~~~~~~~
+
+The time to create a new index on this data is also fairly important. it isn't
+expected that lots and lots of indexes will be created, but it is expected that
+it will be done occasionally.
+
+    ========= ===========   ============    =====
+    method    import time   final size      delta
+    ========= ===========   ============    =====
+    mem       1.132s
+    expand    0.010s        137MB           0MB
+    partial   3.046s        55MB            3MB
+    only-exp  0.008s        91MB            0MB
+    ========= ===========   ============    =====
+
+In the case of the Expanded and OnlyExpanded, creating an index is pretty much
+just inserting the definition of the index, since each field is already
+indexed.
+
+The pure-memory version has to decode all the documents (roughly 800ms), and
+then build up the value representation. The `Partial Expanded Fields`_ has to
+extract all of the content back out of the database, and do the same work,
+inserting the new fields back into the database.
+
+Note that the implementation for `Partial Expanded Fields`_ is smart enough
+that it doesn't index fields that are already indexed, so if you were to do
+something like::
+
+    create_index('name', ('lastname', 'firstname')) takes 3s
+    create_index('lastname', ('lastname',))         takes 0s
+    create_index('firstname', ('firstname',))       takes 0s
+
+The second two would be a no-op. However, the api doesn't allow you to create
+multiple indexes in one pass, so the order now has an effect::
+
+    create_index('lastname', ('lastname',))         takes 3s
+    create_index('firstname', ('firstname',))       takes 3s
+    create_index('name', ('lastname', 'firstname')) takes 0s
+
+
+Extract Content Time
+~~~~~~~~~~~~~~~~~~~~
+
+Now some comparisons for how long it takes to extract documents from the
+database. We timed a loop that extracted every document from the database,
+one-at-a-time by calling ``get_doc()``. This also has the overhead of checking
+if a given document has conflicts, etc. All currently implementations also
+support ``_get_doc()`` which extracts the content without checking for
+conflicts. Further, `Partial Expanded Fields`_ internally has a
+``_iter_all_docs`` method that it uses when it wants to update the index data.
+This simply streams out the document content, as quickly as SQLite can produce
+it.
+
+    ========= ===========   ============    =========
+    method    get_doc()     _get_doc()      _iter_all
+    ========= ===========   ============    =========
+    mem        0.251         0.152
+    expand     5.146         3.091
+    partial    5.189         3.135          0.657
+    only-exp  17.630        15.501
+    ========= ===========   ============    =========
+
+The overhead of doing one-at-a-time lookup is significant (about 5x slower).
+The overhead of checking for conflicts is also significant. It might be
+possible to combine the SQL check.
