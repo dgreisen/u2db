@@ -298,7 +298,16 @@ class DatabaseIndexTests(DatabaseBaseTests):
         self.assertEqual([(doc_id, doc_rev, doc)],
             self.c.get_from_index('test-idx', [('value', 'value2')]))
 
-    # TODO: Add tests that show indexes actually show selectivity, etc
+    def test_nested_index(self):
+        doc_id, doc_rev = self.c.create_doc(nested_doc)
+        self.c.create_index('test-idx', ['sub.doc'])
+        self.assertEqual([(doc_id, doc_rev, nested_doc)],
+            self.c.get_from_index('test-idx', [('underneath',)]))
+        doc2_id, doc2_rev = self.c.create_doc(nested_doc)
+        self.assertEqual(
+            sorted([(doc_id, doc_rev, nested_doc),
+                    (doc2_id, doc2_rev, nested_doc)]),
+            sorted(self.c.get_from_index('test-idx', [('underneath',)])))
 
     def test_put_adds_to_index(self):
         self.c.create_index('test-idx', ['key'])

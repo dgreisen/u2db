@@ -411,6 +411,24 @@ class SQLitePartialExpandDatabase(SQLiteDatabase):
         c.execute("SELECT field FROM index_definitions")
         return set([x[0] for x in c.fetchall()])
 
+    def _evaluate_index(self, raw_doc, field):
+        val = raw_doc
+        for subfield in field.split('.'):
+            if val is None:
+                return None
+            val = val.get(subfield, None)
+        return val
+
+    def _update_indexes(self, doc_id, raw_doc, fields, db_cursor):
+        values = []
+        for field_name in fields:
+            idx_value = self._evaluate_index(raw_doc, field_name)
+            if idx_value is not None:
+                values.append((doc_id, field_name, idx_value))
+        if values:
+            db_cursor.executemany(
+                "INSERT INTO document_fields VALUES (?, ?, ?)", values)
+
     def _put_and_update_indexes(self, doc_id, old_doc, new_rev, doc):
         c = self._db_handle.cursor()
         if doc:
@@ -430,11 +448,7 @@ class SQLitePartialExpandDatabase(SQLiteDatabase):
             # It is expected that len(indexed_fields) is shorter than
             # len(raw_doc)
             # TODO: Handle nested indexed fields.
-            values = [(doc_id, field_name, raw_doc[field_name])
-                      for field_name in indexed_fields
-                      if field_name in raw_doc]
-            c.executemany("INSERT INTO document_fields VALUES (?, ?, ?)",
-                          values)
+            self._update_indexes(doc_id, raw_doc, indexed_fields, c)
         c.execute("INSERT INTO transaction_log(doc_id) VALUES (?)",
                   (doc_id,))
 
@@ -449,7 +463,7 @@ class SQLitePartialExpandDatabase(SQLiteDatabase):
             new_fields = set([f for f in index_expression
                               if f not in cur_fields])
             if new_fields:
-                self._update_indexes(new_fields)
+                self._update_all_indexes(new_fields)
 
     def _iter_all_docs(self):
         c = self._db_handle.cursor()
@@ -461,15 +475,11 @@ class SQLitePartialExpandDatabase(SQLiteDatabase):
             for row in next_rows:
                 yield row
 
-    def _update_indexes(self, new_fields):
+    def _update_all_indexes(self, new_fields):
         for doc_id, doc in self._iter_all_docs():
             raw_doc = simplejson.loads(doc)
-            values = [(doc_id, field_name, raw_doc[field_name])
-                      for field_name in new_fields
-                      if field_name in raw_doc]
             c = self._db_handle.cursor()
-            c.executemany("INSERT INTO document_fields VALUES (?, ?, ?)",
-                          values)
+            self._update_indexes(doc_id, raw_doc, new_fields, c)
 
 
 class SQLiteOnlyExpandedDatabase(SQLiteDatabase):

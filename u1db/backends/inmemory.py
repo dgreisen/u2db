@@ -173,7 +173,9 @@ class InMemoryIndex(object):
         """Evaluate a dict object, applying this definition."""
         result = []
         for field in self._definition:
-            val = obj.get(field)
+            val = obj
+            for subfield in field.split('.'):
+                val = val.get(subfield)
             if val is None:
                 return None
             result.append(val)
