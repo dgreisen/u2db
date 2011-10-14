@@ -171,6 +171,11 @@ class DatabaseTests(DatabaseBaseTests):
         doc_id, new_rev = self.c.create_doc(nested_doc)
         self.assertEqual((new_rev, nested_doc, False), self.c.get_doc(doc_id))
 
+    def test_handles_doc_with_null(self):
+        doc_id, new_rev = self.c.create_doc('{"key": null}')
+        self.assertEqual((new_rev, '{"key": null}', False),
+                         self.c.get_doc(doc_id))
+
     def test__get_sync_info(self):
         self.assertEqual(('test', 0, 0), self.c._get_sync_info('other'))
 

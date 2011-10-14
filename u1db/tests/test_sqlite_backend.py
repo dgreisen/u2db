@@ -24,6 +24,7 @@ from u1db.backends import sqlite_backend
 
 
 simple_doc = '{"key": "value"}'
+nested_doc = '{"key": "value", "sub": {"doc": "underneath"}}'
 
 
 class TestSQLiteExpandedDatabase(tests.TestCase):
@@ -132,6 +133,15 @@ class TestSQLiteExpandedDatabase(tests.TestCase):
                   " ORDER BY doc_id, field_name, value")
         self.assertEqual([(doc1_id, "key1", "val1"),
                           (doc1_id, "key2", "valy"),
+                         ], c.fetchall())
+
+    def test_put_updates_nested_fields(self):
+        doc1_id, doc1_rev = self.db.create_doc(nested_doc)
+        c = self.db._get_sqlite_handle().cursor()
+        c.execute("SELECT doc_id, field_name, value FROM document_fields"
+                  " ORDER BY doc_id, field_name, value")
+        self.assertEqual([(doc1_id, "key", "value"),
+                          (doc1_id, "sub.doc", "underneath"),
                          ], c.fetchall())
 
 

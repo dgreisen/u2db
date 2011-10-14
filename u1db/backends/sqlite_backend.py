@@ -174,6 +174,32 @@ class SQLiteDatabase(CommonBackend):
             self._put_and_update_indexes(doc_id, old_doc, new_rev, doc)
         return new_rev
 
+    def _expand_to_fields(self, doc_id, base_field, raw_doc):
+        """Convert a dict representation into named fields.
+
+        So something like: {'key1': 'val1', 'key2': 'val2'}
+        gets converted into: [(doc_id, 'key1', 'val1', 0)
+                              (doc_id, 'key2', 'val2', 0)]
+        :param doc_id: Just added to every record.
+        :param base_field: if set, these are nested keys, so each field should
+            be appropriately prefixed.
+        :param raw_doc: The python dictionary.
+        """
+        # TODO: Handle lists
+        values = []
+        for field_name, value in raw_doc.iteritems():
+            if base_field:
+                full_name = base_field + '.' + field_name
+            else:
+                full_name = field_name
+            if value is None or isinstance(value, (int, float, basestring)):
+                values.append((doc_id, full_name, value, len(values)))
+            else:
+                subvalues = self._expand_to_fields(doc_id, full_name, value)
+                for _, subfield_name, val, _ in subvalues:
+                    values.append((doc_id, subfield_name, val, len(values)))
+        return values
+
     def _put_and_update_indexes(self, doc_id, old_doc, new_rev, doc):
         """Actually insert a document into the database.
 
@@ -366,9 +392,9 @@ class SQLiteExpandedDatabase(SQLiteDatabase):
         else:
             c.execute("INSERT INTO document VALUES (?, ?, ?)",
                       (doc_id, new_rev, doc))
-        values = [(doc_id, field_name, value) for field_name, value in
-                  raw_doc.iteritems()
-                  if isinstance(value, (int, float, basestring))]
+        values = self._expand_to_fields(doc_id, None, raw_doc)
+        # Strip off the 'offset' column.
+        values = [x[:3] for x in values]
         c.executemany("INSERT INTO document_fields VALUES (?, ?, ?)",
                       values)
         c.execute("INSERT INTO transaction_log(doc_id) VALUES (?)",
@@ -403,6 +429,7 @@ class SQLitePartialExpandDatabase(SQLiteDatabase):
         if indexed_fields:
             # It is expected that len(indexed_fields) is shorter than
             # len(raw_doc)
+            # TODO: Handle nested indexed fields.
             values = [(doc_id, field_name, raw_doc[field_name])
                       for field_name in indexed_fields
                       if field_name in raw_doc]
@@ -455,32 +482,6 @@ class SQLiteOnlyExpandedDatabase(SQLiteDatabase):
     def _extra_schema_init(self, c):
         c.execute("ALTER TABLE document_fields ADD COLUMN offset INT")
 
-    def _convert_to_fields(self, doc_id, base_field, raw_doc):
-        """Convert a dict representation into named fields.
-
-        So something like: {'key1': 'val1', 'key2': 'val2'}
-        gets converted into: [(doc_id, 'key1', 'val1', 0)
-                              (doc_id, 'key2', 'val2', 0)]
-        :param doc_id: Just added to every record.
-        :param base_field: if set, these are nested keys, so each field should
-            be appropriately prefixed.
-        :param raw_doc: The python dictionary.
-        """
-        # TODO: Handle lists
-        values = []
-        for field_name, value in raw_doc.iteritems():
-            if base_field:
-                full_name = base_field + '.' + field_name
-            else:
-                full_name = field_name
-            if isinstance(value, (int, float, basestring)):
-                values.append((doc_id, full_name, value, len(values)))
-            else:
-                subvalues = self._convert_to_fields(doc_id, full_name, value)
-                for _, subfield_name, val, _ in subvalues:
-                    values.append((doc_id, subfield_name, val, len(values)))
-        return values
-
     def _put_and_update_indexes(self, doc_id, old_doc, new_rev, doc):
         c = self._db_handle.cursor()
         if doc:
@@ -498,7 +499,7 @@ class SQLiteOnlyExpandedDatabase(SQLiteDatabase):
         else:
             c.execute("INSERT INTO document VALUES (?, ?, ?)",
                       (doc_id, new_rev, doc_content))
-        values = self._convert_to_fields(doc_id, None, raw_doc)
+        values = self._expand_to_fields(doc_id, None, raw_doc)
         c.executemany("INSERT INTO document_fields VALUES (?, ?, ?, ?)",
                       values)
         c.execute("INSERT INTO transaction_log(doc_id) VALUES (?)",
