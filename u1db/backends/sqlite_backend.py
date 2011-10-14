@@ -71,8 +71,12 @@ class SQLiteDatabase(CommonBackend):
                       " value TEXT,"
                       " CONSTRAINT document_fields_pkey"
                       " PRIMARY KEY (doc_id, field_name))")
-            # TODO: CREATE_INDEX document_fields(value), or maybe
-            #       document_fields(field_name, value) or ...
+            # TODO: Should we include doc_id or not? By including it, the
+            #       content can be returned directly from the index, and
+            #       matched with the documents table, roughly saving 1 btree
+            #       lookup per query. It costs us extra data storage.
+            c.execute("CREATE INDEX document_fields_field_value_doc_idx"
+                      " ON document_fields(field_name, value, doc_id)")
             c.execute("CREATE TABLE sync_log ("
                       " machine_id TEXT PRIMARY KEY,"
                       " known_db_rev INTEGER)")

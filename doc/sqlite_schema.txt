@@ -307,7 +307,7 @@ database.
     ========= ===========   ============    =====
     method    import time   import rec/s    size
     ========= ===========   ============    =====
-    mem       0.941s        70,536          ?
+    mem       0.716s        70,536          ?
     expand    3m21s         248.6           137MB
     *partial* *2m16s*       *365.7*         *52MB*
     only-exp  3m10s         262.8           91MB
@@ -326,9 +326,9 @@ expected that lots and lots of indexes will be created, but it is expected that
 it will be done occasionally.
 
     ========= ===========   ============    =====
-    method    import time   final size      delta
+    method    create time   final size      delta
     ========= ===========   ============    =====
-    mem       1.132s
+    mem       0.966s
     expand    0.010s        137MB           0MB
     partial   3.046s        55MB            3MB
     only-exp  0.008s        91MB            0MB
