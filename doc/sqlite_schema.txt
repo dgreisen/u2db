@@ -308,14 +308,25 @@ database.
     method    import time   import rec/s    size
     ========= ===========   ============    =====
     mem       0.716s        70,536          ?
-    expand    3m21s         248.6           137MB
-    *partial* *2m16s*       *365.7*         *52MB*
-    only-exp  3m10s         262.8           91MB
+    expand    201s          248.6           137MB
+    *partial* *130s*        *384.2*         *52MB*
+    only-exp  190s          262.8           91MB
     ========= ===========   ============    =====
 
 Basically, `Only Expanded Fields`_ suffers a bit from bloat. Probably caused by
 indexing the values. `Expanded Fields`_ then duplicates the data on top of the
 indexed fields.
+
+To make the ``document_fields`` table more useful, I added an extra index on it
+over ``(field_name, value, doc_id)``. This slowed the import time
+significantly, and increased the disk size for expand and only-expand.
+
+    ========= ===========   ============    =====
+    method    import time   import rec/s    size
+    ========= ===========   ============    =====
+    expand    506s          98.8            195MB
+    only-exp  562s          88.9            149MB
+    ========= ===========   ============    =====
 
 
 Create Index Time
@@ -329,9 +340,9 @@ it will be done occasionally.
     method    create time   final size      delta
     ========= ===========   ============    =====
     mem       0.966s
-    expand    0.010s        137MB           0MB
-    partial   3.046s        55MB            3MB
-    only-exp  0.008s        91MB            0MB
+    expand    0.007s        195MB           0MB
+    partial   3.758s         58MB           6MB
+    only-exp  0.005s        149MB           0MB
     ========= ===========   ============    =====
 
 In the case of the Expanded and OnlyExpanded, creating an index is pretty much
@@ -376,9 +387,9 @@ it.
     method    get_doc()     _get_doc()      _iter_all
     ========= ===========   ============    =========
     mem        0.251         0.152
-    expand     5.146         3.091
-    partial    5.189         3.135          0.657
-    only-exp  17.630        15.501
+    expand     4.903         2.888
+    partial    5.392         3.112          0.559
+    only-exp  17.630        15.333
     ========= ===========   ============    =========
 
 The overhead of doing one-at-a-time lookup is significant (about 5x slower).
