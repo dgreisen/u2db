@@ -16,7 +16,7 @@
 
 import simplejson
 
-import u1db
+from u1db import errors
 from u1db.backends import CommonBackend
 
 
@@ -53,14 +53,14 @@ class InMemoryDatabase(CommonBackend):
 
     def put_doc(self, doc_id, old_doc_rev, doc):
         if doc_id is None:
-            raise u1db.InvalidDocId()
+            raise errors.InvalidDocId()
         old_doc = None
         if doc_id in self._docs:
             if doc_id in self._conflicts:
-                raise u1db.ConflictedDoc()
+                raise errors.ConflictedDoc()
             old_rev, old_doc = self._docs[doc_id]
             if old_rev != old_doc_rev:
-                raise u1db.InvalidDocRev()
+                raise errors.InvalidDocRev()
         new_rev = self._allocate_doc_rev(old_doc_rev)
         self._put_and_update_indexes(doc_id, old_doc, new_rev, doc)
         return new_rev
