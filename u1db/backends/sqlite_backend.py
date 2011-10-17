@@ -211,7 +211,7 @@ class SQLiteDatabase(CommonBackend):
             self._put_and_update_indexes(doc_id, old_doc, new_rev, doc)
         return new_rev
 
-    def _expand_to_fields(self, doc_id, base_field, raw_doc):
+    def _expand_to_fields(self, doc_id, base_field, raw_doc, save_none):
         """Convert a dict representation into named fields.
 
         So something like: {'key1': 'val1', 'key2': 'val2'}
@@ -225,6 +225,8 @@ class SQLiteDatabase(CommonBackend):
         # TODO: Handle lists
         values = []
         for field_name, value in raw_doc.iteritems():
+            if value is None and not save_none:
+                continue
             if base_field:
                 full_name = base_field + '.' + field_name
             else:
@@ -232,7 +234,8 @@ class SQLiteDatabase(CommonBackend):
             if value is None or isinstance(value, (int, float, basestring)):
                 values.append((doc_id, full_name, value, len(values)))
             else:
-                subvalues = self._expand_to_fields(doc_id, full_name, value)
+                subvalues = self._expand_to_fields(doc_id, full_name, value,
+                                                   save_none)
                 for _, subfield_name, val, _ in subvalues:
                     values.append((doc_id, subfield_name, val, len(values)))
         return values
@@ -379,6 +382,9 @@ class SQLiteDatabase(CommonBackend):
         novalue_where = ["d.doc_id = d%d.doc_id"
                          " AND d%d.field_name = ?"
                          % (i, i) for i in range(len(definition))]
+        wildcard_where = [novalue_where[i]
+                          + (" AND d%d.value NOT NULL" % (i,))
+                          for i in range(len(definition))]
         exact_where = [novalue_where[i]
                        + (" AND d%d.value = ?" % (i,))
                        for i in range(len(definition))]
@@ -401,7 +407,7 @@ class SQLiteDatabase(CommonBackend):
                 args.append(field)
                 if value.endswith('*'):
                     if value == '*':
-                        where.append(novalue_where[idx])
+                        where.append(wildcard_where[idx])
                     else:
                         # This is a glob match
                         if is_wildcard:
@@ -457,7 +463,7 @@ class SQLiteExpandedDatabase(SQLiteDatabase):
         else:
             c.execute("INSERT INTO document VALUES (?, ?, ?)",
                       (doc_id, new_rev, doc))
-        values = self._expand_to_fields(doc_id, None, raw_doc)
+        values = self._expand_to_fields(doc_id, None, raw_doc, save_none=False)
         # Strip off the 'offset' column.
         values = [x[:3] for x in values]
         c.executemany("INSERT INTO document_fields VALUES (?, ?, ?)",
@@ -582,7 +588,7 @@ class SQLiteOnlyExpandedDatabase(SQLiteDatabase):
         else:
             c.execute("INSERT INTO document VALUES (?, ?, ?)",
                       (doc_id, new_rev, doc_content))
-        values = self._expand_to_fields(doc_id, None, raw_doc)
+        values = self._expand_to_fields(doc_id, None, raw_doc, save_none=True)
         c.executemany("INSERT INTO document_fields VALUES (?, ?, ?, ?)",
                       values)
         c.execute("INSERT INTO transaction_log(doc_id) VALUES (?)",

@@ -358,6 +358,15 @@ class DatabaseIndexTests(DatabaseBaseTests):
         self.assertRaises(u1db.InvalidValueForIndex,
             self.c.get_from_index, 'test-idx', [('*', 'v2')])
 
+
+    def test_get_from_index_not_null(self):
+        self.c.create_index('test-idx', ['key'])
+        doc1_id, doc1_rev = self.c.create_doc(simple_doc)
+        doc2_id, doc2_rev = self.c.create_doc('{"key": null}')
+        self.assertEqual(sorted([
+            (doc1_id, doc1_rev, simple_doc)]),
+            self.c.get_from_index('test-idx', [('*',)]))
+
     def test_get_partial_from_index(self):
         doc1 = '{"k1": "v1", "k2": "v2"}'
         doc2 = '{"k1": "v1", "k2": "x2"}'
