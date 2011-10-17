@@ -49,7 +49,8 @@ class TestSQLiteExpandedDatabase(tests.TestCase):
         c = raw_db.cursor()
         c.execute("SELECT * FROM u1db_config")
         config = dict([(r[0], r[1]) for r in c.fetchall()])
-        self.assertEqual({'sql_schema': '0', 'machine_id': 'test'}, config)
+        self.assertEqual({'sql_schema': '0', 'machine_id': 'test',
+                          'index_storage': 'expanded'}, config)
 
         # These tables must exist, though we don't care what is in them yet
         c.execute("SELECT * FROM transaction_log")
@@ -152,6 +153,14 @@ class TestSQLitePartialExpandDatabase(tests.TestCase):
         self.db = sqlite_backend.SQLitePartialExpandDatabase(':memory:')
         self.db._set_machine_id('test')
 
+    def test_u1db_config_settings(self):
+        raw_db = self.db._get_sqlite_handle()
+        c = raw_db.cursor()
+        c.execute("SELECT * FROM u1db_config")
+        config = dict([(r[0], r[1]) for r in c.fetchall()])
+        self.assertEqual({'sql_schema': '0', 'machine_id': 'test',
+                          'index_storage': 'expand referenced'}, config)
+
     def test_no_indexes_no_document_fields(self):
         doc1_id, doc1_rev = self.db.create_doc(
             '{"key1": "val1", "key2": "val2"}')
@@ -193,6 +202,14 @@ class TestSQLiteOnlyExpandedDatabase(tests.TestCase):
         super(TestSQLiteOnlyExpandedDatabase, self).setUp()
         self.db = sqlite_backend.SQLiteOnlyExpandedDatabase(':memory:')
         self.db._set_machine_id('test')
+
+    def test_u1db_config_settings(self):
+        raw_db = self.db._get_sqlite_handle()
+        c = raw_db.cursor()
+        c.execute("SELECT * FROM u1db_config")
+        config = dict([(r[0], r[1]) for r in c.fetchall()])
+        self.assertEqual({'sql_schema': '0', 'machine_id': 'test',
+                          'index_storage': 'only expanded'}, config)
 
     def test_no_document_content(self):
         doc1_id, doc1_rev = self.db.create_doc(

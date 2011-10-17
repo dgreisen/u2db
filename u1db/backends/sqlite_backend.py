@@ -382,6 +382,10 @@ class SQLiteExpandedDatabase(SQLiteDatabase):
     individual fields into document_fields.
     """
 
+    def _extra_schema_init(self, c):
+        c.execute("INSERT INTO u1db_config VALUES"
+                  " ('index_storage', 'expanded')")
+
     def _put_and_update_indexes(self, doc_id, old_doc, new_rev, doc):
         c = self._db_handle.cursor()
         if doc:
@@ -408,6 +412,10 @@ class SQLiteExpandedDatabase(SQLiteDatabase):
 class SQLitePartialExpandDatabase(SQLiteDatabase):
     """Similar to SQLiteExpandedDatabase, but only indexed fields are expanded.
     """
+
+    def _extra_schema_init(self, c):
+        c.execute("INSERT INTO u1db_config VALUES"
+                  " ('index_storage', 'expand referenced')")
 
     def _get_indexed_fields(self):
         """Determine what fields are indexed."""
@@ -494,6 +502,8 @@ class SQLiteOnlyExpandedDatabase(SQLiteDatabase):
     """
 
     def _extra_schema_init(self, c):
+        c.execute("INSERT INTO u1db_config VALUES"
+                  " ('index_storage', 'only expanded')")
         c.execute("ALTER TABLE document_fields ADD COLUMN offset INT")
 
     def _put_and_update_indexes(self, doc_id, old_doc, new_rev, doc):
