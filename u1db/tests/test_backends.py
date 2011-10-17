@@ -344,8 +344,7 @@ class DatabaseIndexTests(DatabaseBaseTests):
         doc1 = '{"k1": "v1", "k2": "v2"}'
         doc2 = '{"k1": "v1", "k2": "x2"}'
         doc3 = '{"k1": "v1", "k2": "y2"}'
-        # doc4 has a different k1 value. Because of this, it doesn't match the
-        # prefix check.
+        # doc4 has a different k1 value, so it doesn't match the prefix.
         doc4 = '{"k1": "NN", "k2": "v2"}'
         doc1_id, doc1_rev = self.c.create_doc(doc1)
         doc2_id, doc2_rev = self.c.create_doc(doc2)
@@ -357,6 +356,24 @@ class DatabaseIndexTests(DatabaseBaseTests):
             (doc2_id, doc2_rev, doc2),
             (doc3_id, doc3_rev, doc3)]),
             sorted(self.c.get_from_index('test-idx', [("v1",)])))
+
+    def test_get_glob_match(self):
+        # Note: the exact glob syntax is probably subject to change
+        doc1 = '{"k1": "v1", "k2": "v1"}'
+        doc2 = '{"k1": "v1", "k2": "v2"}'
+        doc3 = '{"k1": "v1", "k2": "v3"}'
+        # doc4 has a different k2 prefix value, so it doesn't match
+        doc4 = '{"k1": "v1", "k2": "ZZ"}'
+        self.c.create_index('test-idx', ['k1', 'k2'])
+        doc1_id, doc1_rev = self.c.create_doc(doc1)
+        doc2_id, doc2_rev = self.c.create_doc(doc2)
+        doc3_id, doc3_rev = self.c.create_doc(doc3)
+        doc4_id, doc4_rev = self.c.create_doc(doc4)
+        self.assertEqual(sorted([
+            (doc1_id, doc1_rev, doc1),
+            (doc2_id, doc2_rev, doc2),
+            (doc3_id, doc3_rev, doc3)]),
+            sorted(self.c.get_from_index('test-idx', [("v1", "v*")])))
 
     def test_delete_updates_index(self):
         doc_id, doc_rev = self.c.create_doc(simple_doc)

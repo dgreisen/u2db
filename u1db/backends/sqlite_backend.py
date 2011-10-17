@@ -382,9 +382,9 @@ class SQLiteDatabase(CommonBackend):
         exact_where = [novalue_where[i]
                        + (" AND d%d.value = ?" % (i,))
                        for i in range(len(definition))]
-        # like_where = [novalue_where[i]
-        #               + (" AND d%d.value LIKE ?" % (i,))
-        #               for i in range(len(definition))]
+        like_where = [novalue_where[i]
+                      + (" AND d%d.value LIKE ?" % (i,))
+                      for i in range(len(definition))]
         c = self._db_handle.cursor()
         result = []
         for key_value in key_values:
@@ -394,13 +394,21 @@ class SQLiteDatabase(CommonBackend):
             # (field1, val1, field2, val2, field3, val3)
             args = []
             where = []
-            for idx, (field, val) in enumerate(zip(definition, key_value)):
+            for idx, field in enumerate(definition):
                 args.append(field)
-                args.append(val)
-                where.append(exact_where[idx])
-            if len(key_value) < len(definition):
-                where.extend(novalue_where[len(key_value):])
-                args.extend(definition[len(key_value):])
+                if len(key_value) <= idx:
+                    # This is a missing case, so we just want an entry that
+                    # *has* the given field.
+                    where.append(novalue_where[idx])
+                else:
+                    value = key_value[idx]
+                    if value.endswith('*'):
+                        # This is a glob match
+                        where.append(like_where[idx])
+                        args.append(value[:-1] + '%')
+                    else:
+                        where.append(exact_where[idx])
+                        args.append(value)
             statement = ("SELECT d.doc_id, d.doc_rev, d.doc FROM document d, "
                          + ', '.join(tables) + " WHERE " + ' AND '.join(where))
             try:

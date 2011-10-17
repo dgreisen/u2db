@@ -201,7 +201,8 @@ class InMemoryIndex(object):
         result = []
         for value in values:
             # TODO: Handle glob style prefixes
-            if len(value) == len(self._definition):
+            if (len(value) == len(self._definition)
+                and '*' not in value[-1]):
                 result.extend(self._lookup_exact(value))
             else:
                 result.extend(self._lookup_prefix(value))
@@ -212,6 +213,7 @@ class InMemoryIndex(object):
         # TODO: We need a different data structure to make prefix style fast,
         #       some sort of sorted list would work, but a plain dict doesn't.
         key_prefix = '\x01'.join(value)
+        key_prefix = key_prefix.rstrip('*')
         all_doc_ids = []
         for key, doc_ids in self._values.iteritems():
             if key.startswith(key_prefix):
