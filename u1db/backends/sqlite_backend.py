@@ -17,9 +17,8 @@
 import simplejson
 from sqlite3 import dbapi2
 
-import u1db
 from u1db.backends import CommonBackend
-from u1db import compat
+from u1db import compat, errors
 
 
 class SQLiteDatabase(CommonBackend):
@@ -198,15 +197,15 @@ class SQLiteDatabase(CommonBackend):
 
     def put_doc(self, doc_id, old_doc_rev, doc):
         if doc_id is None:
-            raise u1db.InvalidDocId()
+            raise errors.InvalidDocId()
         old_doc = None
         with self._db_handle:
             if self._has_conflicts(doc_id):
-                raise u1db.ConflictedDoc()
+                raise errors.ConflictedDoc()
             old_rev, old_doc = self._get_doc(doc_id)
             if old_rev is not None:
                 if old_rev != old_doc_rev:
-                    raise u1db.InvalidDocRev()
+                    raise errors.InvalidDocRev()
             new_rev = self._allocate_doc_rev(old_doc_rev)
             self._put_and_update_indexes(doc_id, old_doc, new_rev, doc)
         return new_rev
@@ -264,11 +263,11 @@ class SQLiteDatabase(CommonBackend):
             if old_doc_rev is None:
                 raise KeyError
             if old_doc_rev != doc_rev:
-                raise u1db.InvalidDocRev()
+                raise errors.InvalidDocRev()
             if old_doc is None:
                 raise KeyError
             if self._has_conflicts(doc_id):
-                raise u1db.ConflictedDoc()
+                raise errors.ConflictedDoc()
             new_rev = self._allocate_doc_rev(old_doc_rev)
             self._put_and_update_indexes(doc_id, old_doc, new_rev, None)
         return new_rev
