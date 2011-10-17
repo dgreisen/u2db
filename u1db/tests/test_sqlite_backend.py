@@ -14,6 +14,9 @@
 
 """Test sqlite backend internals."""
 
+import tempfile
+import shutil
+
 from sqlite3 import dbapi2
 import simplejson
 
@@ -145,6 +148,14 @@ class TestSQLiteExpandedDatabase(tests.TestCase):
                           (doc1_id, "sub.doc", "underneath"),
                          ], c.fetchall())
 
+    def test_open_database(self):
+        temp_dir = tempfile.mkdtemp(prefix='u1db-test-')
+        self.addCleanup(shutil.rmtree, temp_dir)
+        path = temp_dir + '/test.sqlite'
+        db = sqlite_backend.SQLiteExpandedDatabase(path)
+        db2 = sqlite_backend.SQLiteDatabase.open_database(path)
+        self.assertIsInstance(db2, sqlite_backend.SQLiteExpandedDatabase)
+
 
 class TestSQLitePartialExpandDatabase(tests.TestCase):
 
@@ -195,6 +206,14 @@ class TestSQLitePartialExpandDatabase(tests.TestCase):
                   " ORDER BY doc_id, field_name, value")
         self.assertEqual([(doc1_id, 'key1', 'val1')], c.fetchall())
 
+    def test_open_database(self):
+        temp_dir = tempfile.mkdtemp(prefix='u1db-test-')
+        self.addCleanup(shutil.rmtree, temp_dir)
+        path = temp_dir + '/test.sqlite'
+        db = sqlite_backend.SQLitePartialExpandDatabase(path)
+        db2 = sqlite_backend.SQLiteDatabase.open_database(path)
+        self.assertIsInstance(db2, sqlite_backend.SQLitePartialExpandDatabase)
+
 
 class TestSQLiteOnlyExpandedDatabase(tests.TestCase):
 
@@ -243,3 +262,11 @@ class TestSQLiteOnlyExpandedDatabase(tests.TestCase):
                   " ORDER BY doc_id, field_name")
         self.assertEqual([(doc1_id, 'a.b.c.d', 'x'),
                          ], c.fetchall())
+
+    def test_open_database(self):
+        temp_dir = tempfile.mkdtemp(prefix='u1db-test-')
+        self.addCleanup(shutil.rmtree, temp_dir)
+        path = temp_dir + '/test.sqlite'
+        db = sqlite_backend.SQLiteOnlyExpandedDatabase(path)
+        db2 = sqlite_backend.SQLiteDatabase.open_database(path)
+        self.assertIsInstance(db2, sqlite_backend.SQLiteOnlyExpandedDatabase)

@@ -25,11 +25,32 @@ from u1db import compat
 class SQLiteDatabase(CommonBackend):
     """A U1DB implementation that uses SQLite as its persistence layer."""
 
+    _sqlite_registry = {}
+
     def __init__(self, sqlite_file):
         """Create a new sqlite file."""
         self._db_handle = dbapi2.connect(sqlite_file)
         self._real_machine_id = None
         self._ensure_schema()
+
+    @staticmethod
+    def open_database(sqlite_file):
+        db_handle = dbapi2.connect(sqlite_file)
+        c = db_handle.cursor()
+        c.execute("SELECT value FROM u1db_config WHERE name = 'index_storage'")
+        v = c.fetchone()
+        # if v is None:
+        #     raise ValueError('No defined index_storage for database %s'
+        #                      % (sqlite_file,))
+        return SQLiteDatabase._sqlite_registry[v[0]](sqlite_file)
+
+    @staticmethod
+    def register_implementation(klass):
+        """Register that we implement an SQLiteDatabase.
+
+        The attribute _index_storage_value will be used as the lookup key.
+        """
+        SQLiteDatabase._sqlite_registry[klass._index_storage_value] = klass
 
     def _get_sqlite_handle(self):
         """Get access to the underlying sqlite database.
@@ -43,9 +64,8 @@ class SQLiteDatabase(CommonBackend):
         """Release access to the underlying sqlite database."""
         self._db_handle.close()
 
-    def _ensure_schema(self):
-        """Ensure that the database schema has been created."""
-        c = self._db_handle.cursor()
+    def _is_initialized(self, c):
+        """Check if this database has been initialized."""
         try:
             c.execute("SELECT value FROM u1db_config"
                       " WHERE name = 'sql_schema'")
@@ -55,7 +75,11 @@ class SQLiteDatabase(CommonBackend):
         else:
             val = c.fetchone()
         if val is not None:
-            return
+            return True
+        return False
+
+    def _initialize(self, c):
+        """Create the schema in the database."""
         with self._db_handle:
             c.execute("CREATE TABLE transaction_log ("
                       " db_rev INTEGER PRIMARY KEY AUTOINCREMENT,"
@@ -93,7 +117,16 @@ class SQLiteDatabase(CommonBackend):
                       " PRIMARY KEY (name, offset))")
             c.execute("CREATE TABLE u1db_config (name TEXT, value TEXT)")
             c.execute("INSERT INTO u1db_config VALUES ('sql_schema', '0')")
+            c.execute("INSERT INTO u1db_config VALUES" " ('index_storage', ?)",
+                      (self._index_storage_value,))
             self._extra_schema_init(c)
+
+    def _ensure_schema(self):
+        """Ensure that the database schema has been created."""
+        c = self._db_handle.cursor()
+        if self._is_initialized(c):
+            return
+        self._initialize(c)
 
     def _extra_schema_init(self, c):
         """Add any extra fields, etc to the basic table definitions."""
@@ -382,9 +415,7 @@ class SQLiteExpandedDatabase(SQLiteDatabase):
     individual fields into document_fields.
     """
 
-    def _extra_schema_init(self, c):
-        c.execute("INSERT INTO u1db_config VALUES"
-                  " ('index_storage', 'expanded')")
+    _index_storage_value = 'expanded'
 
     def _put_and_update_indexes(self, doc_id, old_doc, new_rev, doc):
         c = self._db_handle.cursor()
@@ -408,14 +439,14 @@ class SQLiteExpandedDatabase(SQLiteDatabase):
         c.execute("INSERT INTO transaction_log(doc_id) VALUES (?)",
                   (doc_id,))
 
+SQLiteDatabase.register_implementation(SQLiteExpandedDatabase)
+
 
 class SQLitePartialExpandDatabase(SQLiteDatabase):
     """Similar to SQLiteExpandedDatabase, but only indexed fields are expanded.
     """
 
-    def _extra_schema_init(self, c):
-        c.execute("INSERT INTO u1db_config VALUES"
-                  " ('index_storage', 'expand referenced')")
+    _index_storage_value = 'expand referenced'
 
     def _get_indexed_fields(self):
         """Determine what fields are indexed."""
@@ -493,6 +524,8 @@ class SQLitePartialExpandDatabase(SQLiteDatabase):
             c = self._db_handle.cursor()
             self._update_indexes(doc_id, raw_doc, new_fields, c)
 
+SQLiteDatabase.register_implementation(SQLitePartialExpandDatabase)
+
 
 class SQLiteOnlyExpandedDatabase(SQLiteDatabase):
     """Documents are only stored by their fields.
@@ -501,9 +534,9 @@ class SQLiteOnlyExpandedDatabase(SQLiteDatabase):
     store it in an indexable table.
     """
 
+    _index_storage_value = 'only expanded'
+
     def _extra_schema_init(self, c):
-        c.execute("INSERT INTO u1db_config VALUES"
-                  " ('index_storage', 'only expanded')")
         c.execute("ALTER TABLE document_fields ADD COLUMN offset INT")
 
     def _put_and_update_indexes(self, doc_id, old_doc, new_rev, doc):
@@ -571,3 +604,6 @@ class SQLiteOnlyExpandedDatabase(SQLiteDatabase):
         result = [(doc_id, doc_rev, self._get_doc(doc_id)[1])
                   for doc_id, doc_rev, _ in base]
         return result
+
+
+SQLiteDatabase.register_implementation(SQLiteOnlyExpandedDatabase)
