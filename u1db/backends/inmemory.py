@@ -200,10 +200,27 @@ class InMemoryIndex(object):
         """Find docs that match the values."""
         result = []
         for value in values:
-            key = '\x01'.join(value)
-            try:
-                doc_ids = self._values[key]
-            except KeyError:
-                continue
-            result.extend(doc_ids)
+            # TODO: Handle glob style prefixes
+            if len(value) == len(self._definition):
+                result.extend(self._lookup_exact(value))
+            else:
+                result.extend(self._lookup_prefix(value))
         return result
+
+    def _lookup_prefix(self, value):
+        """Find docs that match the prefix string in values."""
+        # TODO: We need a different data structure to make prefix style fast,
+        #       some sort of sorted list would work, but a plain dict doesn't.
+        key_prefix = '\x01'.join(value)
+        all_doc_ids = []
+        for key, doc_ids in self._values.iteritems():
+            if key.startswith(key_prefix):
+                all_doc_ids.extend(doc_ids)
+        return all_doc_ids
+
+    def _lookup_exact(self, value):
+        """Find docs that match exactly."""
+        key = '\x01'.join(value)
+        if key in self._values:
+            return self._values[key]
+        return ()

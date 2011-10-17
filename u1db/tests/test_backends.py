@@ -325,6 +325,21 @@ class DatabaseIndexTests(DatabaseBaseTests):
         self.assertEqual([(doc_id, new_doc_rev, new_doc)],
             self.c.get_from_index('test-idx', [('altval',)]))
 
+    def test_get_all_from_index(self):
+        self.c.create_index('test-idx', ['key'])
+        doc1_id, doc1_rev = self.c.create_doc(simple_doc)
+        doc2_id, doc2_rev = self.c.create_doc(nested_doc)
+        # This one should not be in the index
+        doc3_id, doc3_rev = self.c.create_doc('{"no": "key"}')
+        diff_value_doc = '{"key": "diff value"}'
+        doc4_id, doc4_rev = self.c.create_doc(diff_value_doc)
+        # This is essentially a 'prefix' match, but we match every entry.
+        self.assertEqual(sorted([
+            (doc1_id, doc1_rev, simple_doc),
+            (doc2_id, doc2_rev, nested_doc),
+            (doc4_id, doc4_rev, diff_value_doc)]),
+            sorted(self.c.get_from_index('test-idx', [()])))
+
     def test_delete_updates_index(self):
         doc_id, doc_rev = self.c.create_doc(simple_doc)
         doc2_id, doc2_rev = self.c.create_doc(simple_doc)
