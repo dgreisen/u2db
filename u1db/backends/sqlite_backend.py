@@ -374,11 +374,17 @@ class SQLiteDatabase(CommonBackend):
         # First, build the definition. We join the document_fields table
         # against itself, as many times as the 'width' of our definition.
         # We then do a query for each key_value, one-at-a-time.
+        # Note: All of these strings are static, we could cache them, etc.
         tables = ["document_fields d%d" % i for i in range(len(definition))]
-        where = ["d.doc_id = d%d.doc_id"
-                 " AND d%d.field_name = ?"
-                 " AND d%d.value = ?"
-                 % (i, i, i) for i in range(len(definition))]
+        novalue_where = ["d.doc_id = d%d.doc_id"
+                         " AND d%d.field_name = ?"
+                         % (i, i) for i in range(len(definition))]
+        exact_where = [novalue_where[i]
+                       + (" AND d%d.value = ?" % (i,))
+                       for i in range(len(definition))]
+        # like_where = [novalue_where[i]
+        #               + (" AND d%d.value LIKE ?" % (i,))
+        #               for i in range(len(definition))]
         c = self._db_handle.cursor()
         result = []
         for key_value in key_values:
@@ -387,9 +393,14 @@ class SQLiteDatabase(CommonBackend):
             # Becomes:
             # (field1, val1, field2, val2, field3, val3)
             args = []
-            for field, val in zip(definition, key_value):
+            where = []
+            for idx, (field, val) in enumerate(zip(definition, key_value)):
                 args.append(field)
                 args.append(val)
+                where.append(exact_where[idx])
+            if len(key_value) < len(definition):
+                where.extend(novalue_where[len(key_value):])
+                args.extend(definition[len(key_value):])
             statement = ("SELECT d.doc_id, d.doc_rev, d.doc FROM document d, "
                          + ', '.join(tables) + " WHERE " + ' AND '.join(where))
             try:
