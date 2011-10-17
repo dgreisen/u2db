@@ -387,6 +387,7 @@ class SQLiteDatabase(CommonBackend):
                       for i in range(len(definition))]
         c = self._db_handle.cursor()
         result = []
+        is_wildcard = False
         for key_value in key_values:
             # Merge the lists together, so that:
             # [field1, field2, field3], [val1, val2, val3]
@@ -394,21 +395,27 @@ class SQLiteDatabase(CommonBackend):
             # (field1, val1, field2, val2, field3, val3)
             args = []
             where = []
-            for idx, field in enumerate(definition):
+            if len(key_value) != len(definition):
+                raise u1db.InvalidValueForIndex()
+            for idx, (field, value) in enumerate(zip(definition, key_value)):
                 args.append(field)
-                if len(key_value) <= idx:
-                    # This is a missing case, so we just want an entry that
-                    # *has* the given field.
-                    where.append(novalue_where[idx])
-                else:
-                    value = key_value[idx]
-                    if value.endswith('*'):
+                if value.endswith('*'):
+                    if value == '*':
+                        where.append(novalue_where[idx])
+                    else:
                         # This is a glob match
+                        if is_wildcard:
+                            # We can't have a partial wildcard following
+                            # another wildcard
+                            raise u1db.InvalidValueForIndex()
                         where.append(like_where[idx])
                         args.append(value[:-1] + '%')
-                    else:
-                        where.append(exact_where[idx])
-                        args.append(value)
+                    is_wildcard = True
+                else:
+                    if is_wildcard:
+                        raise u1db.InvalidValueForIndex()
+                    where.append(exact_where[idx])
+                    args.append(value)
             statement = ("SELECT d.doc_id, d.doc_rev, d.doc FROM document d, "
                          + ', '.join(tables) + " WHERE " + ' AND '.join(where))
             try:

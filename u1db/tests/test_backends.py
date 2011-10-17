@@ -338,7 +338,25 @@ class DatabaseIndexTests(DatabaseBaseTests):
             (doc1_id, doc1_rev, simple_doc),
             (doc2_id, doc2_rev, nested_doc),
             (doc4_id, doc4_rev, diff_value_doc)]),
-            sorted(self.c.get_from_index('test-idx', [()])))
+            sorted(self.c.get_from_index('test-idx', [('*',)])))
+
+    # def test_get_from_index_empty_string(self):
+    #     self.c.create_index('test-idx', ['key'])
+    def test_get_from_index_illegal_number_of_entries(self):
+        self.c.create_index('test-idx', ['k1', 'k2'])
+        self.assertRaises(u1db.InvalidValueForIndex,
+            self.c.get_from_index, 'test-idx', [()])
+        self.assertRaises(u1db.InvalidValueForIndex,
+            self.c.get_from_index, 'test-idx', [('v1',)])
+        self.assertRaises(u1db.InvalidValueForIndex,
+            self.c.get_from_index, 'test-idx', [('v1', 'v2', 'v3')])
+
+    def test_get_from_index_illegal_wildcards(self):
+        self.c.create_index('test-idx', ['k1', 'k2'])
+        self.assertRaises(u1db.InvalidValueForIndex,
+            self.c.get_from_index, 'test-idx', [('v*', 'v2')])
+        self.assertRaises(u1db.InvalidValueForIndex,
+            self.c.get_from_index, 'test-idx', [('*', 'v2')])
 
     def test_get_partial_from_index(self):
         doc1 = '{"k1": "v1", "k2": "v2"}'
@@ -355,7 +373,7 @@ class DatabaseIndexTests(DatabaseBaseTests):
             (doc1_id, doc1_rev, doc1),
             (doc2_id, doc2_rev, doc2),
             (doc3_id, doc3_rev, doc3)]),
-            sorted(self.c.get_from_index('test-idx', [("v1",)])))
+            sorted(self.c.get_from_index('test-idx', [("v1", "*")])))
 
     def test_get_glob_match(self):
         # Note: the exact glob syntax is probably subject to change

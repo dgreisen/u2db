@@ -196,23 +196,53 @@ class InMemoryIndex(object):
         if not doc_ids:
             del self._values[key]
 
-    def lookup(self, values):
+    def _find_non_wildcards(self, values):
+        """Check if this should be a wildcard match.
+
+        Further, this will raise an exception if the syntax is improperly
+        defined.
+
+        :return: The offset of the last value we need to match against.
+        """
+        if len(values) != len(self._definition):
+            raise u1db.InvalidValueForIndex()
+        is_wildcard = False
+        last = 0
+        for idx, val in enumerate(values):
+            if val[-1] == '*':
+                if val != '*':
+                    # We have an 'x*' style wildcard
+                    if is_wildcard:
+                        # We were already in wildcard mode, so this is invalid
+                        raise u1db.InvalidValueForIndex()
+                    last = idx + 1
+                is_wildcard = True
+            else:
+                if is_wildcard:
+                    # We were in wildcard mode, we can't follow that with
+                    # non-wildcard
+                    raise u1db.InvalidValueForIndex()
+                last = idx + 1
+        if not is_wildcard:
+            return -1
+        return last
+
+    def lookup(self, key_values):
         """Find docs that match the values."""
         result = []
-        for value in values:
-            # TODO: Handle glob style prefixes
-            if (len(value) == len(self._definition)
-                and '*' not in value[-1]):
-                result.extend(self._lookup_exact(value))
+        for values in key_values:
+            last = self._find_non_wildcards(values)
+            if last == -1:
+                result.extend(self._lookup_exact(values))
             else:
-                result.extend(self._lookup_prefix(value))
+                result.extend(self._lookup_prefix(last, values))
         return result
 
-    def _lookup_prefix(self, value):
+    def _lookup_prefix(self, last, value):
         """Find docs that match the prefix string in values."""
         # TODO: We need a different data structure to make prefix style fast,
         #       some sort of sorted list would work, but a plain dict doesn't.
-        key_prefix = '\x01'.join(value)
+        key_prefix = '\x01'.join(value[:last])
         key_prefix = key_prefix.rstrip('*')
         all_doc_ids = []
         for key, doc_ids in self._values.iteritems():
