@@ -347,8 +347,14 @@ class DatabaseIndexTests(DatabaseBaseTests):
         self.assertEqual([(doc1_id, doc1_rev, simple_doc)],
                          self.c.get_from_index('test-idx', [('v*',)]))
 
-    # def test_get_from_index_empty_string(self):
-    #     self.c.create_index('test-idx', ['key'])
+    def test_get_from_index_empty_string(self):
+        self.c.create_index('test-idx', ['key'])
+        doc1_id, doc1_rev = self.c.create_doc(simple_doc)
+        doc2 = '{"key": ""}'
+        doc2_id, doc2_rev = self.c.create_doc(doc2)
+        self.assertEqual([(doc2_id, doc2_rev, doc2)],
+                         self.c.get_from_index('test-idx', [('',)]))
+
     def test_get_from_index_illegal_number_of_entries(self):
         self.c.create_index('test-idx', ['k1', 'k2'])
         self.assertRaises(errors.InvalidValueForIndex,
