@@ -235,14 +235,14 @@ class InMemoryIndex(object):
             if last == -1:
                 result.extend(self._lookup_exact(values))
             else:
-                result.extend(self._lookup_prefix(last, values))
+                result.extend(self._lookup_prefix(values[:last]))
         return result
 
-    def _lookup_prefix(self, last, value):
+    def _lookup_prefix(self, value):
         """Find docs that match the prefix string in values."""
         # TODO: We need a different data structure to make prefix style fast,
         #       some sort of sorted list would work, but a plain dict doesn't.
-        key_prefix = '\x01'.join(value[:last])
+        key_prefix = '\x01'.join(value)
         key_prefix = key_prefix.rstrip('*')
         all_doc_ids = []
         for key, doc_ids in self._values.iteritems():
