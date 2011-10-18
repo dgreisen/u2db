@@ -209,7 +209,7 @@ class InMemoryIndex(object):
         is_wildcard = False
         last = 0
         for idx, val in enumerate(values):
-            if val[-1] == '*':
+            if val.endswith('*'):
                 if val != '*':
                     # We have an 'x*' style wildcard
                     if is_wildcard:
