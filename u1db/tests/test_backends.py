@@ -354,6 +354,11 @@ class DatabaseIndexTests(DatabaseBaseTests):
         doc2_id, doc2_rev = self.c.create_doc(doc2)
         self.assertEqual([(doc2_id, doc2_rev, doc2)],
                          self.c.get_from_index('test-idx', [('',)]))
+        # Empty string matches the wildcard.
+        self.assertEqual(sorted([
+            (doc1_id, doc1_rev, simple_doc),
+            (doc2_id, doc2_rev, doc2)]),
+            sorted(self.c.get_from_index('test-idx', [('*',)])))
 
     def test_get_from_index_illegal_number_of_entries(self):
         self.c.create_index('test-idx', ['k1', 'k2'])
