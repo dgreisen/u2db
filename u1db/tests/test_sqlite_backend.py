@@ -156,6 +156,18 @@ class TestSQLiteExpandedDatabase(tests.TestCase):
         db2 = sqlite_backend.SQLiteDatabase.open_database(path)
         self.assertIsInstance(db2, sqlite_backend.SQLiteExpandedDatabase)
 
+    def assertTransform(self, sql_value, value):
+        transformed = sqlite_backend.SQLiteDatabase._transform_glob(value)
+        self.assertEqual(sql_value, transformed)
+
+    def test_glob_escaping(self):
+        # SQL allows us to define any escape char we want, for now I'm just
+        # using '.'
+        self.assertTransform('val%', 'val*')
+        self.assertTransform('v.%al%', 'v%al*')
+        self.assertTransform('v._al%', 'v_al*')
+        self.assertTransform('v..al%', 'v.al*')
+
 
 class TestSQLitePartialExpandDatabase(tests.TestCase):
 

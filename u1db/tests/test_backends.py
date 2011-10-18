@@ -358,6 +358,21 @@ class DatabaseIndexTests(DatabaseBaseTests):
         self.assertRaises(errors.InvalidValueForIndex,
             self.c.get_from_index, 'test-idx', [('*', 'v2')])
 
+    def test_get_from_index_with_sql_wildcards(self):
+        self.c.create_index('test-idx', ['key'])
+        doc1 = '{"key": "va%lue"}'
+        doc2 = '{"key": "value"}'
+        doc3 = '{"key": "va_lue"}'
+        doc1_id, doc1_rev = self.c.create_doc(doc1)
+        doc2_id, doc2_rev = self.c.create_doc(doc2)
+        doc3_id, doc3_rev = self.c.create_doc(doc3)
+        # The '%' in the search should be treated literally, not as a sql
+        # globbing character.
+        self.assertEqual(sorted([(doc1_id, doc1_rev, doc1)]),
+            sorted(self.c.get_from_index('test-idx', [('va%*',)])))
+        # Same for '_'
+        self.assertEqual(sorted([(doc3_id, doc3_rev, doc3)]),
+            sorted(self.c.get_from_index('test-idx', [('va_*',)])))
 
     def test_get_from_index_not_null(self):
         self.c.create_index('test-idx', ['key'])
