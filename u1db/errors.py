@@ -28,3 +28,11 @@ class InvalidDocId(U1DBError):
 
 class ConflictedDoc(U1DBError):
     """The document is conflicted, you must call resolve before put()"""
+
+
+class InvalidValueForIndex(Exception):
+    """The values supplied does not match the index definition.
+
+    Can also be raised if wildcard matches are not strictly at the tail of the
+    request.
+    """

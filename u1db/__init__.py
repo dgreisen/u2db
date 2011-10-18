@@ -132,11 +132,21 @@ class Database(object):
         raise NotImplementedError(self.list_indexes)
 
     def get_from_index(self, index_name, key_values):
-        """Return documents that match the exact keys supplied.
+        """Return documents that match the keys supplied.
+
+        You must supply exactly the same number of values as the index has been
+        defined. It is possible to do a prefix match by using '*' to indicate a
+        wildcard match. You can only supply '*' to trailing entries, (eg
+        [('val', '*', '*')] is allowed, but [('*', 'val', 'val')] is not.)
+        It is also possible to append a '*' to the last supplied value (eg
+        [('val*', '*', '*')] or [('val', 'val*', '*')], but not
+        [('val*', 'val', '*')])
 
         :return: List of [(doc_id, doc_rev, doc)]
         :param index_name: The index to query
         :param key_values: A list of tuple of values to match. eg, if you have
+            an index with 3 field,s then you would have:
+            [(x-val1, x-val2, x-val3), (y-val1, y-val2, y-val3), ...])
         """
         raise NotImplementedError(self.get_from_index)
 

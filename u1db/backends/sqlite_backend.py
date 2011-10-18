@@ -210,7 +210,7 @@ class SQLiteDatabase(CommonBackend):
             self._put_and_update_indexes(doc_id, old_doc, new_rev, doc)
         return new_rev
 
-    def _expand_to_fields(self, doc_id, base_field, raw_doc):
+    def _expand_to_fields(self, doc_id, base_field, raw_doc, save_none):
         """Convert a dict representation into named fields.
 
         So something like: {'key1': 'val1', 'key2': 'val2'}
@@ -224,6 +224,8 @@ class SQLiteDatabase(CommonBackend):
         # TODO: Handle lists
         values = []
         for field_name, value in raw_doc.iteritems():
+            if value is None and not save_none:
+                continue
             if base_field:
                 full_name = base_field + '.' + field_name
             else:
@@ -231,7 +233,8 @@ class SQLiteDatabase(CommonBackend):
             if value is None or isinstance(value, (int, float, basestring)):
                 values.append((doc_id, full_name, value, len(values)))
             else:
-                subvalues = self._expand_to_fields(doc_id, full_name, value)
+                subvalues = self._expand_to_fields(doc_id, full_name, value,
+                                                   save_none)
                 for _, subfield_name, val, _ in subvalues:
                     values.append((doc_id, subfield_name, val, len(values)))
         return values
@@ -368,27 +371,66 @@ class SQLiteDatabase(CommonBackend):
                   " WHERE name = ? ORDER BY offset", (index_name,))
         return [x[0] for x in c.fetchall()]
 
+    @staticmethod
+    def _transform_glob(value, escape_char='.'):
+        """Transform the given glob value into a valid LIKE statement.
+        """
+        to_escape = [escape_char, '%', '_']
+        for esc in to_escape:
+            value = value.replace(esc, escape_char + esc)
+        assert value[-1] == '*'
+        return value[:-1] + '%'
+
     def get_from_index(self, index_name, key_values):
         definition = self._get_index_definition(index_name)
         # First, build the definition. We join the document_fields table
         # against itself, as many times as the 'width' of our definition.
         # We then do a query for each key_value, one-at-a-time.
+        # Note: All of these strings are static, we could cache them, etc.
         tables = ["document_fields d%d" % i for i in range(len(definition))]
-        where = ["d.doc_id = d%d.doc_id"
-                 " AND d%d.field_name = ?"
-                 " AND d%d.value = ?"
-                 % (i, i, i) for i in range(len(definition))]
+        novalue_where = ["d.doc_id = d%d.doc_id"
+                         " AND d%d.field_name = ?"
+                         % (i, i) for i in range(len(definition))]
+        wildcard_where = [novalue_where[i]
+                          + (" AND d%d.value NOT NULL" % (i,))
+                          for i in range(len(definition))]
+        exact_where = [novalue_where[i]
+                       + (" AND d%d.value = ?" % (i,))
+                       for i in range(len(definition))]
+        like_where = [novalue_where[i]
+                      + (" AND d%d.value LIKE ? ESCAPE '.'" % (i,))
+                      for i in range(len(definition))]
         c = self._db_handle.cursor()
         result = []
+        is_wildcard = False
         for key_value in key_values:
             # Merge the lists together, so that:
             # [field1, field2, field3], [val1, val2, val3]
             # Becomes:
             # (field1, val1, field2, val2, field3, val3)
             args = []
-            for field, val in zip(definition, key_value):
+            where = []
+            if len(key_value) != len(definition):
+                raise errors.InvalidValueForIndex()
+            for idx, (field, value) in enumerate(zip(definition, key_value)):
                 args.append(field)
-                args.append(val)
+                if value.endswith('*'):
+                    if value == '*':
+                        where.append(wildcard_where[idx])
+                    else:
+                        # This is a glob match
+                        if is_wildcard:
+                            # We can't have a partial wildcard following
+                            # another wildcard
+                            raise errors.InvalidValueForIndex()
+                        where.append(like_where[idx])
+                        args.append(self._transform_glob(value))
+                    is_wildcard = True
+                else:
+                    if is_wildcard:
+                        raise errors.InvalidValueForIndex()
+                    where.append(exact_where[idx])
+                    args.append(value)
             statement = ("SELECT d.doc_id, d.doc_rev, d.doc FROM document d, "
                          + ', '.join(tables) + " WHERE " + ' AND '.join(where))
             try:
@@ -430,7 +472,7 @@ class SQLiteExpandedDatabase(SQLiteDatabase):
         else:
             c.execute("INSERT INTO document VALUES (?, ?, ?)",
                       (doc_id, new_rev, doc))
-        values = self._expand_to_fields(doc_id, None, raw_doc)
+        values = self._expand_to_fields(doc_id, None, raw_doc, save_none=False)
         # Strip off the 'offset' column.
         values = [x[:3] for x in values]
         c.executemany("INSERT INTO document_fields VALUES (?, ?, ?)",
@@ -555,7 +597,7 @@ class SQLiteOnlyExpandedDatabase(SQLiteDatabase):
         else:
             c.execute("INSERT INTO document VALUES (?, ?, ?)",
                       (doc_id, new_rev, doc_content))
-        values = self._expand_to_fields(doc_id, None, raw_doc)
+        values = self._expand_to_fields(doc_id, None, raw_doc, save_none=True)
         c.executemany("INSERT INTO document_fields VALUES (?, ?, ?, ?)",
                       values)
         c.execute("INSERT INTO transaction_log(doc_id) VALUES (?)",

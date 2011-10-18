@@ -14,9 +14,9 @@
 
 """Test in-memory backend internals."""
 
-import u1db
 from u1db import (
-    tests, vectorclock
+    errors,
+    tests,
     )
 from u1db.backends import inmemory
 
@@ -107,3 +107,19 @@ class TestInMemoryIndex(tests.TestCase):
         idx.add_json('doc-id', simple_doc)
         idx.add_json('doc2-id', simple_doc)
         self.assertEqual(['doc-id', 'doc2-id'], idx.lookup([('value',)]))
+
+    def test__find_non_wildcards(self):
+        idx = inmemory.InMemoryIndex('idx-name', ['k1', 'k2', 'k3'])
+        self.assertEqual(-1, idx._find_non_wildcards(('a', 'b', 'c')))
+        self.assertEqual(2, idx._find_non_wildcards(('a', 'b', '*')))
+        self.assertEqual(3, idx._find_non_wildcards(('a', 'b', 'c*')))
+        self.assertEqual(2, idx._find_non_wildcards(('a', 'b*', '*')))
+        self.assertEqual(0, idx._find_non_wildcards(('*', '*', '*')))
+        self.assertEqual(1, idx._find_non_wildcards(('a*', '*', '*')))
+        self.assertRaises(errors.InvalidValueForIndex,
+            idx._find_non_wildcards, ('a', 'b'))
+        self.assertRaises(errors.InvalidValueForIndex,
+            idx._find_non_wildcards, ('a', 'b', 'c', 'd'))
+        self.assertRaises(errors.InvalidValueForIndex,
+            idx._find_non_wildcards, ('*', 'b', 'c'))
+
