@@ -17,9 +17,8 @@
 import simplejson
 from sqlite3 import dbapi2
 
-import u1db
 from u1db.backends import CommonBackend
-from u1db import compat
+from u1db import compat, errors
 
 
 class SQLiteDatabase(CommonBackend):
@@ -198,15 +197,15 @@ class SQLiteDatabase(CommonBackend):
 
     def put_doc(self, doc_id, old_doc_rev, doc):
         if doc_id is None:
-            raise u1db.InvalidDocId()
+            raise errors.InvalidDocId()
         old_doc = None
         with self._db_handle:
             if self._has_conflicts(doc_id):
-                raise u1db.ConflictedDoc()
+                raise errors.ConflictedDoc()
             old_rev, old_doc = self._get_doc(doc_id)
             if old_rev is not None:
                 if old_rev != old_doc_rev:
-                    raise u1db.InvalidDocRev()
+                    raise errors.InvalidDocRev()
             new_rev = self._allocate_doc_rev(old_doc_rev)
             self._put_and_update_indexes(doc_id, old_doc, new_rev, doc)
         return new_rev
@@ -267,11 +266,11 @@ class SQLiteDatabase(CommonBackend):
             if old_doc_rev is None:
                 raise KeyError
             if old_doc_rev != doc_rev:
-                raise u1db.InvalidDocRev()
+                raise errors.InvalidDocRev()
             if old_doc is None:
                 raise KeyError
             if self._has_conflicts(doc_id):
-                raise u1db.ConflictedDoc()
+                raise errors.ConflictedDoc()
             new_rev = self._allocate_doc_rev(old_doc_rev)
             self._put_and_update_indexes(doc_id, old_doc, new_rev, None)
         return new_rev
@@ -402,7 +401,7 @@ class SQLiteDatabase(CommonBackend):
             args = []
             where = []
             if len(key_value) != len(definition):
-                raise u1db.InvalidValueForIndex()
+                raise errors.InvalidValueForIndex()
             for idx, (field, value) in enumerate(zip(definition, key_value)):
                 args.append(field)
                 if value.endswith('*'):
@@ -413,13 +412,13 @@ class SQLiteDatabase(CommonBackend):
                         if is_wildcard:
                             # We can't have a partial wildcard following
                             # another wildcard
-                            raise u1db.InvalidValueForIndex()
+                            raise errors.InvalidValueForIndex()
                         where.append(like_where[idx])
                         args.append(value[:-1] + '%')
                     is_wildcard = True
                 else:
                     if is_wildcard:
-                        raise u1db.InvalidValueForIndex()
+                        raise errors.InvalidValueForIndex()
                     where.append(exact_where[idx])
                     args.append(value)
             statement = ("SELECT d.doc_id, d.doc_rev, d.doc FROM document d, "

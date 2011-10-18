@@ -240,21 +240,3 @@ class Database(object):
                 for this client
         """
         raise NotImplementedError(self._sync_exchange)
-
-
-class InvalidDocRev(Exception):
-    """The document revisions supplied does not match the current version."""
-
-
-class InvalidDocId(Exception):
-    """A document was tried with an invalid document identifier."""
-
-
-class ConflictedDoc(Exception):
-    """The document is conflicted, you must call resolve before put()"""
-
-
-class InvalidValueForIndex(Exception):
-    """The values supplied does not match the index definition.
-
-    """

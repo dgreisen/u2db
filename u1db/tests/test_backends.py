@@ -14,8 +14,8 @@
 
 """The Client class for U1DB."""
 
-import u1db
 from u1db import (
+    errors,
     tests,
     vectorclock,
     )
@@ -93,12 +93,12 @@ class DatabaseTests(DatabaseBaseTests):
     def test_create_doc_existing_id(self):
         doc_id, new_rev = self.c.create_doc(simple_doc)
         new_doc = '{"something": "else"}'
-        self.assertRaises(u1db.InvalidDocRev, self.c.create_doc,
+        self.assertRaises(errors.InvalidDocRev, self.c.create_doc,
                           new_doc, doc_id)
         self.assertEqual((new_rev, simple_doc, False), self.c.get_doc(doc_id))
 
     def test_put_doc_refuses_no_id(self):
-        self.assertRaises(u1db.InvalidDocId,
+        self.assertRaises(errors.InvalidDocId,
             self.c.put_doc, None, None, simple_doc)
 
     def test_put_doc_creating_initial(self):
@@ -116,7 +116,7 @@ class DatabaseTests(DatabaseBaseTests):
     def test_put_fails_with_bad_old_rev(self):
         doc_id, old_rev = self.c.create_doc(simple_doc, doc_id='my_doc_id')
         new_doc = '{"something": "else"}'
-        self.assertRaises(u1db.InvalidDocRev,
+        self.assertRaises(errors.InvalidDocRev,
             self.c.put_doc, 'my_doc_id', 'other:1', new_doc)
         self.assertEqual((old_rev, simple_doc, False),
                          self.c.get_doc('my_doc_id'))
@@ -141,7 +141,7 @@ class DatabaseTests(DatabaseBaseTests):
     def test_delete_doc_bad_rev(self):
         doc_id, doc_rev = self.c.create_doc(simple_doc)
         self.assertEqual((doc_rev, simple_doc, False), self.c.get_doc(doc_id))
-        self.assertRaises(u1db.InvalidDocRev,
+        self.assertRaises(errors.InvalidDocRev,
             self.c.delete_doc, doc_id, 'other:1')
         self.assertEqual((doc_rev, simple_doc, False), self.c.get_doc(doc_id))
 
@@ -344,18 +344,18 @@ class DatabaseIndexTests(DatabaseBaseTests):
     #     self.c.create_index('test-idx', ['key'])
     def test_get_from_index_illegal_number_of_entries(self):
         self.c.create_index('test-idx', ['k1', 'k2'])
-        self.assertRaises(u1db.InvalidValueForIndex,
+        self.assertRaises(errors.InvalidValueForIndex,
             self.c.get_from_index, 'test-idx', [()])
-        self.assertRaises(u1db.InvalidValueForIndex,
+        self.assertRaises(errors.InvalidValueForIndex,
             self.c.get_from_index, 'test-idx', [('v1',)])
-        self.assertRaises(u1db.InvalidValueForIndex,
+        self.assertRaises(errors.InvalidValueForIndex,
             self.c.get_from_index, 'test-idx', [('v1', 'v2', 'v3')])
 
     def test_get_from_index_illegal_wildcards(self):
         self.c.create_index('test-idx', ['k1', 'k2'])
-        self.assertRaises(u1db.InvalidValueForIndex,
+        self.assertRaises(errors.InvalidValueForIndex,
             self.c.get_from_index, 'test-idx', [('v*', 'v2')])
-        self.assertRaises(u1db.InvalidValueForIndex,
+        self.assertRaises(errors.InvalidValueForIndex,
             self.c.get_from_index, 'test-idx', [('*', 'v2')])
 
 
@@ -633,7 +633,7 @@ class DatabaseSyncTests(DatabaseBaseTests):
         self.c1.sync(self.c2)
         self.assertEqual((doc2_rev, new_doc1, True), self.c1.get_doc(doc_id))
         new_doc2 = '{"key": "local"}'
-        self.assertRaises(u1db.ConflictedDoc,
+        self.assertRaises(errors.ConflictedDoc,
             self.c1.put_doc, doc_id, doc2_rev, new_doc2)
 
     def test_delete_refuses_for_conflicted(self):
@@ -642,7 +642,7 @@ class DatabaseSyncTests(DatabaseBaseTests):
         doc_id, doc2_rev = self.c2.create_doc(new_doc1, doc_id=doc_id)
         self.c1.sync(self.c2)
         self.assertEqual((doc2_rev, new_doc1, True), self.c1.get_doc(doc_id))
-        self.assertRaises(u1db.ConflictedDoc,
+        self.assertRaises(errors.ConflictedDoc,
             self.c1.delete_doc, doc_id, doc2_rev)
 
     def test_get_doc_conflicts_unconflicted(self):

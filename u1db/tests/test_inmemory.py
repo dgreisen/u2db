@@ -14,9 +14,9 @@
 
 """Test in-memory backend internals."""
 
-import u1db
 from u1db import (
-    tests, vectorclock
+    errors,
+    tests,
     )
 from u1db.backends import inmemory
 
@@ -116,10 +116,10 @@ class TestInMemoryIndex(tests.TestCase):
         self.assertEqual(2, idx._find_non_wildcards(('a', 'b*', '*')))
         self.assertEqual(0, idx._find_non_wildcards(('*', '*', '*')))
         self.assertEqual(1, idx._find_non_wildcards(('a*', '*', '*')))
-        self.assertRaises(u1db.InvalidValueForIndex,
+        self.assertRaises(errors.InvalidValueForIndex,
             idx._find_non_wildcards, ('a', 'b'))
-        self.assertRaises(u1db.InvalidValueForIndex,
+        self.assertRaises(errors.InvalidValueForIndex,
             idx._find_non_wildcards, ('a', 'b', 'c', 'd'))
-        self.assertRaises(u1db.InvalidValueForIndex,
+        self.assertRaises(errors.InvalidValueForIndex,
             idx._find_non_wildcards, ('*', 'b', 'c'))
 
