@@ -65,6 +65,7 @@ class SQLiteDatabase(CommonBackend):
 
     def _is_initialized(self, c):
         """Check if this database has been initialized."""
+        c.execute("PRAGMA case_sensitive_like=ON")
         try:
             c.execute("SELECT value FROM u1db_config"
                       " WHERE name = 'sql_schema'")

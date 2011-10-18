@@ -340,6 +340,13 @@ class DatabaseIndexTests(DatabaseBaseTests):
             (doc4_id, doc4_rev, diff_value_doc)]),
             sorted(self.c.get_from_index('test-idx', [('*',)])))
 
+    def test_get_from_index_case_sensitive(self):
+        self.c.create_index('test-idx', ['key'])
+        doc1_id, doc1_rev = self.c.create_doc(simple_doc)
+        self.assertEqual([], self.c.get_from_index('test-idx', [('V*',)]))
+        self.assertEqual([(doc1_id, doc1_rev, simple_doc)],
+                         self.c.get_from_index('test-idx', [('v*',)]))
+
     # def test_get_from_index_empty_string(self):
     #     self.c.create_index('test-idx', ['key'])
     def test_get_from_index_illegal_number_of_entries(self):
