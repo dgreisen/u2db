@@ -120,8 +120,11 @@ class DatabaseSyncTests(tests.DatabaseBaseTests):
         self.db1 = self.create_database('test1')
         self.db2 = self.create_database('test2')
 
+    def sync(self, db_source, db_target):
+        return sync.Synchronizer(db_source, db_target.get_sync_target()).sync()
+
     def test_sync_tracks_db_rev_of_other(self):
-        self.assertEqual(0, sync.Synchronizer(self.db1, self.db2).sync())
+        self.assertEqual(0, self.sync(self.db1, self.db2))
         self.assertEqual(0, self.db1.get_sync_generation('test2'))
         self.assertEqual(0, self.db2.get_sync_generation('test1'))
         self.assertEqual({'receive': {'docs': [], 'from_id': 'test1',
@@ -132,7 +135,7 @@ class DatabaseSyncTests(tests.DatabaseBaseTests):
 
     def test_sync_puts_changes(self):
         doc_id, doc_rev = self.db1.create_doc(simple_doc)
-        self.assertEqual(1, sync.Synchronizer(self.db1, self.db2).sync())
+        self.assertEqual(1, self.sync(self.db1, self.db2))
         self.assertEqual((doc_rev, simple_doc, False), self.db2.get_doc(doc_id))
         self.assertEqual(1, self.db1.get_sync_generation('test2'))
         self.assertEqual(1, self.db2.get_sync_generation('test1'))
@@ -146,7 +149,7 @@ class DatabaseSyncTests(tests.DatabaseBaseTests):
     def test_sync_pulls_changes(self):
         doc_id, doc_rev = self.db2.create_doc(simple_doc)
         self.db1.create_index('test-idx', ['key'])
-        self.assertEqual(0, sync.Synchronizer(self.db1, self.db2).sync())
+        self.assertEqual(0, self.sync(self.db1, self.db2))
         self.assertEqual((doc_rev, simple_doc, False), self.db1.get_doc(doc_id))
         self.assertEqual(1, self.db1.get_sync_generation('test2'))
         self.assertEqual(1, self.db2.get_sync_generation('test1'))
@@ -170,7 +173,7 @@ class DatabaseSyncTests(tests.DatabaseBaseTests):
             self.db1.create_doc(simple_doc)
             return result
         self.db1.put_docs = after_put_docs
-        self.assertEqual(0, sync.Synchronizer(self.db1, self.db2).sync())
+        self.assertEqual(0, self.sync(self.db1, self.db2))
         self.assertEqual({'receive': {'docs': [], 'from_id': 'test1',
                                       'from_rev': 0, 'last_known_rev': 0},
                           'return': {'new_docs': [(doc_id, doc_rev)],
@@ -185,9 +188,9 @@ class DatabaseSyncTests(tests.DatabaseBaseTests):
     def test_sync_ignores_convergence(self):
         doc_id, doc_rev = self.db1.create_doc(simple_doc)
         self.db3 = self.create_database('test3')
-        self.assertEqual(1, sync.Synchronizer(self.db1, self.db3).sync())
-        self.assertEqual(0, sync.Synchronizer(self.db2, self.db3).sync())
-        self.assertEqual(1, sync.Synchronizer(self.db1, self.db2).sync())
+        self.assertEqual(1, self.sync(self.db1, self.db3))
+        self.assertEqual(0, self.sync(self.db2, self.db3))
+        self.assertEqual(1, self.sync(self.db1, self.db2))
         self.assertEqual({'receive': {'docs': [(doc_id, doc_rev)],
                                       'from_id': 'test1',
                                       'from_rev': 1, 'last_known_rev': 0},
@@ -198,11 +201,11 @@ class DatabaseSyncTests(tests.DatabaseBaseTests):
     def test_sync_ignores_superseded(self):
         doc_id, doc_rev = self.db1.create_doc(simple_doc)
         self.db3 = self.create_database('test3')
-        sync.Synchronizer(self.db1, self.db3).sync()
-        sync.Synchronizer(self.db2, self.db3).sync()
+        self.sync(self.db1, self.db3)
+        self.sync(self.db2, self.db3)
         new_doc = '{"key": "altval"}'
         doc_rev2 = self.db1.put_doc(doc_id, doc_rev, new_doc)
-        sync.Synchronizer(self.db2, self.db1).sync()
+        self.sync(self.db2, self.db1)
         self.assertEqual({'receive': {'docs': [(doc_id, doc_rev)],
                                       'from_id': 'test2',
                                       'from_rev': 1, 'last_known_rev': 0},
@@ -218,7 +221,7 @@ class DatabaseSyncTests(tests.DatabaseBaseTests):
         new_doc = '{"key": "altval"}'
         doc_id, doc2_rev = self.db2.create_doc(new_doc, doc_id=doc_id)
         self.assertEqual([doc_id], self.db1._get_transaction_log())
-        sync.Synchronizer(self.db1, self.db2).sync()
+        self.sync(self.db1, self.db2)
         self.assertEqual({'receive': {'docs': [(doc_id, doc1_rev)],
                                       'from_id': 'test1',
                                       'from_rev': 1, 'last_known_rev': 0},
@@ -236,13 +239,13 @@ class DatabaseSyncTests(tests.DatabaseBaseTests):
     def test_sync_sees_remote_delete_conflicted(self):
         doc_id, doc1_rev = self.db1.create_doc(simple_doc)
         self.db1.create_index('test-idx', ['key'])
-        sync.Synchronizer(self.db1, self.db2).sync()
+        self.sync(self.db1, self.db2)
         doc2_rev = doc1_rev
         new_doc = '{"key": "altval"}'
         doc1_rev = self.db1.put_doc(doc_id, doc1_rev, new_doc)
         doc2_rev = self.db2.delete_doc(doc_id, doc2_rev)
         self.assertEqual([doc_id, doc_id], self.db1._get_transaction_log())
-        sync.Synchronizer(self.db1, self.db2).sync()
+        self.sync(self.db1, self.db2)
         self.assertEqual({'receive': {'docs': [(doc_id, doc1_rev)],
                                       'from_id': 'test1',
                                       'from_rev': 2, 'last_known_rev': 1},
@@ -259,7 +262,7 @@ class DatabaseSyncTests(tests.DatabaseBaseTests):
     def test_sync_local_race_conflicted(self):
         doc_id, doc1_rev = self.db1.create_doc(simple_doc)
         self.db1.create_index('test-idx', ['key'])
-        sync.Synchronizer(self.db1, self.db2).sync()
+        self.sync(self.db1, self.db2)
         new_doc1 = '{"key": "localval"}'
         new_doc2 = '{"key": "altval"}'
         doc2_rev2 = self.db2.put_doc(doc_id, doc1_rev, new_doc2)
@@ -271,7 +274,7 @@ class DatabaseSyncTests(tests.DatabaseBaseTests):
             self.db1.put_doc(doc_id, doc1_rev, new_doc1)
             return val
         self.db1.whats_changed = after_whatschanged
-        sync.Synchronizer(self.db1, self.db2).sync()
+        self.sync(self.db1, self.db2)
         self.assertEqual((doc2_rev2, new_doc2, True), self.db1.get_doc(doc_id))
         self.assertEqual([(doc_id, doc2_rev2, new_doc2)],
                          self.db1.get_from_index('test-idx', [('altval',)]))
@@ -281,12 +284,12 @@ class DatabaseSyncTests(tests.DatabaseBaseTests):
     def test_sync_propagates_deletes(self):
         doc_id, doc1_rev = self.db1.create_doc(simple_doc)
         self.db1.create_index('test-idx', ['key'])
-        sync.Synchronizer(self.db1, self.db2).sync()
+        self.sync(self.db1, self.db2)
         self.db2.create_index('test-idx', ['key'])
         self.db3 = self.create_database('test3')
-        sync.Synchronizer(self.db1, self.db3).sync()
+        self.sync(self.db1, self.db3)
         deleted_rev = self.db1.delete_doc(doc_id, doc1_rev)
-        sync.Synchronizer(self.db1, self.db2).sync()
+        self.sync(self.db1, self.db2)
         self.assertEqual({'receive': {'docs': [(doc_id, deleted_rev)],
                                       'from_id': 'test1',
                                       'from_rev': 2, 'last_known_rev': 1},
@@ -297,7 +300,7 @@ class DatabaseSyncTests(tests.DatabaseBaseTests):
         self.assertEqual((deleted_rev, None, False), self.db2.get_doc(doc_id))
         self.assertEqual([], self.db1.get_from_index('test-idx', [('value',)]))
         self.assertEqual([], self.db2.get_from_index('test-idx', [('value',)]))
-        sync.Synchronizer(self.db2, self.db3).sync()
+        self.sync(self.db2, self.db3)
         self.assertEqual({'receive': {'docs': [(doc_id, deleted_rev)],
                                       'from_id': 'test2',
                                       'from_rev': 2, 'last_known_rev': 0},
@@ -310,7 +313,7 @@ class DatabaseSyncTests(tests.DatabaseBaseTests):
         doc_id, doc1_rev = self.db1.create_doc(simple_doc)
         new_doc1 = '{"key": "altval"}'
         doc_id, doc2_rev = self.db2.create_doc(new_doc1, doc_id=doc_id)
-        sync.Synchronizer(self.db1, self.db2).sync()
+        self.sync(self.db1, self.db2)
         self.assertEqual((doc2_rev, new_doc1, True), self.db1.get_doc(doc_id))
         new_doc2 = '{"key": "local"}'
         self.assertRaises(errors.ConflictedDoc,
@@ -320,7 +323,7 @@ class DatabaseSyncTests(tests.DatabaseBaseTests):
         doc_id, doc1_rev = self.db1.create_doc(simple_doc)
         new_doc1 = '{"key": "altval"}'
         doc_id, doc2_rev = self.db2.create_doc(new_doc1, doc_id=doc_id)
-        sync.Synchronizer(self.db1, self.db2).sync()
+        self.sync(self.db1, self.db2)
         self.assertEqual((doc2_rev, new_doc1, True), self.db1.get_doc(doc_id))
         self.assertRaises(errors.ConflictedDoc,
             self.db1.delete_doc, doc_id, doc2_rev)
@@ -336,7 +339,7 @@ class DatabaseSyncTests(tests.DatabaseBaseTests):
         doc_id, doc1_rev = self.db1.create_doc(simple_doc)
         new_doc1 = '{"key": "altval"}'
         doc_id, doc2_rev = self.db2.create_doc(new_doc1, doc_id=doc_id)
-        sync.Synchronizer(self.db1, self.db2).sync()
+        self.sync(self.db1, self.db2)
         self.assertEqual([(doc2_rev, new_doc1),
                           (doc1_rev, simple_doc)],
                          self.db1.get_doc_conflicts(doc_id))
@@ -345,7 +348,7 @@ class DatabaseSyncTests(tests.DatabaseBaseTests):
         doc_id, doc1_rev = self.db1.create_doc(simple_doc)
         new_doc1 = '{"key": "altval"}'
         doc_id, doc2_rev = self.db2.create_doc(new_doc1, doc_id=doc_id)
-        sync.Synchronizer(self.db1, self.db2).sync()
+        self.sync(self.db1, self.db2)
         self.assertEqual([(doc2_rev, new_doc1),
                           (doc1_rev, simple_doc)],
                          self.db1.get_doc_conflicts(doc_id))
@@ -361,7 +364,7 @@ class DatabaseSyncTests(tests.DatabaseBaseTests):
         new_doc1 = '{"key": "altval"}'
         doc_id, doc2_rev = self.db2.create_doc(new_doc1, doc_id=doc_id)
         doc2_rev = self.db2.put_doc(doc_id, doc2_rev, new_doc1)
-        sync.Synchronizer(self.db1, self.db2).sync()
+        self.sync(self.db1, self.db2)
         self.assertEqual([(doc2_rev, new_doc1),
                           (doc1_rev, simple_doc)],
                          self.db1.get_doc_conflicts(doc_id))
@@ -380,14 +383,14 @@ class DatabaseSyncTests(tests.DatabaseBaseTests):
         doc_id, doc1_rev = self.db1.create_doc(simple_doc)
         new_doc2 = '{"key": "valin2"}'
         doc_id, doc2_rev = self.db2.create_doc(new_doc2, doc_id=doc_id)
-        sync.Synchronizer(self.db1, self.db2).sync()
+        self.sync(self.db1, self.db2)
         self.assertEqual([(doc2_rev, new_doc2),
                           (doc1_rev, simple_doc)],
                          self.db1.get_doc_conflicts(doc_id))
         self.db3 = self.create_database('test3')
         new_doc3 = '{"key": "valin3"}'
         doc_id, doc3_rev = self.db3.create_doc(new_doc3, doc_id=doc_id)
-        sync.Synchronizer(self.db1, self.db3).sync()
+        self.sync(self.db1, self.db3)
         self.assertEqual([(doc3_rev, new_doc3),
                           (doc1_rev, simple_doc),
                           (doc2_rev, new_doc2)],
@@ -403,11 +406,11 @@ class DatabaseSyncTests(tests.DatabaseBaseTests):
         doc_id, doc1_rev = self.db1.create_doc(simple_doc)
         new_doc2 = '{"key": "valin2"}'
         doc_id, doc2_rev = self.db2.create_doc(new_doc2, doc_id=doc_id)
-        sync.Synchronizer(self.db1, self.db2).sync()
+        self.sync(self.db1, self.db2)
         self.db3 = self.create_database('test3')
         new_doc3 = '{"key": "valin3"}'
         doc_id, doc3_rev = self.db3.create_doc(new_doc3, doc_id=doc_id)
-        sync.Synchronizer(self.db1, self.db3).sync()
+        self.sync(self.db1, self.db3)
         self.assertEqual([(doc3_rev, new_doc3),
                           (doc1_rev, simple_doc),
                           (doc2_rev, new_doc2)],

@@ -24,9 +24,14 @@ class Synchronizer(object):
     at the moment, conflicts are only created in the source.
     """
 
-    def __init__(self, source, target):
+    def __init__(self, source, sync_target):
+        """Create a new Synchronization object.
+
+        :param source: A Database
+        :param sync_target: A SyncTarget
+        """
         self.source = source
-        self.target = target
+        self.sync_target = sync_target
 
     def _insert_conflicts(self, docs_info):
         """Record all of docs_info as conflicted documents.
@@ -42,7 +47,7 @@ class Synchronizer(object):
         return len(docs_info)
 
     def sync(self, callback=None):
-        sync_target = self.target.get_sync_target()
+        sync_target = self.sync_target
         (other_machine_id, other_rev,
          others_my_rev) = sync_target.get_sync_info(self.source._machine_id)
         docs_to_send = []
