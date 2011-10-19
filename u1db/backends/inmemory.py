@@ -17,7 +17,7 @@
 import simplejson
 
 from u1db import errors
-from u1db.backends import CommonBackend
+from u1db.backends import CommonBackend, CommonSyncTarget
 
 
 class InMemoryDatabase(CommonBackend):
@@ -34,9 +34,11 @@ class InMemoryDatabase(CommonBackend):
         self._machine_id = machine_id
         self._last_exchange_log = None
 
-    def _get_sync_info(self, other_machine_id):
-        other_rev = self._other_revs.get(other_machine_id, 0)
-        return self._machine_id, len(self._transaction_log), other_rev
+    def get_sync_generation(self, other_db_id):
+        return self._other_revs.get(other_db_id, 0)
+
+    def get_sync_target(self):
+        return InMemorySyncTarget(self)
 
     def _record_sync_info(self, machine_id, db_rev):
         self._other_revs[machine_id] = db_rev
@@ -256,3 +258,14 @@ class InMemoryIndex(object):
         if key in self._values:
             return self._values[key]
         return ()
+
+
+class InMemorySyncTarget(CommonSyncTarget):
+
+    def __init__(self, db):
+        self._db = db
+
+    def get_sync_info(self, other_machine_id):
+        other_rev = self._db.get_sync_generation(other_machine_id)
+        return self._db._machine_id, len(self._db._transaction_log), other_rev
+

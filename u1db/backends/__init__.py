@@ -140,6 +140,9 @@ class CommonBackend(u1db.Database):
             self._put_as_conflict(doc_id, doc_rev, doc)
         return len(docs_info)
 
+    def get_sync_generation(self, other_db_id):
+        return self._get_sync_info(other_db_id)[2]
+
     def get_sync_target(self):
         return CommonSyncTarget(self)
 
@@ -170,14 +173,15 @@ class CommonBackend(u1db.Database):
         return new_docs, conflicts, my_db_rev
 
     def sync(self, other, callback=None):
+        st = other.get_sync_target()
         (other_machine_id, other_rev,
-         others_my_rev) = other._get_sync_info(self._machine_id)
+         others_my_rev) = st.get_sync_info(self._machine_id)
         docs_to_send = []
         my_db_rev, changed_doc_ids = self.whats_changed(others_my_rev)
         for doc_id in changed_doc_ids:
             doc_rev, doc = self._get_doc(doc_id)
             docs_to_send.append((doc_id, doc_rev, doc))
-        _, _, other_last_known_rev = self._get_sync_info(other_machine_id)
+        other_last_known_rev = self.get_sync_generation(other_machine_id)
         (new_records, conflicted_records,
          new_db_rev) = other._sync_exchange(docs_to_send, self._machine_id,
                             my_db_rev, other_last_known_rev)

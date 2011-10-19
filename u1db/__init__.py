@@ -181,6 +181,19 @@ class Database(object):
         """
         raise NotImplementedError(self.get_sync_target)
 
+    def get_sync_generation(self, other_db_id):
+        """Return the last known database generation of 'other'.
+
+        When you do a synchronization with another database, the Database keeps
+        track of what generation the other database was at. This way we only
+        have to request data that is newer.
+
+        :param other_db_id: The identifier for the other database.
+        :return: The generation we encountered during synchronization. If we've
+            never synchronized with the machine, this is 0.
+        """
+        raise NotImplementedError(self.get_sync_generation)
+
 
 class SyncTarget(object):
     """Functionality for using a Database as a synchronization target."""
