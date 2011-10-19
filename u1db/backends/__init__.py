@@ -126,40 +126,6 @@ class CommonBackend(u1db.Database):
                 conflict_ids.add(doc_id)
         return conflict_ids, superseded_ids, num_inserted
 
-    def _insert_conflicts(self, docs_info):
-        """Record all of docs_info as conflicted documents.
-
-        Because of the 'TAKE_OTHER' semantics, any document which is marked as
-        conflicted takes docs_info as the official value.
-        This will update index definitions, etc.
-
-        :return: The number of documents inserted into the db.
-        """
-        for doc_id, doc_rev, doc in docs_info:
-            self.force_doc_with_conflict(doc_id, doc_rev, doc)
-        return len(docs_info)
-
-    def sync(self, other, callback=None):
-        other_st = other.get_sync_target()
-        (other_machine_id, other_rev,
-         others_my_rev) = other_st.get_sync_info(self._machine_id)
-        docs_to_send = []
-        my_db_rev, changed_doc_ids = self.whats_changed(others_my_rev)
-        docs_to_send = self.get_docs(changed_doc_ids)
-        other_last_known_rev = self.get_sync_generation(other_machine_id)
-        (new_records, conflicted_records,
-         new_db_rev) = other_st.sync_exchange(docs_to_send, self._machine_id,
-                            my_db_rev, other_last_known_rev)
-        all_records = new_records + conflicted_records
-        conflict_ids, _, num_inserted = self.put_docs(all_records)
-        conflict_docs = [r for r in all_records if r[0] in conflict_ids]
-        num_inserted += self._insert_conflicts(conflict_docs)
-        self.set_sync_generation(other_machine_id, new_db_rev)
-        cur_db_rev = self._get_db_rev()
-        if cur_db_rev == my_db_rev + num_inserted:
-            other_st.record_sync_info(self._machine_id, cur_db_rev)
-        return my_db_rev
-
     def _ensure_maximal_rev(self, cur_rev, extra_revs):
         vcr = VectorClockRev(cur_rev)
         for rev in extra_revs:

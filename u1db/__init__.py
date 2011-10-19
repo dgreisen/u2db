@@ -23,21 +23,6 @@ class Database(object):
     This data store can be synchronized with other u1db.Database instances.
     """
 
-    def sync(self, other, callback=None):
-        """Synchronize my database with another database.
-        This pushes local changes to the remote, and pulls remote changes
-        locally.  There is not a separate push vs pull step.
-
-        :param other: Another database to sync with
-        :param callback: gives optional progress callbacks
-        :return: old_db_rev
-            The global database revision before sync started. You can pass the
-            old_db_rev to whats_changed to find out what was actually updated.
-            (concurrent updates to the local db outside of sync will also be
-            included in whats_changed)
-        """
-        raise NotImplementedError(self.sync)
-
     def whats_changed(self, old_db_rev):
         """Return a list of entries that have changed since old_db_rev.
         This allows APPS to only store a db_rev before going 'offline', and
