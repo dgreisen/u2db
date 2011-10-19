@@ -101,6 +101,13 @@ class DatabaseTests(DatabaseBaseTests):
         self.assertRaises(errors.InvalidDocId,
             self.db.put_doc, None, None, simple_doc)
 
+    def test_get_docs(self):
+        doc1_id, doc1_rev = self.db.create_doc(simple_doc)
+        doc2_id, doc2_rev = self.db.create_doc(nested_doc)
+        self.assertEqual([(doc1_id, doc1_rev, simple_doc),
+                          (doc2_id, doc2_rev, nested_doc)],
+                         self.db.get_docs([doc1_id, doc2_id]))
+
     def test_put_doc_creating_initial(self):
         new_rev = self.db.put_doc('my_doc_id', None, simple_doc)
         self.assertEqual((new_rev, simple_doc, False),

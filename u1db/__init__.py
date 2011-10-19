@@ -65,6 +65,15 @@ class Database(object):
         """
         raise NotImplementedError(self.get_doc)
 
+    def get_docs(self, doc_ids):
+        """Get the JSON content for many documents.
+
+        :param doc_ids: A list of document identifiers.
+        :return: [(doc_rev, doc)] for each document listed, note that this
+            ignores conflicts.
+        """
+        raise NotImplementedError(self.get_docs)
+
     def create_doc(self, doc, doc_id=None):
         """Create a new document.
 

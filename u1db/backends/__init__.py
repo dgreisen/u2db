@@ -30,15 +30,10 @@ class CommonSyncTarget(u1db.SyncTarget):
         seen_ids = [x[0] for x in docs_info if x[0] not in superseded_ids]
         new_docs = []
         my_db_rev, changed_doc_ids = self._db.whats_changed(last_known_rev)
-        for doc_id in changed_doc_ids:
-            if doc_id in seen_ids:
-                continue
-            doc_rev, doc = self._db._get_doc(doc_id)
-            new_docs.append((doc_id, doc_rev, doc))
-        conflicts = []
-        for doc_id in conflict_ids:
-            doc_rev, doc = self._db._get_doc(doc_id)
-            conflicts.append((doc_id, doc_rev, doc))
+        doc_ids_to_return = [doc_id for doc_id in changed_doc_ids
+                             if doc_id not in seen_ids]
+        new_docs = self._db.get_docs(doc_ids_to_return)
+        conflicts = self._db.get_docs(conflict_ids)
         self._db.set_sync_generation(from_machine_id, from_machine_rev)
         self._db._last_exchange_log = {
             'receive': {'docs': [(di, dr) for di, dr, _ in docs_info],
@@ -109,6 +104,9 @@ class CommonBackend(u1db.Database):
         else:
             return cur_doc, 'conflicted'
 
+    def get_docs(self, doc_ids):
+        return [(doc_id,) + self._get_doc(doc_id) for doc_id in doc_ids]
+
     def put_docs(self, docs_info):
         superseded_ids = set()
         conflict_ids = set()
@@ -151,9 +149,7 @@ class CommonBackend(u1db.Database):
          others_my_rev) = other_st.get_sync_info(self._machine_id)
         docs_to_send = []
         my_db_rev, changed_doc_ids = self.whats_changed(others_my_rev)
-        for doc_id in changed_doc_ids:
-            doc_rev, doc = self._get_doc(doc_id)
-            docs_to_send.append((doc_id, doc_rev, doc))
+        docs_to_send = self.get_docs(changed_doc_ids)
         other_last_known_rev = self.get_sync_generation(other_machine_id)
         (new_records, conflicted_records,
          new_db_rev) = other_st.sync_exchange(docs_to_send, self._machine_id,
