@@ -25,7 +25,9 @@ class CommonSyncTarget(u1db.SyncTarget):
 
     def sync_exchange(self, docs_info, from_machine_id, from_machine_rev,
                       last_known_rev):
-        seen_ids, conflict_ids, _ = self._db._insert_many_docs(docs_info)
+        (conflict_ids, superseded_ids,
+         num_inserted) = self._db.put_docs(docs_info)
+        seen_ids = [x[0] for x in docs_info if x[0] not in superseded_ids]
         new_docs = []
         my_db_rev, changed_doc_ids = self._db.whats_changed(last_known_rev)
         for doc_id in changed_doc_ids:
@@ -175,7 +177,7 @@ class CommonBackend(u1db.Database):
          new_db_rev) = other_st.sync_exchange(docs_to_send, self._machine_id,
                             my_db_rev, other_last_known_rev)
         all_records = new_records + conflicted_records
-        _, conflict_ids, num_inserted = self._insert_many_docs(all_records)
+        conflict_ids, _, num_inserted = self.put_docs(all_records)
         conflict_docs = [r for r in all_records if r[0] in conflict_ids]
         num_inserted += self._insert_conflicts(conflict_docs)
         self.set_sync_generation(other_machine_id, new_db_rev)
