@@ -80,11 +80,6 @@ class CommonBackend(u1db.Database):
             doc_id = self._allocate_doc_id()
         return doc_id, self.put_doc(doc_id, None, doc)
 
-    def put_docs(self, docs_info):
-        seen_ids, conflict_ids, num_inserted = self._insert_many_docs(docs_info)
-        all_ids = set([x[0] for x in docs_info])
-        return conflict_ids, all_ids - seen_ids, num_inserted
-
     def _get_transaction_log(self):
         """This is only for the test suite, it is not part of the api."""
         raise NotImplementedError(self._get_transaction_log)
@@ -114,37 +109,24 @@ class CommonBackend(u1db.Database):
         else:
             return cur_doc, 'conflicted'
 
-    def _insert_many_docs(self, docs_info):
-        """Add a bunch of documents to the local store.
-
-        This will only add entries if they supersede the local entries,
-        otherwise the doc ids will be added to conflict_ids.
-        :param docs_info: List of [(doc_id, doc_rev, doc)]
-        :return: (seen_ids, conflict_ids, num_inserted) sets of entries that
-            were seen, and what was considered conflicted and not added, and
-            the number of documents that were explictly added.
-        """
+    def put_docs(self, docs_info):
+        superseded_ids = set()
         conflict_ids = set()
-        seen_ids = set()
         num_inserted = 0
         for doc_id, doc_rev, doc in docs_info:
             old_doc, state = self._compare_and_insert_doc(doc_id, doc_rev, doc)
-            seen_ids.add(doc_id)
             if state == 'inserted':
                 num_inserted += 1
             elif state == 'converged':
                 # magical convergence
                 continue
             elif state == 'superseded':
-                # Don't add this to seen_ids, because we have something newer,
-                # so we should send it back, and we should not generate a
-                # conflict
-                seen_ids.remove(doc_id)
+                superseded_ids.add(doc_id)
                 continue
             else:
                 assert state == 'conflicted'
                 conflict_ids.add(doc_id)
-        return seen_ids, conflict_ids, num_inserted
+        return conflict_ids, superseded_ids, num_inserted
 
     def _put_as_conflict(self, doc_id, doc_rev, doc):
         """Insert a doc as current value, putting cur value as conflict."""
