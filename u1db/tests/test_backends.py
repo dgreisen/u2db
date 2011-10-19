@@ -382,9 +382,10 @@ class DatabaseIndexTests(DatabaseBaseTests):
         self.db.create_index('test-idx', ['key'])
         new_doc = '{"key": "altval"}'
         other_rev = 'test:1|z:2'
-        result = self.db._sync_exchange([(doc_id, other_rev, new_doc)],
-                                        'other-machine', from_machine_rev=10,
-                                        last_known_rev=0)
+        st = self.db.get_sync_target()
+        result = st.sync_exchange([(doc_id, other_rev, new_doc)],
+                                  'other-machine', from_machine_rev=10,
+                                  last_known_rev=0)
         self.assertEqual((other_rev, new_doc, False), self.db.get_doc(doc_id))
         self.assertEqual([(doc_id, other_rev, new_doc)],
                          self.db.get_from_index('test-idx', [('altval',)]))
@@ -482,15 +483,11 @@ class DatabaseSyncTests(DatabaseBaseTests):
     def setUp(self):
         super(DatabaseSyncTests, self).setUp()
         self.db1 = self.create_database('test1')
-        self.st1 = self.db1.get_sync_target()
         self.db2 = self.create_database('test2')
-        self.st2 = self.db2.get_sync_target()
 
     def test_sync_tracks_db_rev_of_other(self):
         self.assertEqual(0, self.db1.sync(self.db2))
-        self.assertEqual(('test1', 0, 0), self.st1.get_sync_info('test2'))
         self.assertEqual(0, self.db1.get_sync_generation('test2'))
-        self.assertEqual(('test2', 0, 0), self.st2.get_sync_info('test1'))
         self.assertEqual(0, self.db2.get_sync_generation('test1'))
         self.assertEqual({'receive': {'docs': [], 'from_id': 'test1',
                                       'from_rev': 0, 'last_known_rev': 0},
@@ -532,12 +529,12 @@ class DatabaseSyncTests(DatabaseBaseTests):
         # with a new record. When we finish synchronizing, we can notice that
         # something locally was updated, and we cannot tell c2 our new updated
         # db_rev
-        orig_se = self.db2._sync_exchange
-        def after_sync_exchange(*args, **kwargs):
-            result = orig_se(*args, **kwargs)
+        orig = self.db1._insert_many_docs
+        def after_insert_many_docs(*args, **kwargs):
+            result = orig(*args, **kwargs)
             self.db1.create_doc(simple_doc)
             return result
-        self.db2._sync_exchange = after_sync_exchange
+        self.db1._insert_many_docs = after_insert_many_docs
         self.assertEqual(0, self.db1.sync(self.db2))
         self.assertEqual({'receive': {'docs': [], 'from_id': 'test1',
                                       'from_rev': 0, 'last_known_rev': 0},

@@ -31,8 +31,30 @@ class CommonSyncTarget(u1db.SyncTarget):
 
     def sync_exchange(self, docs_info, from_machine_id, from_machine_rev,
                       last_known_rev):
-        return self._db._sync_exchange(docs_info, from_machine_id,
-            from_machine_rev, last_known_rev)
+        seen_ids, conflict_ids, _ = self._db._insert_many_docs(docs_info)
+        new_docs = []
+        my_db_rev, changed_doc_ids = self._db.whats_changed(last_known_rev)
+        for doc_id in changed_doc_ids:
+            if doc_id in seen_ids:
+                continue
+            doc_rev, doc = self._db._get_doc(doc_id)
+            new_docs.append((doc_id, doc_rev, doc))
+        conflicts = []
+        for doc_id in conflict_ids:
+            doc_rev, doc = self._db._get_doc(doc_id)
+            conflicts.append((doc_id, doc_rev, doc))
+        self._db.set_sync_generation(from_machine_id, from_machine_rev)
+        self._db._last_exchange_log = {
+            'receive': {'docs': [(di, dr) for di, dr, _ in docs_info],
+                        'from_id': from_machine_id,
+                        'from_rev': from_machine_rev,
+                        'last_known_rev': last_known_rev},
+            'return': {'new_docs': [(di, dr) for di, dr, _ in new_docs],
+                       'conf_docs': [(di, dr) for di, dr, _ in conflicts],
+                       'last_rev': my_db_rev}
+        }
+        return new_docs, conflicts, my_db_rev
+
 
 
 class CommonBackend(u1db.Database):
@@ -149,36 +171,10 @@ class CommonBackend(u1db.Database):
     def get_sync_target(self):
         return CommonSyncTarget(self)
 
-    def _sync_exchange(self, docs_info, from_machine_id, from_machine_rev,
-                       last_known_rev):
-        seen_ids, conflict_ids, _ = self._insert_many_docs(docs_info)
-        new_docs = []
-        my_db_rev, changed_doc_ids = self.whats_changed(last_known_rev)
-        for doc_id in changed_doc_ids:
-            if doc_id in seen_ids:
-                continue
-            doc_rev, doc = self._get_doc(doc_id)
-            new_docs.append((doc_id, doc_rev, doc))
-        conflicts = []
-        for doc_id in conflict_ids:
-            doc_rev, doc = self._get_doc(doc_id)
-            conflicts.append((doc_id, doc_rev, doc))
-        self.set_sync_generation(from_machine_id, from_machine_rev)
-        self._last_exchange_log = {
-            'receive': {'docs': [(di, dr) for di, dr, _ in docs_info],
-                        'from_id': from_machine_id,
-                        'from_rev': from_machine_rev,
-                        'last_known_rev': last_known_rev},
-            'return': {'new_docs': [(di, dr) for di, dr, _ in new_docs],
-                       'conf_docs': [(di, dr) for di, dr, _ in conflicts],
-                       'last_rev': my_db_rev}
-        }
-        return new_docs, conflicts, my_db_rev
-
     def sync(self, other, callback=None):
-        st = other.get_sync_target()
+        other_st = other.get_sync_target()
         (other_machine_id, other_rev,
-         others_my_rev) = st.get_sync_info(self._machine_id)
+         others_my_rev) = other_st.get_sync_info(self._machine_id)
         docs_to_send = []
         my_db_rev, changed_doc_ids = self.whats_changed(others_my_rev)
         for doc_id in changed_doc_ids:
@@ -186,7 +182,7 @@ class CommonBackend(u1db.Database):
             docs_to_send.append((doc_id, doc_rev, doc))
         other_last_known_rev = self.get_sync_generation(other_machine_id)
         (new_records, conflicted_records,
-         new_db_rev) = other._sync_exchange(docs_to_send, self._machine_id,
+         new_db_rev) = other_st.sync_exchange(docs_to_send, self._machine_id,
                             my_db_rev, other_last_known_rev)
         all_records = new_records + conflicted_records
         _, conflict_ids, num_inserted = self._insert_many_docs(all_records)
@@ -195,7 +191,7 @@ class CommonBackend(u1db.Database):
         self.set_sync_generation(other_machine_id, new_db_rev)
         cur_db_rev = self._get_db_rev()
         if cur_db_rev == my_db_rev + num_inserted:
-            st.record_sync_info(self._machine_id, cur_db_rev)
+            other_st.record_sync_info(self._machine_id, cur_db_rev)
         return my_db_rev
 
     def _ensure_maximal_rev(self, cur_rev, extra_revs):

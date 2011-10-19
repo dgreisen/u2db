@@ -30,7 +30,6 @@ class InMemoryDatabase(CommonBackend):
         self._conflicts = {}
         self._other_revs = {}
         self._indexes = {}
-        self._doc_counter = 0
         self._machine_id = machine_id
         self._last_exchange_log = None
 
@@ -46,8 +45,7 @@ class InMemoryDatabase(CommonBackend):
         return InMemorySyncTarget(self)
 
     def _allocate_doc_id(self):
-        self._doc_counter += 1
-        return 'doc-%d' % (self._doc_counter,)
+        return 'doc-%d' % (len(self._transaction_log) + 1,)
 
     def _get_transaction_log(self):
         return self._transaction_log
@@ -263,9 +261,6 @@ class InMemoryIndex(object):
 
 
 class InMemorySyncTarget(CommonSyncTarget):
-
-    def __init__(self, db):
-        self._db = db
 
     def get_sync_info(self, other_machine_id):
         other_rev = self._db.get_sync_generation(other_machine_id)
