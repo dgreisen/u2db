@@ -114,6 +114,11 @@ class DatabaseTests(DatabaseBaseTests):
     def test_get_doc_nonexisting(self):
         self.assertEqual((None, None, False), self.db.get_doc('non-existing'))
 
+    def test_get_sync_generation(self):
+        self.assertEqual(0, self.db.get_sync_generation('other-db'))
+        self.db.set_sync_generation('other-db', 2)
+        self.assertEqual(2, self.db.get_sync_generation('other-db'))
+
     def test_put_fails_with_bad_old_rev(self):
         doc_id, old_rev = self.db.create_doc(simple_doc, doc_id='my_doc_id')
         new_doc = '{"something": "else"}'
