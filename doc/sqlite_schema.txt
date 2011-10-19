@@ -91,10 +91,24 @@ in one request. This is because you could have the document::
 
 Which you don't want to match.
 
-We also may need another index on this table, something like::
+We also want another index on this table, something like [#]_::
 
-    CREATE INDEX document_fields_field_value
-           ON document_fields (field_name, value);
+    CREATE INDEX document_fields_field_value_idx
+           ON document_fields (field_name, value, doc_id);
+
+
+.. [#] Another possible index would have been::
+
+            CREATE INDEX document_fields_field_value
+                   ON document_fields (field_name, value);
+
+   SQLite is capable of using an index as long as you use the early columns.
+   The main advantage of putting ``doc_id`` into the index is that SQLite
+   doesn't have to do another btree search to find the ``doc_id`` in the
+   original row. The time to get 47k docs from an index goes from 0.8s to 1.2s
+   with the extra lookup. The penalty is that the size of the database goes
+   from 185MB to 195MB. In 'partial' mode it goes from 57MB to 58MB.
+
 
 And then possibly rewriting the query as::
 
