@@ -12,7 +12,7 @@
 # You should have received a copy of the GNU General Public License along
 # with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-"""The Client class for U1DB."""
+"""The backend class for U1DB. This deals with hiding storage details."""
 
 from u1db import (
     errors,
@@ -465,6 +465,12 @@ class DatabaseIndexTests(DatabaseBaseTests):
                          self.c.get_from_index('test-idx', [('altval',)]))
         self.assertEqual([], self.c.get_from_index('test-idx', [('value',)]))
 
+
+class DatabaseSyncTargetTests(DatabaseSyncTests):
+
+    def setUp(self):
+        super(DatabaseSyncTests, self).setUp()
+        self.c = self.create_database('test1')
 
 class DatabaseSyncTests(DatabaseBaseTests):
 

@@ -174,7 +174,17 @@ class Database(object):
         """
         raise NotImplementedError(self.resolve_doc)
 
-    def _get_sync_info(self, other_machine_id):
+    def get_sync_target(self):
+        """Return a SyncTarget object, for another u1db to synchronize with.
+
+        :return: An instance of SyncTarget.
+        """
+
+
+class SyncTarget(object):
+    """Functionality for using a Database as a synchronization target."""
+
+    def get_sync_info(self, other_machine_id):
         """Return information about known state.
 
         This is not meant to be called from client code, but is part of the
@@ -191,7 +201,7 @@ class Database(object):
         """
         raise NotImplementedError(self._get_sync_info)
 
-    def _record_sync_info(self, other_machine_id, other_machine_rev):
+    def record_sync_info(self, other_machine_id, other_machine_rev):
         """Record tip information for another machine.
 
         This is not meant to be called from client code, but is part of the
@@ -213,7 +223,7 @@ class Database(object):
         """
         raise NotImplementedError(self._record_sync_info)
 
-    def _sync_exchange(self, docs_info, from_machine_id, from_machine_rev,
+    def sync_exchange(self, docs_info, from_machine_id, from_machine_rev,
                        last_known_rev):
         """Incorporate the documents sent from the other machine.
 
@@ -240,3 +250,6 @@ class Database(object):
                 for this client
         """
         raise NotImplementedError(self._sync_exchange)
+
+
+
