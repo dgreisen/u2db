@@ -179,6 +179,7 @@ class Database(object):
 
         :return: An instance of SyncTarget.
         """
+        raise NotImplementedError(self.get_sync_target)
 
 
 class SyncTarget(object):
@@ -199,7 +200,7 @@ class SyncTarget(object):
         :return: (this_machine_id, this_machine_db_rev,
                   other_machine_last_known_db_rev)o
         """
-        raise NotImplementedError(self._get_sync_info)
+        raise NotImplementedError(self.get_sync_info)
 
     def record_sync_info(self, other_machine_id, other_machine_rev):
         """Record tip information for another machine.
@@ -221,10 +222,10 @@ class SyncTarget(object):
         :param other_machine_rev: The database revision for other_machine
         :return: None
         """
-        raise NotImplementedError(self._record_sync_info)
+        raise NotImplementedError(self.record_sync_info)
 
     def sync_exchange(self, docs_info, from_machine_id, from_machine_rev,
-                       last_known_rev):
+                      last_known_rev):
         """Incorporate the documents sent from the other machine.
 
         This is not meant to be called by client code directly, but is used as
@@ -249,7 +250,5 @@ class SyncTarget(object):
             new_db_rev - After applying docs_info, this is the current db_rev
                 for this client
         """
-        raise NotImplementedError(self._sync_exchange)
-
-
+        raise NotImplementedError(self.sync_exchange)
 

@@ -177,82 +177,6 @@ class DatabaseTests(DatabaseBaseTests):
         self.assertEqual((new_rev, '{"key": null}', False),
                          self.db.get_doc(doc_id))
 
-    def test__get_sync_info(self):
-        self.assertEqual(('test', 0, 0), self.db._get_sync_info('other'))
-
-    def test_put_updates_state_info(self):
-        self.assertEqual(('test', 0, 0), self.db._get_sync_info('other'))
-        doc_id, doc_rev = self.db.create_doc(simple_doc)
-        self.assertEqual(('test', 1, 0), self.db._get_sync_info('other'))
-
-    def test__record_sync_info(self):
-        self.assertEqual(('test', 0, 0), self.db._get_sync_info('machine'))
-        self.db._record_sync_info('machine', 10)
-        self.assertEqual(('test', 0, 10), self.db._get_sync_info('machine'))
-
-
-    def test__sync_exchange(self):
-        result = self.db._sync_exchange([('doc-id', 'machine:1', simple_doc)],
-                                       'machine', from_machine_rev=10,
-                                       last_known_rev=0)
-        self.assertEqual(('machine:1', simple_doc, False),
-                         self.db.get_doc('doc-id'))
-        self.assertEqual(['doc-id'], self.db._get_transaction_log())
-        self.assertEqual(([], [], 1), result)
-        self.assertEqual(10, self.db._get_sync_info('machine')[-1])
-
-    def test__sync_exchange_refuses_conflicts(self):
-        doc_id, doc_rev = self.db.create_doc(simple_doc)
-        self.assertEqual([doc_id], self.db._get_transaction_log())
-        new_doc = '{"key": "altval"}'
-        result = self.db._sync_exchange([(doc_id, 'machine:1', new_doc)],
-                                       'machine', from_machine_rev=10,
-                                       last_known_rev=0)
-        self.assertEqual([doc_id], self.db._get_transaction_log())
-        self.assertEqual(([], [(doc_id, doc_rev, simple_doc)], 1), result)
-
-    def test__sync_exchange_ignores_convergence(self):
-        doc_id, doc_rev = self.db.create_doc(simple_doc)
-        self.assertEqual([doc_id], self.db._get_transaction_log())
-        result = self.db._sync_exchange([(doc_id, doc_rev, simple_doc)],
-                                       'machine', from_machine_rev=10,
-                                       last_known_rev=1)
-        self.assertEqual([doc_id], self.db._get_transaction_log())
-        self.assertEqual(([], [], 1), result)
-
-    def test__sync_exchange_returns_new_docs(self):
-        doc_id, doc_rev = self.db.create_doc(simple_doc)
-        self.assertEqual([doc_id], self.db._get_transaction_log())
-        result = self.db._sync_exchange([], 'other-machine',
-                                       from_machine_rev=10, last_known_rev=0)
-        self.assertEqual([doc_id], self.db._get_transaction_log())
-        self.assertEqual(([(doc_id, doc_rev, simple_doc)], [], 1), result)
-
-    def test__sync_exchange_getting_newer_docs(self):
-        doc_id, doc_rev = self.db.create_doc(simple_doc)
-        self.assertEqual([doc_id], self.db._get_transaction_log())
-        new_doc = '{"key": "altval"}'
-        result = self.db._sync_exchange([(doc_id, 'test:1|z:2', new_doc)],
-                                        'other-machine', from_machine_rev=10,
-                                        last_known_rev=0)
-        self.assertEqual([doc_id, doc_id], self.db._get_transaction_log())
-        self.assertEqual(([], [], 2), result)
-
-    def test__sync_exchange_with_concurrent_updates(self):
-        doc_id, doc_rev = self.db.create_doc(simple_doc)
-        self.assertEqual([doc_id], self.db._get_transaction_log())
-        orig_wc = self.db.whats_changed
-        def after_whatschanged(*args, **kwargs):
-            val = orig_wc(*args, **kwargs)
-            self.db.create_doc('{"new": "doc"}')
-            return val
-        self.db.whats_changed = after_whatschanged
-        new_doc = '{"key": "altval"}'
-        result = self.db._sync_exchange([(doc_id, 'test:1|z:2', new_doc)],
-                                        'other-machine', from_machine_rev=10,
-                                        last_known_rev=0)
-        self.assertEqual(([], [], 2), result)
-
 
 class DatabaseIndexTests(DatabaseBaseTests):
 
@@ -467,11 +391,91 @@ class DatabaseIndexTests(DatabaseBaseTests):
         self.assertEqual([], self.db.get_from_index('test-idx', [('value',)]))
 
 
-class DatabaseSyncTargetTests(DatabaseSyncTests):
+class DatabaseSyncTargetTests(DatabaseBaseTests):
 
     def setUp(self):
-        super(DatabaseSyncTests, self).setUp()
-        self.c = self.create_database('test1')
+        super(DatabaseSyncTargetTests, self).setUp()
+        self.db = self.create_database('test')
+        self.st = self.db.get_sync_target()
+
+    def test_get_sync_target(self):
+        self.assertIsNot(None, self.st)
+
+    def test_get_sync_info(self):
+        self.assertEqual(('test', 0, 0), self.st.get_sync_info('other'))
+
+    def test_create_doc_updates_sync_info(self):
+        self.assertEqual(('test', 0, 0), self.st.get_sync_info('other'))
+        doc_id, doc_rev = self.db.create_doc(simple_doc)
+        self.assertEqual(('test', 1, 0), self.st.get_sync_info('other'))
+
+    def test_record_sync_info(self):
+        self.assertEqual(('test', 0, 0), self.st.get_sync_info('machine'))
+        self.st.record_sync_info('machine', 10)
+        self.assertEqual(('test', 0, 10), self.st.get_sync_info('machine'))
+
+    def test_sync_exchange(self):
+        result = self.st.sync_exchange([('doc-id', 'machine:1', simple_doc)],
+                                       'machine', from_machine_rev=10,
+                                       last_known_rev=0)
+        self.assertEqual(('machine:1', simple_doc, False),
+                         self.db.get_doc('doc-id'))
+        self.assertEqual(['doc-id'], self.db._get_transaction_log())
+        self.assertEqual(([], [], 1), result)
+        self.assertEqual(10, self.st.get_sync_info('machine')[-1])
+
+    def test_sync_exchange_refuses_conflicts(self):
+        doc_id, doc_rev = self.db.create_doc(simple_doc)
+        self.assertEqual([doc_id], self.db._get_transaction_log())
+        new_doc = '{"key": "altval"}'
+        result = self.st.sync_exchange([(doc_id, 'machine:1', new_doc)],
+                                       'machine', from_machine_rev=10,
+                                       last_known_rev=0)
+        self.assertEqual([doc_id], self.db._get_transaction_log())
+        self.assertEqual(([], [(doc_id, doc_rev, simple_doc)], 1), result)
+
+    def test_sync_exchange_ignores_convergence(self):
+        doc_id, doc_rev = self.db.create_doc(simple_doc)
+        self.assertEqual([doc_id], self.db._get_transaction_log())
+        result = self.st.sync_exchange([(doc_id, doc_rev, simple_doc)],
+                                       'machine', from_machine_rev=10,
+                                       last_known_rev=1)
+        self.assertEqual([doc_id], self.db._get_transaction_log())
+        self.assertEqual(([], [], 1), result)
+
+    def test_sync_exchange_returns_new_docs(self):
+        doc_id, doc_rev = self.db.create_doc(simple_doc)
+        self.assertEqual([doc_id], self.db._get_transaction_log())
+        result = self.st.sync_exchange([], 'other-machine',
+                                       from_machine_rev=10, last_known_rev=0)
+        self.assertEqual([doc_id], self.db._get_transaction_log())
+        self.assertEqual(([(doc_id, doc_rev, simple_doc)], [], 1), result)
+
+    def test_sync_exchange_getting_newer_docs(self):
+        doc_id, doc_rev = self.db.create_doc(simple_doc)
+        self.assertEqual([doc_id], self.db._get_transaction_log())
+        new_doc = '{"key": "altval"}'
+        result = self.st.sync_exchange([(doc_id, 'test:1|z:2', new_doc)],
+                                        'other-machine', from_machine_rev=10,
+                                        last_known_rev=0)
+        self.assertEqual([doc_id, doc_id], self.db._get_transaction_log())
+        self.assertEqual(([], [], 2), result)
+
+    def test_sync_exchange_with_concurrent_updates(self):
+        doc_id, doc_rev = self.db.create_doc(simple_doc)
+        self.assertEqual([doc_id], self.db._get_transaction_log())
+        orig_wc = self.db.whats_changed
+        def after_whatschanged(*args, **kwargs):
+            val = orig_wc(*args, **kwargs)
+            self.db.create_doc('{"new": "doc"}')
+            return val
+        self.db.whats_changed = after_whatschanged
+        new_doc = '{"key": "altval"}'
+        result = self.st.sync_exchange([(doc_id, 'test:1|z:2', new_doc)],
+                                       'other-machine', from_machine_rev=10,
+                                       last_known_rev=0)
+        self.assertEqual(([], [], 2), result)
+
 
 class DatabaseSyncTests(DatabaseBaseTests):
 

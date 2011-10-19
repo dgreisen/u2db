@@ -18,6 +18,23 @@ import u1db
 from u1db.vectorclock import VectorClockRev
 
 
+class CommonSyncTarget(u1db.SyncTarget):
+
+    def __init__(self, db):
+        self._db = db
+
+    def get_sync_info(self, other_machine_id):
+        return self._db._get_sync_info(other_machine_id)
+
+    def record_sync_info(self, other_machine_id, other_machine_rev):
+        return self._db._record_sync_info(other_machine_id, other_machine_rev)
+
+    def sync_exchange(self, docs_info, from_machine_id, from_machine_rev,
+                      last_known_rev):
+        return self._db._sync_exchange(docs_info, from_machine_id,
+            from_machine_rev, last_known_rev)
+
+
 class CommonBackend(u1db.Database):
 
     def _allocate_doc_id(self):
@@ -122,6 +139,9 @@ class CommonBackend(u1db.Database):
         for doc_id, doc_rev, doc in docs_info:
             self._put_as_conflict(doc_id, doc_rev, doc)
         return len(docs_info)
+
+    def get_sync_target(self):
+        return CommonSyncTarget(self)
 
     def _sync_exchange(self, docs_info, from_machine_id, from_machine_rev,
                        last_known_rev):
