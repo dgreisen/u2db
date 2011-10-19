@@ -28,23 +28,23 @@ class TestInMemoryDatabaseInternals(tests.TestCase):
 
     def setUp(self):
         super(TestInMemoryDatabaseInternals, self).setUp()
-        self.c = inmemory.InMemoryDatabase('test')
+        self.db = inmemory.InMemoryDatabase('test')
 
     def test__allocate_doc_id(self):
-        self.assertEqual('doc-1', self.c._allocate_doc_id())
+        self.assertEqual('doc-1', self.db._allocate_doc_id())
 
     def test__allocate_doc_rev_from_None(self):
-        self.assertEqual('test:1', self.c._allocate_doc_rev(None))
+        self.assertEqual('test:1', self.db._allocate_doc_rev(None))
 
     def test__allocate_doc_rev_incremental(self):
-        self.assertEqual('test:2', self.c._allocate_doc_rev('test:1'))
+        self.assertEqual('test:2', self.db._allocate_doc_rev('test:1'))
 
     def test__allocate_doc_rev_other(self):
         self.assertEqual('machine:1|test:1',
-                         self.c._allocate_doc_rev('machine:1'))
+                         self.db._allocate_doc_rev('machine:1'))
 
     def test__get_machine_id(self):
-        self.assertEqual('test', self.c._machine_id)
+        self.assertEqual('test', self.db._machine_id)
 
 
 class TestInMemoryIndex(tests.TestCase):
