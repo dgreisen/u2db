@@ -143,6 +143,9 @@ class CommonBackend(u1db.Database):
     def get_sync_generation(self, other_db_id):
         return self._get_sync_info(other_db_id)[2]
 
+    def set_sync_generation(self, other_db_id, other_generation):
+        return self._record_sync_info(other_db_id, other_generation)
+
     def get_sync_target(self):
         return CommonSyncTarget(self)
 
@@ -160,7 +163,7 @@ class CommonBackend(u1db.Database):
         for doc_id in conflict_ids:
             doc_rev, doc = self._get_doc(doc_id)
             conflicts.append((doc_id, doc_rev, doc))
-        self._record_sync_info(from_machine_id, from_machine_rev)
+        self.set_sync_generation(from_machine_id, from_machine_rev)
         self._last_exchange_log = {
             'receive': {'docs': [(di, dr) for di, dr, _ in docs_info],
                         'from_id': from_machine_id,
@@ -189,10 +192,10 @@ class CommonBackend(u1db.Database):
         _, conflict_ids, num_inserted = self._insert_many_docs(all_records)
         conflict_docs = [r for r in all_records if r[0] in conflict_ids]
         num_inserted += self._insert_conflicts(conflict_docs)
-        self._record_sync_info(other_machine_id, new_db_rev)
+        self.set_sync_generation(other_machine_id, new_db_rev)
         cur_db_rev = self._get_db_rev()
         if cur_db_rev == my_db_rev + num_inserted:
-            other._record_sync_info(self._machine_id, cur_db_rev)
+            st.record_sync_info(self._machine_id, cur_db_rev)
         return my_db_rev
 
     def _ensure_maximal_rev(self, cur_rev, extra_revs):

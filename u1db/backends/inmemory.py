@@ -37,11 +37,13 @@ class InMemoryDatabase(CommonBackend):
     def get_sync_generation(self, other_db_id):
         return self._other_revs.get(other_db_id, 0)
 
+    def set_sync_generation(self, other_db_id, other_generation):
+        # TODO: to handle race conditions, we may want to check if the current
+        #       value is greater than this new value.
+        self._other_revs[other_db_id] = other_generation
+
     def get_sync_target(self):
         return InMemorySyncTarget(self)
-
-    def _record_sync_info(self, machine_id, db_rev):
-        self._other_revs[machine_id] = db_rev
 
     def _allocate_doc_id(self):
         self._doc_counter += 1
@@ -268,4 +270,7 @@ class InMemorySyncTarget(CommonSyncTarget):
     def get_sync_info(self, other_machine_id):
         other_rev = self._db.get_sync_generation(other_machine_id)
         return self._db._machine_id, len(self._db._transaction_log), other_rev
+
+    def record_sync_info(self, other_machine_id, other_machine_rev):
+        self._db.set_sync_generation(other_machine_id, other_machine_rev)
 

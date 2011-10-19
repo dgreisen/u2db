@@ -194,6 +194,17 @@ class Database(object):
         """
         raise NotImplementedError(self.get_sync_generation)
 
+    def set_sync_generation(self, other_db_id, other_generation):
+        """Set the last-known generation for the other database.
+
+        We have just performed some synchronization, and we want to track what
+        generation the other database was at. See also get_sync_generation.
+        :param other_db_id: The U1DB identifier for the other database.
+        :param other_generation: The generation number for the other db.
+        :return: None
+        """
+        raise NotImplementedError(self.get_sync_generation)
+
 
 class SyncTarget(object):
     """Functionality for using a Database as a synchronization target."""
@@ -201,27 +212,20 @@ class SyncTarget(object):
     def get_sync_info(self, other_machine_id):
         """Return information about known state.
 
-        This is not meant to be called from client code, but is part of the
-        sync api.
-
-        Return the machine_id and the current global database revision of this
-        database, and the last-seen global database revision for
-        other_machine_id
+        Return the machine_id and the current database generation of this
+        database, and the last-seen database generation for other_machine_id
 
         :param other_machine_id: Another machine which we might have
             synchronized with in the past.
         :return: (this_machine_id, this_machine_db_rev,
-                  other_machine_last_known_db_rev)o
+                  other_machine_last_known_generation)
         """
         raise NotImplementedError(self.get_sync_info)
 
-    def record_sync_info(self, other_machine_id, other_machine_rev):
+    def record_sync_info(self, other_machine_id, other_machine_gen):
         """Record tip information for another machine.
 
-        This is not meant to be called from client code, but is part of the
-        sync api.
-
-        After _sync_exchange has been processed, the caller will have received
+        After sync_exchange has been processed, the caller will have received
         new content from this machine. This call allows the machine instigating
         the sync to inform us what their global database revision became after
         applying the documents we returned.
