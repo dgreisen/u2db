@@ -106,9 +106,10 @@ class Database(object):
             put is ignored.
             If doc_rev is not strictly superseded or supersedes, then the
             document id is added to the set of conflicted documents.
-        :return: (would_conflict_ids, num_inserted), the document_ids that
-            that could not be inserted (and were not superseded), and the total
-            number of entries that were successfully added.
+        :return: (would_conflict_ids, superseded_ids, num_inserted), the
+            document_ids that that could not be inserted (and were not
+            superseded), the document ids that we already had something newer,
+            and the count of entries that were successfully added.
         """
         raise NotImplementedError(self.put_docs)
 

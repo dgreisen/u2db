@@ -79,7 +79,9 @@ class CommonBackend(u1db.Database):
         return doc_id, self.put_doc(doc_id, None, doc)
 
     def put_docs(self, docs_info):
-        return self._insert_many_docs(docs_info)[1:]
+        seen_ids, conflict_ids, num_inserted = self._insert_many_docs(docs_info)
+        all_ids = set([x[0] for x in docs_info])
+        return conflict_ids, all_ids - seen_ids, num_inserted
 
     def _get_transaction_log(self):
         """This is only for the test suite, it is not part of the api."""
