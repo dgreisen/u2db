@@ -132,6 +132,18 @@ class Database(object):
         though doc_rev may not supersede the currently stored revision.  The
         currently stored document will be added to the list of conflict
         alternatives for the given doc_id.
+
+        The reason this forces the new content to be 'current' is so that we
+        get convergence after synchronizing, even if people don't resolve
+        conflicts. Users can then notice that their content is out of date,
+        update it, and synchronize again. (The alternative is that users could
+        synchronize and think the data has propagated, but their local copy
+        looks fine, and the remote copy is never updated again.)
+
+        :param doc_id: The indentifier for this document
+        :param doc_rev: The document revision for this document
+        :param doc: The JSON string for the document.
+        :return: None
         """
         raise NotImplementedError(self.force_doc_with_conflict)
 
