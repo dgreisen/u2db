@@ -81,10 +81,6 @@ class Synchronizer(object):
                 conflict_ids.add(doc_id)
         return seen_ids, conflict_ids, num_inserted
 
-    def _put_as_conflict(self, doc_id, doc_rev, doc):
-        """Insert a doc as current value, putting cur value as conflict."""
-        raise NotImplementedError(self._put_as_conflict)
-
     def _insert_conflicts(self, docs_info):
         """Record all of docs_info as conflicted documents.
 

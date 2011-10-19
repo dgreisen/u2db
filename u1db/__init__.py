@@ -122,6 +122,19 @@ class Database(object):
         """
         raise NotImplementedError(self.put_docs)
 
+    def force_doc_with_conflict(self, doc_id, doc_rev, doc):
+        """Update documents even though they should conflict.
+
+        This is used for synchronization, and should generally not be used by
+        clients.
+
+        The content will be selected as the 'current' content for doc_id, even
+        though doc_rev may not supersede the currently stored revision.  The
+        currently stored document will be added to the list of conflict
+        alternatives for the given doc_id.
+        """
+        raise NotImplementedError(self.force_doc_with_conflict)
+
     def delete_doc(self, doc_id, old_doc_rev):
         """Mark a document as deleted.
         (might be equivalent to PUT(nil)). Will abort if the document is now

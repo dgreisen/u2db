@@ -126,10 +126,6 @@ class CommonBackend(u1db.Database):
                 conflict_ids.add(doc_id)
         return conflict_ids, superseded_ids, num_inserted
 
-    def _put_as_conflict(self, doc_id, doc_rev, doc):
-        """Insert a doc as current value, putting cur value as conflict."""
-        raise NotImplementedError(self._put_as_conflict)
-
     def _insert_conflicts(self, docs_info):
         """Record all of docs_info as conflicted documents.
 
@@ -140,7 +136,7 @@ class CommonBackend(u1db.Database):
         :return: The number of documents inserted into the db.
         """
         for doc_id, doc_rev, doc in docs_info:
-            self._put_as_conflict(doc_id, doc_rev, doc)
+            self.force_doc_with_conflict(doc_id, doc_rev, doc)
         return len(docs_info)
 
     def sync(self, other, callback=None):

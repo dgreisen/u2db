@@ -320,7 +320,7 @@ class SQLiteDatabase(CommonBackend):
         c.execute("INSERT INTO conflicts VALUES (?, ?, ?)",
                   (doc_id, my_doc_rev, my_doc))
 
-    def _put_as_conflict(self, doc_id, doc_rev, doc):
+    def force_doc_with_conflict(self, doc_id, doc_rev, doc):
         with self._db_handle:
             my_doc_rev, my_doc = self._get_doc(doc_id)
             c = self._db_handle.cursor()

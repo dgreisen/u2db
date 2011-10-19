@@ -137,9 +137,18 @@ class DatabaseTests(DatabaseBaseTests):
         # Nothing is inserted, the document id is returned as would-conflict
         self.assertEqual((set([doc1_id]), set(), 0), self.db.put_docs(
             [(doc1_id, 'alternate:1', nested_doc)]))
-        # The database wasn't updated yet, either
+        # The database wasn't altered
         self.assertEqual((doc1_rev1, simple_doc, False),
                          self.db.get_doc(doc1_id))
+
+    def test_force_doc_with_conflict(self):
+        doc1_id, doc1_rev1 = self.db.create_doc(simple_doc)
+        self.db.force_doc_with_conflict(doc1_id, 'alternate:1', nested_doc)
+        self.assertEqual(('alternate:1', nested_doc, True),
+                         self.db.get_doc(doc1_id))
+        self.assertEqual([('alternate:1', nested_doc),
+                          (doc1_rev1, simple_doc)],
+                         self.db.get_doc_conflicts(doc1_id))
 
     def test_get_doc_after_put(self):
         doc_id, new_rev = self.db.create_doc(simple_doc, doc_id='my_doc_id')
