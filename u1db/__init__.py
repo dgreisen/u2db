@@ -56,13 +56,12 @@ class Database(object):
         """Get the JSON string for the given document.
 
         :param doc_id: The unique document identifier
-        :return: (doc_id, doc_rev, has_conflicts, doc)
-
-            :doc_rev- The current version of the document
-            :has_conflicts- A boolean indicating if there are conflict records
-                for this document
-            :doc- A JSON string if the document exists (possibly an empty
+        :return: (doc_rev, doc, has_conflicts)
+            doc_rev- The current version of the document
+            doc- A JSON string if the document exists (possibly an empty
                 string), None/nil if the document does not exist.
+            has_conflicts- A boolean indicating if there are conflict records
+                for this document
         """
         raise NotImplementedError(self.get_doc)
 
@@ -80,7 +79,7 @@ class Database(object):
         raise NotImplementedError(self.create_doc)
 
     def put_doc(self, doc_id, old_doc_rev, doc):
-        """Add/update a document.
+        """Update a document.
         If the document currently has conflicts, put will fail.
 
         :param doc_id: Unique handle for a document, if it is None, a new
@@ -92,6 +91,26 @@ class Database(object):
         :return: new_doc_rev - The new revision identifier for the document
         """
         raise NotImplementedError(self.put_doc)
+
+    def put_docs(self, docs_info):
+        """Insert/update many documents into the database.
+
+        This api is used during synchronization operations. It is possible to
+        also use for client code, but put_doc() is more obvious.
+
+        :param: A list of [(doc_id, doc_rev, doc_content)]. If we don't have
+            doc_id already, or if doc_rev supersedes the existing document
+            revision, then the content will be inserted, and num_inserted will
+            be incremented.
+            If doc_rev is less than or equal to the existing revision, then the
+            put is ignored.
+            If doc_rev is not strictly superseded or supersedes, then the
+            document id is added to the set of conflicted documents.
+        :return: (would_conflict_ids, num_inserted), the document_ids that
+            that could not be inserted (and were not superseded), and the total
+            number of entries that were successfully added.
+        """
+        raise NotImplementedError(self.put_docs)
 
     def delete_doc(self, doc_id, old_doc_rev):
         """Mark a document as deleted.

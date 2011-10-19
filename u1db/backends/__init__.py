@@ -78,6 +78,9 @@ class CommonBackend(u1db.Database):
             doc_id = self._allocate_doc_id()
         return doc_id, self.put_doc(doc_id, None, doc)
 
+    def put_docs(self, docs_info):
+        return self._insert_many_docs(docs_info)[1:]
+
     def _get_transaction_log(self):
         """This is only for the test suite, it is not part of the api."""
         raise NotImplementedError(self._get_transaction_log)
