@@ -33,21 +33,23 @@ class TestRemoteSyncServer(tests.TestCase):
         server = remote_sync_server.RemoteSyncServer(db)
 
 
-class MyHelloHandler(SocketServer.StreamRequestHandler):
+class MyHelloHandler(SocketServer.BaseRequestHandler):
 
     def handle(self):
-        value = self.rfile.readline()
+        value = self.request.recv(1024)
         if value == 'hello\n':
-            self.wfile.write('hello to you, too\n')
+            self.request.sendall('hello to you, too\n')
 
 
-class TwoMessageHandler(SocketServer.StreamRequestHandler):
+class TwoMessageHandler(SocketServer.BaseRequestHandler):
 
     def handle(self):
-        value = self.rfile.readline()
-        self.wfile.write('same to you\n')
-        value = self.rfile.readline()
-        self.wfile.write('goodbye\n')
+        value = self.request.recv(1024)
+        self.request.sendall('same to you\n')
+        value = self.request.recv(1024)
+        if value == '':
+            return
+        self.request.sendall('goodbye\n')
 
 
 class TestTCPSyncServer(tests.TestCase):
@@ -62,7 +64,7 @@ class TestTCPSyncServer(tests.TestCase):
         # the socket is already created. So the client can bind, even if the
         # server thread isn't actively listening yet.
         self.addCleanup(self.server_thread.join)
-        self.addCleanup(self.server.shutdown)
+        self.addCleanup(self.server.force_shutdown)
 
     def connectToServer(self):
         client_sock = socket.socket()
@@ -89,3 +91,44 @@ class TestTCPSyncServer(tests.TestCase):
         self.assertEqual(1, len(self.server._request_threads))
         client_sock.sendall('goodbye\n')
         self.assertEqual('goodbye\n', client_sock.recv(1024))
+
+    def test_wait_for_requests(self):
+        # This can be called after shutdown() if you want to wait for all the
+        # request threads to finish.
+        self.startServer(TwoMessageHandler)
+        client_sock = self.connectToServer()
+        client_sock.sendall('hello\n')
+        self.assertEqual('same to you\n', client_sock.recv(1024))
+        started = threading.Event()
+        returned = threading.Event()
+        self.server.shutdown()
+        def waited_and_returned():
+            started.set()
+            self.server.wait_for_requests()
+            returned.set()
+        waiting_thread = threading.Thread(target=waited_and_returned)
+        waiting_thread.start()
+        started.wait(10.0)
+        if not started.isSet():
+            self.fail('started never reached')
+        returned.wait(0.01)
+        self.assertFalse(returned.isSet())
+        client_sock.sendall('goodbye\n')
+        self.assertEqual('goodbye\n', client_sock.recv(1024))
+        returned.wait(10.0)
+        if not returned.isSet():
+            self.fail('returned never reached')
+
+    def test_force_close_requests(self):
+        self.startServer(TwoMessageHandler)
+        client_sock = self.connectToServer()
+        client_sock.sendall('hello\n')
+        self.assertEqual('same to you\n', client_sock.recv(1024))
+        # Now, we forcibly close all active connections, rather than doing a
+        # graceful shutdown. (shutdown(), then wait_for_requests())
+        self.server.force_shutdown()
+        # the request thread has been requested to close, however, it doesn't
+        # seem to actually close on all platforms until the client socket is
+        # closed, so we can't assert the socket is closed by reading the empty
+        # string on it.
+        # self.assertEqual('', client_sock.recv(1024))

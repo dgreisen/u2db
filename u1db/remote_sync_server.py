@@ -14,8 +14,9 @@
 
 """A Server that listens for synchronization requests"""
 
-import threading
+import socket
 import SocketServer
+import threading
 
 
 class TCPSyncServer(SocketServer.TCPServer):
@@ -49,8 +50,14 @@ class TCPSyncServer(SocketServer.TCPServer):
     def _remove_request(self, request):
         with self._request_threads_lock:
             if request in self._request_threads:
-                t = self._request_threads[request]
+                t = self._request_threads.pop(request)
                 return t
+        return None
+
+    def _get_a_request_thread(self):
+        with self._request_threads_lock:
+            if self._request_threads:
+                return self._request_threads.itervalues().next()
         return None
 
     def process_request(self, request, client_address):
@@ -65,6 +72,27 @@ class TCPSyncServer(SocketServer.TCPServer):
     def close_request(self, request):
         SocketServer.TCPServer.close_request(self, request)
         return self._remove_request(request)
+
+    def wait_for_requests(self):
+        """Wait until all request threads have exited cleanly."""
+        t = self._get_a_request_thread()
+        while t is not None:
+            t.join()
+            t = self._get_a_request_thread()
+
+    def force_shutdown(self):
+        self.shutdown()
+        waiting_threads = []
+        with self._request_threads_lock:
+            all_requests = self._request_threads.keys()
+        for request in all_requests:
+            t = self.close_request(request)
+            if t is not None:
+                waiting_threads.append(t)
+        # Note: We don't wait on the threads. I've discovered that
+        #       request.close() in one thread may not actually cause
+        #       request.recv() to return in another thread. The only thing that
+        #       seems to always work is client_sock.close()
 
 
 class TCPSyncRequestHandler(SocketServer.StreamRequestHandler):
