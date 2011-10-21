@@ -277,6 +277,12 @@ class Buffer(object):
 
 
 class StructureDecoderV1(object):
+    """Decode a Type Length Value structure.
+
+    The Type is one byte (we assign no meaning at this level),
+    Length is a 4-byte big-endian integer.
+    Value (at this level) is octet-stream of the given length.
+    """
 
     def __init__(self, buf):
         self._buf = buf
@@ -293,11 +299,11 @@ class StructureDecoderV1(object):
         content = self._buf.consume_bytes(5 + struct_len)
         if content is None:
             return None
-        content = content[5:]
-        return struct_type, content
+        return struct_type, content[5:]
 
 
-class ProtocolDecoderV1(object):
+class ProtocolDecoder(object):
+    """Generic decoding of structured data."""
 
     def __init__(self, message_handler):
         self._state = self._state_expecting_protocol_header

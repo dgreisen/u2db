@@ -291,11 +291,11 @@ class LoggingMessageHandler(object):
         self.actions.append(('structure', structure_type, value))
 
 
-class TestProtocolDecoderV1(tests.TestCase):
+class TestProtocolDecoder(tests.TestCase):
 
     def makeDecoder(self):
         self.messages = LoggingMessageHandler()
-        self.decoder = remote_sync_server.ProtocolDecoderV1(self.messages)
+        self.decoder = remote_sync_server.ProtocolDecoder(self.messages)
         return self.decoder
 
     def test_starting_state(self):
@@ -394,7 +394,7 @@ class TestProtocolDecodingIntoMessage(tests.TestCase):
 
     def makeDecoder(self):
         self.handler = remote_sync_server.MessageHandler()
-        self.decoder = remote_sync_server.ProtocolDecoderV1(self.handler)
+        self.decoder = remote_sync_server.ProtocolDecoder(self.handler)
         return self.decoder
 
     def test_decode_full_request(self):
@@ -416,7 +416,7 @@ class TestProtocolEncodeDecode(tests.TestCase):
 
     def test_simple_request(self):
         handler = remote_sync_server.MessageHandler()
-        decoder = remote_sync_server.ProtocolDecoderV1(handler)
+        decoder = remote_sync_server.ProtocolDecoder(handler)
         encoder = remote_sync_server.ProtocolEncoderV1(decoder.accept_bytes)
         encoder.encode_request('myrequest', arg1='a', arg2=2, value='bytes')
         message = handler._cur_message
