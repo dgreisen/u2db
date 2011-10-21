@@ -157,7 +157,7 @@ class TestProtocolEncoderV1(tests.TestCase):
     def test_encode_end(self):
         sio, encoder = self.makeEncoder()
         encoder.encode_end()
-        self.assertEqual('e', sio.getvalue())
+        self.assertEqual('e\x00\x00\x00\x00', sio.getvalue())
 
     def test_encode_request(self):
         sio, encoder = self.makeEncoder()
@@ -167,14 +167,29 @@ class TestProtocolEncoderV1(tests.TestCase):
             'h%s{"client_version": "%s", "request": "name"}'
             % (struct.pack('!L', 41 + len(_u1db_version)), _u1db_version)
             + 'a\x00\x00\x00\x08{"a": 1}'
-            + 'e',
+            + 'e\x00\x00\x00\x00',
             sio.getvalue())
+
+
+class LoggingMessageHandler(object):
+    """Just records what bits were observed by the protocol_decoder."""
+
+    def __init__(self):
+        self.actions = []
+
+    def received_protocol(self, protocol_bytes):
+        self.actions.append(('protocol', protocol_bytes))
+
+    def received_structure(self, structure_type, value):
+        self.actions.append(('structure', structure_type, value))
 
 
 class TestProtocolDecoderV1(tests.TestCase):
 
     def makeDecoder(self):
-        return remote_sync_server.ProtocolDecoderV1()
+        self.messages = LoggingMessageHandler()
+        self.decoder = remote_sync_server.ProtocolDecoderV1(self.messages)
+        return self.decoder
 
     def test__append_bytes(self):
         decoder = self.makeDecoder()
@@ -254,6 +269,45 @@ class TestProtocolDecoderV1(tests.TestCase):
         self.assertIs(None, decoder._peek_line())
         self.assertEqual(['abcd'], decoder._buf)
 
+    def test__consume_bytes(self):
+        decoder = self.makeDecoder()
+        start = 'ab\n'
+        decoder._append_bytes(start)
+        decoder._append_bytes('cd')
+        decoder._append_bytes('ef')
+        self.assertEqual(['ab\n', 'cd', 'ef'], decoder._buf)
+        self.assertEqual(7, decoder._buf_len)
+        # If we can exactly yield the bytes from the buffer, do so.
+        self.assertIs(start, decoder._consume_bytes(3))
+        self.assertEqual(['cd', 'ef'], decoder._buf)
+        self.assertEqual(4, decoder._buf_len)
+
+    def test__consume_bytes_no_bytes(self):
+        decoder = self.makeDecoder()
+        self.assertIs(None, decoder._consume_bytes(1))
+
+    def test__consume_bytes_not_enough_bytes(self):
+        decoder = self.makeDecoder()
+        decoder._append_bytes('ab')
+        decoder._append_bytes('cd')
+        decoder._append_bytes('ef')
+        self.assertEqual(['ab', 'cd', 'ef'], decoder._buf)
+        self.assertIs(None, decoder._consume_bytes(7))
+        self.assertEqual(['ab', 'cd', 'ef'], decoder._buf)
+
+    def test__consume_partial_buffer(self):
+        decoder = self.makeDecoder()
+        decoder._append_bytes('ab')
+        decoder._append_bytes('cd')
+        decoder._append_bytes('ef')
+        self.assertEqual(['ab', 'cd', 'ef'], decoder._buf)
+        self.assertEqual(6, decoder._buf_len)
+        self.assertIs('a', decoder._consume_bytes(1))
+        self.assertEqual(['b', 'cd', 'ef'], decoder._buf)
+        self.assertEqual(5, decoder._buf_len)
+        self.assertEqual('bc', decoder._consume_bytes(2))
+        self.assertEqual(['def'], decoder._buf)
+
     def test_starting_state(self):
         decoder = self.makeDecoder()
         self.assertEqual(decoder._state_expecting_protocol_header,
@@ -264,8 +318,11 @@ class TestProtocolDecoderV1(tests.TestCase):
         self.assertEqual(decoder._state_expecting_protocol_header,
                          decoder._state)
         decoder.accept_bytes(remote_sync_server.PROTOCOL_HEADER_V1)
-        self.assertEqual(decoder._state_expecting_request_header,
+        self.assertEqual(decoder._state_expecting_structure,
                          decoder._state)
+        self.assertEqual(0, decoder._buf_len)
+        self.assertEqual([('protocol', remote_sync_server.PROTOCOL_HEADER_V1)],
+                         self.messages.actions)
 
     def test_process_partial_header(self):
         decoder = self.makeDecoder()
@@ -275,7 +332,7 @@ class TestProtocolDecoderV1(tests.TestCase):
         self.assertEqual(decoder._state_expecting_protocol_header,
                          decoder._state)
         decoder.accept_bytes(remote_sync_server.PROTOCOL_HEADER_V1[3:])
-        self.assertEqual(decoder._state_expecting_request_header,
+        self.assertEqual(decoder._state_expecting_structure,
                          decoder._state)
 
     def test_process_bad_header(self):
@@ -287,3 +344,84 @@ class TestProtocolDecoderV1(tests.TestCase):
         self.assertIn('Not A Protocol', str(e))
         # The bytes haven't been consumed, either
         self.assertEqual(['Not A Protocol\n'], decoder._buf)
+
+    def test_process_proto_and_partial_structure(self):
+        decoder = self.makeDecoder()
+        self.assertEqual(decoder._state_expecting_protocol_header,
+                         decoder._state)
+        decoder.accept_bytes(remote_sync_server.PROTOCOL_HEADER_V1)
+        self.assertEqual([('protocol', remote_sync_server.PROTOCOL_HEADER_V1)],
+                         self.messages.actions)
+        del self.messages.actions[:]
+        # Not enough bytes for a structure
+        decoder.accept_bytes('s')
+        self.assertEqual([], self.messages.actions)
+        self.assertEqual('s', decoder.unused_bytes())
+        decoder.accept_bytes('\x00\x00\x00\x00')
+        self.assertEqual([('structure', 's', '')], self.messages.actions)
+        self.assertEqual('', decoder.unused_bytes())
+
+    def test_process_proto_and_request(self):
+        decoder = self.makeDecoder()
+        self.assertEqual(decoder._state_expecting_protocol_header,
+                         decoder._state)
+        client_header = '{"client_version": "0.1.1.dev.0", "request": "foo"}'
+        decoder.accept_bytes(remote_sync_server.PROTOCOL_HEADER_V1
+            + 'h\x00\x00\x00\x33'
+            + client_header
+            + 'e\x00\x00\x00\x00')
+        self.assertEqual(decoder._state_expecting_structure,
+                         decoder._state)
+        self.assertEqual([('protocol', remote_sync_server.PROTOCOL_HEADER_V1),
+                          ('structure', 'h', client_header),
+                          ('structure', 'e', '')],
+                         self.messages.actions)
+        self.assertEqual('', decoder.unused_bytes())
+
+
+class TestMessageHandler(tests.TestCase):
+
+    def test_header(self):
+        handler = remote_sync_server.MessageHandler()
+        handler.received_structure('h',
+            '{"client_version": "0.1.1.dev.0", "request": "foo"}')
+        self.assertEqual(handler._cur_message.client_version, '0.1.1.dev.0')
+        self.assertEqual(handler._cur_message.request, 'foo')
+
+    def test_args(self):
+        handler = remote_sync_server.MessageHandler()
+        handler.received_structure('a', '{"a": 1, "b": "foo"}')
+        self.assertEqual(handler._cur_message.args, {'a': 1, 'b': 'foo'})
+
+    def test_end(self):
+        handler = remote_sync_server.MessageHandler()
+        handler.received_structure('e', '')
+        self.assertEqual(handler._cur_message.complete, True)
+
+    def test_unknown_structure(self):
+        handler = remote_sync_server.MessageHandler()
+        e = self.assertRaises(errors.BadProtocolStream,
+            handler.received_structure, 'z', '')
+        self.assertEqual("unknown structure type: 'z'", str(e))
+
+
+class TestProtocolDecodingIntoMessage(tests.TestCase):
+
+    def makeDecoder(self):
+        self.handler = remote_sync_server.MessageHandler()
+        self.decoder = remote_sync_server.ProtocolDecoderV1(self.handler)
+        return self.decoder
+
+    def test_decode_full_request(self):
+        self.makeDecoder()
+        client_header = '{"client_version": "0.1.1.dev.0", "request": "foo"}'
+        self.decoder.accept_bytes(remote_sync_server.PROTOCOL_HEADER_V1
+            + 'h\x00\x00\x00\x33'
+            + client_header
+            + 'a\x00\x00\x00\x0E{"arg": "foo"}'
+            + 'e\x00\x00\x00\x00')
+        message = self.handler._cur_message
+        self.assertEqual('0.1.1.dev.0', message.client_version)
+        self.assertEqual('foo', message.request)
+        self.assertEqual({'arg': 'foo'}, message.args)
+        self.assertTrue(message.complete)

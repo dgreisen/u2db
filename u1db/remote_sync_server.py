@@ -131,7 +131,7 @@ class ProtocolEncoderV1(object):
         self._writer(dict_type + l + raw)
 
     def encode_end(self):
-        self._writer('e')
+        self._writer('e\x00\x00\x00\x00')
 
     def encode_request(self, request_name, **request_kwargs):
         self._writer(PROTOCOL_HEADER_V1)
@@ -144,17 +144,83 @@ class ProtocolEncoderV1(object):
         self.encode_end()
 
 
-class ProtocolDecoderV1(object):
+class Message(object):
+    """A single message, built up by MessageHandler"""
 
     def __init__(self):
+        self.client_version = None
+        self.request = None
+        self.args = None
+        self.complete = False
+
+    def set_header(self, header_bytes):
+        msg = simplejson.loads(header_bytes)
+        self.client_version = msg['client_version']
+        self.request = msg['request']
+
+    def set_arguments(self, arg_bytes):
+        msg = simplejson.loads(arg_bytes)
+        self.args = msg
+
+    def set_finished(self):
+        self._validate()
+        self.complete = True
+
+    def _validate(self):
+        pass
+
+
+class MessageHandler(object):
+    """Handle the parts of messages as they come in.
+
+    As the Decoder receives message pieces, it calls into this function to set
+    various attributes.
+    """
+
+    def __init__(self):
+        self._cur_message = Message()
+
+    def received_protocol(self, proto):
+        # We just ignore the protocol
+        pass
+
+    def received_structure(self, structure_type, content):
+        if structure_type == 'h':
+            self._cur_message.set_header(content)
+        elif structure_type == 'a':
+            self._cur_message.set_arguments(content)
+        elif structure_type == 'e':
+            self._message_done()
+        else:
+            raise errors.BadProtocolStream(
+                'unknown structure type: %r' % (structure_type,))
+
+    def _message_done(self):
+        """We got the end-of-message indicator."""
+        self._cur_message.set_finished()
+
+
+class ProtocolDecoderV1(object):
+
+    def __init__(self, message_handler):
         self._state = self._state_expecting_protocol_header
         self._buf = []
         self._buf_len = 0
+        self._message_handler = message_handler
 
     def _append_bytes(self, content):
         """Add more content to the internal buffer."""
         self._buf.append(content)
         self._buf_len += len(content)
+
+    def unused_bytes(self):
+        if not self._buf:
+            return ''
+        if len(self._buf) == 1:
+            return self._buf[0]
+        content = ''.join(self._buf)
+        self._buf = [content]
+        return content
 
     def _peek_bytes(self, count):
         """Check in the buffer for more content."""
@@ -192,27 +258,53 @@ class ProtocolDecoderV1(object):
             return content
         return content[:pos]
 
+    def _consume_bytes(self, count):
+        """Remove bytes from the buffer."""
+        content = self._peek_bytes(count)
+        if content is None:
+            return None
+        if len(content) != count:
+            raise AssertionError('How did we get %d bytes when we asked for %d'
+                                 % (len(content), count))
+        if count == len(self._buf[0]):
+            self._buf.pop(0)
+        else:
+            self._buf[0] = self._buf[0][count:]
+        self._buf_len -= count
+        return content
+
     def accept_bytes(self, content):
         """Some bytes have been read, process them."""
         self._append_bytes(content)
-        last_state = None
-        while last_state != self._state:
-            last_state = self._state
-            self._state()
+        while self._state():
+            pass
 
     def _state_expecting_protocol_header(self):
         proto_header_bytes = self._peek_line()
         if proto_header_bytes is None:
             # Not enough bytes for the v1 header yet
-            return
+            return False
         if proto_header_bytes != PROTOCOL_HEADER_V1:
             raise errors.UnknownProtocolVersion(
                 'expected protocol header: %r got: %r'
                 % (PROTOCOL_HEADER_V1, proto_header_bytes))
-        self._state = self._state_expecting_request_header
+        self._consume_bytes(len(proto_header_bytes))
+        self._message_handler.received_protocol(proto_header_bytes)
+        self._state = self._state_expecting_structure
+        return True
 
-    def _state_expecting_request_header(self):
-        pass
-
-    def _state_expecting_request_arguments(self):
-        pass
+    def _state_expecting_structure(self):
+        type_len = self._peek_bytes(5)
+        if type_len is None:
+            return
+        # TODO: We should probably validate struct_len isn't something crazy
+        #       like 4GB, but for now, just accept whatever. Arbitrary message
+        #       length caps would be... arbitrary.
+        struct_type, struct_len = struct.unpack('>cL', type_len)
+        # Consume bytes only moves the pointer if it is successful
+        content = self._consume_bytes(5 + struct_len)
+        if content is None:
+            return None
+        content = content[5:]
+        self._message_handler.received_structure(struct_type, content)
+        return True
