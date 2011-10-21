@@ -276,12 +276,34 @@ class Buffer(object):
         return content
 
 
+class StructureDecoderV1(object):
+
+    def __init__(self, buf):
+        self._buf = buf
+
+    def decode_structure(self):
+        type_len = self._buf.peek_bytes(5)
+        if type_len is None:
+            return None
+        # TODO: We should probably validate struct_len isn't something crazy
+        #       like 4GB, but for now, just accept whatever. Arbitrary message
+        #       length caps would be... arbitrary.
+        struct_type, struct_len = struct.unpack('>cL', type_len)
+        # Consume bytes only moves the pointer if it is successful
+        content = self._buf.consume_bytes(5 + struct_len)
+        if content is None:
+            return None
+        content = content[5:]
+        return struct_type, content
+
+
 class ProtocolDecoderV1(object):
 
     def __init__(self, message_handler):
         self._state = self._state_expecting_protocol_header
         self._message_handler = message_handler
         self._buf = Buffer()
+        self._decoder = None
 
     def accept_bytes(self, content):
         """Some bytes have been read, process them."""
@@ -302,21 +324,14 @@ class ProtocolDecoderV1(object):
                 'expected protocol header: %r got: %r'
                 % (PROTOCOL_HEADER_V1, proto_header_bytes))
         self._buf.consume_bytes(len(proto_header_bytes))
+        self._decoder = StructureDecoderV1(self._buf)
         self._state = self._state_expecting_structure
         return True
 
     def _state_expecting_structure(self):
-        type_len = self._buf.peek_bytes(5)
-        if type_len is None:
-            return
-        # TODO: We should probably validate struct_len isn't something crazy
-        #       like 4GB, but for now, just accept whatever. Arbitrary message
-        #       length caps would be... arbitrary.
-        struct_type, struct_len = struct.unpack('>cL', type_len)
-        # Consume bytes only moves the pointer if it is successful
-        content = self._buf.consume_bytes(5 + struct_len)
-        if content is None:
-            return None
-        content = content[5:]
+        res = self._decoder.decode_structure()
+        if res is None:
+            return False
+        struct_type, content = res
         self._message_handler.received_structure(struct_type, content)
         return True
