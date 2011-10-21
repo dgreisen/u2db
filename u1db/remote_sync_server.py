@@ -28,7 +28,7 @@ from u1db import (
 
 
 PROTOCOL_HEADER_V1 = 'u1db-1\n'
-
+READ_CHUNK_SIZE = 64*1024
 
 class TCPSyncServer(SocketServer.TCPServer):
 
@@ -109,7 +109,12 @@ class TCPSyncServer(SocketServer.TCPServer):
 class TCPSyncRequestHandler(SocketServer.StreamRequestHandler):
 
     def handle(self):
-        pass
+        handler = MessageHandler()
+        decoder = ProtocolDecoderV1(handler)
+        content = self.request.recv(READ_CHUNK_SIZE)
+        while content:
+            decoder.accept_bytes()
+            content = self.request.recv(READ_CHUNK_SIZE)
 
 
 class RemoteSyncServer(object):
@@ -173,8 +178,7 @@ class Message(object):
 class MessageHandler(object):
     """Handle the parts of messages as they come in.
 
-    As the Decoder receives message pieces, it calls into this function to set
-    various attributes.
+    Assign meaning to the structures received from the decoder.
     """
 
     def __init__(self):
