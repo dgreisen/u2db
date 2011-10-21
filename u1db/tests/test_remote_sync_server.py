@@ -256,12 +256,12 @@ class TestProtocolEncoderV1(tests.TestCase):
 
     def test_encode_dict(self):
         sio, encoder = self.makeEncoder()
-        encoder.encode_dict({'key': 'value'})
+        encoder.encode_dict('d', {'key': 'value'})
         self.assertEqual('d\x00\x00\x00\x10{"key": "value"}', sio.getvalue())
 
     def test_encode_dict_custom_type(self):
         sio, encoder = self.makeEncoder()
-        encoder.encode_dict({'key': 'value'}, dict_type='X')
+        encoder.encode_dict('X', {'key': 'value'})
         self.assertEqual('X\x00\x00\x00\x10{"key": "value"}', sio.getvalue())
 
     def test_encode_end(self):
@@ -289,6 +289,9 @@ class LoggingMessageHandler(object):
 
     def received_structure(self, structure_type, value):
         self.actions.append(('structure', structure_type, value))
+
+    def received_end(self):
+        self.actions.append(('end',))
 
 
 class TestProtocolDecoder(tests.TestCase):
@@ -340,11 +343,11 @@ class TestProtocolDecoder(tests.TestCase):
         decoder.accept_bytes(remote_sync_server.PROTOCOL_HEADER_V1)
         self.assertEqual([], self.messages.actions)
         # Not enough bytes for a structure
-        decoder.accept_bytes('s')
+        decoder.accept_bytes('e')
         self.assertEqual([], self.messages.actions)
-        self.assertEqual('s', decoder.unused_bytes())
+        self.assertEqual('e', decoder.unused_bytes())
         decoder.accept_bytes('\x00\x00\x00\x00')
-        self.assertEqual([('structure', 's', '')], self.messages.actions)
+        self.assertEqual([('end',)], self.messages.actions)
         self.assertEqual('', decoder.unused_bytes())
 
     def test_process_proto_and_request(self):
@@ -358,8 +361,9 @@ class TestProtocolDecoder(tests.TestCase):
             + 'e\x00\x00\x00\x00')
         self.assertEqual(decoder._state_expecting_structure,
                          decoder._state)
-        self.assertEqual([('structure', 'h', client_header),
-                          ('structure', 'e', '')],
+        self.assertEqual([('structure', 'h', {'client_version': '0.1.1.dev.0',
+                                              'request': 'foo'}),
+                          ('end',)],
                          self.messages.actions)
         self.assertEqual('', decoder.unused_bytes())
 
@@ -375,7 +379,7 @@ class TestMessageHandler(tests.TestCase):
 
     def test_args(self):
         handler = remote_sync_server.MessageHandler()
-        handler.received_structure('a', '{"a": 1, "b": "foo"}')
+        handler.received_structure('a', {"a": 1, "b": "foo"})
         self.assertEqual(handler._cur_message.args, {'a': 1, 'b': 'foo'})
 
     def test_end(self):

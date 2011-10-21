@@ -110,7 +110,7 @@ class TCPSyncRequestHandler(SocketServer.StreamRequestHandler):
 
     def handle(self):
         handler = MessageHandler()
-        decoder = ProtocolDecoderV1(handler)
+        decoder = _ProtocolDecoderV1(handler)
         content = self.request.recv(READ_CHUNK_SIZE)
         while content:
             decoder.accept_bytes()
@@ -130,7 +130,7 @@ class ProtocolEncoderV1(object):
     def __init__(self, writer):
         self._writer = writer
 
-    def encode_dict(self, d, dict_type='d'):
+    def encode_dict(self, dict_type, d):
         raw = simplejson.dumps(d)
         l = struct.pack('>L', len(raw))
         self._writer(dict_type + l + raw)
@@ -140,12 +140,12 @@ class ProtocolEncoderV1(object):
 
     def encode_request(self, request_name, **request_kwargs):
         self._writer(PROTOCOL_HEADER_V1)
-        request = compat.OrderedDict([
+        request_header = compat.OrderedDict([
             ('client_version', _u1db_version),
             ('request', request_name),
             ])
-        self.encode_dict(request, dict_type='h')
-        self.encode_dict(request_kwargs, dict_type='a')
+        self.encode_dict('h', request_header)
+        self.encode_dict('a', request_kwargs)
         self.encode_end()
 
 
@@ -158,13 +158,11 @@ class Message(object):
         self.args = None
         self.complete = False
 
-    def set_header(self, header_bytes):
-        msg = simplejson.loads(header_bytes)
+    def set_header(self, msg):
         self.client_version = msg['client_version']
         self.request = msg['request']
 
-    def set_arguments(self, arg_bytes):
-        msg = simplejson.loads(arg_bytes)
+    def set_arguments(self, msg):
         self.args = msg
 
     def set_finished(self):
@@ -184,16 +182,16 @@ class MessageHandler(object):
     def __init__(self):
         self._cur_message = Message()
 
-    def received_structure(self, structure_type, content):
-        if structure_type == 'h':
-            self._cur_message.set_header(content)
-        elif structure_type == 'a':
-            self._cur_message.set_arguments(content)
-        elif structure_type == 'e':
-            self._message_done()
-        else:
-            raise errors.BadProtocolStream(
-                'unknown structure type: %r' % (structure_type,))
+    def received_request_header(self, header):
+        self._cur_message.set_header(header)
+        pass
+
+    def received_request_args(self, args):
+        self._cur_message.set_arguments(args)
+        pass
+
+    def received_end(self):
+        self._message_done()
 
     def _message_done(self):
         """We got the end-of-message indicator."""
@@ -276,18 +274,19 @@ class Buffer(object):
         return content
 
 
-class StructureDecoderV1(object):
-    """Decode a Type Length Value structure.
+class _ProtocolDecoderV1(object):
 
-    The Type is one byte (we assign no meaning at this level),
-    Length is a 4-byte big-endian integer.
-    Value (at this level) is octet-stream of the given length.
-    """
-
-    def __init__(self, buf):
+    def __init__(self, buf, message_handler):
         self._buf = buf
+        self._message_handler = message_handler
 
-    def decode_structure(self):
+    def _extract_tlv(self):
+        """Decode a Type Length Value structure.
+
+        The Type is one byte (we assign no meaning at this level),
+        Length is a 4-byte big-endian integer.
+        Value (at this level) is octet-stream of the given length.
+        """
         type_len = self._buf.peek_bytes(5)
         if type_len is None:
             return None
@@ -300,6 +299,22 @@ class StructureDecoderV1(object):
         if content is None:
             return None
         return struct_type, content[5:]
+
+    def decode_one(self):
+        res = self._extract_tlv()
+        if res is None:
+            return None
+        struct_type, content = res
+        if struct_type == 'h':
+            self._message_handler.received_request_header(
+                simplejson.loads(content))
+        elif struct_type == 'a':
+            self._message_handler.received_request_args(
+                simplejson.loads(content))
+        elif struct_type == 'e':
+            # assert content == ''
+            self._message_handler.received_end()
+        return struct_type
 
 
 class ProtocolDecoder(object):
@@ -330,14 +345,12 @@ class ProtocolDecoder(object):
                 'expected protocol header: %r got: %r'
                 % (PROTOCOL_HEADER_V1, proto_header_bytes))
         self._buf.consume_bytes(len(proto_header_bytes))
-        self._decoder = StructureDecoderV1(self._buf)
+        self._decoder = _ProtocolDecoderV1(self._buf, self._message_handler)
         self._state = self._state_expecting_structure
         return True
 
     def _state_expecting_structure(self):
-        res = self._decoder.decode_structure()
+        res = self._decoder.decode_one()
         if res is None:
             return False
-        struct_type, content = res
-        self._message_handler.received_structure(struct_type, content)
         return True
