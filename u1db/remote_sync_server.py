@@ -14,10 +14,18 @@
 
 """A Server that listens for synchronization requests"""
 
-import socket
+import struct
 import SocketServer
 import threading
 
+import simplejson
+
+from u1db import (
+    __version__ as _u1db_version,
+    compat,
+    )
+
+MESSAGE_HEADER = 'u1db-1\n'
 
 class TCPSyncServer(SocketServer.TCPServer):
 
@@ -107,3 +115,26 @@ class RemoteSyncServer(object):
     def __init__(self, db):
         self._db = db
 
+
+class ProtocolEncoderV1(object):
+    """Encode/decode a message."""
+
+    def __init__(self, writer):
+        self._writer = writer
+
+    def encode_dict(self, d, dict_type='d'):
+        raw = simplejson.dumps(d)
+        l = struct.pack('>L', len(raw))
+        self._writer(dict_type + l + raw)
+
+    def encode_end(self):
+        self._writer('e')
+
+    def encode_request(self, request_name, **request_kwargs):
+        request = compat.OrderedDict([
+            ('client_version', _u1db_version),
+            ('request', request_name),
+            ])
+        self.encode_dict(request, dict_type='h')
+        self.encode_dict(request_kwargs, dict_type='a')
+        self.encode_end()

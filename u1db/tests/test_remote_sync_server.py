@@ -14,11 +14,14 @@
 
 """Tests for the remote synchronization server"""
 
+import cStringIO
 import threading
 import socket
 import SocketServer
+import struct
 
 from u1db import (
+    __version__ as _u1db_version,
     errors,
     remote_sync_server,
     tests,
@@ -132,3 +135,36 @@ class TestTCPSyncServer(tests.TestCase):
         # closed, so we can't assert the socket is closed by reading the empty
         # string on it.
         # self.assertEqual('', client_sock.recv(1024))
+
+
+class TestProtocolEncoderV1(tests.TestCase):
+
+    def getEncoder(self):
+        sio = cStringIO.StringIO()
+        encoder = remote_sync_server.ProtocolEncoderV1(sio.write)
+        return sio, encoder
+
+    def test_encode_dict(self):
+        sio, encoder = self.getEncoder()
+        encoder.encode_dict({'key': 'value'})
+        self.assertEqual('d\x00\x00\x00\x10{"key": "value"}', sio.getvalue())
+
+    def test_encode_dict_custom_type(self):
+        sio, encoder = self.getEncoder()
+        encoder.encode_dict({'key': 'value'}, dict_type='X')
+        self.assertEqual('X\x00\x00\x00\x10{"key": "value"}', sio.getvalue())
+
+    def test_encode_end(self):
+        sio, encoder = self.getEncoder()
+        encoder.encode_end()
+        self.assertEqual('e', sio.getvalue())
+
+    def test_encode_request(self):
+        sio, encoder = self.getEncoder()
+        encoder.encode_request('name', a=1)
+        self.assertEqual(
+            'h%s{"client_version": "%s", "request": "name"}'
+            % (struct.pack('!L', 41 + len(_u1db_version)), _u1db_version)
+            + 'a\x00\x00\x00\x08{"a": 1}'
+            + 'e',
+            sio.getvalue())
