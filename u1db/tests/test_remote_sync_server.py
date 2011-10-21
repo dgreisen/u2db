@@ -425,3 +425,17 @@ class TestProtocolDecodingIntoMessage(tests.TestCase):
         self.assertEqual('foo', message.request)
         self.assertEqual({'arg': 'foo'}, message.args)
         self.assertTrue(message.complete)
+
+
+class TestProtocolEncodeDecode(tests.TestCase):
+
+    def test_simple_request(self):
+        handler = remote_sync_server.MessageHandler()
+        decoder = remote_sync_server.ProtocolDecoderV1(handler)
+        encoder = remote_sync_server.ProtocolEncoderV1(decoder.accept_bytes)
+        encoder.encode_request('myrequest', arg1='a', arg2=2, value='bytes')
+        message = handler._cur_message
+        self.assertEqual(_u1db_version, message.client_version)
+        self.assertEqual('myrequest', message.request)
+        self.assertEqual({'arg1': 'a', 'arg2': 2, 'value':'bytes'},
+                         message.args)
