@@ -184,10 +184,6 @@ class MessageHandler(object):
     def __init__(self):
         self._cur_message = Message()
 
-    def received_protocol(self, proto):
-        # We just ignore the protocol
-        pass
-
     def received_structure(self, structure_type, content):
         if structure_type == 'h':
             self._cur_message.set_header(content)
@@ -204,54 +200,56 @@ class MessageHandler(object):
         self._cur_message.set_finished()
 
 
-class ProtocolDecoderV1(object):
+class Buffer(object):
+    """Manager a buffer of bytes as they come in."""
 
-    def __init__(self, message_handler):
-        self._state = self._state_expecting_protocol_header
-        self._buf = []
-        self._buf_len = 0
-        self._message_handler = message_handler
+    def __init__(self):
+        self._content = []
+        self._len = 0
 
-    def _append_bytes(self, content):
+    def __len__(self):
+        return self._len
+
+    def add_bytes(self, content):
         """Add more content to the internal buffer."""
-        self._buf.append(content)
-        self._buf_len += len(content)
+        self._content.append(content)
+        self._len += len(content)
 
-    def unused_bytes(self):
-        if not self._buf:
+    def peek_all_bytes(self):
+        if not self._content:
             return ''
-        if len(self._buf) == 1:
-            return self._buf[0]
-        content = ''.join(self._buf)
-        self._buf = [content]
+        if len(self._content) == 1:
+            return self._content[0]
+        content = ''.join(self._content)
+        self._content = [content]
         return content
 
-    def _peek_bytes(self, count):
+    def peek_bytes(self, count):
         """Check in the buffer for more content."""
-        if count > self._buf_len:
+        if count > self._len:
             # Not enough bytes for the peek, do nothing
             return None
-        if len(self._buf[0]) >= count:
+        if len(self._content[0]) >= count:
             # We have enough bytes in the first byte string, return it
-            return self._buf[0][:count]
+            return self._content[0][:count]
         # Join the buffer, return the count we need, and save the big buffer
-        content = ''.join(self._buf)
-        self._buf = [content]
+        content = ''.join(self._content)
+        self._content = [content]
         return content[:count]
 
-    def _peek_line(self):
+    def peek_line(self):
         """Peek in the buffer for a line.
 
         This will return None if no line is available.
         """
-        if not self._buf:
+        if not self._content:
             return None
-        content = self._buf[0]
+        content = self._content[0]
         pos = content.find('\n')
         if pos == -1:
             # No newline in the first buffer, combine it, and try again
-            content = ''.join(self._buf)
-            self._buf = [content]
+            content = ''.join(self._content)
+            self._content = [content]
             pos = content.find('\n')
         if pos == -1:
             # No newlines at all
@@ -262,29 +260,40 @@ class ProtocolDecoderV1(object):
             return content
         return content[:pos]
 
-    def _consume_bytes(self, count):
+    def consume_bytes(self, count):
         """Remove bytes from the buffer."""
-        content = self._peek_bytes(count)
+        content = self.peek_bytes(count)
         if content is None:
             return None
         if len(content) != count:
             raise AssertionError('How did we get %d bytes when we asked for %d'
                                  % (len(content), count))
-        if count == len(self._buf[0]):
-            self._buf.pop(0)
+        if count == len(self._content[0]):
+            self._content.pop(0)
         else:
-            self._buf[0] = self._buf[0][count:]
-        self._buf_len -= count
+            self._content[0] = self._content[0][count:]
+        self._len -= count
         return content
+
+
+class ProtocolDecoderV1(object):
+
+    def __init__(self, message_handler):
+        self._state = self._state_expecting_protocol_header
+        self._message_handler = message_handler
+        self._buf = Buffer()
 
     def accept_bytes(self, content):
         """Some bytes have been read, process them."""
-        self._append_bytes(content)
+        self._buf.add_bytes(content)
         while self._state():
             pass
 
+    def unused_bytes(self):
+        return self._buf.peek_all_bytes()
+
     def _state_expecting_protocol_header(self):
-        proto_header_bytes = self._peek_line()
+        proto_header_bytes = self._buf.peek_line()
         if proto_header_bytes is None:
             # Not enough bytes for the v1 header yet
             return False
@@ -292,13 +301,12 @@ class ProtocolDecoderV1(object):
             raise errors.UnknownProtocolVersion(
                 'expected protocol header: %r got: %r'
                 % (PROTOCOL_HEADER_V1, proto_header_bytes))
-        self._consume_bytes(len(proto_header_bytes))
-        self._message_handler.received_protocol(proto_header_bytes)
+        self._buf.consume_bytes(len(proto_header_bytes))
         self._state = self._state_expecting_structure
         return True
 
     def _state_expecting_structure(self):
-        type_len = self._peek_bytes(5)
+        type_len = self._buf.peek_bytes(5)
         if type_len is None:
             return
         # TODO: We should probably validate struct_len isn't something crazy
@@ -306,7 +314,7 @@ class ProtocolDecoderV1(object):
         #       length caps would be... arbitrary.
         struct_type, struct_len = struct.unpack('>cL', type_len)
         # Consume bytes only moves the pointer if it is successful
-        content = self._consume_bytes(5 + struct_len)
+        content = self._buf.consume_bytes(5 + struct_len)
         if content is None:
             return None
         content = content[5:]

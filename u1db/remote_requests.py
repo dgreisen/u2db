@@ -36,3 +36,11 @@ class RPCRequest(object):
 
 class RPCResponse(object):
     """Base class for responses to RPC requests."""
+
+
+class RPCServerVersion(RPCRequest):
+    """Return the version of the server."""
+
+    name = 'version'
+
+RPCServerVersion.register()

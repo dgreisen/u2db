@@ -34,3 +34,7 @@ class TestRPCRequest(tests.TestCase):
         self.assertIs(None, remote_requests.RPCRequest.lookup('mytestreq'))
         # Calling it again should not be an error.
         MyRequest.unregister()
+
+    def test_get_version_rpc(self):
+        self.assertEqual(remote_requests.RPCServerVersion,
+                         remote_requests.RPCRequest.lookup('version'))

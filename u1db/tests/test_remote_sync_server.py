@@ -55,6 +55,116 @@ class TwoMessageHandler(SocketServer.BaseRequestHandler):
         self.request.sendall('goodbye\n')
 
 
+class TestBuffer(tests.TestCase):
+
+    def setUp(self):
+        super(TestBuffer, self).setUp()
+        self.buf = remote_sync_server.Buffer()
+
+    def test_add_bytes(self):
+        self.buf.add_bytes('abc')
+        self.assertEqual(['abc'], self.buf._content)
+        self.assertEqual(3, len(self.buf))
+        self.buf.add_bytes('def')
+        self.assertEqual(['abc', 'def'], self.buf._content)
+        self.assertEqual(6, len(self.buf))
+
+    def test_peek_bytes(self):
+        self.buf.add_bytes('abc')
+        self.buf.add_bytes('def')
+        self.assertEqual(['abc', 'def'], self.buf._content)
+        # If we can peek without combining, do so
+        self.assertEqual('ab', self.buf.peek_bytes(2))
+        self.assertEqual(['abc', 'def'], self.buf._content)
+        self.assertEqual('abc', self.buf.peek_bytes(3))
+        self.assertEqual(['abc', 'def'], self.buf._content)
+        # After a bigger peek, we combine and save the larger string
+        self.assertEqual('abcd', self.buf.peek_bytes(4))
+        self.assertEqual(['abcdef'], self.buf._content)
+
+    def test_peek_bytes_no_bytes(self):
+        self.assertEqual(None, self.buf.peek_bytes(2))
+
+    def test_peek_bytes_not_enough_bytes(self):
+        self.buf.add_bytes('abc')
+        self.buf.add_bytes('def')
+        self.assertEqual(None, self.buf.peek_bytes(8))
+        self.assertEqual(['abc', 'def'], self.buf._content)
+
+    def test_peek_line_exact(self):
+        content = 'ab\n'
+        self.buf.add_bytes(content)
+        self.assertEqual(['ab\n'], self.buf._content)
+        self.assertEqual('ab\n', self.buf.peek_line())
+        self.assertIs(content, self.buf.peek_line())
+
+    def test_peek_line_multiple_chunks(self):
+        self.buf.add_bytes('ab')
+        self.buf.add_bytes('cd\n')
+        self.assertEqual(['ab', 'cd\n'], self.buf._content)
+        self.assertEqual('abcd\n', self.buf.peek_line())
+        self.assertEqual(['abcd\n'], self.buf._content)
+
+    def test_peek_line_partial_chunk(self):
+        self.buf.add_bytes('ab\ncd')
+        self.buf.add_bytes('ef')
+        self.assertEqual(['ab\ncd', 'ef'], self.buf._content)
+        self.assertEqual('ab\n', self.buf.peek_line())
+        self.assertEqual(['ab\ncd', 'ef'], self.buf._content)
+
+    def test_peek_line_mixed(self):
+        self.buf.add_bytes('ab')
+        self.buf.add_bytes('cd\nef')
+        self.assertEqual(['ab', 'cd\nef'], self.buf._content)
+        self.assertEqual('abcd\n', self.buf.peek_line())
+        self.assertEqual(['abcd\nef'], self.buf._content)
+
+    def test_peek_line_no_bytes(self):
+        self.assertIs(None, self.buf.peek_line())
+
+    def test_peek_no_line(self):
+        self.buf.add_bytes('ab')
+        self.buf.add_bytes('cd')
+        self.assertEqual(['ab', 'cd'], self.buf._content)
+        self.assertIs(None, self.buf.peek_line())
+        self.assertEqual(['abcd'], self.buf._content)
+
+    def test_consume_bytes(self):
+        start = 'ab\n'
+        self.buf.add_bytes(start)
+        self.buf.add_bytes('cd')
+        self.buf.add_bytes('ef')
+        self.assertEqual(['ab\n', 'cd', 'ef'], self.buf._content)
+        self.assertEqual(7, len(self.buf))
+        # If we can exactly yield the bytes from the buffer, do so.
+        self.assertIs(start, self.buf.consume_bytes(3))
+        self.assertEqual(['cd', 'ef'], self.buf._content)
+        self.assertEqual(4, len(self.buf))
+
+    def test_consume_bytes_no_bytes(self):
+        self.assertIs(None, self.buf.consume_bytes(1))
+
+    def test_consume_bytes_not_enough_bytes(self):
+        self.buf.add_bytes('ab')
+        self.buf.add_bytes('cd')
+        self.buf.add_bytes('ef')
+        self.assertEqual(['ab', 'cd', 'ef'], self.buf._content)
+        self.assertIs(None, self.buf.consume_bytes(7))
+        self.assertEqual(['ab', 'cd', 'ef'], self.buf._content)
+
+    def test_consume_partial_buffer(self):
+        self.buf.add_bytes('ab')
+        self.buf.add_bytes('cd')
+        self.buf.add_bytes('ef')
+        self.assertEqual(['ab', 'cd', 'ef'], self.buf._content)
+        self.assertEqual(6, len(self.buf))
+        self.assertIs('a', self.buf.consume_bytes(1))
+        self.assertEqual(['b', 'cd', 'ef'], self.buf._content)
+        self.assertEqual(5, len(self.buf))
+        self.assertEqual('bc', self.buf.consume_bytes(2))
+        self.assertEqual(['def'], self.buf._content)
+
+
 class TestTCPSyncServer(tests.TestCase):
 
     def startServer(self, request_handler):
@@ -177,9 +287,6 @@ class LoggingMessageHandler(object):
     def __init__(self):
         self.actions = []
 
-    def received_protocol(self, protocol_bytes):
-        self.actions.append(('protocol', protocol_bytes))
-
     def received_structure(self, structure_type, value):
         self.actions.append(('structure', structure_type, value))
 
@@ -190,123 +297,6 @@ class TestProtocolDecoderV1(tests.TestCase):
         self.messages = LoggingMessageHandler()
         self.decoder = remote_sync_server.ProtocolDecoderV1(self.messages)
         return self.decoder
-
-    def test__append_bytes(self):
-        decoder = self.makeDecoder()
-        decoder._append_bytes('abc')
-        self.assertEqual(['abc'], decoder._buf)
-        self.assertEqual(3, decoder._buf_len)
-        decoder._append_bytes('def')
-        self.assertEqual(['abc', 'def'], decoder._buf)
-        self.assertEqual(6, decoder._buf_len)
-
-    def test__peek_bytes(self):
-        decoder = self.makeDecoder()
-        decoder._append_bytes('abc')
-        decoder._append_bytes('def')
-        self.assertEqual(['abc', 'def'], decoder._buf)
-        # If we can peek without combining, do so
-        self.assertEqual('ab', decoder._peek_bytes(2))
-        self.assertEqual(['abc', 'def'], decoder._buf)
-        self.assertEqual('abc', decoder._peek_bytes(3))
-        self.assertEqual(['abc', 'def'], decoder._buf)
-        # After a bigger peek, we combine and save the larger string
-        self.assertEqual('abcd', decoder._peek_bytes(4))
-        self.assertEqual(['abcdef'], decoder._buf)
-
-    def test__peek_bytes_no_bytes(self):
-        decoder = self.makeDecoder()
-        self.assertEqual(None, decoder._peek_bytes(2))
-
-    def test__peek_bytes_not_enough_bytes(self):
-        decoder = self.makeDecoder()
-        decoder._append_bytes('abc')
-        decoder._append_bytes('def')
-        self.assertEqual(None, decoder._peek_bytes(8))
-        self.assertEqual(['abc', 'def'], decoder._buf)
-
-    def test__peek_line_exact(self):
-        decoder = self.makeDecoder()
-        content = 'ab\n'
-        decoder._append_bytes(content)
-        self.assertEqual(['ab\n'], decoder._buf)
-        self.assertEqual('ab\n', decoder._peek_line())
-        self.assertIs(content, decoder._peek_line())
-
-    def test__peek_line_multiple_chunks(self):
-        decoder = self.makeDecoder()
-        decoder._append_bytes('ab')
-        decoder._append_bytes('cd\n')
-        self.assertEqual(['ab', 'cd\n'], decoder._buf)
-        self.assertEqual('abcd\n', decoder._peek_line())
-        self.assertEqual(['abcd\n'], decoder._buf)
-
-    def test__peek_line_partial_chunk(self):
-        decoder = self.makeDecoder()
-        decoder._append_bytes('ab\ncd')
-        decoder._append_bytes('ef')
-        self.assertEqual(['ab\ncd', 'ef'], decoder._buf)
-        self.assertEqual('ab\n', decoder._peek_line())
-        self.assertEqual(['ab\ncd', 'ef'], decoder._buf)
-
-    def test__peek_line_mixed(self):
-        decoder = self.makeDecoder()
-        decoder._append_bytes('ab')
-        decoder._append_bytes('cd\nef')
-        self.assertEqual(['ab', 'cd\nef'], decoder._buf)
-        self.assertEqual('abcd\n', decoder._peek_line())
-        self.assertEqual(['abcd\nef'], decoder._buf)
-
-    def test__peek_line_no_bytes(self):
-        decoder = self.makeDecoder()
-        self.assertIs(None, decoder._peek_line())
-
-    def test__peek_no_line(self):
-        decoder = self.makeDecoder()
-        decoder._append_bytes('ab')
-        decoder._append_bytes('cd')
-        self.assertEqual(['ab', 'cd'], decoder._buf)
-        self.assertIs(None, decoder._peek_line())
-        self.assertEqual(['abcd'], decoder._buf)
-
-    def test__consume_bytes(self):
-        decoder = self.makeDecoder()
-        start = 'ab\n'
-        decoder._append_bytes(start)
-        decoder._append_bytes('cd')
-        decoder._append_bytes('ef')
-        self.assertEqual(['ab\n', 'cd', 'ef'], decoder._buf)
-        self.assertEqual(7, decoder._buf_len)
-        # If we can exactly yield the bytes from the buffer, do so.
-        self.assertIs(start, decoder._consume_bytes(3))
-        self.assertEqual(['cd', 'ef'], decoder._buf)
-        self.assertEqual(4, decoder._buf_len)
-
-    def test__consume_bytes_no_bytes(self):
-        decoder = self.makeDecoder()
-        self.assertIs(None, decoder._consume_bytes(1))
-
-    def test__consume_bytes_not_enough_bytes(self):
-        decoder = self.makeDecoder()
-        decoder._append_bytes('ab')
-        decoder._append_bytes('cd')
-        decoder._append_bytes('ef')
-        self.assertEqual(['ab', 'cd', 'ef'], decoder._buf)
-        self.assertIs(None, decoder._consume_bytes(7))
-        self.assertEqual(['ab', 'cd', 'ef'], decoder._buf)
-
-    def test__consume_partial_buffer(self):
-        decoder = self.makeDecoder()
-        decoder._append_bytes('ab')
-        decoder._append_bytes('cd')
-        decoder._append_bytes('ef')
-        self.assertEqual(['ab', 'cd', 'ef'], decoder._buf)
-        self.assertEqual(6, decoder._buf_len)
-        self.assertIs('a', decoder._consume_bytes(1))
-        self.assertEqual(['b', 'cd', 'ef'], decoder._buf)
-        self.assertEqual(5, decoder._buf_len)
-        self.assertEqual('bc', decoder._consume_bytes(2))
-        self.assertEqual(['def'], decoder._buf)
 
     def test_starting_state(self):
         decoder = self.makeDecoder()
@@ -320,9 +310,7 @@ class TestProtocolDecoderV1(tests.TestCase):
         decoder.accept_bytes(remote_sync_server.PROTOCOL_HEADER_V1)
         self.assertEqual(decoder._state_expecting_structure,
                          decoder._state)
-        self.assertEqual(0, decoder._buf_len)
-        self.assertEqual([('protocol', remote_sync_server.PROTOCOL_HEADER_V1)],
-                         self.messages.actions)
+        self.assertEqual(0, len(decoder._buf))
 
     def test_process_partial_header(self):
         decoder = self.makeDecoder()
@@ -343,16 +331,14 @@ class TestProtocolDecoderV1(tests.TestCase):
                           decoder.accept_bytes, 'Not A Protocol\n')
         self.assertIn('Not A Protocol', str(e))
         # The bytes haven't been consumed, either
-        self.assertEqual(['Not A Protocol\n'], decoder._buf)
+        self.assertEqual('Not A Protocol\n', decoder.unused_bytes())
 
     def test_process_proto_and_partial_structure(self):
         decoder = self.makeDecoder()
         self.assertEqual(decoder._state_expecting_protocol_header,
                          decoder._state)
         decoder.accept_bytes(remote_sync_server.PROTOCOL_HEADER_V1)
-        self.assertEqual([('protocol', remote_sync_server.PROTOCOL_HEADER_V1)],
-                         self.messages.actions)
-        del self.messages.actions[:]
+        self.assertEqual([], self.messages.actions)
         # Not enough bytes for a structure
         decoder.accept_bytes('s')
         self.assertEqual([], self.messages.actions)
@@ -372,8 +358,7 @@ class TestProtocolDecoderV1(tests.TestCase):
             + 'e\x00\x00\x00\x00')
         self.assertEqual(decoder._state_expecting_structure,
                          decoder._state)
-        self.assertEqual([('protocol', remote_sync_server.PROTOCOL_HEADER_V1),
-                          ('structure', 'h', client_header),
+        self.assertEqual([('structure', 'h', client_header),
                           ('structure', 'e', '')],
                          self.messages.actions)
         self.assertEqual('', decoder.unused_bytes())
