@@ -139,32 +139,151 @@ class TestTCPSyncServer(tests.TestCase):
 
 class TestProtocolEncoderV1(tests.TestCase):
 
-    def getEncoder(self):
+    def makeEncoder(self):
         sio = cStringIO.StringIO()
         encoder = remote_sync_server.ProtocolEncoderV1(sio.write)
         return sio, encoder
 
     def test_encode_dict(self):
-        sio, encoder = self.getEncoder()
+        sio, encoder = self.makeEncoder()
         encoder.encode_dict({'key': 'value'})
         self.assertEqual('d\x00\x00\x00\x10{"key": "value"}', sio.getvalue())
 
     def test_encode_dict_custom_type(self):
-        sio, encoder = self.getEncoder()
+        sio, encoder = self.makeEncoder()
         encoder.encode_dict({'key': 'value'}, dict_type='X')
         self.assertEqual('X\x00\x00\x00\x10{"key": "value"}', sio.getvalue())
 
     def test_encode_end(self):
-        sio, encoder = self.getEncoder()
+        sio, encoder = self.makeEncoder()
         encoder.encode_end()
         self.assertEqual('e', sio.getvalue())
 
     def test_encode_request(self):
-        sio, encoder = self.getEncoder()
+        sio, encoder = self.makeEncoder()
         encoder.encode_request('name', a=1)
         self.assertEqual(
+            'u1db-1\n'
             'h%s{"client_version": "%s", "request": "name"}'
             % (struct.pack('!L', 41 + len(_u1db_version)), _u1db_version)
             + 'a\x00\x00\x00\x08{"a": 1}'
             + 'e',
             sio.getvalue())
+
+
+class TestProtocolDecoderV1(tests.TestCase):
+
+    def makeDecoder(self):
+        return remote_sync_server.ProtocolDecoderV1()
+
+    def test__append_bytes(self):
+        decoder = self.makeDecoder()
+        decoder._append_bytes('abc')
+        self.assertEqual(['abc'], decoder._buf)
+        self.assertEqual(3, decoder._buf_len)
+        decoder._append_bytes('def')
+        self.assertEqual(['abc', 'def'], decoder._buf)
+        self.assertEqual(6, decoder._buf_len)
+
+    def test__peek_bytes(self):
+        decoder = self.makeDecoder()
+        decoder._append_bytes('abc')
+        decoder._append_bytes('def')
+        self.assertEqual(['abc', 'def'], decoder._buf)
+        # If we can peek without combining, do so
+        self.assertEqual('ab', decoder._peek_bytes(2))
+        self.assertEqual(['abc', 'def'], decoder._buf)
+        self.assertEqual('abc', decoder._peek_bytes(3))
+        self.assertEqual(['abc', 'def'], decoder._buf)
+        # After a bigger peek, we combine and save the larger string
+        self.assertEqual('abcd', decoder._peek_bytes(4))
+        self.assertEqual(['abcdef'], decoder._buf)
+
+    def test__peek_bytes_no_bytes(self):
+        decoder = self.makeDecoder()
+        self.assertEqual(None, decoder._peek_bytes(2))
+
+    def test__peek_bytes_not_enough_bytes(self):
+        decoder = self.makeDecoder()
+        decoder._append_bytes('abc')
+        decoder._append_bytes('def')
+        self.assertEqual(None, decoder._peek_bytes(8))
+        self.assertEqual(['abc', 'def'], decoder._buf)
+
+    def test__peek_line_exact(self):
+        decoder = self.makeDecoder()
+        content = 'ab\n'
+        decoder._append_bytes(content)
+        self.assertEqual(['ab\n'], decoder._buf)
+        self.assertEqual('ab\n', decoder._peek_line())
+        self.assertIs(content, decoder._peek_line())
+
+    def test__peek_line_multiple_chunks(self):
+        decoder = self.makeDecoder()
+        decoder._append_bytes('ab')
+        decoder._append_bytes('cd\n')
+        self.assertEqual(['ab', 'cd\n'], decoder._buf)
+        self.assertEqual('abcd\n', decoder._peek_line())
+        self.assertEqual(['abcd\n'], decoder._buf)
+
+    def test__peek_line_partial_chunk(self):
+        decoder = self.makeDecoder()
+        decoder._append_bytes('ab\ncd')
+        decoder._append_bytes('ef')
+        self.assertEqual(['ab\ncd', 'ef'], decoder._buf)
+        self.assertEqual('ab\n', decoder._peek_line())
+        self.assertEqual(['ab\ncd', 'ef'], decoder._buf)
+
+    def test__peek_line_mixed(self):
+        decoder = self.makeDecoder()
+        decoder._append_bytes('ab')
+        decoder._append_bytes('cd\nef')
+        self.assertEqual(['ab', 'cd\nef'], decoder._buf)
+        self.assertEqual('abcd\n', decoder._peek_line())
+        self.assertEqual(['abcd\nef'], decoder._buf)
+
+    def test__peek_line_no_bytes(self):
+        decoder = self.makeDecoder()
+        self.assertIs(None, decoder._peek_line())
+
+    def test__peek_no_line(self):
+        decoder = self.makeDecoder()
+        decoder._append_bytes('ab')
+        decoder._append_bytes('cd')
+        self.assertEqual(['ab', 'cd'], decoder._buf)
+        self.assertIs(None, decoder._peek_line())
+        self.assertEqual(['abcd'], decoder._buf)
+
+    def test_starting_state(self):
+        decoder = self.makeDecoder()
+        self.assertEqual(decoder._state_expecting_protocol_header,
+                         decoder._state)
+
+    def test_process_header(self):
+        decoder = self.makeDecoder()
+        self.assertEqual(decoder._state_expecting_protocol_header,
+                         decoder._state)
+        decoder.accept_bytes(remote_sync_server.PROTOCOL_HEADER_V1)
+        self.assertEqual(decoder._state_expecting_request_header,
+                         decoder._state)
+
+    def test_process_partial_header(self):
+        decoder = self.makeDecoder()
+        self.assertEqual(decoder._state_expecting_protocol_header,
+                         decoder._state)
+        decoder.accept_bytes(remote_sync_server.PROTOCOL_HEADER_V1[:3])
+        self.assertEqual(decoder._state_expecting_protocol_header,
+                         decoder._state)
+        decoder.accept_bytes(remote_sync_server.PROTOCOL_HEADER_V1[3:])
+        self.assertEqual(decoder._state_expecting_request_header,
+                         decoder._state)
+
+    def test_process_bad_header(self):
+        decoder = self.makeDecoder()
+        self.assertEqual(decoder._state_expecting_protocol_header,
+                         decoder._state)
+        e = self.assertRaises(errors.UnknownProtocolVersion,
+                          decoder.accept_bytes, 'Not A Protocol\n')
+        self.assertIn('Not A Protocol', str(e))
+        # The bytes haven't been consumed, either
+        self.assertEqual(['Not A Protocol\n'], decoder._buf)

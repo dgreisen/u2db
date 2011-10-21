@@ -23,9 +23,12 @@ import simplejson
 from u1db import (
     __version__ as _u1db_version,
     compat,
+    errors,
     )
 
-MESSAGE_HEADER = 'u1db-1\n'
+
+PROTOCOL_HEADER_V1 = 'u1db-1\n'
+
 
 class TCPSyncServer(SocketServer.TCPServer):
 
@@ -131,6 +134,7 @@ class ProtocolEncoderV1(object):
         self._writer('e')
 
     def encode_request(self, request_name, **request_kwargs):
+        self._writer(PROTOCOL_HEADER_V1)
         request = compat.OrderedDict([
             ('client_version', _u1db_version),
             ('request', request_name),
@@ -138,3 +142,77 @@ class ProtocolEncoderV1(object):
         self.encode_dict(request, dict_type='h')
         self.encode_dict(request_kwargs, dict_type='a')
         self.encode_end()
+
+
+class ProtocolDecoderV1(object):
+
+    def __init__(self):
+        self._state = self._state_expecting_protocol_header
+        self._buf = []
+        self._buf_len = 0
+
+    def _append_bytes(self, content):
+        """Add more content to the internal buffer."""
+        self._buf.append(content)
+        self._buf_len += len(content)
+
+    def _peek_bytes(self, count):
+        """Check in the buffer for more content."""
+        if count > self._buf_len:
+            # Not enough bytes for the peek, do nothing
+            return None
+        if len(self._buf[0]) >= count:
+            # We have enough bytes in the first byte string, return it
+            return self._buf[0][:count]
+        # Join the buffer, return the count we need, and save the big buffer
+        content = ''.join(self._buf)
+        self._buf = [content]
+        return content[:count]
+
+    def _peek_line(self):
+        """Peek in the buffer for a line.
+
+        This will return None if no line is available.
+        """
+        if not self._buf:
+            return None
+        content = self._buf[0]
+        pos = content.find('\n')
+        if pos == -1:
+            # No newline in the first buffer, combine it, and try again
+            content = ''.join(self._buf)
+            self._buf = [content]
+            pos = content.find('\n')
+        if pos == -1:
+            # No newlines at all
+            return None
+        pos += 1 # Move pos by 1 so we include '\n'
+        if pos == len(content):
+            # The newline fits exactly in the first chunk, return it
+            return content
+        return content[:pos]
+
+    def accept_bytes(self, content):
+        """Some bytes have been read, process them."""
+        self._append_bytes(content)
+        last_state = None
+        while last_state != self._state:
+            last_state = self._state
+            self._state()
+
+    def _state_expecting_protocol_header(self):
+        proto_header_bytes = self._peek_line()
+        if proto_header_bytes is None:
+            # Not enough bytes for the v1 header yet
+            return
+        if proto_header_bytes != PROTOCOL_HEADER_V1:
+            raise errors.UnknownProtocolVersion(
+                'expected protocol header: %r got: %r'
+                % (PROTOCOL_HEADER_V1, proto_header_bytes))
+        self._state = self._state_expecting_request_header
+
+    def _state_expecting_request_header(self):
+        pass
+
+    def _state_expecting_request_arguments(self):
+        pass

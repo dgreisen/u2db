@@ -30,9 +30,17 @@ class ConflictedDoc(U1DBError):
     """The document is conflicted, you must call resolve before put()"""
 
 
-class InvalidValueForIndex(Exception):
+class InvalidValueForIndex(U1DBError):
     """The values supplied does not match the index definition.
 
     Can also be raised if wildcard matches are not strictly at the tail of the
     request.
     """
+
+
+class BadProtocolStream(U1DBError):
+    """Raised when part of the protocol stream is incorrectly formatted."""
+
+
+class UnknownProtocolVersion(BadProtocolStream):
+    """Raised when the protocol header is unknown to us."""
