@@ -173,29 +173,32 @@ class Message(object):
         pass
 
 
-class MessageHandler(object):
+class RequestHandler(object):
     """Handle the parts of messages as they come in.
 
     Assign meaning to the structures received from the decoder.
     """
 
-    def __init__(self):
-        self._cur_message = Message()
+    def __init__(self, commands):
+        self._request = None
+        self._commands = commands
+        self._client_version = None
 
-    def received_request_header(self, header):
-        self._cur_message.set_header(header)
-        pass
+    def received_request_header(self, headers):
+        self._client_version = headers['client_version']
+        self._lookup_request(headers['request'])
 
-    def received_request_args(self, args):
-        self._cur_message.set_arguments(args)
-        pass
+    def _lookup_request(self, request_name):
+        factory = self._commands.get(request_name)
+        if factory is None:
+            raise errors.UnknownRequest(request_name)
+        self._request = factory()
+
+    def received_request_args(self, kwargs):
+        self._request.handle_args(**kwargs)
 
     def received_end(self):
-        self._message_done()
-
-    def _message_done(self):
-        """We got the end-of-message indicator."""
-        self._cur_message.set_finished()
+        self._request.handle_end()
 
 
 class Buffer(object):
@@ -353,4 +356,12 @@ class ProtocolDecoder(object):
         res = self._decoder.decode_one()
         if res is None:
             return False
+        if res == 'e': # End of request
+            self._state = self._state_finished
         return True
+
+    def _state_finished(self):
+        # We won't transition to another state from here, this is used to allow
+        # accept_bytes to buffer any extra bytes to be used for the next
+        # request.
+        return False

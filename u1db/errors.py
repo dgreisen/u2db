@@ -44,3 +44,7 @@ class BadProtocolStream(U1DBError):
 
 class UnknownProtocolVersion(BadProtocolStream):
     """Raised when the protocol header is unknown to us."""
+
+
+class UnknownRequest(BadProtocolStream):
+    """Raised when an RPC comes in for a request we don't know about."""

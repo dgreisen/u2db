@@ -18,24 +18,32 @@
 class RPCRequest(object):
     """Base class for request instances."""
 
-    _requests = {}
+    requests = {}
 
     @classmethod
     def register(cls):
-        RPCRequest._requests[cls.name] = cls
+        RPCRequest.requests[cls.name] = cls
 
     @classmethod
     def unregister(cls):
-        if cls.name in RPCRequest._requests:
-            RPCRequest._requests.pop(cls.name)
+        if cls.name in RPCRequest.requests:
+            RPCRequest.requests.pop(cls.name)
 
     @staticmethod
     def lookup(request_name):
-        return RPCRequest._requests.get(request_name, None)
+        return RPCRequest.requests.get(request_name, None)
 
 
 class RPCResponse(object):
     """Base class for responses to RPC requests."""
+
+
+class RPCSuccessfulResponse(RPCResponse):
+    pass
+
+
+class RPCFailureResponse(RPCResponse):
+    pass
 
 
 class RPCServerVersion(RPCRequest):
