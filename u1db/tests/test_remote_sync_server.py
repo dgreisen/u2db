@@ -457,15 +457,24 @@ class TestProtocolDecodingIntoRequest(object): # tests.TestCase):
         self.assertTrue(message.complete)
 
 
-class TestProtocolEncodeDecode(object): # tests.TestCase):
+class TestProtocolEncodeDecode(tests.TestCase):
 
     def test_simple_request(self):
-        handler = remote_sync_server.RequestHandler({})
+        self.actions = []
+        class TestFunc(object):
+            def __init__(fobj):
+                # self here is the test case
+                self.actions.append('initialized')
+            def handle_args(fobj, **kwargs):
+                self.actions.append(('args', kwargs))
+            def handle_end(fobj):
+                self.actions.append('end')
+        handler = remote_sync_server.RequestHandler({'test': TestFunc})
         decoder = remote_sync_server.ProtocolDecoder(handler)
         encoder = remote_sync_server.ProtocolEncoderV1(decoder.accept_bytes)
-        encoder.encode_request('myrequest', arg1='a', arg2=2, value='bytes')
-        message = handler._cur_message
-        self.assertEqual(_u1db_version, message.client_version)
-        self.assertEqual('myrequest', message.request)
-        self.assertEqual({'arg1': 'a', 'arg2': 2, 'value':'bytes'},
-                         message.args)
+        encoder.encode_request('test', arg1='a', arg2=2, value='bytes')
+        self.assertEqual([
+            'initialized',
+            ('args', {'arg1': 'a', 'arg2': 2, 'value': 'bytes'}),
+            'end',
+            ], self.actions)
