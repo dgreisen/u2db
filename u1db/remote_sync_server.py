@@ -181,7 +181,7 @@ class StructureToRequest(object):
         self._responder = responder
         self._client_version = None
 
-    def received_request_header(self, headers):
+    def received_header(self, headers):
         self._client_version = headers['client_version']
         self._lookup_request(headers['request'])
 
@@ -191,7 +191,7 @@ class StructureToRequest(object):
             raise errors.UnknownRequest(request_name)
         self._request = factory()
 
-    def received_request_args(self, kwargs):
+    def received_args(self, kwargs):
         self._request.handle_args(**kwargs)
 
     def received_end(self):
@@ -230,10 +230,10 @@ class _ProtocolDecoderV1(object):
             return None
         struct_type, content = res
         if struct_type == 'h':
-            self._structure_handler.received_request_header(
+            self._structure_handler.received_header(
                 simplejson.loads(content))
         elif struct_type == 'a':
-            self._structure_handler.received_request_args(
+            self._structure_handler.received_args(
                 simplejson.loads(content))
         elif struct_type == 'e':
             # assert content == ''
@@ -325,18 +325,20 @@ class StructureToResponse(object):
         # self._responder = responder
         self.server_version = None
         self.status = None
-        self.args = None
+        self.kwargs = None
+        self.finished = False
 
-    def received_request_header(self, headers):
+    def received_header(self, headers):
         self.server_version = headers['server_version']
         self.request_name = headers['request']
         self.status = headers['status']
 
-    # def received_request_args(self, kwargs):
-    #     self._request.handle_args(**kwargs)
+    def received_args(self, kwargs):
+        self.kwargs = kwargs
 
-    # def received_end(self):
-    #     self._request.handle_end()
+    def received_end(self):
+        self.finished = True
+
 
 class Client(object):
     """Implement the client-side managing the call state."""

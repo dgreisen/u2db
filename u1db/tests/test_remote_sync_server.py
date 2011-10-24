@@ -185,10 +185,10 @@ class LoggingMessageHandler(object):
     def __init__(self):
         self.actions = []
 
-    def received_request_header(self, header):
+    def received_header(self, header):
         self.actions.append(('header', header))
 
-    def received_request_args(self, args):
+    def received_args(self, args):
         self.actions.append(('args', args))
 
     def received_end(self):
@@ -314,43 +314,61 @@ class TestStructureToRequest(tests.TestCase):
         requests = {}
         handler = remote_sync_server.StructureToRequest(requests, None)
         e = self.assertRaises(errors.UnknownRequest,
-            handler.received_request_header,
+            handler.received_header,
                 {'client_version': '1', 'request': 'request-name'})
         self.assertIn('request-name', str(e))
 
     def test_initialize_request(self):
         requests = {"hello": HelloRequest}
         handler = remote_sync_server.StructureToRequest(requests, None)
-        handler.received_request_header({'client_version': '1',
-                                         'request': 'hello'})
+        handler.received_header({'client_version': '1',
+                                 'request': 'hello'})
         self.assertIsInstance(handler._request, HelloRequest)
 
     def test_call_args(self):
         requests = {"hello": HelloRequest}
         handler = remote_sync_server.StructureToRequest(requests, None)
-        handler.received_request_header({'client_version': '1',
-                                         'request': 'hello'})
-        handler.received_request_args({'arg': 1})
+        handler.received_header({'client_version': '1',
+                                 'request': 'hello'})
+        handler.received_args({'arg': 1})
         self.assertEqual(handler._request._args, {'arg': 1})
 
     def test_call_end(self):
         requests = {"hello": HelloRequest}
         handler = remote_sync_server.StructureToRequest(requests, None)
-        handler.received_request_header({'client_version': '1',
-                                         'request': 'hello'})
+        handler.received_header({'client_version': '1',
+                                 'request': 'hello'})
         handler.received_end()
         self.assertTrue(handler._request._finished)
 
 
 class TestStructureToResponse(tests.TestCase):
 
-    def test_received_request_header(self):
+    def test_received_header(self):
         response_handler = remote_sync_server.StructureToResponse()
-        response_handler.received_request_header(
+        response_handler.received_header(
             {'server_version': '1', 'request': 'hello', 'status': 'success'})
         self.assertEqual('hello', response_handler.request_name)
         self.assertEqual('1', response_handler.server_version)
         self.assertEqual('success', response_handler.status)
+        self.assertEqual(None, response_handler.kwargs)
+        self.assertFalse(response_handler.finished)
+
+    def test_received_args(self):
+        response_handler = remote_sync_server.StructureToResponse()
+        response_handler.received_header(
+            {'server_version': '1', 'request': 'hello', 'status': 'success'})
+        response_handler.received_args({'arg': 2, 'arg2': 'value'})
+        self.assertEqual({'arg': 2, 'arg2': 'value'}, response_handler.kwargs)
+        self.assertFalse(response_handler.finished)
+
+    def test_received_end(self):
+        response_handler = remote_sync_server.StructureToResponse()
+        response_handler.received_header(
+            {'server_version': '1', 'request': 'hello', 'status': 'success'})
+        response_handler.received_args({'arg': 2, 'arg2': 'value'})
+        response_handler.received_end()
+        self.assertTrue(response_handler.finished)
 
 
 class TestProtocolDecodingIntoRequest(tests.TestCase):
