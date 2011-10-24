@@ -25,16 +25,16 @@ class TestRPCRequest(tests.TestCase):
     def test_register_request(self):
         class MyRequest(remote_requests.RPCRequest):
             name = 'mytestreq'
-        self.assertIs(None, remote_requests.RPCRequest.lookup('mytestreq'))
+        requests = remote_requests.RPCRequest.requests
+        self.assertIs(None, requests.get('mytestreq'))
         MyRequest.register()
         self.addCleanup(MyRequest.unregister)
-        self.assertEqual(MyRequest,
-                         remote_requests.RPCRequest.lookup('mytestreq'))
+        self.assertEqual(MyRequest, requests.get('mytestreq'))
         MyRequest.unregister()
-        self.assertIs(None, remote_requests.RPCRequest.lookup('mytestreq'))
+        self.assertIs(None, requests.get('mytestreq'))
         # Calling it again should not be an error.
         MyRequest.unregister()
 
     def test_get_version_rpc(self):
         self.assertEqual(remote_requests.RPCServerVersion,
-                         remote_requests.RPCRequest.lookup('version'))
+                         remote_requests.RPCRequest.requests.get('version'))

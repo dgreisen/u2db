@@ -401,11 +401,11 @@ class HelloRequest(object):
         self._finished = True
 
 
-class TestRequestHandler(tests.TestCase):
+class TestStructureToRequest(tests.TestCase):
 
     def test_unknown_request(self):
         commands = {}
-        handler = remote_sync_server.RequestHandler(commands)
+        handler = remote_sync_server.StructureToRequest(commands)
         e = self.assertRaises(errors.UnknownRequest,
             handler.received_request_header,
                 {'client_version': '1', 'request': 'request-name'})
@@ -413,14 +413,14 @@ class TestRequestHandler(tests.TestCase):
 
     def test_initialize_request(self):
         commands = {"hello": HelloRequest}
-        handler = remote_sync_server.RequestHandler(commands)
+        handler = remote_sync_server.StructureToRequest(commands)
         handler.received_request_header({'client_version': '1',
                                          'request': 'hello'})
         self.assertIsInstance(handler._request, HelloRequest)
 
     def test_call_args(self):
         commands = {"hello": HelloRequest}
-        handler = remote_sync_server.RequestHandler(commands)
+        handler = remote_sync_server.StructureToRequest(commands)
         handler.received_request_header({'client_version': '1',
                                          'request': 'hello'})
         handler.received_request_args({'arg': 1})
@@ -428,33 +428,29 @@ class TestRequestHandler(tests.TestCase):
 
     def test_call_end(self):
         commands = {"hello": HelloRequest}
-        handler = remote_sync_server.RequestHandler(commands)
+        handler = remote_sync_server.StructureToRequest(commands)
         handler.received_request_header({'client_version': '1',
                                          'request': 'hello'})
         handler.received_end()
         self.assertTrue(handler._request._finished)
 
 
-class TestProtocolDecodingIntoRequest(object): # tests.TestCase):
+class TestProtocolDecodingIntoRequest(tests.TestCase):
 
     def makeDecoder(self):
-        self.handler = remote_sync_server.RequestHandler({})
+        commands = {'hello': HelloRequest}
+        self.handler = remote_sync_server.StructureToRequest(commands)
         self.decoder = remote_sync_server.ProtocolDecoder(self.handler)
         return self.decoder
 
     def test_decode_full_request(self):
         self.makeDecoder()
-        client_header = '{"client_version": "0.1.1.dev.0", "request": "foo"}'
+        client_header = '{"client_version": "0.1.1.dev.0", "request": "hello"}'
         self.decoder.accept_bytes(remote_sync_server.PROTOCOL_HEADER_V1
-            + 'h\x00\x00\x00\x33'
+            + 'h\x00\x00\x00\x35'
             + client_header
             + 'a\x00\x00\x00\x0E{"arg": "foo"}'
             + 'e\x00\x00\x00\x00')
-        message = self.handler._cur_message
-        self.assertEqual('0.1.1.dev.0', message.client_version)
-        self.assertEqual('foo', message.request)
-        self.assertEqual({'arg': 'foo'}, message.args)
-        self.assertTrue(message.complete)
 
 
 class TestProtocolEncodeDecode(tests.TestCase):
@@ -469,7 +465,7 @@ class TestProtocolEncodeDecode(tests.TestCase):
                 self.actions.append(('args', kwargs))
             def handle_end(fobj):
                 self.actions.append('end')
-        handler = remote_sync_server.RequestHandler({'test': TestFunc})
+        handler = remote_sync_server.StructureToRequest({'test': TestFunc})
         decoder = remote_sync_server.ProtocolDecoder(handler)
         encoder = remote_sync_server.ProtocolEncoderV1(decoder.accept_bytes)
         encoder.encode_request('test', arg1='a', arg2=2, value='bytes')

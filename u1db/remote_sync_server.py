@@ -173,15 +173,15 @@ class Message(object):
         pass
 
 
-class RequestHandler(object):
+class StructureToRequest(object):
     """Handle the parts of messages as they come in.
 
     Assign meaning to the structures received from the decoder.
     """
 
-    def __init__(self, commands):
+    def __init__(self, requests):
         self._request = None
-        self._commands = commands
+        self._requests = requests
         self._client_version = None
 
     def received_request_header(self, headers):
@@ -189,7 +189,7 @@ class RequestHandler(object):
         self._lookup_request(headers['request'])
 
     def _lookup_request(self, request_name):
-        factory = self._commands.get(request_name)
+        factory = self._requests.get(request_name)
         if factory is None:
             raise errors.UnknownRequest(request_name)
         self._request = factory()
