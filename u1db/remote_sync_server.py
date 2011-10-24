@@ -184,6 +184,7 @@ class StructureToRequest(object):
     def received_header(self, headers):
         self._client_version = headers['client_version']
         self._lookup_request(headers['request'])
+        self._check_send_response()
 
     def _lookup_request(self, request_name):
         factory = self._requests.get(request_name)
@@ -193,9 +194,20 @@ class StructureToRequest(object):
 
     def received_args(self, kwargs):
         self._request.handle_args(**kwargs)
+        self._check_send_response()
 
     def received_end(self):
         self._request.handle_end()
+        self._check_send_response()
+        if self._request.response is None:
+            raise errors.BadProtocolStream("Client sent end-of-message,"
+                " but the Request did not generate a response."
+                " for Request: %s" % (self._request,))
+
+    def _check_send_response(self):
+        if self._request.response is None:
+            return
+        self._responder.send_response(self._request.response)
 
 
 class _ProtocolDecoderV1(object):

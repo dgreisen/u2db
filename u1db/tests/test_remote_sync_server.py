@@ -299,47 +299,117 @@ class TestProtocolDecoder(tests.TestCase):
         self.assertEqual(remote_sync_server.PROTOCOL_HEADER_V1, decoder.unused_bytes())
 
 
-class HelloRequest(object):
+class HelloRequest(remote_requests.RPCRequest):
+
+    name = 'hello'
 
     def handle_args(self, **kwargs):
         self._args = kwargs
 
     def handle_end(self):
         self._finished = True
+        self.response = remote_requests.RPCSuccessfulResponse(self.name)
+
+
+class FastRequest(remote_requests.RPCRequest):
+
+    name = 'fast'
+
+    def __init__(self):
+        self.response = remote_requests.RPCSuccessfulResponse(self.name,
+            value=True)
+
+
+class ArgRequest(remote_requests.RPCRequest):
+
+    name = 'arg'
+
+    def handle_args(self, **kwargs):
+        self.response = remote_requests.RPCSuccessfulResponse(self.name,
+            **kwargs)
+
+
+class EndRequest(remote_requests.RPCRequest):
+
+    name = 'end'
+
+    def handle_end(self):
+        self.response = remote_requests.RPCSuccessfulResponse(self.name,
+            finished=True)
+
+
+class ResponderForTests(object):
+
+    def __init__(self):
+        self.response = None
+
+    def send_response(self, response):
+        self.response = response
 
 
 class TestStructureToRequest(tests.TestCase):
 
+    def makeStructToRequest(self):
+        requests = {"hello": HelloRequest, 'fast': FastRequest,
+                    "arg": ArgRequest, 'end': EndRequest}
+        responder = ResponderForTests()
+        handler = remote_sync_server.StructureToRequest(requests, responder)
+        return handler
+
     def test_unknown_request(self):
-        requests = {}
-        handler = remote_sync_server.StructureToRequest(requests, None)
+        handler = self.makeStructToRequest()
         e = self.assertRaises(errors.UnknownRequest,
             handler.received_header,
                 {'client_version': '1', 'request': 'request-name'})
         self.assertIn('request-name', str(e))
 
     def test_initialize_request(self):
-        requests = {"hello": HelloRequest}
-        handler = remote_sync_server.StructureToRequest(requests, None)
+        handler = self.makeStructToRequest()
         handler.received_header({'client_version': '1',
                                  'request': 'hello'})
         self.assertIsInstance(handler._request, HelloRequest)
 
     def test_call_args(self):
-        requests = {"hello": HelloRequest}
-        handler = remote_sync_server.StructureToRequest(requests, None)
+        handler = self.makeStructToRequest()
         handler.received_header({'client_version': '1',
                                  'request': 'hello'})
         handler.received_args({'arg': 1})
         self.assertEqual(handler._request._args, {'arg': 1})
 
     def test_call_end(self):
-        requests = {"hello": HelloRequest}
-        handler = remote_sync_server.StructureToRequest(requests, None)
+        handler = self.makeStructToRequest()
         handler.received_header({'client_version': '1',
                                  'request': 'hello'})
         handler.received_end()
         self.assertTrue(handler._request._finished)
+
+    def test_send_response_after_header(self):
+        handler = self.makeStructToRequest()
+        handler.received_header({'client_version': '1', 'request': 'fast'})
+        self.assertIsNot(None, handler._responder.response)
+        handler.received_end()
+
+    def test_send_response_after_args(self):
+        handler = self.makeStructToRequest()
+        handler.received_header({'client_version': '1', 'request': 'arg'})
+        self.assertIs(None, handler._responder.response)
+        handler.received_args({'arg': 'value', 'foo': 1})
+        self.assertIsNot(None, handler._responder.response)
+        handler.received_end()
+
+    def test_send_response_after_end(self):
+        handler = self.makeStructToRequest()
+        handler.received_header({'client_version': '1', 'request': 'end'})
+        self.assertIs(None, handler._responder.response)
+        handler.received_end()
+        self.assertIsNot(None, handler._responder.response)
+
+    def test_end_no_response(self):
+        handler = self.makeStructToRequest()
+        handler.received_header({'client_version': '1', 'request': 'arg'})
+        self.assertIs(None, handler._responder.response)
+        self.assertRaises(errors.BadProtocolStream,
+                          handler.received_end)
 
 
 class TestStructureToResponse(tests.TestCase):
@@ -374,8 +444,10 @@ class TestStructureToResponse(tests.TestCase):
 class TestProtocolDecodingIntoRequest(tests.TestCase):
 
     def makeDecoder(self):
+        responder = ResponderForTests()
         requests = {'hello': HelloRequest}
-        self.handler = remote_sync_server.StructureToRequest(requests, None)
+        self.handler = remote_sync_server.StructureToRequest(
+            requests, responder)
         self.decoder = remote_sync_server.ProtocolDecoder(self.handler)
         return self.decoder
 
@@ -394,15 +466,19 @@ class TestProtocolEncodeDecode(tests.TestCase):
     def test_simple_request(self):
         self.actions = []
         class TestFunc(remote_requests.RPCRequest):
+            name = 'test'
             def __init__(fobj):
+                fobj.response = None
                 # self here is the test case
                 self.actions.append('initialized')
             def handle_args(fobj, **kwargs):
                 self.actions.append(('args', kwargs))
             def handle_end(fobj):
                 self.actions.append('end')
+                fobj.response = remote_requests.RPCSuccessfulResponse(fobj.name)
         requests = {'test': TestFunc}
-        handler = remote_sync_server.StructureToRequest(requests, None)
+        responder = ResponderForTests()
+        handler = remote_sync_server.StructureToRequest(requests, responder)
         decoder = remote_sync_server.ProtocolDecoder(handler)
         encoder = remote_sync_server.ProtocolEncoderV1(decoder.accept_bytes)
         encoder.encode_request('test', arg1='a', arg2=2, value='bytes')
