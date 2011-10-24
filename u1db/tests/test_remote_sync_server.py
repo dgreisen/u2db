@@ -30,6 +30,24 @@ from u1db import (
 from u1db.backends import inmemory
 
 
+def socket_pair():
+    """Return a pair of TCP sockets connected to each other.
+
+    Unlike socket.socketpair, this should work on Windows.
+    """
+    sock_pair = getattr(socket, 'socket_pair', None)
+    if sock_pair:
+        return sock_pair(socket.AF_INET, socket.SOCK_STREAM)
+    listen_sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    listen_sock.bind(('127.0.0.1', 0))
+    listen_sock.listen(1)
+    client_sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    client_sock.connect(listen_sock.getsockname())
+    server_sock, addr = listen_sock.accept()
+    listen_sock.close()
+    return server_sock, client_sock
+
+
 class TestRemoteSyncServer(tests.TestCase):
 
     def test_takes_database(self):
@@ -324,6 +342,17 @@ class TestStructureToRequest(tests.TestCase):
         self.assertTrue(handler._request._finished)
 
 
+class TestStructureToResponse(tests.TestCase):
+
+    def test_received_request_header(self):
+        response_handler = remote_sync_server.StructureToResponse()
+        response_handler.received_request_header(
+            {'server_version': '1', 'request': 'hello', 'status': 'success'})
+        self.assertEqual('hello', response_handler.request_name)
+        self.assertEqual('1', response_handler.server_version)
+        self.assertEqual('success', response_handler.status)
+
+
 class TestProtocolDecodingIntoRequest(tests.TestCase):
 
     def makeDecoder(self):
@@ -368,15 +397,9 @@ class TestProtocolEncodeDecode(tests.TestCase):
 
 class TestResponder(tests.TestCase):
 
-    def test__buffered_write(self):
-        responder = remote_sync_server.Responder(None)
-        responder._buffered_write('content\nbytes\n')
-        responder._buffered_write('more content\n')
-        self.assertEqual(['content\nbytes\n', 'more content\n'],
-                         responder._out_buffer._content)
-
     def test_send_response(self):
-        responder = remote_sync_server.Responder(None)
+        server_sock, client_sock = socket_pair()
+        responder = remote_sync_server.Responder(server_sock)
         responder.send_response(
             remote_requests.RPCSuccessfulResponse('request', value='success'))
         self.assertEqual(
@@ -385,20 +408,19 @@ class TestResponder(tests.TestCase):
             % (struct.pack('!L', 65 + len(_u1db_version)), _u1db_version)
             + 'a\x00\x00\x00\x14{"value": "success"}'
             + 'e\x00\x00\x00\x00',
-            responder._out_buffer.peek_all_bytes())
+            client_sock.recv(4096))
 
 
 class TestClient(tests.TestCase):
 
     def test__encode_request(self):
-        sio = cStringIO.StringIO()
-        encoder = remote_sync_server.ProtocolEncoderV1(sio.write)
-        client = remote_sync_server.Client(None)
-        client._encode_request(encoder, 'name', dict(a=1))
+        server_sock, client_sock = socket_pair()
+        client = remote_sync_server.Client(client_sock)
+        client._encode_request('name', dict(a=1))
         self.assertEqual(
             'u1db-1\n'
             'h%s{"client_version": "%s", "request": "name"}'
             % (struct.pack('!L', 41 + len(_u1db_version)), _u1db_version)
             + 'a\x00\x00\x00\x08{"a": 1}'
             + 'e\x00\x00\x00\x00',
-            sio.getvalue())
+            server_sock.recv(4096))

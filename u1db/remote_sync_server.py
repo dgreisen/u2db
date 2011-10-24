@@ -31,6 +31,8 @@ from u1db import (
 
 PROTOCOL_HEADER_V1 = 'u1db-1\n'
 READ_CHUNK_SIZE = 64*1024
+BUFFER_SIZE = 1024*1024
+
 
 class TCPSyncServer(SocketServer.TCPServer):
 
@@ -294,17 +296,16 @@ class Responder(object):
     def __init__(self, conn):
         """Turn an RPCResponse into bytes-on-the-wire."""
         self._conn = conn
-        self._out_buffer = buffers.Buffer()
-        self._encoder = ProtocolEncoderV1(self._out_buffer.add_bytes)
+        self._out_buffer = buffers.BufferedWriter(self._write_to_client,
+            BUFFER_SIZE)
+        self._encoder = ProtocolEncoderV1(self._out_buffer.write)
 
-    def _buffered_write(self, content):
-        """Like 'write()' but buffers locally until flush()"""
-        # TODO: Have a maximum # bytes buffered, and flush opportunistically.
-        self._out_buffer.add_bytes(content)
+    def _write_to_client(self, content):
+        self._conn.sendall(content)
 
     def send_response(self, response):
         """Send a RPCResponse back to the caller."""
-        self._buffered_write(PROTOCOL_HEADER_V1)
+        self._out_buffer.write(PROTOCOL_HEADER_V1)
         response_header = compat.OrderedDict([
             ('server_version', _u1db_version),
             ('request', response.request_name),
@@ -313,11 +314,29 @@ class Responder(object):
         self._encoder.encode_dict('h', response_header)
         self._encoder.encode_dict('a', response.response_kwargs)
         self._encoder.encode_end()
+        self._out_buffer.flush()
 
 
 class StructureToResponse(object):
     """Take structured byte streams and turn them into a Response."""
 
+    def __init__(self): #, responder):
+        self.request_name = None
+        # self._responder = responder
+        self.server_version = None
+        self.status = None
+        self.args = None
+
+    def received_request_header(self, headers):
+        self.server_version = headers['server_version']
+        self.request_name = headers['request']
+        self.status = headers['status']
+
+    # def received_request_args(self, kwargs):
+    #     self._request.handle_args(**kwargs)
+
+    # def received_end(self):
+    #     self._request.handle_end()
 
 class Client(object):
     """Implement the client-side managing the call state."""
@@ -326,8 +345,16 @@ class Client(object):
         self._conn = conn
         self._cur_request = None
 
-    def _encode_request(self, encoder, request_name, kwargs):
-        encoder._writer(PROTOCOL_HEADER_V1)
+    def _write_to_server(self, content):
+        self._conn.sendall(content)
+
+    def _read_from_server(self):
+        return self._conn.recv(READ_CHUNK_SIZE)
+
+    def _encode_request(self, request_name, kwargs):
+        buf = buffers.BufferedWriter(self._write_to_server, BUFFER_SIZE)
+        buf.write(PROTOCOL_HEADER_V1)
+        encoder = ProtocolEncoderV1(buf.write)
         request_header = compat.OrderedDict([
             ('client_version', _u1db_version),
             ('request', request_name),
@@ -335,6 +362,7 @@ class Client(object):
         encoder.encode_dict('h', request_header)
         encoder.encode_dict('a', kwargs)
         encoder.encode_end()
+        buf.flush()
 
     def call(self, rpc_name, **kwargs):
         """Place a call to the remote server."""
