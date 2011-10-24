@@ -23,6 +23,7 @@ import struct
 from u1db import (
     __version__ as _u1db_version,
     errors,
+    remote_requests,
     remote_sync_server,
     tests,
     )
@@ -269,17 +270,6 @@ class TestProtocolEncoderV1(tests.TestCase):
         encoder.encode_end()
         self.assertEqual('e\x00\x00\x00\x00', sio.getvalue())
 
-    def test_encode_request(self):
-        sio, encoder = self.makeEncoder()
-        encoder.encode_request('name', a=1)
-        self.assertEqual(
-            'u1db-1\n'
-            'h%s{"client_version": "%s", "request": "name"}'
-            % (struct.pack('!L', 41 + len(_u1db_version)), _u1db_version)
-            + 'a\x00\x00\x00\x08{"a": 1}'
-            + 'e\x00\x00\x00\x00',
-            sio.getvalue())
-
 
 class LoggingMessageHandler(object):
     """Just records what bits were observed by the protocol_decoder."""
@@ -404,31 +394,31 @@ class HelloRequest(object):
 class TestStructureToRequest(tests.TestCase):
 
     def test_unknown_request(self):
-        commands = {}
-        handler = remote_sync_server.StructureToRequest(commands)
+        requests = {}
+        handler = remote_sync_server.StructureToRequest(requests, None)
         e = self.assertRaises(errors.UnknownRequest,
             handler.received_request_header,
                 {'client_version': '1', 'request': 'request-name'})
         self.assertIn('request-name', str(e))
 
     def test_initialize_request(self):
-        commands = {"hello": HelloRequest}
-        handler = remote_sync_server.StructureToRequest(commands)
+        requests = {"hello": HelloRequest}
+        handler = remote_sync_server.StructureToRequest(requests, None)
         handler.received_request_header({'client_version': '1',
                                          'request': 'hello'})
         self.assertIsInstance(handler._request, HelloRequest)
 
     def test_call_args(self):
-        commands = {"hello": HelloRequest}
-        handler = remote_sync_server.StructureToRequest(commands)
+        requests = {"hello": HelloRequest}
+        handler = remote_sync_server.StructureToRequest(requests, None)
         handler.received_request_header({'client_version': '1',
                                          'request': 'hello'})
         handler.received_request_args({'arg': 1})
         self.assertEqual(handler._request._args, {'arg': 1})
 
     def test_call_end(self):
-        commands = {"hello": HelloRequest}
-        handler = remote_sync_server.StructureToRequest(commands)
+        requests = {"hello": HelloRequest}
+        handler = remote_sync_server.StructureToRequest(requests, None)
         handler.received_request_header({'client_version': '1',
                                          'request': 'hello'})
         handler.received_end()
@@ -438,8 +428,8 @@ class TestStructureToRequest(tests.TestCase):
 class TestProtocolDecodingIntoRequest(tests.TestCase):
 
     def makeDecoder(self):
-        commands = {'hello': HelloRequest}
-        self.handler = remote_sync_server.StructureToRequest(commands)
+        requests = {'hello': HelloRequest}
+        self.handler = remote_sync_server.StructureToRequest(requests, None)
         self.decoder = remote_sync_server.ProtocolDecoder(self.handler)
         return self.decoder
 
@@ -457,7 +447,7 @@ class TestProtocolEncodeDecode(tests.TestCase):
 
     def test_simple_request(self):
         self.actions = []
-        class TestFunc(object):
+        class TestFunc(remote_requests.RPCRequest):
             def __init__(fobj):
                 # self here is the test case
                 self.actions.append('initialized')
@@ -465,7 +455,8 @@ class TestProtocolEncodeDecode(tests.TestCase):
                 self.actions.append(('args', kwargs))
             def handle_end(fobj):
                 self.actions.append('end')
-        handler = remote_sync_server.StructureToRequest({'test': TestFunc})
+        requests = {'test': TestFunc}
+        handler = remote_sync_server.StructureToRequest(requests, None)
         decoder = remote_sync_server.ProtocolDecoder(handler)
         encoder = remote_sync_server.ProtocolEncoderV1(decoder.accept_bytes)
         encoder.encode_request('test', arg1='a', arg2=2, value='bytes')
@@ -474,3 +465,41 @@ class TestProtocolEncodeDecode(tests.TestCase):
             ('args', {'arg1': 'a', 'arg2': 2, 'value': 'bytes'}),
             'end',
             ], self.actions)
+
+
+class TestResponder(tests.TestCase):
+
+    def test__buffered_write(self):
+        responder = remote_sync_server.Responder(None)
+        responder._buffered_write('content\nbytes\n')
+        responder._buffered_write('more content\n')
+        self.assertEqual(['content\nbytes\n', 'more content\n'],
+                         responder._out_buffer._content)
+
+    def test_send_response(self):
+        responder = remote_sync_server.Responder(None)
+        responder.send_response(
+            remote_requests.RPCSuccessfulResponse('request', value='success'))
+        self.assertEqual(
+            'u1db-1\n'
+            'h%s{"server_version": "%s", "request": "request"}'
+            % (struct.pack('!L', 44 + len(_u1db_version)), _u1db_version)
+            + 'a\x00\x00\x00\x14{"value": "success"}'
+            + 'e\x00\x00\x00\x00',
+            responder._out_buffer.peek_all_bytes())
+
+
+class TestClient(tests.TestCase):
+
+    def test_encode_request(self):
+        sio = cStringIO.StringIO()
+        encoder = remote_sync_server.ProtocolEncoderV1(sio.write)
+        client = remote_sync_server.Client(None)
+        client._encode_request(encoder, 'name', dict(a=1))
+        self.assertEqual(
+            'u1db-1\n'
+            'h%s{"client_version": "%s", "request": "name"}'
+            % (struct.pack('!L', 41 + len(_u1db_version)), _u1db_version)
+            + 'a\x00\x00\x00\x08{"a": 1}'
+            + 'e\x00\x00\x00\x00',
+            sio.getvalue())

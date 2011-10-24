@@ -15,6 +15,7 @@
 """Tests for the remote request objects"""
 
 from u1db import (
+    __version__ as _u1db_version,
     remote_requests,
     tests,
     )
@@ -36,5 +37,12 @@ class TestRPCRequest(tests.TestCase):
         MyRequest.unregister()
 
     def test_get_version_rpc(self):
-        self.assertEqual(remote_requests.RPCServerVersion,
-                         remote_requests.RPCRequest.requests.get('version'))
+        factory = remote_requests.RPCRequest.requests.get('version')
+        self.assertEqual(remote_requests.RPCServerVersion, factory)
+        self.assertEqual('version', factory.name)
+        instance = factory()
+        self.assertEqual('version', instance.name)
+        # 'version' doesn't require arguments, it just returns the response
+        self.assertIsNot(None, instance.response)
+        self.assertEqual({'version': _u1db_version},
+                         instance.response.response_kwargs)

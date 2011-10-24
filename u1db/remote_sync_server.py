@@ -24,6 +24,7 @@ from u1db import (
     __version__ as _u1db_version,
     compat,
     errors,
+    remote_requests,
     )
 
 
@@ -106,15 +107,30 @@ class TCPSyncServer(SocketServer.TCPServer):
         #       seems to always work is client_sock.close()
 
 
-class TCPSyncRequestHandler(SocketServer.StreamRequestHandler):
+class TCPSyncRequestHandler(SocketServer.BaseRequestHandler):
+
+    def setup(self):
+        SocketServer.BaseRequestHandler.setup()
+        self.finished = False
 
     def handle(self):
-        handler = MessageHandler()
-        decoder = _ProtocolDecoderV1(handler)
-        content = self.request.recv(READ_CHUNK_SIZE)
-        while content:
-            decoder.accept_bytes()
+        extra_bytes = ''
+        while not self.finished:
+            self._handle_one_request()
+
+    def _handle_one_request(self, extra_bytes):
+        handler = StructureToRequest(remote_requests.RPCRequest.requests)
+        decoder = ProtocolDecoder(handler)
+        if extra_bytes:
+            decoder.accept_bytes(extra_bytes)
+        while not decoder.request_finished:
             content = self.request.recv(READ_CHUNK_SIZE)
+            if content == '':
+                # We have been disconnected
+                self.finished = True
+                break
+            decoder.accept_bytes(content)
+        return decoder.unused_bytes()
 
 
 class RemoteSyncServer(object):
@@ -149,29 +165,6 @@ class ProtocolEncoderV1(object):
         self.encode_end()
 
 
-class Message(object):
-    """A single message, built up by MessageHandler"""
-
-    def __init__(self):
-        self.client_version = None
-        self.request = None
-        self.args = None
-        self.complete = False
-
-    def set_header(self, msg):
-        self.client_version = msg['client_version']
-        self.request = msg['request']
-
-    def set_arguments(self, msg):
-        self.args = msg
-
-    def set_finished(self):
-        self._validate()
-        self.complete = True
-
-    def _validate(self):
-        pass
-
 
 class StructureToRequest(object):
     """Handle the parts of messages as they come in.
@@ -179,9 +172,10 @@ class StructureToRequest(object):
     Assign meaning to the structures received from the decoder.
     """
 
-    def __init__(self, requests):
+    def __init__(self, requests, responder):
         self._request = None
         self._requests = requests
+        self._responder = responder
         self._client_version = None
 
     def received_request_header(self, headers):
@@ -279,9 +273,9 @@ class Buffer(object):
 
 class _ProtocolDecoderV1(object):
 
-    def __init__(self, buf, message_handler):
+    def __init__(self, buf, structure_handler):
         self._buf = buf
-        self._message_handler = message_handler
+        self._structure_handler = structure_handler
 
     def _extract_tlv(self):
         """Decode a Type Length Value structure.
@@ -309,25 +303,26 @@ class _ProtocolDecoderV1(object):
             return None
         struct_type, content = res
         if struct_type == 'h':
-            self._message_handler.received_request_header(
+            self._structure_handler.received_request_header(
                 simplejson.loads(content))
         elif struct_type == 'a':
-            self._message_handler.received_request_args(
+            self._structure_handler.received_request_args(
                 simplejson.loads(content))
         elif struct_type == 'e':
             # assert content == ''
-            self._message_handler.received_end()
+            self._structure_handler.received_end()
         return struct_type
 
 
 class ProtocolDecoder(object):
     """Generic decoding of structured data."""
 
-    def __init__(self, message_handler):
+    def __init__(self, structure_handler):
         self._state = self._state_expecting_protocol_header
-        self._message_handler = message_handler
+        self._structure_handler = structure_handler
         self._buf = Buffer()
         self._decoder = None
+        self.request_finished = False
 
     def accept_bytes(self, content):
         """Some bytes have been read, process them."""
@@ -348,7 +343,7 @@ class ProtocolDecoder(object):
                 'expected protocol header: %r got: %r'
                 % (PROTOCOL_HEADER_V1, proto_header_bytes))
         self._buf.consume_bytes(len(proto_header_bytes))
-        self._decoder = _ProtocolDecoderV1(self._buf, self._message_handler)
+        self._decoder = _ProtocolDecoderV1(self._buf, self._structure_handler)
         self._state = self._state_expecting_structure
         return True
 
@@ -365,3 +360,54 @@ class ProtocolDecoder(object):
         # accept_bytes to buffer any extra bytes to be used for the next
         # request.
         return False
+
+
+class Responder(object):
+    """Encoder responses from the server back to the client."""
+
+    def __init__(self, conn):
+        """Turn an RPCResponse into bytes-on-the-wire."""
+        self._conn = conn
+        self._out_buffer = Buffer()
+        self._encoder = ProtocolEncoderV1(self._buffered_write)
+
+    def _buffered_write(self, content):
+        """Like 'write()' but buffers locally until flush()"""
+        # TODO: Have a maximum # bytes buffered, and flush opportunistically.
+        self._out_buffer.add_bytes(content)
+
+    def send_response(self, response):
+        """Send a RPCResponse back to the caller."""
+        self._buffered_write(PROTOCOL_HEADER_V1)
+        response_header = compat.OrderedDict([
+            ('server_version', _u1db_version),
+            ('request', response.request_name),
+            ])
+        self._encoder.encode_dict('h', response_header)
+        self._encoder.encode_dict('a', response.response_kwargs)
+        self._encoder.encode_end()
+
+
+class StructureToResponse(object):
+    """Take structured byte streams and turn them into a Response."""
+
+
+class Client(object):
+    """Implement the client-side managing the call state."""
+
+    def __init__(self, conn):
+        self._conn = conn
+        self._cur_request = None
+
+    def _encode_request(self, encoder, request_name, kwargs):
+        encoder._writer(PROTOCOL_HEADER_V1)
+        request_header = compat.OrderedDict([
+            ('client_version', _u1db_version),
+            ('request', request_name),
+            ])
+        encoder.encode_dict('h', request_header)
+        encoder.encode_dict('a', kwargs)
+        encoder.encode_end()
+
+    def call(self, rpc_name, **kwargs):
+        """Place a call to the remote server."""
