@@ -353,6 +353,7 @@ class ProtocolDecoder(object):
             return False
         if res == 'e': # End of request
             self._state = self._state_finished
+            self.request_finished = True
         return True
 
     def _state_finished(self):
@@ -369,7 +370,7 @@ class Responder(object):
         """Turn an RPCResponse into bytes-on-the-wire."""
         self._conn = conn
         self._out_buffer = Buffer()
-        self._encoder = ProtocolEncoderV1(self._buffered_write)
+        self._encoder = ProtocolEncoderV1(self._out_buffer.add_bytes)
 
     def _buffered_write(self, content):
         """Like 'write()' but buffers locally until flush()"""
@@ -382,6 +383,7 @@ class Responder(object):
         response_header = compat.OrderedDict([
             ('server_version', _u1db_version),
             ('request', response.request_name),
+            ('status', response.status),
             ])
         self._encoder.encode_dict('h', response_header)
         self._encoder.encode_dict('a', response.response_kwargs)

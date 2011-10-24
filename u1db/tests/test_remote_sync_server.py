@@ -298,6 +298,7 @@ class TestProtocolDecoder(tests.TestCase):
         decoder = self.makeDecoder()
         self.assertEqual(decoder._state_expecting_protocol_header,
                          decoder._state)
+        self.assertFalse(decoder.request_finished)
 
     def test_process_header(self):
         decoder = self.makeDecoder()
@@ -307,6 +308,7 @@ class TestProtocolDecoder(tests.TestCase):
         self.assertEqual(decoder._state_expecting_structure,
                          decoder._state)
         self.assertEqual(0, len(decoder._buf))
+        self.assertFalse(decoder.request_finished)
 
     def test_process_partial_header(self):
         decoder = self.makeDecoder()
@@ -318,6 +320,7 @@ class TestProtocolDecoder(tests.TestCase):
         decoder.accept_bytes(remote_sync_server.PROTOCOL_HEADER_V1[3:])
         self.assertEqual(decoder._state_expecting_structure,
                          decoder._state)
+        self.assertFalse(decoder.request_finished)
 
     def test_process_bad_header(self):
         decoder = self.makeDecoder()
@@ -328,12 +331,14 @@ class TestProtocolDecoder(tests.TestCase):
         self.assertIn('Not A Protocol', str(e))
         # The bytes haven't been consumed, either
         self.assertEqual('Not A Protocol\n', decoder.unused_bytes())
+        self.assertFalse(decoder.request_finished)
 
     def test_process_proto_and_partial_structure(self):
         decoder = self.makeDecoder()
         self.assertEqual(decoder._state_expecting_protocol_header,
                          decoder._state)
         decoder.accept_bytes(remote_sync_server.PROTOCOL_HEADER_V1)
+        self.assertFalse(decoder.request_finished)
         self.assertEqual([], self.handler.actions)
         # Not enough bytes for a structure
         decoder.accept_bytes('e')
@@ -342,6 +347,7 @@ class TestProtocolDecoder(tests.TestCase):
         decoder.accept_bytes('\x00\x00\x00\x00')
         self.assertEqual([('end',)], self.handler.actions)
         self.assertEqual('', decoder.unused_bytes())
+        self.assertTrue(decoder.request_finished)
 
     def test_process_proto_and_request(self):
         decoder = self.makeDecoder()
@@ -359,6 +365,7 @@ class TestProtocolDecoder(tests.TestCase):
             ('end',),
             ], self.handler.actions)
         self.assertEqual('', decoder.unused_bytes())
+        self.assertTrue(decoder.request_finished)
 
     def test_process_bytes_after_request(self):
         decoder = self.makeDecoder()
@@ -369,6 +376,7 @@ class TestProtocolDecoder(tests.TestCase):
                          decoder._state)
         decoder.accept_bytes(
             'h\x00\x00\x00\x33{"client_version": "0.1.1.dev.0", "request": "foo"}')
+        self.assertFalse(decoder.request_finished)
         self.assertEqual(decoder._state_expecting_structure,
                          decoder._state)
         self.assertEqual([
@@ -377,6 +385,7 @@ class TestProtocolDecoder(tests.TestCase):
         self.assertEqual('', decoder.unused_bytes())
         decoder.accept_bytes('e\x00\x00\x00\x00')
         self.assertEqual(decoder._state_finished, decoder._state)
+        self.assertTrue(decoder.request_finished)
         self.assertEqual('', decoder.unused_bytes())
         decoder.accept_bytes(remote_sync_server.PROTOCOL_HEADER_V1)
         self.assertEqual(remote_sync_server.PROTOCOL_HEADER_V1, decoder.unused_bytes())
@@ -482,8 +491,8 @@ class TestResponder(tests.TestCase):
             remote_requests.RPCSuccessfulResponse('request', value='success'))
         self.assertEqual(
             'u1db-1\n'
-            'h%s{"server_version": "%s", "request": "request"}'
-            % (struct.pack('!L', 44 + len(_u1db_version)), _u1db_version)
+            'h%s{"server_version": "%s", "request": "request", "status": "success"}'
+            % (struct.pack('!L', 65 + len(_u1db_version)), _u1db_version)
             + 'a\x00\x00\x00\x14{"value": "success"}'
             + 'e\x00\x00\x00\x00',
             responder._out_buffer.peek_all_bytes())
@@ -491,7 +500,7 @@ class TestResponder(tests.TestCase):
 
 class TestClient(tests.TestCase):
 
-    def test_encode_request(self):
+    def test__encode_request(self):
         sio = cStringIO.StringIO()
         encoder = remote_sync_server.ProtocolEncoderV1(sio.write)
         client = remote_sync_server.Client(None)

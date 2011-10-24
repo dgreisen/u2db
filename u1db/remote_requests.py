@@ -70,6 +70,8 @@ class RPCSuccessfulResponse(RPCResponse):
     """Used to indicate that the request was successful.
     """
 
+    status = 'success'
+
     def __init__(self, request_name, **response_kwargs):
         """Create a new Successful Response.
 
@@ -81,6 +83,8 @@ class RPCSuccessfulResponse(RPCResponse):
 
 class RPCFailureResponse(RPCResponse):
     """Used to indicate there was a failure processing the request."""
+
+    status = 'fail'
 
 
 
