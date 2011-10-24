@@ -91,6 +91,7 @@ class TestTCPSyncServer(tests.TestCase):
     def connectToServer(self):
         client_sock = socket.socket()
         client_sock.connect(self.server.server_address)
+        self.addCleanup(client_sock.close)
         return client_sock
 
     def test_start_and_stop_server_in_a_thread(self):
@@ -154,6 +155,29 @@ class TestTCPSyncServer(tests.TestCase):
         # closed, so we can't assert the socket is closed by reading the empty
         # string on it.
         # self.assertEqual('', client_sock.recv(1024))
+
+    def test_rpc_version_bytes(self):
+        self.startServer(remote_sync_server.TCPSyncRequestHandler)
+        client_sock = self.connectToServer()
+        client_sock.sendall(remote_sync_server.PROTOCOL_HEADER_V1
+            + 'h\x00\x00\x00\x31{"client_version": "0.1.1", "request": "version"}'
+            + 'e\x00\x00\x00\x00')
+        self.assertEqual(remote_sync_server.PROTOCOL_HEADER_V1
+            + 'h%s{"server_version": "%s", "request": "version", "status": "success"}'
+              % (struct.pack('!L', 65 + len(_u1db_version)), _u1db_version)
+            + 'a%s{"version": "%s"}'
+              % (struct.pack('!L', 15 + len(_u1db_version)), _u1db_version)
+            + 'e\x00\x00\x00\x00',
+            client_sock.recv(4096))
+        client_sock.close()
+
+    def test_client_rpc_version(self):
+        self.startServer(remote_sync_server.TCPSyncRequestHandler)
+        client_sock = self.connectToServer()
+        client = remote_sync_server.Client(client_sock)
+        self.assertEqual({'version': _u1db_version},
+                         client.call_returning_args('version'))
+
 
 
 class TestProtocolEncoderV1(tests.TestCase):
@@ -518,3 +542,50 @@ class TestClient(tests.TestCase):
             + 'a\x00\x00\x00\x08{"a": 1}'
             + 'e\x00\x00\x00\x00',
             server_sock.recv(4096))
+
+    def test__encode_request_no_args(self):
+        server_sock, client_sock = socket_pair()
+        client = remote_sync_server.Client(client_sock)
+        client._encode_request('name', {})
+        self.assertEqual(
+            'u1db-1\n'
+            'h%s{"client_version": "%s", "request": "name"}'
+            % (struct.pack('!L', 41 + len(_u1db_version)), _u1db_version)
+            + 'e\x00\x00\x00\x00',
+            server_sock.recv(4096))
+
+    def test_client_to_server_and_back(self):
+        server_sock, client_sock = socket_pair()
+        client = remote_sync_server.Client(client_sock)
+        client._encode_request('arg', {'one': 1})
+        requests = {'arg': ArgRequest}
+        responder = remote_sync_server.Responder(server_sock)
+        handler = remote_sync_server.StructureToRequest(requests, responder)
+        decoder = remote_sync_server.ProtocolDecoder(handler)
+        # This should be the message from the client to the server
+        content = server_sock.recv(4096)
+        self.assertEqual(
+            'u1db-1\n'
+            'h%s{"client_version": "%s", "request": "arg"}'
+            % (struct.pack('!L', 40 + len(_u1db_version)), _u1db_version)
+            + 'a\x00\x00\x00\x0a{"one": 1}'
+            + 'e\x00\x00\x00\x00',
+            content)
+        decoder.accept_bytes(content)
+        # The response from the server
+        content = client_sock.recv(4096)
+        self.assertEqual(
+            'u1db-1\n'
+            'h%s{"server_version": "%s", "request": "arg", "status": "success"}'
+            % (struct.pack('!L', 61 + len(_u1db_version)), _u1db_version)
+            + 'a\x00\x00\x00\x0a{"one": 1}'
+            + 'e\x00\x00\x00\x00',
+            content)
+        response_handler = remote_sync_server.StructureToResponse()
+        decoder = remote_sync_server.ProtocolDecoder(response_handler)
+        decoder.accept_bytes(content)
+        self.assertEqual({'one': 1}, response_handler.kwargs)
+        self.assertEqual('arg', response_handler.request_name)
+        self.assertEqual(_u1db_version, response_handler.server_version)
+        self.assertEqual('success', response_handler.status)
+        self.assertTrue(response_handler.finished)

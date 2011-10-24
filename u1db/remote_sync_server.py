@@ -113,16 +113,18 @@ class TCPSyncServer(SocketServer.TCPServer):
 class TCPSyncRequestHandler(SocketServer.BaseRequestHandler):
 
     def setup(self):
-        SocketServer.BaseRequestHandler.setup()
+        SocketServer.BaseRequestHandler.setup(self)
         self.finished = False
 
     def handle(self):
         extra_bytes = ''
         while not self.finished:
-            self._handle_one_request()
+            extra_bytes = self._handle_one_request(extra_bytes)
 
     def _handle_one_request(self, extra_bytes):
-        handler = StructureToRequest(remote_requests.RPCRequest.requests)
+        responder = Responder(self.request)
+        handler = StructureToRequest(remote_requests.RPCRequest.requests,
+                                     responder)
         decoder = ProtocolDecoder(handler)
         if extra_bytes:
             decoder.accept_bytes(extra_bytes)
@@ -180,6 +182,7 @@ class StructureToRequest(object):
         self._requests = requests
         self._responder = responder
         self._client_version = None
+        self._sent_response = False
 
     def received_header(self, headers):
         self._client_version = headers['client_version']
@@ -205,8 +208,9 @@ class StructureToRequest(object):
                 " for Request: %s" % (self._request,))
 
     def _check_send_response(self):
-        if self._request.response is None:
+        if self._request.response is None or self._sent_response:
             return
+        self._sent_response = True
         self._responder.send_response(self._request.response)
 
 
@@ -324,7 +328,8 @@ class Responder(object):
             ('status', response.status),
             ])
         self._encoder.encode_dict('h', response_header)
-        self._encoder.encode_dict('a', response.response_kwargs)
+        if response.response_kwargs:
+            self._encoder.encode_dict('a', response.response_kwargs)
         self._encoder.encode_end()
         self._out_buffer.flush()
 
@@ -332,7 +337,7 @@ class Responder(object):
 class StructureToResponse(object):
     """Take structured byte streams and turn them into a Response."""
 
-    def __init__(self): #, responder):
+    def __init__(self):
         self.request_name = None
         # self._responder = responder
         self.server_version = None
@@ -374,9 +379,41 @@ class Client(object):
             ('request', request_name),
             ])
         encoder.encode_dict('h', request_header)
-        encoder.encode_dict('a', kwargs)
+        if kwargs:
+            encoder.encode_dict('a', kwargs)
         encoder.encode_end()
         buf.flush()
 
-    def call(self, rpc_name, **kwargs):
-        """Place a call to the remote server."""
+    def _read_more_content(self, decoder):
+        content = self._read_from_server()
+        if content == '':
+            fail
+            # Connection prematurely closed while waiting for a response.
+        decoder.accept_bytes(content)
+
+    def _wait_for_response_header(self):
+        """Keep reading from the connection until we see the response args."""
+        while (not response_handler.finished
+               and response_handler.status is None):
+            self._read_more_content()
+
+    def _wait_for_response_args(self):
+        while (not response_handler.finished
+               and response_handler.kwargs is None):
+            self._read_more_content()
+
+    def _wait_for_response_end(self, response_handler, decoder):
+        while not response_handler.finished:
+            self._read_more_content(decoder)
+
+    def call_returning_args(self, rpc_name, **kwargs):
+        """Place a call to the remote server.
+
+        This call assumes the server is just going to return simple arguments
+        back to the client.
+        """
+        self._encode_request(rpc_name, kwargs)
+        response_handler = StructureToResponse()
+        decoder = ProtocolDecoder(response_handler)
+        self._wait_for_response_end(response_handler, decoder)
+        return response_handler.kwargs
