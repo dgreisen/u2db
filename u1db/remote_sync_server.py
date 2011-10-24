@@ -271,6 +271,27 @@ class Buffer(object):
         return content
 
 
+class BufferedWriter(object):
+    """Buffer writing to some output.
+    """
+
+    def __init__(self, writer, max_buf):
+        self._buf = Buffer()
+        self._writer = writer
+        self._max_buf = max_buf
+
+    def write(self, content):
+        self._buf.add_bytes(content)
+        if len(self._buf) > self._max_buf:
+            self.flush()
+
+    def flush(self):
+        """Write whatever is buffered out to the real writer."""
+        content = self._buf.peek_all_bytes()
+        self._buf.consume_bytes(len(content))
+        self._writer(content)
+
+
 class _ProtocolDecoderV1(object):
 
     def __init__(self, buf, structure_handler):

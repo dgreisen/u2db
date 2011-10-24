@@ -166,6 +166,39 @@ class TestBuffer(tests.TestCase):
         self.assertEqual(['def'], self.buf._content)
 
 
+class TestBufferedWriter(tests.TestCase):
+
+    def test_no_write_less_than_max(self):
+        sio = cStringIO.StringIO()
+        writer = remote_sync_server.BufferedWriter(sio.write, 200)
+        writer.write('short content\n')
+        writer.write('more content\n')
+        self.assertEqual('', sio.getvalue())
+        self.assertEqual(['short content\n', 'more content\n'],
+                         writer._buf._content)
+
+    def test_flush_long_after_enough_bytes(self):
+        sio = cStringIO.StringIO()
+        writer = remote_sync_server.BufferedWriter(sio.write, 10)
+        writer.write('abcd\n')
+        self.assertEqual('', sio.getvalue())
+        writer.write('efgh\n')
+        self.assertEqual('', sio.getvalue())
+        writer.write('i')
+        self.assertEqual('abcd\nefgh\ni', sio.getvalue())
+        self.assertEqual([], writer._buf._content)
+
+    def test_flush(self):
+        sio = cStringIO.StringIO()
+        writer = remote_sync_server.BufferedWriter(sio.write, 200)
+        writer.write('short content\n')
+        writer.write('more content\n')
+        self.assertEqual('', sio.getvalue())
+        writer.flush()
+        self.assertEqual('short content\nmore content\n', sio.getvalue())
+        self.assertEqual([], writer._buf._content)
+
+
 class TestTCPSyncServer(tests.TestCase):
 
     def startServer(self, request_handler):
