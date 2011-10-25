@@ -23,21 +23,6 @@ class Database(object):
     This data store can be synchronized with other u1db.Database instances.
     """
 
-    def sync(self, other, callback=None):
-        """Synchronize my database with another database.
-        This pushes local changes to the remote, and pulls remote changes
-        locally.  There is not a separate push vs pull step.
-
-        :param other: Another database to sync with
-        :param callback: gives optional progress callbacks
-        :return: old_db_rev
-            The global database revision before sync started. You can pass the
-            old_db_rev to whats_changed to find out what was actually updated.
-            (concurrent updates to the local db outside of sync will also be
-            included in whats_changed)
-        """
-        raise NotImplementedError(self.sync)
-
     def whats_changed(self, old_db_rev):
         """Return a list of entries that have changed since old_db_rev.
         This allows APPS to only store a db_rev before going 'offline', and
@@ -56,15 +41,24 @@ class Database(object):
         """Get the JSON string for the given document.
 
         :param doc_id: The unique document identifier
-        :return: (doc_id, doc_rev, has_conflicts, doc)
-
-            :doc_rev- The current version of the document
-            :has_conflicts- A boolean indicating if there are conflict records
-                for this document
-            :doc- A JSON string if the document exists (possibly an empty
+        :return: (doc_rev, doc, has_conflicts)
+            doc_rev- The current version of the document
+            doc- A JSON string if the document exists (possibly an empty
                 string), None/nil if the document does not exist.
+            has_conflicts- A boolean indicating if there are conflict records
+                for this document
         """
         raise NotImplementedError(self.get_doc)
+
+    def get_docs(self, doc_ids, check_for_conflicts=True):
+        """Get the JSON content for many documents.
+
+        :param doc_ids: A list of document identifiers.
+        :param check_for_conflicts: If set to False, then the conflict check
+            will be skipped, and 'None' will be returned instead of True/False.
+        :return: [(doc_id, doc_rev, doc, is_conflicted)] for each document id.
+        """
+        raise NotImplementedError(self.get_docs)
 
     def create_doc(self, doc, doc_id=None):
         """Create a new document.
@@ -80,7 +74,7 @@ class Database(object):
         raise NotImplementedError(self.create_doc)
 
     def put_doc(self, doc_id, old_doc_rev, doc):
-        """Add/update a document.
+        """Update a document.
         If the document currently has conflicts, put will fail.
 
         :param doc_id: Unique handle for a document, if it is None, a new
@@ -92,6 +86,52 @@ class Database(object):
         :return: new_doc_rev - The new revision identifier for the document
         """
         raise NotImplementedError(self.put_doc)
+
+    def put_docs_if_newer(self, docs_info):
+        """Insert/update many documents into the database.
+
+        This api is used during synchronization operations. It is possible to
+        also use for client code, but put_doc() is more obvious.
+
+        :param: A list of [(doc_id, doc_rev, doc_content)]. If we don't have
+            doc_id already, or if doc_rev supersedes the existing document
+            revision, then the content will be inserted, and num_inserted will
+            be incremented.
+            If doc_rev is less than or equal to the existing revision, then the
+            put is ignored.
+            If doc_rev is not strictly superseded or supersedes, then the
+            document id is added to the set of conflicted documents.
+        :return: (would_conflict_ids, superseded_ids, num_inserted), the
+            document_ids that that could not be inserted (and were not
+            superseded), the document ids that we already had something newer,
+            and the count of entries that were successfully added.
+        """
+        raise NotImplementedError(self.put_docs)
+
+    def force_doc_sync_conflict(self, doc_id, doc_rev, doc):
+        """Update documents even though they should conflict.
+
+        This is used for synchronization, and should generally not be used by
+        clients.
+
+        The content will be selected as the 'current' content for doc_id, even
+        though doc_rev may not supersede the currently stored revision.  The
+        currently stored document will be added to the list of conflict
+        alternatives for the given doc_id.
+
+        The reason this forces the new content to be 'current' is so that we
+        get convergence after synchronizing, even if people don't resolve
+        conflicts. Users can then notice that their content is out of date,
+        update it, and synchronize again. (The alternative is that users could
+        synchronize and think the data has propagated, but their local copy
+        looks fine, and the remote copy is never updated again.)
+
+        :param doc_id: The indentifier for this document
+        :param doc_rev: The document revision for this document
+        :param doc: The JSON string for the document.
+        :return: None
+        """
+        raise NotImplementedError(self.force_doc_sync_conflict)
 
     def delete_doc(self, doc_id, old_doc_rev):
         """Mark a document as deleted.
@@ -174,30 +214,58 @@ class Database(object):
         """
         raise NotImplementedError(self.resolve_doc)
 
-    def _get_sync_info(self, other_machine_id):
+    def get_sync_target(self):
+        """Return a SyncTarget object, for another u1db to synchronize with.
+
+        :return: An instance of SyncTarget.
+        """
+        raise NotImplementedError(self.get_sync_target)
+
+    def get_sync_generation(self, other_db_id):
+        """Return the last known database generation of 'other'.
+
+        When you do a synchronization with another database, the Database keeps
+        track of what generation the other database was at. This way we only
+        have to request data that is newer.
+
+        :param other_db_id: The identifier for the other database.
+        :return: The generation we encountered during synchronization. If we've
+            never synchronized with the machine, this is 0.
+        """
+        raise NotImplementedError(self.get_sync_generation)
+
+    def set_sync_generation(self, other_db_id, other_generation):
+        """Set the last-known generation for the other database.
+
+        We have just performed some synchronization, and we want to track what
+        generation the other database was at. See also get_sync_generation.
+        :param other_db_id: The U1DB identifier for the other database.
+        :param other_generation: The generation number for the other db.
+        :return: None
+        """
+        raise NotImplementedError(self.get_sync_generation)
+
+
+class SyncTarget(object):
+    """Functionality for using a Database as a synchronization target."""
+
+    def get_sync_info(self, other_machine_id):
         """Return information about known state.
 
-        This is not meant to be called from client code, but is part of the
-        sync api.
-
-        Return the machine_id and the current global database revision of this
-        database, and the last-seen global database revision for
-        other_machine_id
+        Return the machine_id and the current database generation of this
+        database, and the last-seen database generation for other_machine_id
 
         :param other_machine_id: Another machine which we might have
             synchronized with in the past.
         :return: (this_machine_id, this_machine_db_rev,
-                  other_machine_last_known_db_rev)o
+                  other_machine_last_known_generation)
         """
-        raise NotImplementedError(self._get_sync_info)
+        raise NotImplementedError(self.get_sync_info)
 
-    def _record_sync_info(self, other_machine_id, other_machine_rev):
+    def record_sync_info(self, other_machine_id, other_machine_gen):
         """Record tip information for another machine.
 
-        This is not meant to be called from client code, but is part of the
-        sync api.
-
-        After _sync_exchange has been processed, the caller will have received
+        After sync_exchange has been processed, the caller will have received
         new content from this machine. This call allows the machine instigating
         the sync to inform us what their global database revision became after
         applying the documents we returned.
@@ -211,10 +279,10 @@ class Database(object):
         :param other_machine_rev: The database revision for other_machine
         :return: None
         """
-        raise NotImplementedError(self._record_sync_info)
+        raise NotImplementedError(self.record_sync_info)
 
-    def _sync_exchange(self, docs_info, from_machine_id, from_machine_rev,
-                       last_known_rev):
+    def sync_exchange(self, docs_info, from_machine_id, from_machine_rev,
+                      last_known_rev):
         """Incorporate the documents sent from the other machine.
 
         This is not meant to be called by client code directly, but is used as
@@ -239,4 +307,5 @@ class Database(object):
             new_db_rev - After applying docs_info, this is the current db_rev
                 for this client
         """
-        raise NotImplementedError(self._sync_exchange)
+        raise NotImplementedError(self.sync_exchange)
+

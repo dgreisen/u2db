@@ -18,6 +18,38 @@ import u1db
 from u1db.vectorclock import VectorClockRev
 
 
+class CommonSyncTarget(u1db.SyncTarget):
+
+    def __init__(self, db):
+        self._db = db
+
+    def sync_exchange(self, docs_info, from_machine_id, from_machine_rev,
+                      last_known_rev):
+        (conflict_ids, superseded_ids,
+         num_inserted) = self._db.put_docs_if_newer(docs_info)
+        seen_ids = [x[0] for x in docs_info if x[0] not in superseded_ids]
+        new_docs = []
+        my_db_rev, changed_doc_ids = self._db.whats_changed(last_known_rev)
+        doc_ids_to_return = [doc_id for doc_id in changed_doc_ids
+                             if doc_id not in seen_ids]
+        new_docs = self._db.get_docs(doc_ids_to_return, check_for_conflicts=False)
+        new_docs = [x[:3] for x in new_docs]
+        conflicts = self._db.get_docs(conflict_ids, check_for_conflicts=False)
+        conflicts = [x[:3] for x in conflicts]
+        self._db.set_sync_generation(from_machine_id, from_machine_rev)
+        self._db._last_exchange_log = {
+            'receive': {'docs': [(di, dr) for di, dr, _ in docs_info],
+                        'from_id': from_machine_id,
+                        'from_rev': from_machine_rev,
+                        'last_known_rev': last_known_rev},
+            'return': {'new_docs': [(di, dr) for di, dr, _ in new_docs],
+                       'conf_docs': [(di, dr) for di, dr, _ in conflicts],
+                       'last_rev': my_db_rev}
+        }
+        return new_docs, conflicts, my_db_rev
+
+
+
 class CommonBackend(u1db.Database):
 
     def _allocate_doc_id(self):
@@ -39,6 +71,10 @@ class CommonBackend(u1db.Database):
         if there are any conflicts, etc.
         """
         raise NotImplementedError(self._get_doc)
+
+    def _has_conflicts(self, doc_id):
+        """Return True if the doc has conflicts, False otherwise."""
+        raise NotImplementedError(self._has_conflicts)
 
     def create_doc(self, doc, doc_id=None):
         if doc_id is None:
@@ -74,102 +110,36 @@ class CommonBackend(u1db.Database):
         else:
             return cur_doc, 'conflicted'
 
-    def _insert_many_docs(self, docs_info):
-        """Add a bunch of documents to the local store.
+    def get_docs(self, doc_ids, check_for_conflicts=True):
+        if check_for_conflicts:
+            result = []
+            for doc_id in doc_ids:
+                doc_rev, doc = self._get_doc(doc_id)
+                is_conflicted = self._has_conflicts(doc_id)
+                result.append((doc_id, doc_rev, doc, is_conflicted))
+        else:
+            result = [(doc_id,) + self._get_doc(doc_id) + (None,)
+                      for doc_id in doc_ids]
+        return result
 
-        This will only add entries if they supersede the local entries,
-        otherwise the doc ids will be added to conflict_ids.
-        :param docs_info: List of [(doc_id, doc_rev, doc)]
-        :return: (seen_ids, conflict_ids, num_inserted) sets of entries that
-            were seen, and what was considered conflicted and not added, and
-            the number of documents that were explictly added.
-        """
+    def put_docs_if_newer(self, docs_info):
+        superseded_ids = set()
         conflict_ids = set()
-        seen_ids = set()
         num_inserted = 0
         for doc_id, doc_rev, doc in docs_info:
             old_doc, state = self._compare_and_insert_doc(doc_id, doc_rev, doc)
-            seen_ids.add(doc_id)
             if state == 'inserted':
                 num_inserted += 1
             elif state == 'converged':
                 # magical convergence
                 continue
             elif state == 'superseded':
-                # Don't add this to seen_ids, because we have something newer,
-                # so we should send it back, and we should not generate a
-                # conflict
-                seen_ids.remove(doc_id)
+                superseded_ids.add(doc_id)
                 continue
             else:
                 assert state == 'conflicted'
                 conflict_ids.add(doc_id)
-        return seen_ids, conflict_ids, num_inserted
-
-    def _put_as_conflict(self, doc_id, doc_rev, doc):
-        """Insert a doc as current value, putting cur value as conflict."""
-        raise NotImplementedError(self._put_as_conflict)
-
-    def _insert_conflicts(self, docs_info):
-        """Record all of docs_info as conflicted documents.
-
-        Because of the 'TAKE_OTHER' semantics, any document which is marked as
-        conflicted takes docs_info as the official value.
-        This will update index definitions, etc.
-
-        :return: The number of documents inserted into the db.
-        """
-        for doc_id, doc_rev, doc in docs_info:
-            self._put_as_conflict(doc_id, doc_rev, doc)
-        return len(docs_info)
-
-    def _sync_exchange(self, docs_info, from_machine_id, from_machine_rev,
-                       last_known_rev):
-        seen_ids, conflict_ids, _ = self._insert_many_docs(docs_info)
-        new_docs = []
-        my_db_rev, changed_doc_ids = self.whats_changed(last_known_rev)
-        for doc_id in changed_doc_ids:
-            if doc_id in seen_ids:
-                continue
-            doc_rev, doc = self._get_doc(doc_id)
-            new_docs.append((doc_id, doc_rev, doc))
-        conflicts = []
-        for doc_id in conflict_ids:
-            doc_rev, doc = self._get_doc(doc_id)
-            conflicts.append((doc_id, doc_rev, doc))
-        self._record_sync_info(from_machine_id, from_machine_rev)
-        self._last_exchange_log = {
-            'receive': {'docs': [(di, dr) for di, dr, _ in docs_info],
-                        'from_id': from_machine_id,
-                        'from_rev': from_machine_rev,
-                        'last_known_rev': last_known_rev},
-            'return': {'new_docs': [(di, dr) for di, dr, _ in new_docs],
-                       'conf_docs': [(di, dr) for di, dr, _ in conflicts],
-                       'last_rev': my_db_rev}
-        }
-        return new_docs, conflicts, my_db_rev
-
-    def sync(self, other, callback=None):
-        (other_machine_id, other_rev,
-         others_my_rev) = other._get_sync_info(self._machine_id)
-        docs_to_send = []
-        my_db_rev, changed_doc_ids = self.whats_changed(others_my_rev)
-        for doc_id in changed_doc_ids:
-            doc_rev, doc = self._get_doc(doc_id)
-            docs_to_send.append((doc_id, doc_rev, doc))
-        _, _, other_last_known_rev = self._get_sync_info(other_machine_id)
-        (new_records, conflicted_records,
-         new_db_rev) = other._sync_exchange(docs_to_send, self._machine_id,
-                            my_db_rev, other_last_known_rev)
-        all_records = new_records + conflicted_records
-        _, conflict_ids, num_inserted = self._insert_many_docs(all_records)
-        conflict_docs = [r for r in all_records if r[0] in conflict_ids]
-        num_inserted += self._insert_conflicts(conflict_docs)
-        self._record_sync_info(other_machine_id, new_db_rev)
-        cur_db_rev = self._get_db_rev()
-        if cur_db_rev == my_db_rev + num_inserted:
-            other._record_sync_info(self._machine_id, cur_db_rev)
-        return my_db_rev
+        return conflict_ids, superseded_ids, num_inserted
 
     def _ensure_maximal_rev(self, cur_rev, extra_revs):
         vcr = VectorClockRev(cur_rev)

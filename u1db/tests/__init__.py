@@ -19,7 +19,59 @@ import testscenarios
 import testtools
 
 
+from u1db.backends import (
+    inmemory,
+    sqlite_backend,
+    )
+
 TestCase = testtools.TestCase
+
+
+simple_doc = '{"key": "value"}'
+nested_doc = '{"key": "value", "sub": {"doc": "underneath"}}'
+
+
+def create_memory_database(machine_id):
+    return inmemory.InMemoryDatabase(machine_id)
+
+
+def create_sqlite_expanded(machine_id):
+    db = sqlite_backend.SQLiteExpandedDatabase(':memory:')
+    db._set_machine_id(machine_id)
+    return db
+
+
+def create_sqlite_partial_expanded(machine_id):
+    db = sqlite_backend.SQLitePartialExpandDatabase(':memory:')
+    db._set_machine_id(machine_id)
+    return db
+
+
+def create_sqlite_only_expanded(machine_id):
+    db = sqlite_backend.SQLiteOnlyExpandedDatabase(':memory:')
+    db._set_machine_id(machine_id)
+    return db
+
+
+class DatabaseBaseTests(TestCase):
+
+    create_database = None
+    scenarios = [
+        ('mem', {'create_database': create_memory_database}),
+        ('sql_expand', {'create_database': create_sqlite_expanded}),
+        ('sql_partexpand', {'create_database': create_sqlite_partial_expanded}),
+        ('sql_onlyexpand', {'create_database': create_sqlite_only_expanded}),
+        ]
+
+    def setUp(self):
+        super(DatabaseBaseTests, self).setUp()
+        self.db = self.create_database('test')
+
+    def tearDown(self):
+        # TODO: Add close_database parameterization
+        # self.close_database(self.db)
+        super(DatabaseBaseTests, self).tearDown()
+
 
 
 def load_with_scenarios(loader, standard_tests, pattern):

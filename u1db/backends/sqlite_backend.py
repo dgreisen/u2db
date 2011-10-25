@@ -17,7 +17,7 @@
 import simplejson
 from sqlite3 import dbapi2
 
-from u1db.backends import CommonBackend
+from u1db.backends import CommonBackend, CommonSyncTarget
 from u1db import compat, errors
 
 
@@ -31,6 +31,9 @@ class SQLiteDatabase(CommonBackend):
         self._db_handle = dbapi2.connect(sqlite_file)
         self._real_machine_id = None
         self._ensure_schema()
+
+    def get_sync_target(self):
+        return SQLiteSyncTarget(self)
 
     @staticmethod
     def open_database(sqlite_file):
@@ -290,25 +293,23 @@ class SQLiteDatabase(CommonBackend):
             this_doc_rev, this_doc = self._get_doc(doc_id)
         return [(this_doc_rev, this_doc)] + conflict_docs
 
-    def _get_sync_info(self, other_machine_id):
+    def get_sync_generation(self, other_db_id):
         c = self._db_handle.cursor()
-        my_db_rev = self._get_db_rev()
         c.execute("SELECT known_db_rev FROM sync_log WHERE machine_id = ?",
-                  (other_machine_id,))
+                  (other_db_id,))
         val = c.fetchone()
         if val is None:
             other_db_rev = 0
         else:
             other_db_rev = val[0]
+        return other_db_rev
 
-        return self._machine_id, my_db_rev, other_db_rev
-
-    def _record_sync_info(self, machine_id, db_rev):
+    def set_sync_generation(self, other_db_id, other_generation):
         with self._db_handle:
             c = self._db_handle.cursor()
             my_db_rev = self._get_db_rev()
             c.execute("INSERT OR REPLACE INTO sync_log VALUES (?, ?)",
-                      (machine_id, db_rev))
+                      (other_db_id, other_generation))
 
     def _compare_and_insert_doc(self, doc_id, doc_rev, doc):
         with self._db_handle:
@@ -319,7 +320,7 @@ class SQLiteDatabase(CommonBackend):
         c.execute("INSERT INTO conflicts VALUES (?, ?, ?)",
                   (doc_id, my_doc_rev, my_doc))
 
-    def _put_as_conflict(self, doc_id, doc_rev, doc):
+    def force_doc_sync_conflict(self, doc_id, doc_rev, doc):
         with self._db_handle:
             my_doc_rev, my_doc = self._get_doc(doc_id)
             c = self._db_handle.cursor()
@@ -448,6 +449,17 @@ class SQLiteDatabase(CommonBackend):
             c = self._db_handle.cursor()
             c.execute("DELETE FROM index_definitions WHERE name = ?",
                       (index_name,))
+
+
+class SQLiteSyncTarget(CommonSyncTarget):
+
+    def get_sync_info(self, other_machine_id):
+        other_db_rev = self._db.get_sync_generation(other_machine_id)
+        my_db_rev = self._db._get_db_rev()
+        return self._db._machine_id, my_db_rev, other_db_rev
+
+    def record_sync_info(self, other_machine_id, other_machine_gen):
+        self._db.set_sync_generation(other_machine_id, other_machine_gen)
 
 
 class SQLiteExpandedDatabase(SQLiteDatabase):

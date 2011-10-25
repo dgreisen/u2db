@@ -17,7 +17,7 @@
 import simplejson
 
 from u1db import errors
-from u1db.backends import CommonBackend
+from u1db.backends import CommonBackend, CommonSyncTarget
 
 
 class InMemoryDatabase(CommonBackend):
@@ -30,20 +30,22 @@ class InMemoryDatabase(CommonBackend):
         self._conflicts = {}
         self._other_revs = {}
         self._indexes = {}
-        self._doc_counter = 0
         self._machine_id = machine_id
         self._last_exchange_log = None
 
-    def _get_sync_info(self, other_machine_id):
-        other_rev = self._other_revs.get(other_machine_id, 0)
-        return self._machine_id, len(self._transaction_log), other_rev
+    def get_sync_generation(self, other_db_id):
+        return self._other_revs.get(other_db_id, 0)
 
-    def _record_sync_info(self, machine_id, db_rev):
-        self._other_revs[machine_id] = db_rev
+    def set_sync_generation(self, other_db_id, other_generation):
+        # TODO: to handle race conditions, we may want to check if the current
+        #       value is greater than this new value.
+        self._other_revs[other_db_id] = other_generation
+
+    def get_sync_target(self):
+        return InMemorySyncTarget(self)
 
     def _allocate_doc_id(self):
-        self._doc_counter += 1
-        return 'doc-%d' % (self._doc_counter,)
+        return 'doc-%d' % (len(self._transaction_log) + 1,)
 
     def _get_transaction_log(self):
         return self._transaction_log
@@ -80,6 +82,9 @@ class InMemoryDatabase(CommonBackend):
         except KeyError:
             return None, None
         return doc_rev, doc
+
+    def _has_conflicts(self, doc_id):
+        return doc_id in self._conflicts
 
     def get_doc(self, doc_id):
         doc_rev, doc = self._get_doc(doc_id)
@@ -150,7 +155,7 @@ class InMemoryDatabase(CommonBackend):
         return (len(self._transaction_log),
                 set(self._transaction_log[old_db_rev:]))
 
-    def _put_as_conflict(self, doc_id, doc_rev, doc):
+    def force_doc_sync_conflict(self, doc_id, doc_rev, doc):
         my_doc_rev, my_doc = self._docs[doc_id]
         self._conflicts.setdefault(doc_id, []).append((my_doc_rev, my_doc))
         self._put_and_update_indexes(doc_id, my_doc, doc_rev, doc)
@@ -256,3 +261,14 @@ class InMemoryIndex(object):
         if key in self._values:
             return self._values[key]
         return ()
+
+
+class InMemorySyncTarget(CommonSyncTarget):
+
+    def get_sync_info(self, other_machine_id):
+        other_rev = self._db.get_sync_generation(other_machine_id)
+        return self._db._machine_id, len(self._db._transaction_log), other_rev
+
+    def record_sync_info(self, other_machine_id, other_machine_rev):
+        self._db.set_sync_generation(other_machine_id, other_machine_rev)
+
