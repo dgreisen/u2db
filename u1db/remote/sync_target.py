@@ -14,10 +14,14 @@
 
 """"""
 
+import socket
 import urlparse
 
 from u1db import (
     SyncTarget,
+    )
+from u1db.remote import (
+    client,
     )
 
 
@@ -31,6 +35,14 @@ class RemoteSyncTarget(SyncTarget):
     def __init__(self, url):
         self._url = urlparse.urlsplit(url)
         self._conn = None
+        self._client = None
 
     def _ensure_connection(self):
+        if self._conn is not None:
+            return
+        self._conn = socket.socket()
+        self._conn.connect((self._url.hostname, self._url.port))
+        self._client = client.Client(self._conn)
+
+    def get_sync_info(self, other_machine_id):
         pass

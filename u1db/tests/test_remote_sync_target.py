@@ -27,6 +27,10 @@ from u1db.remote import (
 
 class TestCaseWithSyncServer(tests.TestCase):
 
+    def setUp(self):
+        super(TestCaseWithSyncServer, self).setUp()
+        self.server = self.server_thread = None
+
     def startServer(self):
         self.server = sync_server.TCPSyncServer(
             ('127.0.0.1', 0), sync_server.TCPSyncRequestHandler)
@@ -52,6 +56,11 @@ class TestTestCaseWithSyncServer(TestCaseWithSyncServer):
 
 class TestRemoteSyncTarget(TestCaseWithSyncServer):
 
+    def getSyncTarget(self):
+        if self.server is None:
+            self.startServer()
+        return sync_target.RemoteSyncTarget.connect(self.getURL())
+
     def test_connect(self):
         self.startServer()
         url = self.getURL()
@@ -59,9 +68,22 @@ class TestRemoteSyncTarget(TestCaseWithSyncServer):
         self.assertEqual(url, remote_target._url.geturl())
         self.assertIs(None, remote_target._conn)
 
-    def test__parse_url(self):
+    def test_parse_url(self):
         remote_target = sync_target.RemoteSyncTarget('u1db://127.0.0.1:12345/')
         self.assertEqual('u1db', remote_target._url.scheme)
         self.assertEqual('127.0.0.1', remote_target._url.hostname)
         self.assertEqual(12345, remote_target._url.port)
         self.assertEqual('/', remote_target._url.path)
+
+    def test__ensure_connection(self):
+        remote_target = self.getSyncTarget()
+        self.assertIs(None, remote_target._conn)
+        remote_target._ensure_connection()
+        self.assertIsNot(None, remote_target._conn)
+        c = remote_target._conn
+        remote_target._ensure_connection()
+        self.assertIs(c, remote_target._conn)
+        self.assertIsNot(None, remote_target._client)
+
+    def test_get_sync_info(self):
+        remote_target = self.getSyncTarget()
