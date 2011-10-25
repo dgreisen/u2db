@@ -30,14 +30,6 @@ from u1db.remote import (
     requests,
     sync_server,
     )
-from u1db.backends import inmemory
-
-
-class TestRemoteSyncServer(tests.TestCase):
-
-    def test_takes_database(self):
-        db = inmemory.InMemoryDatabase('test')
-        server = sync_server.RemoteSyncServer(db)
 
 
 class MyHelloHandler(SocketServer.BaseRequestHandler):
