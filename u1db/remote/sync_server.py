@@ -25,8 +25,8 @@ from u1db import (
     compat,
     buffers,
     errors,
-    remote_requests,
     )
+from u1db.remote import requests
 
 
 PROTOCOL_HEADER_V1 = 'u1db-1\n'
@@ -123,7 +123,7 @@ class TCPSyncRequestHandler(SocketServer.BaseRequestHandler):
 
     def _handle_one_request(self, extra_bytes):
         responder = Responder(self.request)
-        handler = StructureToRequest(remote_requests.RPCRequest.requests,
+        handler = StructureToRequest(requests.RPCRequest.requests,
                                      responder)
         decoder = ProtocolDecoder(handler)
         if extra_bytes:
@@ -177,9 +177,9 @@ class StructureToRequest(object):
     Assign meaning to the structures received from the decoder.
     """
 
-    def __init__(self, requests, responder):
+    def __init__(self, reqs, responder):
         self._request = None
-        self._requests = requests
+        self._requests = reqs
         self._responder = responder
         self._client_version = None
         self._sent_response = False

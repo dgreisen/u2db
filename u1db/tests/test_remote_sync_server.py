@@ -23,9 +23,11 @@ import struct
 from u1db import (
     __version__ as _u1db_version,
     errors,
-    remote_requests,
-    remote_sync_server,
     tests,
+    )
+from u1db.remote import (
+    requests,
+    sync_server,
     )
 from u1db.backends import inmemory
 
@@ -52,7 +54,7 @@ class TestRemoteSyncServer(tests.TestCase):
 
     def test_takes_database(self):
         db = inmemory.InMemoryDatabase('test')
-        server = remote_sync_server.RemoteSyncServer(db)
+        server = sync_server.RemoteSyncServer(db)
 
 
 class MyHelloHandler(SocketServer.BaseRequestHandler):
@@ -77,7 +79,7 @@ class TwoMessageHandler(SocketServer.BaseRequestHandler):
 class TestTCPSyncServer(tests.TestCase):
 
     def startServer(self, request_handler):
-        self.server = remote_sync_server.TCPSyncServer(
+        self.server = sync_server.TCPSyncServer(
             ('127.0.0.1', 0), request_handler)
         self.server_thread = threading.Thread(target=self.server.serve_forever,
                                               kwargs=dict(poll_interval=0.01))
@@ -95,7 +97,7 @@ class TestTCPSyncServer(tests.TestCase):
         return client_sock
 
     def test_start_and_stop_server_in_a_thread(self):
-        self.startServer(remote_sync_server.TCPSyncRequestHandler)
+        self.startServer(sync_server.TCPSyncRequestHandler)
         self.server.shutdown()
         self.server_thread.join()
 
@@ -157,12 +159,12 @@ class TestTCPSyncServer(tests.TestCase):
         # self.assertEqual('', client_sock.recv(1024))
 
     def test_rpc_version_bytes(self):
-        self.startServer(remote_sync_server.TCPSyncRequestHandler)
+        self.startServer(sync_server.TCPSyncRequestHandler)
         client_sock = self.connectToServer()
-        client_sock.sendall(remote_sync_server.PROTOCOL_HEADER_V1
+        client_sock.sendall(sync_server.PROTOCOL_HEADER_V1
             + 'h\x00\x00\x00\x31{"client_version": "0.1.1", "request": "version"}'
             + 'e\x00\x00\x00\x00')
-        self.assertEqual(remote_sync_server.PROTOCOL_HEADER_V1
+        self.assertEqual(sync_server.PROTOCOL_HEADER_V1
             + 'h%s{"server_version": "%s", "request": "version", "status": "success"}'
               % (struct.pack('!L', 65 + len(_u1db_version)), _u1db_version)
             + 'a%s{"version": "%s"}'
@@ -172,9 +174,9 @@ class TestTCPSyncServer(tests.TestCase):
         client_sock.close()
 
     def test_client_rpc_version(self):
-        self.startServer(remote_sync_server.TCPSyncRequestHandler)
+        self.startServer(sync_server.TCPSyncRequestHandler)
         client_sock = self.connectToServer()
-        client = remote_sync_server.Client(client_sock)
+        client = sync_server.Client(client_sock)
         self.assertEqual({'version': _u1db_version},
                          client.call_returning_args('version'))
 
@@ -184,7 +186,7 @@ class TestProtocolEncoderV1(tests.TestCase):
 
     def makeEncoder(self):
         sio = cStringIO.StringIO()
-        encoder = remote_sync_server.ProtocolEncoderV1(sio.write)
+        encoder = sync_server.ProtocolEncoderV1(sio.write)
         return sio, encoder
 
     def test_encode_dict(self):
@@ -223,7 +225,7 @@ class TestProtocolDecoder(tests.TestCase):
 
     def makeDecoder(self):
         self.handler = LoggingMessageHandler()
-        self.decoder = remote_sync_server.ProtocolDecoder(self.handler)
+        self.decoder = sync_server.ProtocolDecoder(self.handler)
         return self.decoder
 
     def test_starting_state(self):
@@ -236,7 +238,7 @@ class TestProtocolDecoder(tests.TestCase):
         decoder = self.makeDecoder()
         self.assertEqual(decoder._state_expecting_protocol_header,
                          decoder._state)
-        decoder.accept_bytes(remote_sync_server.PROTOCOL_HEADER_V1)
+        decoder.accept_bytes(sync_server.PROTOCOL_HEADER_V1)
         self.assertEqual(decoder._state_expecting_structure,
                          decoder._state)
         self.assertEqual(0, len(decoder._buf))
@@ -246,10 +248,10 @@ class TestProtocolDecoder(tests.TestCase):
         decoder = self.makeDecoder()
         self.assertEqual(decoder._state_expecting_protocol_header,
                          decoder._state)
-        decoder.accept_bytes(remote_sync_server.PROTOCOL_HEADER_V1[:3])
+        decoder.accept_bytes(sync_server.PROTOCOL_HEADER_V1[:3])
         self.assertEqual(decoder._state_expecting_protocol_header,
                          decoder._state)
-        decoder.accept_bytes(remote_sync_server.PROTOCOL_HEADER_V1[3:])
+        decoder.accept_bytes(sync_server.PROTOCOL_HEADER_V1[3:])
         self.assertEqual(decoder._state_expecting_structure,
                          decoder._state)
         self.assertFalse(decoder.request_finished)
@@ -269,7 +271,7 @@ class TestProtocolDecoder(tests.TestCase):
         decoder = self.makeDecoder()
         self.assertEqual(decoder._state_expecting_protocol_header,
                          decoder._state)
-        decoder.accept_bytes(remote_sync_server.PROTOCOL_HEADER_V1)
+        decoder.accept_bytes(sync_server.PROTOCOL_HEADER_V1)
         self.assertFalse(decoder.request_finished)
         self.assertEqual([], self.handler.actions)
         # Not enough bytes for a structure
@@ -286,7 +288,7 @@ class TestProtocolDecoder(tests.TestCase):
         self.assertEqual(decoder._state_expecting_protocol_header,
                          decoder._state)
         client_header = '{"client_version": "0.1.1.dev.0", "request": "foo"}'
-        decoder.accept_bytes(remote_sync_server.PROTOCOL_HEADER_V1
+        decoder.accept_bytes(sync_server.PROTOCOL_HEADER_V1
             + 'h\x00\x00\x00\x33' + client_header
             + 'a\x00\x00\x00\x18{"arg": 1, "val": "bar"}'
             + 'e\x00\x00\x00\x00')
@@ -303,7 +305,7 @@ class TestProtocolDecoder(tests.TestCase):
         decoder = self.makeDecoder()
         self.assertEqual(decoder._state_expecting_protocol_header,
                          decoder._state)
-        decoder.accept_bytes(remote_sync_server.PROTOCOL_HEADER_V1)
+        decoder.accept_bytes(sync_server.PROTOCOL_HEADER_V1)
         self.assertEqual(decoder._state_expecting_structure,
                          decoder._state)
         decoder.accept_bytes(
@@ -319,11 +321,11 @@ class TestProtocolDecoder(tests.TestCase):
         self.assertEqual(decoder._state_finished, decoder._state)
         self.assertTrue(decoder.request_finished)
         self.assertEqual('', decoder.unused_bytes())
-        decoder.accept_bytes(remote_sync_server.PROTOCOL_HEADER_V1)
-        self.assertEqual(remote_sync_server.PROTOCOL_HEADER_V1, decoder.unused_bytes())
+        decoder.accept_bytes(sync_server.PROTOCOL_HEADER_V1)
+        self.assertEqual(sync_server.PROTOCOL_HEADER_V1, decoder.unused_bytes())
 
 
-class HelloRequest(remote_requests.RPCRequest):
+class HelloRequest(requests.RPCRequest):
 
     name = 'hello'
 
@@ -332,33 +334,33 @@ class HelloRequest(remote_requests.RPCRequest):
 
     def handle_end(self):
         self._finished = True
-        self.response = remote_requests.RPCSuccessfulResponse(self.name)
+        self.response = requests.RPCSuccessfulResponse(self.name)
 
 
-class FastRequest(remote_requests.RPCRequest):
+class FastRequest(requests.RPCRequest):
 
     name = 'fast'
 
     def __init__(self):
-        self.response = remote_requests.RPCSuccessfulResponse(self.name,
+        self.response = requests.RPCSuccessfulResponse(self.name,
             value=True)
 
 
-class ArgRequest(remote_requests.RPCRequest):
+class ArgRequest(requests.RPCRequest):
 
     name = 'arg'
 
     def handle_args(self, **kwargs):
-        self.response = remote_requests.RPCSuccessfulResponse(self.name,
+        self.response = requests.RPCSuccessfulResponse(self.name,
             **kwargs)
 
 
-class EndRequest(remote_requests.RPCRequest):
+class EndRequest(requests.RPCRequest):
 
     name = 'end'
 
     def handle_end(self):
-        self.response = remote_requests.RPCSuccessfulResponse(self.name,
+        self.response = requests.RPCSuccessfulResponse(self.name,
             finished=True)
 
 
@@ -374,10 +376,10 @@ class ResponderForTests(object):
 class TestStructureToRequest(tests.TestCase):
 
     def makeStructToRequest(self):
-        requests = {"hello": HelloRequest, 'fast': FastRequest,
+        reqs = {"hello": HelloRequest, 'fast': FastRequest,
                     "arg": ArgRequest, 'end': EndRequest}
         responder = ResponderForTests()
-        handler = remote_sync_server.StructureToRequest(requests, responder)
+        handler = sync_server.StructureToRequest(reqs, responder)
         return handler
 
     def test_unknown_request(self):
@@ -439,7 +441,7 @@ class TestStructureToRequest(tests.TestCase):
 class TestStructureToResponse(tests.TestCase):
 
     def test_received_header(self):
-        response_handler = remote_sync_server.StructureToResponse()
+        response_handler = sync_server.StructureToResponse()
         response_handler.received_header(
             {'server_version': '1', 'request': 'hello', 'status': 'success'})
         self.assertEqual('hello', response_handler.request_name)
@@ -449,7 +451,7 @@ class TestStructureToResponse(tests.TestCase):
         self.assertFalse(response_handler.finished)
 
     def test_received_args(self):
-        response_handler = remote_sync_server.StructureToResponse()
+        response_handler = sync_server.StructureToResponse()
         response_handler.received_header(
             {'server_version': '1', 'request': 'hello', 'status': 'success'})
         response_handler.received_args({'arg': 2, 'arg2': 'value'})
@@ -457,7 +459,7 @@ class TestStructureToResponse(tests.TestCase):
         self.assertFalse(response_handler.finished)
 
     def test_received_end(self):
-        response_handler = remote_sync_server.StructureToResponse()
+        response_handler = sync_server.StructureToResponse()
         response_handler.received_header(
             {'server_version': '1', 'request': 'hello', 'status': 'success'})
         response_handler.received_args({'arg': 2, 'arg2': 'value'})
@@ -469,16 +471,16 @@ class TestProtocolDecodingIntoRequest(tests.TestCase):
 
     def makeDecoder(self):
         responder = ResponderForTests()
-        requests = {'hello': HelloRequest}
-        self.handler = remote_sync_server.StructureToRequest(
-            requests, responder)
-        self.decoder = remote_sync_server.ProtocolDecoder(self.handler)
+        reqs = {'hello': HelloRequest}
+        self.handler = sync_server.StructureToRequest(
+            reqs, responder)
+        self.decoder = sync_server.ProtocolDecoder(self.handler)
         return self.decoder
 
     def test_decode_full_request(self):
         self.makeDecoder()
         client_header = '{"client_version": "0.1.1.dev.0", "request": "hello"}'
-        self.decoder.accept_bytes(remote_sync_server.PROTOCOL_HEADER_V1
+        self.decoder.accept_bytes(sync_server.PROTOCOL_HEADER_V1
             + 'h\x00\x00\x00\x35'
             + client_header
             + 'a\x00\x00\x00\x0E{"arg": "foo"}'
@@ -489,7 +491,7 @@ class TestProtocolEncodeDecode(tests.TestCase):
 
     def test_simple_request(self):
         self.actions = []
-        class TestFunc(remote_requests.RPCRequest):
+        class TestFunc(requests.RPCRequest):
             name = 'test'
             def __init__(fobj):
                 fobj.response = None
@@ -499,12 +501,12 @@ class TestProtocolEncodeDecode(tests.TestCase):
                 self.actions.append(('args', kwargs))
             def handle_end(fobj):
                 self.actions.append('end')
-                fobj.response = remote_requests.RPCSuccessfulResponse(fobj.name)
-        requests = {'test': TestFunc}
+                fobj.response = requests.RPCSuccessfulResponse(fobj.name)
+        reqs = {'test': TestFunc}
         responder = ResponderForTests()
-        handler = remote_sync_server.StructureToRequest(requests, responder)
-        decoder = remote_sync_server.ProtocolDecoder(handler)
-        encoder = remote_sync_server.ProtocolEncoderV1(decoder.accept_bytes)
+        handler = sync_server.StructureToRequest(reqs, responder)
+        decoder = sync_server.ProtocolDecoder(handler)
+        encoder = sync_server.ProtocolEncoderV1(decoder.accept_bytes)
         encoder.encode_request('test', arg1='a', arg2=2, value='bytes')
         self.assertEqual([
             'initialized',
@@ -517,9 +519,9 @@ class TestResponder(tests.TestCase):
 
     def test_send_response(self):
         server_sock, client_sock = socket_pair()
-        responder = remote_sync_server.Responder(server_sock)
+        responder = sync_server.Responder(server_sock)
         responder.send_response(
-            remote_requests.RPCSuccessfulResponse('request', value='success'))
+            requests.RPCSuccessfulResponse('request', value='success'))
         self.assertEqual(
             'u1db-1\n'
             'h%s{"server_version": "%s", "request": "request", "status": "success"}'
@@ -533,7 +535,7 @@ class TestClient(tests.TestCase):
 
     def test__encode_request(self):
         server_sock, client_sock = socket_pair()
-        client = remote_sync_server.Client(client_sock)
+        client = sync_server.Client(client_sock)
         client._encode_request('name', dict(a=1))
         self.assertEqual(
             'u1db-1\n'
@@ -545,7 +547,7 @@ class TestClient(tests.TestCase):
 
     def test__encode_request_no_args(self):
         server_sock, client_sock = socket_pair()
-        client = remote_sync_server.Client(client_sock)
+        client = sync_server.Client(client_sock)
         client._encode_request('name', {})
         self.assertEqual(
             'u1db-1\n'
@@ -556,12 +558,12 @@ class TestClient(tests.TestCase):
 
     def test_client_to_server_and_back(self):
         server_sock, client_sock = socket_pair()
-        client = remote_sync_server.Client(client_sock)
+        client = sync_server.Client(client_sock)
         client._encode_request('arg', {'one': 1})
-        requests = {'arg': ArgRequest}
-        responder = remote_sync_server.Responder(server_sock)
-        handler = remote_sync_server.StructureToRequest(requests, responder)
-        decoder = remote_sync_server.ProtocolDecoder(handler)
+        reqs = {'arg': ArgRequest}
+        responder = sync_server.Responder(server_sock)
+        handler = sync_server.StructureToRequest(reqs, responder)
+        decoder = sync_server.ProtocolDecoder(handler)
         # This should be the message from the client to the server
         content = server_sock.recv(4096)
         self.assertEqual(
@@ -581,8 +583,8 @@ class TestClient(tests.TestCase):
             + 'a\x00\x00\x00\x0a{"one": 1}'
             + 'e\x00\x00\x00\x00',
             content)
-        response_handler = remote_sync_server.StructureToResponse()
-        decoder = remote_sync_server.ProtocolDecoder(response_handler)
+        response_handler = sync_server.StructureToResponse()
+        decoder = sync_server.ProtocolDecoder(response_handler)
         decoder.accept_bytes(content)
         self.assertEqual({'one': 1}, response_handler.kwargs)
         self.assertEqual('arg', response_handler.request_name)
