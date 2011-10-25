@@ -58,14 +58,14 @@ class DatabaseTests(tests.DatabaseBaseTests):
 
     def test_get_docs_conflicted(self):
         doc1_id, doc1_rev = self.db.create_doc(simple_doc)
-        self.db.force_doc_with_conflict(doc1_id, 'alternate:1', nested_doc)
+        self.db.force_doc_sync_conflict(doc1_id, 'alternate:1', nested_doc)
         self.assertEqual([(doc1_id, 'alternate:1', nested_doc, True)],
                          self.db.get_docs([doc1_id]))
 
     def test_get_docs_conflicts_ignored(self):
         doc1_id, doc1_rev = self.db.create_doc(simple_doc)
         doc2_id, doc2_rev = self.db.create_doc(nested_doc)
-        self.db.force_doc_with_conflict(doc1_id, 'alternate:1', nested_doc)
+        self.db.force_doc_sync_conflict(doc1_id, 'alternate:1', nested_doc)
         self.assertEqual(
             sorted([(doc1_id, 'alternate:1', nested_doc, None),
                     (doc2_id, doc2_rev, nested_doc, None)]),
@@ -107,7 +107,7 @@ class DatabaseTests(tests.DatabaseBaseTests):
 
     def test_force_doc_with_conflict(self):
         doc1_id, doc1_rev1 = self.db.create_doc(simple_doc)
-        self.db.force_doc_with_conflict(doc1_id, 'alternate:1', nested_doc)
+        self.db.force_doc_sync_conflict(doc1_id, 'alternate:1', nested_doc)
         self.assertEqual(('alternate:1', nested_doc, True),
                          self.db.get_doc(doc1_id))
         self.assertEqual([('alternate:1', nested_doc),

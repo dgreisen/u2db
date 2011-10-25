@@ -108,7 +108,7 @@ class Database(object):
         """
         raise NotImplementedError(self.put_docs)
 
-    def force_doc_with_conflict(self, doc_id, doc_rev, doc):
+    def force_doc_sync_conflict(self, doc_id, doc_rev, doc):
         """Update documents even though they should conflict.
 
         This is used for synchronization, and should generally not be used by
@@ -131,7 +131,7 @@ class Database(object):
         :param doc: The JSON string for the document.
         :return: None
         """
-        raise NotImplementedError(self.force_doc_with_conflict)
+        raise NotImplementedError(self.force_doc_sync_conflict)
 
     def delete_doc(self, doc_id, old_doc_rev):
         """Mark a document as deleted.

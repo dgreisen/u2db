@@ -43,7 +43,7 @@ class Synchronizer(object):
         :return: The number of documents inserted into the db.
         """
         for doc_id, doc_rev, doc in docs_info:
-            self.source.force_doc_with_conflict(doc_id, doc_rev, doc)
+            self.source.force_doc_sync_conflict(doc_id, doc_rev, doc)
         return len(docs_info)
 
     def sync(self, callback=None):
