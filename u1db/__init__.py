@@ -50,12 +50,13 @@ class Database(object):
         """
         raise NotImplementedError(self.get_doc)
 
-    def get_docs(self, doc_ids):
+    def get_docs(self, doc_ids, check_for_conflicts=True):
         """Get the JSON content for many documents.
 
         :param doc_ids: A list of document identifiers.
-        :return: [(doc_rev, doc)] for each document listed, note that this
-            ignores conflicts.
+        :param check_for_conflicts: If set to False, then the conflict check
+            will be skipped, and 'None' will be returned instead of True/False.
+        :return: [(doc_id, doc_rev, doc, is_conflicted)] for each document id.
         """
         raise NotImplementedError(self.get_docs)
 

@@ -50,9 +50,10 @@ class Synchronizer(object):
         sync_target = self.sync_target
         (other_machine_id, other_rev,
          others_my_rev) = sync_target.get_sync_info(self.source._machine_id)
-        docs_to_send = []
         my_db_rev, changed_doc_ids = self.source.whats_changed(others_my_rev)
-        docs_to_send = self.source.get_docs(changed_doc_ids)
+        docs_to_send = self.source.get_docs(changed_doc_ids,
+            check_for_conflicts=False)
+        docs_to_send = [x[:3] for x in docs_to_send]
         other_last_known_rev = self.source.get_sync_generation(other_machine_id)
         (new_records, conflicted_records,
          new_db_rev) = sync_target.sync_exchange(docs_to_send,

@@ -83,6 +83,9 @@ class InMemoryDatabase(CommonBackend):
             return None, None
         return doc_rev, doc
 
+    def _has_conflicts(self, doc_id):
+        return doc_id in self._conflicts
+
     def get_doc(self, doc_id):
         doc_rev, doc = self._get_doc(doc_id)
         if doc == 'null':
