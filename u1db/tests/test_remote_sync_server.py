@@ -14,7 +14,6 @@
 
 """Tests for the remote synchronization server"""
 
-import cStringIO
 import threading
 import socket
 import SocketServer
@@ -26,29 +25,12 @@ from u1db import (
     tests,
     )
 from u1db.remote import (
+    client,
     protocol,
     requests,
     sync_server,
     )
 from u1db.backends import inmemory
-
-
-def socket_pair():
-    """Return a pair of TCP sockets connected to each other.
-
-    Unlike socket.socketpair, this should work on Windows.
-    """
-    sock_pair = getattr(socket, 'socket_pair', None)
-    if sock_pair:
-        return sock_pair(socket.AF_INET, socket.SOCK_STREAM)
-    listen_sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    listen_sock.bind(('127.0.0.1', 0))
-    listen_sock.listen(1)
-    client_sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    client_sock.connect(listen_sock.getsockname())
-    server_sock, addr = listen_sock.accept()
-    listen_sock.close()
-    return server_sock, client_sock
 
 
 class TestRemoteSyncServer(tests.TestCase):
@@ -177,9 +159,9 @@ class TestTCPSyncServer(tests.TestCase):
     def test_client_rpc_version(self):
         self.startServer(sync_server.TCPSyncRequestHandler)
         client_sock = self.connectToServer()
-        client = sync_server.Client(client_sock)
+        cli = client.Client(client_sock)
         self.assertEqual({'version': _u1db_version},
-                         client.call_returning_args('version'))
+                         cli.call_returning_args('version'))
 
 
 
@@ -296,35 +278,6 @@ class TestStructureToRequest(tests.TestCase):
                           handler.received_end)
 
 
-class TestStructureToResponse(tests.TestCase):
-
-    def test_received_header(self):
-        response_handler = sync_server.StructureToResponse()
-        response_handler.received_header(
-            {'server_version': '1', 'request': 'hello', 'status': 'success'})
-        self.assertEqual('hello', response_handler.request_name)
-        self.assertEqual('1', response_handler.server_version)
-        self.assertEqual('success', response_handler.status)
-        self.assertEqual(None, response_handler.kwargs)
-        self.assertFalse(response_handler.finished)
-
-    def test_received_args(self):
-        response_handler = sync_server.StructureToResponse()
-        response_handler.received_header(
-            {'server_version': '1', 'request': 'hello', 'status': 'success'})
-        response_handler.received_args({'arg': 2, 'arg2': 'value'})
-        self.assertEqual({'arg': 2, 'arg2': 'value'}, response_handler.kwargs)
-        self.assertFalse(response_handler.finished)
-
-    def test_received_end(self):
-        response_handler = sync_server.StructureToResponse()
-        response_handler.received_header(
-            {'server_version': '1', 'request': 'hello', 'status': 'success'})
-        response_handler.received_args({'arg': 2, 'arg2': 'value'})
-        response_handler.received_end()
-        self.assertTrue(response_handler.finished)
-
-
 class TestProtocolDecodingIntoRequest(tests.TestCase):
 
     def makeDecoder(self):
@@ -376,7 +329,7 @@ class TestProtocolEncodeDecode(tests.TestCase):
 class TestResponder(tests.TestCase):
 
     def test_send_response(self):
-        server_sock, client_sock = socket_pair()
+        server_sock, client_sock = tests.socket_pair()
         responder = sync_server.Responder(server_sock)
         responder.send_response(
             requests.RPCSuccessfulResponse('request', value='success'))
@@ -389,63 +342,3 @@ class TestResponder(tests.TestCase):
             client_sock.recv(4096))
 
 
-class TestClient(tests.TestCase):
-
-    def test__encode_request(self):
-        server_sock, client_sock = socket_pair()
-        client = sync_server.Client(client_sock)
-        client._encode_request('name', dict(a=1))
-        self.assertEqual(
-            'u1db-1\n'
-            'h%s{"client_version": "%s", "request": "name"}'
-            % (struct.pack('!L', 41 + len(_u1db_version)), _u1db_version)
-            + 'a\x00\x00\x00\x08{"a": 1}'
-            + 'e\x00\x00\x00\x00',
-            server_sock.recv(4096))
-
-    def test__encode_request_no_args(self):
-        server_sock, client_sock = socket_pair()
-        client = sync_server.Client(client_sock)
-        client._encode_request('name', {})
-        self.assertEqual(
-            'u1db-1\n'
-            'h%s{"client_version": "%s", "request": "name"}'
-            % (struct.pack('!L', 41 + len(_u1db_version)), _u1db_version)
-            + 'e\x00\x00\x00\x00',
-            server_sock.recv(4096))
-
-    def test_client_to_server_and_back(self):
-        server_sock, client_sock = socket_pair()
-        client = sync_server.Client(client_sock)
-        client._encode_request('arg', {'one': 1})
-        reqs = {'arg': ArgRequest}
-        responder = sync_server.Responder(server_sock)
-        handler = sync_server.StructureToRequest(reqs, responder)
-        decoder = protocol.ProtocolDecoder(handler)
-        # This should be the message from the client to the server
-        content = server_sock.recv(4096)
-        self.assertEqual(
-            'u1db-1\n'
-            'h%s{"client_version": "%s", "request": "arg"}'
-            % (struct.pack('!L', 40 + len(_u1db_version)), _u1db_version)
-            + 'a\x00\x00\x00\x0a{"one": 1}'
-            + 'e\x00\x00\x00\x00',
-            content)
-        decoder.accept_bytes(content)
-        # The response from the server
-        content = client_sock.recv(4096)
-        self.assertEqual(
-            'u1db-1\n'
-            'h%s{"server_version": "%s", "request": "arg", "status": "success"}'
-            % (struct.pack('!L', 61 + len(_u1db_version)), _u1db_version)
-            + 'a\x00\x00\x00\x0a{"one": 1}'
-            + 'e\x00\x00\x00\x00',
-            content)
-        response_handler = sync_server.StructureToResponse()
-        decoder = protocol.ProtocolDecoder(response_handler)
-        decoder.accept_bytes(content)
-        self.assertEqual({'one': 1}, response_handler.kwargs)
-        self.assertEqual('arg', response_handler.request_name)
-        self.assertEqual(_u1db_version, response_handler.server_version)
-        self.assertEqual('success', response_handler.status)
-        self.assertTrue(response_handler.finished)
