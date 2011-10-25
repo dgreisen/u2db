@@ -109,8 +109,5 @@ class TestRemoteSyncTarget(TestCaseWithSyncServer):
         local_db._close_sqlite_handle()
         del local_db
         remote_target = self.getSyncTarget('test.sqlite')
-        self.assertEqual({'this_db_id': 'test-id',
-                          'this_db_generation': 0,
-                          'other_db_id': 'other-id',
-                          'other_db_generation': 1},
+        self.assertEqual(('test-id', 0, 1),
                          remote_target.get_sync_info('other-id'))

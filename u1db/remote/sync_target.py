@@ -46,5 +46,7 @@ class RemoteSyncTarget(SyncTarget):
 
     def get_sync_info(self, other_db_id):
         self._ensure_connection()
-        return self._client.call_returning_args("get_sync_info",
+        res = self._client.call_returning_args("get_sync_info",
             path=self._url.path, other_db_id=other_db_id)
+        return (res['this_db_id'], res['this_db_generation'],
+                res['other_db_generation'])
