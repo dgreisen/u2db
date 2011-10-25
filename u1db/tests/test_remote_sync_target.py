@@ -14,6 +14,9 @@
 
 """Tests for the RemoteSyncTarget"""
 
+import os
+import shutil
+import tempfile
 import threading
 
 from u1db import (
@@ -22,6 +25,9 @@ from u1db import (
 from u1db.remote import (
     sync_server,
     sync_target,
+    )
+from u1db.backends import (
+    sqlite_backend,
     )
 
 
@@ -40,9 +46,11 @@ class TestCaseWithSyncServer(tests.TestCase):
         self.addCleanup(self.server_thread.join)
         self.addCleanup(self.server.force_shutdown)
 
-    def getURL(self):
+    def getURL(self, path=None):
         host, port = self.server.server_address
-        return 'u1db://%s:%s/' % (host, port)
+        if path is None:
+            path = ''
+        return 'u1db://%s:%s/%s' % (host, port, path)
 
 
 class TestTestCaseWithSyncServer(TestCaseWithSyncServer):
@@ -56,10 +64,17 @@ class TestTestCaseWithSyncServer(TestCaseWithSyncServer):
 
 class TestRemoteSyncTarget(TestCaseWithSyncServer):
 
-    def getSyncTarget(self):
+    def getSyncTarget(self, path=None):
         if self.server is None:
             self.startServer()
-        return sync_target.RemoteSyncTarget.connect(self.getURL())
+        return sync_target.RemoteSyncTarget.connect(self.getURL(path))
+
+    def switchToTempDir(self):
+        tempdir = tempfile.mkdtemp(prefix='u1db-tmp-')
+        self.addCleanup(shutil.rmtree, tempdir)
+        curdir = os.getcwd()
+        os.chdir(tempdir)
+        self.addCleanup(os.chdir, curdir)
 
     def test_connect(self):
         self.startServer()
@@ -86,4 +101,16 @@ class TestRemoteSyncTarget(TestCaseWithSyncServer):
         self.assertIsNot(None, remote_target._client)
 
     def test_get_sync_info(self):
-        remote_target = self.getSyncTarget()
+        self.switchToTempDir()
+        local_db = sqlite_backend.SQLitePartialExpandDatabase('test.sqlite')
+        local_db._set_machine_id('test-id')
+        local_db.set_sync_generation('other-id', 1)
+        # TODO: introduce a real close?
+        local_db._close_sqlite_handle()
+        del local_db
+        remote_target = self.getSyncTarget('test.sqlite')
+        self.assertEqual({'this_db_id': 'test-id',
+                          'this_db_generation': 0,
+                          'other_db_id': 'other-id',
+                          'other_db_generation': 1},
+                         remote_target.get_sync_info('other-id'))

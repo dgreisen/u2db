@@ -44,5 +44,7 @@ class RemoteSyncTarget(SyncTarget):
         self._conn.connect((self._url.hostname, self._url.port))
         self._client = client.Client(self._conn)
 
-    def get_sync_info(self, other_machine_id):
-        pass
+    def get_sync_info(self, other_db_id):
+        self._ensure_connection()
+        return self._client.call_returning_args("get_sync_info",
+            path=self._url.path, other_db_id=other_db_id)

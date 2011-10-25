@@ -96,5 +96,23 @@ class RPCServerVersion(RPCRequest):
     def __init__(self):
         self.response = RPCSuccessfulResponse(self.name, version=_u1db_version)
 
-
 RPCServerVersion.register()
+
+
+class RPCGetSyncInfo(RPCRequest):
+    """See SyncTarget.get_sync_info()"""
+
+    name = "get_sync_info"
+
+    def handle_args(self, path, other_db_id):
+        from u1db.backends import sqlite_backend
+        assert path.startswith('/')
+        path = path.lstrip('/')
+        db = sqlite_backend.SQLiteDatabase.open_database(path)
+        target = db.get_sync_target()
+        result = target.get_sync_info(other_db_id)
+        self.response = RPCSuccessfulResponse(self.name,
+            this_db_id=result[0], this_db_generation=result[1],
+            other_db_id=other_db_id, other_db_generation=result[2])
+
+RPCGetSyncInfo.register()
