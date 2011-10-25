@@ -137,13 +137,6 @@ class TCPSyncRequestHandler(SocketServer.BaseRequestHandler):
         return decoder.unused_bytes()
 
 
-class RemoteSyncServer(object):
-    """Listen for requests to synchronize."""
-
-    def __init__(self, db):
-        self._db = db
-
-
 class StructureToRequest(object):
     """Handle the parts of messages as they come in.
 
