@@ -58,7 +58,8 @@ class Synchronizer(object):
          new_db_rev) = sync_target.sync_exchange(docs_to_send,
             self.source._machine_id, my_db_rev, other_last_known_rev)
         all_records = new_records + conflicted_records
-        conflict_ids, _, num_inserted = self.source.put_docs(all_records)
+        conflict_ids, _, num_inserted = self.source.put_docs_if_newer(
+            all_records)
         conflict_docs = [r for r in all_records if r[0] in conflict_ids]
         num_inserted += self._insert_conflicts(conflict_docs)
         self.source.set_sync_generation(other_machine_id, new_db_rev)

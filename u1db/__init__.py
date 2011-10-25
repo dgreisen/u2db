@@ -86,7 +86,7 @@ class Database(object):
         """
         raise NotImplementedError(self.put_doc)
 
-    def put_docs(self, docs_info):
+    def put_docs_if_newer(self, docs_info):
         """Insert/update many documents into the database.
 
         This api is used during synchronization operations. It is possible to
