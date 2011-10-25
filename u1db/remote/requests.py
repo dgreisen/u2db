@@ -99,20 +99,37 @@ class RPCServerVersion(RPCRequest):
 RPCServerVersion.register()
 
 
-class RPCGetSyncInfo(RPCRequest):
-    """See SyncTarget.get_sync_info()"""
+class SyncTargetRPC(RPCRequest):
+    """See u1db.SyncTarget
+
+    This is a common base class for RPCs that represent SyncTarget functions.
+    """
+
+    def _get_sync_target(self, path):
+        from u1db.backends import sqlite_backend
+        assert path.startswith('/')
+        path = path.lstrip('/')
+        self.db = sqlite_backend.SQLiteDatabase.open_database(path)
+        self.target = self.db.get_sync_target()
+
+    def _result(self, **kwargs):
+        self.response = RPCSuccessfulResponse(self.name, **kwargs)
+        # If we have a result, then we can close this db connection.
+        self._close()
+
+    def _close(self):
+        self.target = None
+        self.db = None
+
+
+class RPCGetSyncInfo(SyncTargetRPC):
 
     name = "get_sync_info"
 
     def handle_args(self, path, other_db_id):
-        from u1db.backends import sqlite_backend
-        assert path.startswith('/')
-        path = path.lstrip('/')
-        db = sqlite_backend.SQLiteDatabase.open_database(path)
-        target = db.get_sync_target()
-        result = target.get_sync_info(other_db_id)
-        self.response = RPCSuccessfulResponse(self.name,
-            this_db_id=result[0], this_db_generation=result[1],
+        self._get_sync_target(path)
+        result = self.target.get_sync_info(other_db_id)
+        self._result(this_db_id=result[0], this_db_generation=result[1],
             other_db_id=other_db_id, other_db_generation=result[2])
 
 RPCGetSyncInfo.register()
