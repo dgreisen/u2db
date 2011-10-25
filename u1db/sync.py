@@ -43,22 +43,24 @@ class Synchronizer(object):
         :return: The number of documents inserted into the db.
         """
         for doc_id, doc_rev, doc in docs_info:
-            self.source.force_doc_with_conflict(doc_id, doc_rev, doc)
+            self.source.force_doc_sync_conflict(doc_id, doc_rev, doc)
         return len(docs_info)
 
     def sync(self, callback=None):
         sync_target = self.sync_target
         (other_machine_id, other_rev,
          others_my_rev) = sync_target.get_sync_info(self.source._machine_id)
-        docs_to_send = []
         my_db_rev, changed_doc_ids = self.source.whats_changed(others_my_rev)
-        docs_to_send = self.source.get_docs(changed_doc_ids)
+        docs_to_send = self.source.get_docs(changed_doc_ids,
+            check_for_conflicts=False)
+        docs_to_send = [x[:3] for x in docs_to_send]
         other_last_known_rev = self.source.get_sync_generation(other_machine_id)
         (new_records, conflicted_records,
          new_db_rev) = sync_target.sync_exchange(docs_to_send,
             self.source._machine_id, my_db_rev, other_last_known_rev)
         all_records = new_records + conflicted_records
-        conflict_ids, _, num_inserted = self.source.put_docs(all_records)
+        conflict_ids, _, num_inserted = self.source.put_docs_if_newer(
+            all_records)
         conflict_docs = [r for r in all_records if r[0] in conflict_ids]
         num_inserted += self._insert_conflicts(conflict_docs)
         self.source.set_sync_generation(other_machine_id, new_db_rev)

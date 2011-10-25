@@ -51,12 +51,13 @@ class Database(object):
         """
         raise NotImplementedError(self.get_doc)
 
-    def get_docs(self, doc_ids):
+    def get_docs(self, doc_ids, check_for_conflicts=True):
         """Get the JSON content for many documents.
 
         :param doc_ids: A list of document identifiers.
-        :return: [(doc_rev, doc)] for each document listed, note that this
-            ignores conflicts.
+        :param check_for_conflicts: If set to False, then the conflict check
+            will be skipped, and 'None' will be returned instead of True/False.
+        :return: [(doc_id, doc_rev, doc, is_conflicted)] for each document id.
         """
         raise NotImplementedError(self.get_docs)
 
@@ -87,7 +88,7 @@ class Database(object):
         """
         raise NotImplementedError(self.put_doc)
 
-    def put_docs(self, docs_info):
+    def put_docs_if_newer(self, docs_info):
         """Insert/update many documents into the database.
 
         This api is used during synchronization operations. It is possible to
@@ -108,7 +109,7 @@ class Database(object):
         """
         raise NotImplementedError(self.put_docs)
 
-    def force_doc_with_conflict(self, doc_id, doc_rev, doc):
+    def force_doc_sync_conflict(self, doc_id, doc_rev, doc):
         """Update documents even though they should conflict.
 
         This is used for synchronization, and should generally not be used by
@@ -131,7 +132,7 @@ class Database(object):
         :param doc: The JSON string for the document.
         :return: None
         """
-        raise NotImplementedError(self.force_doc_with_conflict)
+        raise NotImplementedError(self.force_doc_sync_conflict)
 
     def delete_doc(self, doc_id, old_doc_rev):
         """Mark a document as deleted.

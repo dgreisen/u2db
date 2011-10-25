@@ -52,17 +52,33 @@ class DatabaseTests(tests.DatabaseBaseTests):
     def test_get_docs(self):
         doc1_id, doc1_rev = self.db.create_doc(simple_doc)
         doc2_id, doc2_rev = self.db.create_doc(nested_doc)
-        self.assertEqual([(doc1_id, doc1_rev, simple_doc),
-                          (doc2_id, doc2_rev, nested_doc)],
+        self.assertEqual([(doc1_id, doc1_rev, simple_doc, False),
+                          (doc2_id, doc2_rev, nested_doc, False)],
                          self.db.get_docs([doc1_id, doc2_id]))
+
+    def test_get_docs_conflicted(self):
+        doc1_id, doc1_rev = self.db.create_doc(simple_doc)
+        self.db.force_doc_sync_conflict(doc1_id, 'alternate:1', nested_doc)
+        self.assertEqual([(doc1_id, 'alternate:1', nested_doc, True)],
+                         self.db.get_docs([doc1_id]))
+
+    def test_get_docs_conflicts_ignored(self):
+        doc1_id, doc1_rev = self.db.create_doc(simple_doc)
+        doc2_id, doc2_rev = self.db.create_doc(nested_doc)
+        self.db.force_doc_sync_conflict(doc1_id, 'alternate:1', nested_doc)
+        self.assertEqual(
+            sorted([(doc1_id, 'alternate:1', nested_doc, None),
+                    (doc2_id, doc2_rev, nested_doc, None)]),
+            sorted(self.db.get_docs([doc1_id, doc2_id],
+                                    check_for_conflicts=False)))
 
     def test_put_doc_creating_initial(self):
         new_rev = self.db.put_doc('my_doc_id', None, simple_doc)
         self.assertEqual((new_rev, simple_doc, False),
                          self.db.get_doc('my_doc_id'))
 
-    def test_simple_put_docs(self):
-        self.assertEqual((set(), set(), 2), self.db.put_docs(
+    def test_simple_put_docs_if_newer(self):
+        self.assertEqual((set(), set(), 2), self.db.put_docs_if_newer(
             [('my-doc-id', 'test:1', simple_doc),
              ('my-doc2-id', 'test:1', nested_doc)]))
         self.assertEqual(('test:1', simple_doc, False),
@@ -70,20 +86,20 @@ class DatabaseTests(tests.DatabaseBaseTests):
         self.assertEqual(('test:1', nested_doc, False),
                          self.db.get_doc('my-doc2-id'))
 
-    def test_put_docs_already_superseded(self):
+    def test_put_docs_if_newer_already_superseded(self):
         orig_doc = '{"new": "doc"}'
         doc1_id, doc1_rev1 = self.db.create_doc(orig_doc)
         doc1_rev2 = self.db.put_doc(doc1_id, doc1_rev1, simple_doc)
         # Nothing is inserted, because the document is already superseded
-        self.assertEqual((set(), set([doc1_id]), 0), self.db.put_docs(
+        self.assertEqual((set(), set([doc1_id]), 0), self.db.put_docs_if_newer(
             [(doc1_id, doc1_rev1, orig_doc)]))
         self.assertEqual((doc1_rev2, simple_doc, False),
                          self.db.get_doc(doc1_id))
 
-    def test_put_docs_conflicted(self):
+    def test_put_docs_if_newer_conflicted(self):
         doc1_id, doc1_rev1 = self.db.create_doc(simple_doc)
         # Nothing is inserted, the document id is returned as would-conflict
-        self.assertEqual((set([doc1_id]), set(), 0), self.db.put_docs(
+        self.assertEqual((set([doc1_id]), set(), 0), self.db.put_docs_if_newer(
             [(doc1_id, 'alternate:1', nested_doc)]))
         # The database wasn't altered
         self.assertEqual((doc1_rev1, simple_doc, False),
@@ -91,7 +107,7 @@ class DatabaseTests(tests.DatabaseBaseTests):
 
     def test_force_doc_with_conflict(self):
         doc1_id, doc1_rev1 = self.db.create_doc(simple_doc)
-        self.db.force_doc_with_conflict(doc1_id, 'alternate:1', nested_doc)
+        self.db.force_doc_sync_conflict(doc1_id, 'alternate:1', nested_doc)
         self.assertEqual(('alternate:1', nested_doc, True),
                          self.db.get_doc(doc1_id))
         self.assertEqual([('alternate:1', nested_doc),

@@ -167,12 +167,12 @@ class DatabaseSyncTests(tests.DatabaseBaseTests):
         # with a new record. When we finish synchronizing, we can notice that
         # something locally was updated, and we cannot tell c2 our new updated
         # db_rev
-        orig = self.db1.put_docs
-        def after_put_docs(*args, **kwargs):
+        orig = self.db1.put_docs_if_newer
+        def after_put_docs_if_newer(*args, **kwargs):
             result = orig(*args, **kwargs)
             self.db1.create_doc(simple_doc)
             return result
-        self.db1.put_docs = after_put_docs
+        self.db1.put_docs_if_newer = after_put_docs_if_newer
         self.assertEqual(0, self.sync(self.db1, self.db2))
         self.assertEqual({'receive': {'docs': [], 'from_id': 'test1',
                                       'from_rev': 0, 'last_known_rev': 0},

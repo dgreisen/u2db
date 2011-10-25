@@ -83,6 +83,9 @@ class InMemoryDatabase(CommonBackend):
             return None, None
         return doc_rev, doc
 
+    def _has_conflicts(self, doc_id):
+        return doc_id in self._conflicts
+
     def get_doc(self, doc_id):
         doc_rev, doc = self._get_doc(doc_id)
         if doc == 'null':
@@ -152,7 +155,7 @@ class InMemoryDatabase(CommonBackend):
         return (len(self._transaction_log),
                 set(self._transaction_log[old_db_rev:]))
 
-    def force_doc_with_conflict(self, doc_id, doc_rev, doc):
+    def force_doc_sync_conflict(self, doc_id, doc_rev, doc):
         my_doc_rev, my_doc = self._docs[doc_id]
         self._conflicts.setdefault(doc_id, []).append((my_doc_rev, my_doc))
         self._put_and_update_indexes(doc_id, my_doc, doc_rev, doc)
