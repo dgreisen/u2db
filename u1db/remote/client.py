@@ -86,16 +86,17 @@ class Client(object):
             # Connection prematurely closed while waiting for a response.
         decoder.accept_bytes(content)
 
-    def _wait_for_response_header(self):
-        """Keep reading from the connection until we see the response args."""
-        while (not response_handler.finished
-               and response_handler.status is None):
-            self._read_more_content()
+    # Not used yet.
+    # def _wait_for_response_header(self):
+    #     """Keep reading from the connection until we see the response args."""
+    #     while (not response_handler.finished
+    #            and response_handler.status is None):
+    #         self._read_more_content()
 
-    def _wait_for_response_args(self):
-        while (not response_handler.finished
-               and response_handler.kwargs is None):
-            self._read_more_content()
+    # def _wait_for_response_args(self):
+    #     while (not response_handler.finished
+    #            and response_handler.kwargs is None):
+    #         self._read_more_content()
 
     def _wait_for_response_end(self, response_handler, decoder):
         while not response_handler.finished:
