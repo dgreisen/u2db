@@ -14,10 +14,10 @@
 
 """Test infrastructure for U1DB Client"""
 
+import socket
 
 import testscenarios
 import testtools
-
 
 from u1db.backends import (
     inmemory,
@@ -71,6 +71,24 @@ class DatabaseBaseTests(TestCase):
         # TODO: Add close_database parameterization
         # self.close_database(self.db)
         super(DatabaseBaseTests, self).tearDown()
+
+
+def socket_pair():
+    """Return a pair of TCP sockets connected to each other.
+
+    Unlike socket.socketpair, this should work on Windows.
+    """
+    sock_pair = getattr(socket, 'socket_pair', None)
+    if sock_pair:
+        return sock_pair(socket.AF_INET, socket.SOCK_STREAM)
+    listen_sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    listen_sock.bind(('127.0.0.1', 0))
+    listen_sock.listen(1)
+    client_sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    client_sock.connect(listen_sock.getsockname())
+    server_sock, addr = listen_sock.accept()
+    listen_sock.close()
+    return server_sock, client_sock
 
 
 
