@@ -18,6 +18,7 @@ from u1db import (
     __version__ as _u1db_version,
     buffers,
     compat,
+    SyncTarget,
     )
 from u1db.remote import (
     protocol,
@@ -112,4 +113,3 @@ class Client(object):
         decoder = protocol.ProtocolDecoder(response_handler)
         self._wait_for_response_end(response_handler, decoder)
         return response_handler.kwargs
-

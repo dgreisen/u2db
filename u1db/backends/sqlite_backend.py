@@ -37,6 +37,8 @@ class SQLiteDatabase(CommonBackend):
 
     @staticmethod
     def open_database(sqlite_file):
+        # TODO: We really want a way to indicate that the database must already
+        # exist.
         db_handle = dbapi2.connect(sqlite_file)
         c = db_handle.cursor()
         c.execute("SELECT value FROM u1db_config WHERE name = 'index_storage'")
