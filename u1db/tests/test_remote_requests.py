@@ -48,3 +48,19 @@ class TestRPCRequest(tests.TestCase):
         self.assertIsNot(None, instance.response)
         self.assertEqual({'version': _u1db_version},
                          instance.response.response_kwargs)
+
+
+class TestRequestState(tests.TestCase):
+
+    def setUp(self):
+        super(TestRequestState, self).setUp()
+        self.state = requests.RequestState()
+
+    def test_set_workingdir(self):
+        tempdir = self.createTempDir()
+        self.state.set_workingdir(tempdir)
+        self.assertTrue(self.state._relpath('path').startswith(tempdir))
+
+    # def test_open_database(self):
+    #     tempd
+    #     db = self.state.open_database('/:memory:')

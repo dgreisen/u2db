@@ -14,7 +14,9 @@
 
 """Test infrastructure for U1DB"""
 
+import shutil
 import socket
+import tempfile
 
 import testscenarios
 import testtools
@@ -24,7 +26,17 @@ from u1db.backends import (
     sqlite_backend,
     )
 
-TestCase = testtools.TestCase
+
+class TestCase(testtools.TestCase):
+
+    def createTempDir(self, prefix='u1db-tmp-'):
+        """Create a temporary directory to do some work in.
+
+        This directory will be scheduled for cleanup when the test ends.
+        """
+        tempdir = tempfile.mkdtemp(prefix=prefix)
+        self.addCleanup(shutil.rmtree, tempdir)
+        return tempdir
 
 
 simple_doc = '{"key": "value"}'

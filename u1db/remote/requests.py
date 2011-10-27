@@ -16,6 +16,27 @@
 
 from u1db import __version__ as _u1db_version
 
+
+class RequestState(object):
+    """Passed to a Request when it is instantiated.
+
+    This is used to track server-side state, such as working-directory, open
+    databases, etc.
+    """
+
+    def __init__(self):
+        self._workingdir = None
+
+    def set_workingdir(self, path):
+        self._workingdir = path
+
+    def _relpath(self, relpath):
+        # Note: We don't want to allow absolute paths here, because we
+        #       don't want to expose the filesystem. We should also check that
+        #       relpath doesn't have '..' in it, etc.
+        return self._workingdir + '/' + relpath
+
+
 class RPCRequest(object):
     """Base class for request instances.
 

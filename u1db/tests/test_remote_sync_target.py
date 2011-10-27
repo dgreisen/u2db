@@ -70,8 +70,7 @@ class TestRemoteSyncTarget(TestCaseWithSyncServer):
         return sync_target.RemoteSyncTarget.connect(self.getURL(path))
 
     def switchToTempDir(self):
-        tempdir = tempfile.mkdtemp(prefix='u1db-tmp-')
-        self.addCleanup(shutil.rmtree, tempdir)
+        tempdir = self.createTempDir()
         curdir = os.getcwd()
         os.chdir(tempdir)
         self.addCleanup(os.chdir, curdir)
