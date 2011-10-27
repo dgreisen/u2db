@@ -17,6 +17,7 @@
 import shutil
 import socket
 import tempfile
+import threading
 
 import testscenarios
 import testtools
@@ -24,6 +25,9 @@ import testtools
 from u1db.backends import (
     inmemory,
     sqlite_backend,
+    )
+from u1db.remote import (
+    sync_server,
     )
 
 
@@ -83,6 +87,28 @@ class DatabaseBaseTests(TestCase):
         # TODO: Add close_database parameterization
         # self.close_database(self.db)
         super(DatabaseBaseTests, self).tearDown()
+
+
+class TestCaseWithSyncServer(TestCase):
+
+    def setUp(self):
+        super(TestCaseWithSyncServer, self).setUp()
+        self.server = self.server_thread = None
+
+    def startServer(self):
+        self.server = sync_server.TCPSyncServer(
+            ('127.0.0.1', 0), sync_server.TCPSyncRequestHandler)
+        self.server_thread = threading.Thread(target=self.server.serve_forever,
+                                              kwargs=dict(poll_interval=0.01))
+        self.server_thread.start()
+        self.addCleanup(self.server_thread.join)
+        self.addCleanup(self.server.force_shutdown)
+
+    def getURL(self, path=None):
+        host, port = self.server.server_address
+        if path is None:
+            path = ''
+        return 'u1db://%s:%s/%s' % (host, port, path)
 
 
 def socket_pair():

@@ -15,15 +15,11 @@
 """Tests for the RemoteSyncTarget"""
 
 import os
-import shutil
-import tempfile
-import threading
 
 from u1db import (
     tests,
     )
 from u1db.remote import (
-    sync_server,
     sync_target,
     )
 from u1db.backends import (
@@ -31,38 +27,7 @@ from u1db.backends import (
     )
 
 
-class TestCaseWithSyncServer(tests.TestCase):
-
-    def setUp(self):
-        super(TestCaseWithSyncServer, self).setUp()
-        self.server = self.server_thread = None
-
-    def startServer(self):
-        self.server = sync_server.TCPSyncServer(
-            ('127.0.0.1', 0), sync_server.TCPSyncRequestHandler)
-        self.server_thread = threading.Thread(target=self.server.serve_forever,
-                                              kwargs=dict(poll_interval=0.01))
-        self.server_thread.start()
-        self.addCleanup(self.server_thread.join)
-        self.addCleanup(self.server.force_shutdown)
-
-    def getURL(self, path=None):
-        host, port = self.server.server_address
-        if path is None:
-            path = ''
-        return 'u1db://%s:%s/%s' % (host, port, path)
-
-
-class TestTestCaseWithSyncServer(TestCaseWithSyncServer):
-
-    def test_getURL(self):
-        self.startServer()
-        url = self.getURL()
-        self.assertTrue(url.startswith('u1db://127.0.0.1:'))
-
-
-
-class TestRemoteSyncTarget(TestCaseWithSyncServer):
+class TestRemoteSyncTarget(tests.TestCaseWithSyncServer):
 
     def getSyncTarget(self, path=None):
         if self.server is None:
