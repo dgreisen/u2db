@@ -209,7 +209,7 @@ class TestStructureToRequest(tests.TestCase):
                     "arg": ArgRequest, 'end': EndRequest}
         responder = ResponderForTests()
         handler = sync_server.StructureToRequest(reqs, responder,
-            tests.TestRequestState())
+            tests.ServerStateForTests())
         return handler
 
     def test_unknown_request(self):
@@ -274,7 +274,7 @@ class TestProtocolDecodingIntoRequest(tests.TestCase):
         responder = ResponderForTests()
         reqs = {'hello': HelloRequest}
         self.handler = sync_server.StructureToRequest(
-            reqs, responder, tests.TestRequestState())
+            reqs, responder, tests.ServerStateForTests())
         self.decoder = protocol.ProtocolDecoder(self.handler)
         return self.decoder
 

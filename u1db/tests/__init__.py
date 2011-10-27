@@ -90,11 +90,11 @@ class DatabaseBaseTests(TestCase):
         super(DatabaseBaseTests, self).tearDown()
 
 
-class TestRequestState(requests.RequestState):
+class ServerStateForTests(requests.ServerState):
     """Used in the test suite, so we don't have to touch disk, etc."""
 
     def __init__(self):
-        super(TestRequestState, self).__init__()
+        super(ServerStateForTests, self).__init__()
         self._dbs = {}
 
     def open_database(self, path):
@@ -113,7 +113,7 @@ class TestCaseWithSyncServer(TestCase):
         self.server = self.server_thread = None
 
     def startServer(self, request_handler=sync_server.TCPSyncRequestHandler):
-        self.request_state = TestRequestState()
+        self.request_state = ServerStateForTests()
         self.server = sync_server.TCPSyncServer(
             ('127.0.0.1', 0), request_handler,
             self.request_state)

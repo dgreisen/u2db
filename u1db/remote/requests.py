@@ -17,7 +17,7 @@
 from u1db import __version__ as _u1db_version
 
 
-class RequestState(object):
+class ServerState(object):
     """Passed to a Request when it is instantiated.
 
     This is used to track server-side state, such as working-directory, open

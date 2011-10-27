@@ -45,7 +45,7 @@ class TestRPCRequest(tests.TestCase):
         factory = requests.RPCRequest.requests.get('version')
         self.assertEqual(requests.RPCServerVersion, factory)
         self.assertEqual('version', factory.name)
-        state = tests.TestRequestState()
+        state = tests.ServerStateForTests()
         instance = factory(state)
         self.assertEqual('version', instance.name)
         # 'version' doesn't require arguments, it just returns the response
@@ -55,11 +55,11 @@ class TestRPCRequest(tests.TestCase):
         self.assertIs(state, instance.state)
 
 
-class TestRequestState(tests.TestCase):
+class TestServerState(tests.TestCase):
 
     def setUp(self):
-        super(TestRequestState, self).setUp()
-        self.state = requests.RequestState()
+        super(TestServerState, self).setUp()
+        self.state = requests.ServerState()
 
     def test_set_workingdir(self):
         tempdir = self.createTempDir()
