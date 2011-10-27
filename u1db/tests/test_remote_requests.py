@@ -14,6 +14,8 @@
 
 """Tests for the remote request objects"""
 
+import os
+
 from u1db import (
     __version__ as _u1db_version,
     tests,
@@ -21,6 +23,7 @@ from u1db import (
 from u1db.remote import (
     requests,
     )
+from u1db.backends import sqlite_backend
 
 
 class TestRPCRequest(tests.TestCase):
@@ -61,6 +64,12 @@ class TestRequestState(tests.TestCase):
         self.state.set_workingdir(tempdir)
         self.assertTrue(self.state._relpath('path').startswith(tempdir))
 
-    # def test_open_database(self):
-    #     tempd
-    #     db = self.state.open_database('/:memory:')
+    def test_open_database(self):
+        tempdir = self.createTempDir()
+        self.state.set_workingdir(tempdir)
+        path = tempdir + '/test.db'
+        self.assertFalse(os.path.exists(path))
+        # Create the db, but don't do anything with it
+        sqlite_backend.SQLitePartialExpandDatabase(path)
+        db = self.state.open_database('test.db')
+        self.assertIsInstance(db, sqlite_backend.SQLitePartialExpandDatabase)

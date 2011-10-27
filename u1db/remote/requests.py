@@ -36,6 +36,12 @@ class RequestState(object):
         #       relpath doesn't have '..' in it, etc.
         return self._workingdir + '/' + relpath
 
+    def open_database(self, path):
+        """Open a database at the given location."""
+        from u1db.backends import sqlite_backend
+        full_path = self._relpath(path)
+        return sqlite_backend.SQLiteDatabase.open_database(full_path)
+
 
 class RPCRequest(object):
     """Base class for request instances.
