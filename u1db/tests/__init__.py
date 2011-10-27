@@ -14,7 +14,10 @@
 
 """Test infrastructure for U1DB"""
 
+import shutil
 import socket
+import tempfile
+import threading
 
 import testscenarios
 import testtools
@@ -23,8 +26,22 @@ from u1db.backends import (
     inmemory,
     sqlite_backend,
     )
+from u1db.remote import (
+    requests,
+    sync_server,
+    )
 
-TestCase = testtools.TestCase
+
+class TestCase(testtools.TestCase):
+
+    def createTempDir(self, prefix='u1db-tmp-'):
+        """Create a temporary directory to do some work in.
+
+        This directory will be scheduled for cleanup when the test ends.
+        """
+        tempdir = tempfile.mkdtemp(prefix=prefix)
+        self.addCleanup(shutil.rmtree, tempdir)
+        return tempdir
 
 
 simple_doc = '{"key": "value"}'
@@ -71,6 +88,46 @@ class DatabaseBaseTests(TestCase):
         # TODO: Add close_database parameterization
         # self.close_database(self.db)
         super(DatabaseBaseTests, self).tearDown()
+
+
+class ServerStateForTests(requests.ServerState):
+    """Used in the test suite, so we don't have to touch disk, etc."""
+
+    def __init__(self):
+        super(ServerStateForTests, self).__init__()
+        self._dbs = {}
+
+    def open_database(self, path):
+        return self._dbs[path]
+
+    def _create_database(self, path):
+        db = inmemory.InMemoryDatabase('db-%s' % path)
+        self._dbs[path] = db
+        return db
+
+
+class TestCaseWithSyncServer(TestCase):
+
+    def setUp(self):
+        super(TestCaseWithSyncServer, self).setUp()
+        self.server = self.server_thread = None
+
+    def startServer(self, request_handler=sync_server.TCPSyncRequestHandler):
+        self.request_state = ServerStateForTests()
+        self.server = sync_server.TCPSyncServer(
+            ('127.0.0.1', 0), request_handler,
+            self.request_state)
+        self.server_thread = threading.Thread(target=self.server.serve_forever,
+                                              kwargs=dict(poll_interval=0.01))
+        self.server_thread.start()
+        self.addCleanup(self.server_thread.join)
+        self.addCleanup(self.server.force_shutdown)
+
+    def getURL(self, path=None):
+        host, port = self.server.server_address
+        if path is None:
+            path = ''
+        return 'u1db://%s:%s/%s' % (host, port, path)
 
 
 def socket_pair():

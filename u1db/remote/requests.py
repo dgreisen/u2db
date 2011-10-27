@@ -16,6 +16,33 @@
 
 from u1db import __version__ as _u1db_version
 
+
+class ServerState(object):
+    """Passed to a Request when it is instantiated.
+
+    This is used to track server-side state, such as working-directory, open
+    databases, etc.
+    """
+
+    def __init__(self):
+        self._workingdir = None
+
+    def set_workingdir(self, path):
+        self._workingdir = path
+
+    def _relpath(self, relpath):
+        # Note: We don't want to allow absolute paths here, because we
+        #       don't want to expose the filesystem. We should also check that
+        #       relpath doesn't have '..' in it, etc.
+        return self._workingdir + '/' + relpath
+
+    def open_database(self, path):
+        """Open a database at the given location."""
+        from u1db.backends import sqlite_backend
+        full_path = self._relpath(path)
+        return sqlite_backend.SQLiteDatabase.open_database(full_path)
+
+
 class RPCRequest(object):
     """Base class for request instances.
 
@@ -41,11 +68,10 @@ class RPCRequest(object):
         if cls.name in RPCRequest.requests:
             RPCRequest.requests.pop(cls.name)
 
-    def __init__(self):
-        # TODO: We'll need some amount of server-state context to pass into all
-        #       of these requests (such as WorkingDirectory, or something).
+    def __init__(self, state):
         # This will get instantiated once we receive the "header" portion of
         # the request.
+        self.state = state
         self.response = None
 
     def handle_args(self, **kwargs):
@@ -93,7 +119,8 @@ class RPCServerVersion(RPCRequest):
 
     name = 'version'
 
-    def __init__(self):
+    def __init__(self, state):
+        super(RPCServerVersion, self).__init__(state)
         self.response = RPCSuccessfulResponse(self.name, version=_u1db_version)
 
 RPCServerVersion.register()
@@ -106,10 +133,9 @@ class SyncTargetRPC(RPCRequest):
     """
 
     def _get_sync_target(self, path):
-        from u1db.backends import sqlite_backend
         assert path.startswith('/')
         path = path.lstrip('/')
-        self.db = sqlite_backend.SQLiteDatabase.open_database(path)
+        self.db = self.state.open_database(path)
         self.target = self.db.get_sync_target()
 
     def _result(self, **kwargs):

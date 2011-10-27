@@ -51,19 +51,15 @@ class TwoMessageHandler(SocketServer.BaseRequestHandler):
         self.request.sendall('goodbye\n')
 
 
-class TestTCPSyncServer(tests.TestCase):
+class TestTestCaseWithSyncServer(tests.TestCaseWithSyncServer):
 
-    def startServer(self, request_handler):
-        self.server = sync_server.TCPSyncServer(
-            ('127.0.0.1', 0), request_handler)
-        self.server_thread = threading.Thread(target=self.server.serve_forever,
-                                              kwargs=dict(poll_interval=0.01))
-        self.server_thread.start()
-        # Because TCPSyncServer sets bind_and_activate=True in its constructor,
-        # the socket is already created. So the client can bind, even if the
-        # server thread isn't actively listening yet.
-        self.addCleanup(self.server_thread.join)
-        self.addCleanup(self.server.force_shutdown)
+    def test_getURL(self):
+        self.startServer()
+        url = self.getURL()
+        self.assertTrue(url.startswith('u1db://127.0.0.1:'))
+
+
+class TestTCPSyncServer(tests.TestCaseWithSyncServer):
 
     def connectToServer(self):
         client_sock = socket.socket()
@@ -173,7 +169,8 @@ class FastRequest(requests.RPCRequest):
 
     name = 'fast'
 
-    def __init__(self):
+    def __init__(self, state):
+        super(FastRequest, self).__init__(state)
         self.response = requests.RPCSuccessfulResponse(self.name,
             value=True)
 
@@ -211,7 +208,8 @@ class TestStructureToRequest(tests.TestCase):
         reqs = {"hello": HelloRequest, 'fast': FastRequest,
                     "arg": ArgRequest, 'end': EndRequest}
         responder = ResponderForTests()
-        handler = sync_server.StructureToRequest(reqs, responder)
+        handler = sync_server.StructureToRequest(reqs, responder,
+            tests.ServerStateForTests())
         return handler
 
     def test_unknown_request(self):
@@ -276,7 +274,7 @@ class TestProtocolDecodingIntoRequest(tests.TestCase):
         responder = ResponderForTests()
         reqs = {'hello': HelloRequest}
         self.handler = sync_server.StructureToRequest(
-            reqs, responder)
+            reqs, responder, tests.ServerStateForTests())
         self.decoder = protocol.ProtocolDecoder(self.handler)
         return self.decoder
 

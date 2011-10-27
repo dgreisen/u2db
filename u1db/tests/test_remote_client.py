@@ -88,7 +88,8 @@ class TestClient(tests.TestCase):
         cli._encode_request('arg', {'one': 1})
         reqs = {'arg': test_remote_sync_server.ArgRequest}
         responder = sync_server.Responder(server_sock)
-        handler = sync_server.StructureToRequest(reqs, responder)
+        handler = sync_server.StructureToRequest(reqs, responder,
+            tests.ServerStateForTests())
         decoder = protocol.ProtocolDecoder(handler)
         # This should be the message from the client to the server
         content = server_sock.recv(4096)

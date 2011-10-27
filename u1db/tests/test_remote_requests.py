@@ -14,6 +14,8 @@
 
 """Tests for the remote request objects"""
 
+import os
+
 from u1db import (
     __version__ as _u1db_version,
     tests,
@@ -21,6 +23,7 @@ from u1db import (
 from u1db.remote import (
     requests,
     )
+from u1db.backends import sqlite_backend
 
 
 class TestRPCRequest(tests.TestCase):
@@ -42,9 +45,33 @@ class TestRPCRequest(tests.TestCase):
         factory = requests.RPCRequest.requests.get('version')
         self.assertEqual(requests.RPCServerVersion, factory)
         self.assertEqual('version', factory.name)
-        instance = factory()
+        state = tests.ServerStateForTests()
+        instance = factory(state)
         self.assertEqual('version', instance.name)
         # 'version' doesn't require arguments, it just returns the response
         self.assertIsNot(None, instance.response)
         self.assertEqual({'version': _u1db_version},
                          instance.response.response_kwargs)
+        self.assertIs(state, instance.state)
+
+
+class TestServerState(tests.TestCase):
+
+    def setUp(self):
+        super(TestServerState, self).setUp()
+        self.state = requests.ServerState()
+
+    def test_set_workingdir(self):
+        tempdir = self.createTempDir()
+        self.state.set_workingdir(tempdir)
+        self.assertTrue(self.state._relpath('path').startswith(tempdir))
+
+    def test_open_database(self):
+        tempdir = self.createTempDir()
+        self.state.set_workingdir(tempdir)
+        path = tempdir + '/test.db'
+        self.assertFalse(os.path.exists(path))
+        # Create the db, but don't do anything with it
+        sqlite_backend.SQLitePartialExpandDatabase(path)
+        db = self.state.open_database('test.db')
+        self.assertIsInstance(db, sqlite_backend.SQLitePartialExpandDatabase)
