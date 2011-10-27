@@ -23,30 +23,33 @@ class CommonSyncTarget(u1db.SyncTarget):
     def __init__(self, db):
         self._db = db
 
-    def sync_exchange(self, docs_info, from_machine_id, from_machine_rev,
-                      last_known_rev):
+    def sync_exchange(self, docs_info,
+                      from_machine_id, from_machine_generation,
+                      last_known_generation):
         (conflict_ids, superseded_ids,
          num_inserted) = self._db.put_docs_if_newer(docs_info)
         seen_ids = [x[0] for x in docs_info if x[0] not in superseded_ids]
         new_docs = []
-        my_db_rev, changed_doc_ids = self._db.whats_changed(last_known_rev)
+        my_gen, changed_doc_ids = self._db.whats_changed(last_known_generation)
         doc_ids_to_return = [doc_id for doc_id in changed_doc_ids
                              if doc_id not in seen_ids]
-        new_docs = self._db.get_docs(doc_ids_to_return, check_for_conflicts=False)
+        new_docs = self._db.get_docs(doc_ids_to_return,
+                                     check_for_conflicts=False)
         new_docs = [x[:3] for x in new_docs]
         conflicts = self._db.get_docs(conflict_ids, check_for_conflicts=False)
         conflicts = [x[:3] for x in conflicts]
-        self._db.set_sync_generation(from_machine_id, from_machine_rev)
+        self._db.set_sync_generation(from_machine_id,
+                                     from_machine_generation)
         self._db._last_exchange_log = {
             'receive': {'docs': [(di, dr) for di, dr, _ in docs_info],
                         'from_id': from_machine_id,
-                        'from_rev': from_machine_rev,
-                        'last_known_rev': last_known_rev},
+                        'from_gen': from_machine_generation,
+                        'last_known_gen': last_known_generation},
             'return': {'new_docs': [(di, dr) for di, dr, _ in new_docs],
                        'conf_docs': [(di, dr) for di, dr, _ in conflicts],
-                       'last_rev': my_db_rev}
+                       'last_gen': my_gen}
         }
-        return new_docs, conflicts, my_db_rev
+        return new_docs, conflicts, my_gen
 
 
 
@@ -61,8 +64,8 @@ class CommonBackend(u1db.Database):
         vcr.increment(self._machine_id)
         return vcr.as_str()
 
-    def _get_db_rev(self):
-        raise NotImplementedError(self._get_db_rev)
+    def _get_generation(self):
+        raise NotImplementedError(self._get_generation)
 
     def _get_doc(self, doc_id):
         """Extract the document from storage.

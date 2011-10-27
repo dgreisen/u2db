@@ -24,17 +24,18 @@ class Database(object):
     This data store can be synchronized with other u1db.Database instances.
     """
 
-    def whats_changed(self, old_db_rev):
-        """Return a list of entries that have changed since old_db_rev.
-        This allows APPS to only store a db_rev before going 'offline', and
-        then when coming back online they can use this data to update whatever
-        extra data they are storing.
+    def whats_changed(self, old_generation):
+        """Return a list of entries that have changed since old_generation.
+        This allows APPS to only store a db generation before going
+        'offline', and then when coming back online they can use this
+        data to update whatever extra data they are storing.
 
-        :param old_db_rev: The global revision state of the database in the old
+        :param old_generation: The generation of the database in the old
             state.
-        :return: (cur_db_rev, set([doc_id]))
-            The current global revision state of the database, and the set of
-            document ids that were changed in between old_db_rev and cur_db_rev
+        :return: (cur_generation, set([doc_id]))
+            The current generation of the database, and the set of
+            document ids that were changed in between old_generation and
+            cur_generation
         """
         raise NotImplementedError(self.whats_changed)
 
@@ -258,17 +259,17 @@ class SyncTarget(object):
 
         :param other_machine_id: Another machine which we might have
             synchronized with in the past.
-        :return: (this_machine_id, this_machine_db_rev,
+        :return: (this_machine_id, this_machine_generation,
                   other_machine_last_known_generation)
         """
         raise NotImplementedError(self.get_sync_info)
 
-    def record_sync_info(self, other_machine_id, other_machine_gen):
+    def record_sync_info(self, other_machine_id, other_machine_generation):
         """Record tip information for another machine.
 
         After sync_exchange has been processed, the caller will have received
         new content from this machine. This call allows the machine instigating
-        the sync to inform us what their global database revision became after
+        the sync to inform us what their generation became after
         applying the documents we returned.
 
         This is used to allow future sync operations to not need to repeat data
@@ -277,13 +278,15 @@ class SyncTarget(object):
         synchronized.
 
         :param other_machine_id: The identifier for the other machine.
-        :param other_machine_rev: The database revision for other_machine
+        :param other_machine_generation:
+             The database generation for other_machine
         :return: None
         """
         raise NotImplementedError(self.record_sync_info)
 
-    def sync_exchange(self, docs_info, from_machine_id, from_machine_rev,
-                      last_known_rev):
+    def sync_exchange(self, docs_info,
+                      from_machine_id, from_machine_generation,
+                      last_known_generation):
         """Incorporate the documents sent from the other machine.
 
         This is not meant to be called by client code directly, but is used as
@@ -295,18 +298,18 @@ class SyncTarget(object):
         :param docs_info: A list of [(doc_id, doc_rev, doc)] tuples indicating
             documents which should be updated on this machine.
         :param from_machine_id: The other machines' identifier
-        :param from_machine_rev: The db rev for the other machine, indicating
-            the tip of data being sent by docs_info.
-        :param last_known_rev: The last db_rev that other_machine knows about
-            this
-        :return: (new_records, conflicted_records, new_db_rev)
+        :param from_machine_generation: The db generation for the other machine
+            indicating the tip of data being sent by docs_info.
+        :param last_known_generation: The last generation that other_machine
+            knows about this
+        :return: (new_records, conflicted_records, new_generation)
             new_records - A list of [(doc_id, doc_rev, doc)] that have changed
                           since other_my_rev
             conflicted_records - A list of [(doc_id, doc_rev, doc)] for entries
                 which were sent in docs_info, but which cannot be applied
                 because it would conflict.
-            new_db_rev - After applying docs_info, this is the current db_rev
-                for this client
+            new_generation - After applying docs_info,
+                this is the current generation for this machine
         """
         raise NotImplementedError(self.sync_exchange)
 

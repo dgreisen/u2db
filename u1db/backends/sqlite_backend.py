@@ -87,7 +87,7 @@ class SQLiteDatabase(CommonBackend):
         """Create the schema in the database."""
         with self._db_handle:
             c.execute("CREATE TABLE transaction_log ("
-                      " db_rev INTEGER PRIMARY KEY AUTOINCREMENT,"
+                      " generation INTEGER PRIMARY KEY AUTOINCREMENT,"
                       " doc_id TEXT)")
             c.execute("CREATE TABLE document ("
                       " doc_id TEXT PRIMARY KEY,"
@@ -108,7 +108,7 @@ class SQLiteDatabase(CommonBackend):
                       " ON document_fields(field_name, value, doc_id)")
             c.execute("CREATE TABLE sync_log ("
                       " machine_id TEXT PRIMARY KEY,"
-                      " known_db_rev INTEGER)")
+                      " known_generation INTEGER)")
             c.execute("CREATE TABLE conflicts ("
                       " doc_id TEXT,"
                       " doc_rev TEXT,"
@@ -157,21 +157,21 @@ class SQLiteDatabase(CommonBackend):
 
     _machine_id = property(_get_machine_id)
 
-    def _get_db_rev(self):
+    def _get_generation(self):
         c = self._db_handle.cursor()
-        c.execute('SELECT max(db_rev) FROM transaction_log')
+        c.execute('SELECT max(generation) FROM transaction_log')
         val = c.fetchone()[0]
         if val is None:
             return 0
         return val
 
     def _allocate_doc_id(self):
-        db_rev = self._get_db_rev()
-        return 'doc-%d' % (db_rev,)
+        my_gen = self._get_generation()
+        return 'doc-%d' % (my_gen,)
 
     def _get_transaction_log(self):
         c = self._db_handle.cursor()
-        c.execute("SELECT doc_id FROM transaction_log ORDER BY db_rev")
+        c.execute("SELECT doc_id FROM transaction_log ORDER BY generation")
         return [v[0] for v in c.fetchall()]
 
     def _get_doc(self, doc_id):
@@ -253,18 +253,18 @@ class SQLiteDatabase(CommonBackend):
         """
         raise NotImplementedError(self._put_and_update_indexes)
 
-    def whats_changed(self, old_db_rev=0):
+    def whats_changed(self, old_generation=0):
         c = self._db_handle.cursor()
-        c.execute("SELECT db_rev, doc_id FROM transaction_log"
-                  " WHERE db_rev > ?", (old_db_rev,))
+        c.execute("SELECT generation, doc_id FROM transaction_log"
+                  " WHERE generation > ?", (old_generation,))
         results = c.fetchall()
-        cur_db_rev = old_db_rev
+        cur_gen = old_generation
         doc_ids = set()
-        for db_rev, doc_id in results:
-            if db_rev > cur_db_rev:
-                cur_db_rev = db_rev
+        for gen, doc_id in results:
+            if gen > cur_gen:
+                cur_gen = gen
             doc_ids.add(doc_id)
-        return cur_db_rev, doc_ids
+        return cur_gen, doc_ids
 
     def delete_doc(self, doc_id, doc_rev):
         with self._db_handle:
@@ -297,19 +297,19 @@ class SQLiteDatabase(CommonBackend):
 
     def get_sync_generation(self, other_db_id):
         c = self._db_handle.cursor()
-        c.execute("SELECT known_db_rev FROM sync_log WHERE machine_id = ?",
+        c.execute("SELECT known_generation FROM sync_log WHERE machine_id = ?",
                   (other_db_id,))
         val = c.fetchone()
         if val is None:
-            other_db_rev = 0
+            other_gen = 0
         else:
-            other_db_rev = val[0]
-        return other_db_rev
+            other_gen = val[0]
+        return other_gen
 
     def set_sync_generation(self, other_db_id, other_generation):
         with self._db_handle:
             c = self._db_handle.cursor()
-            my_db_rev = self._get_db_rev()
+            my_gen = self._get_generation()
             c.execute("INSERT OR REPLACE INTO sync_log VALUES (?, ?)",
                       (other_db_id, other_generation))
 
@@ -456,12 +456,13 @@ class SQLiteDatabase(CommonBackend):
 class SQLiteSyncTarget(CommonSyncTarget):
 
     def get_sync_info(self, other_machine_id):
-        other_db_rev = self._db.get_sync_generation(other_machine_id)
-        my_db_rev = self._db._get_db_rev()
-        return self._db._machine_id, my_db_rev, other_db_rev
+        other_gen = self._db.get_sync_generation(other_machine_id)
+        my_gen = self._db._get_generation()
+        return self._db._machine_id, my_gen, other_gen
 
-    def record_sync_info(self, other_machine_id, other_machine_gen):
-        self._db.set_sync_generation(other_machine_id, other_machine_gen)
+    def record_sync_info(self, other_machine_id, other_machine_generation):
+        self._db.set_sync_generation(other_machine_id,
+                                     other_machine_generation)
 
 
 class SQLiteExpandedDatabase(SQLiteDatabase):
