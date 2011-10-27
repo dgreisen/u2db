@@ -50,3 +50,10 @@ class RemoteSyncTarget(SyncTarget):
             path=self._url.path, other_db_id=other_db_id)
         return (res['this_db_id'], res['this_db_generation'],
                 res['other_db_generation'])
+
+    def record_sync_info(self, other_db_id, other_db_generation):
+        self._ensure_connection()
+        self._client.call_returning_args("record_sync_info",
+                                      path=self._url.path,
+                                      other_db_id=other_db_id,
+                                      other_db_generation=other_db_generation)
