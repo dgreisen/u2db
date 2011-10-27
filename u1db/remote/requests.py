@@ -159,3 +159,15 @@ class RPCGetSyncInfo(SyncTargetRPC):
             other_db_id=other_db_id, other_db_generation=result[2])
 
 RPCGetSyncInfo.register()
+
+
+class RPCRecordSyncInfo(SyncTargetRPC):
+
+    name = "record_sync_info"
+
+    def handle_args(self, path, other_db_id, other_db_generation):
+        self._get_sync_target(path)
+        self.target.record_sync_info(other_db_id, other_db_generation)
+        self._result()
+
+RPCRecordSyncInfo.register()

@@ -65,3 +65,10 @@ class TestRemoteSyncTarget(tests.TestCaseWithSyncServer):
         remote_target = self.getSyncTarget('test.sqlite')
         self.assertEqual(('db-test.sqlite', 0, 1),
                          remote_target.get_sync_info('other-id'))
+
+    def test_record_sync_info(self):
+        self.startServer()
+        db = self.request_state._create_database('test.sqlite')
+        remote_target = self.getSyncTarget('test.sqlite')
+        remote_target.record_sync_info('other-id', 2)
+        self.assertEqual(db.get_sync_generation('other-id'), 2)
