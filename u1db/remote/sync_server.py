@@ -38,11 +38,12 @@ class TCPSyncServer(SocketServer.TCPServer):
     allow_reuse_address = False # Should be set to True for testing
     daemon_threads = False
 
-    def __init__(self, server_address, RequestHandlerClass):
+    def __init__(self, server_address, RequestHandlerClass, request_state):
         SocketServer.TCPServer.__init__(self, server_address,
                                         RequestHandlerClass)
         self._request_threads = {}
         self._request_threads_lock = threading.Lock()
+        self.request_state = request_state
 
     def process_request_thread(self, request, client_address):
         """Same as in BaseServer but as a thread.
@@ -123,7 +124,7 @@ class TCPSyncRequestHandler(SocketServer.BaseRequestHandler):
     def _handle_one_request(self, extra_bytes):
         responder = Responder(self.request)
         handler = StructureToRequest(requests.RPCRequest.requests,
-                                     responder)
+                                     responder, self.server.request_state)
         decoder = protocol.ProtocolDecoder(handler)
         if extra_bytes:
             decoder.accept_bytes(extra_bytes)
@@ -143,8 +144,9 @@ class StructureToRequest(object):
     Assign meaning to the structures received from the decoder.
     """
 
-    def __init__(self, reqs, responder):
+    def __init__(self, reqs, responder, request_state):
         self._request = None
+        self._request_state = request_state
         self._requests = reqs
         self._responder = responder
         self._client_version = None
@@ -159,7 +161,7 @@ class StructureToRequest(object):
         factory = self._requests.get(request_name)
         if factory is None:
             raise errors.UnknownRequest(request_name)
-        self._request = factory()
+        self._request = factory(self._request_state)
 
     def received_args(self, kwargs):
         self._request.handle_args(**kwargs)

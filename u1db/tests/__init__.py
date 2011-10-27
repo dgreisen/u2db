@@ -27,6 +27,7 @@ from u1db.backends import (
     sqlite_backend,
     )
 from u1db.remote import (
+    requests,
     sync_server,
     )
 
@@ -89,15 +90,33 @@ class DatabaseBaseTests(TestCase):
         super(DatabaseBaseTests, self).tearDown()
 
 
+class TestRequestState(requests.RequestState):
+    """Used in the test suite, so we don't have to touch disk, etc."""
+
+    def __init__(self):
+        super(TestRequestState, self).__init__()
+        self._dbs = {}
+
+    def open_database(self, path):
+        return self._dbs[path]
+
+    def _create_database(self, path):
+        db = inmemory.InMemoryDatabase('db-%s' % path)
+        self._dbs[path] = db
+        return db
+
+
 class TestCaseWithSyncServer(TestCase):
 
     def setUp(self):
         super(TestCaseWithSyncServer, self).setUp()
         self.server = self.server_thread = None
 
-    def startServer(self):
+    def startServer(self, request_handler=sync_server.TCPSyncRequestHandler):
+        self.request_state = TestRequestState()
         self.server = sync_server.TCPSyncServer(
-            ('127.0.0.1', 0), sync_server.TCPSyncRequestHandler)
+            ('127.0.0.1', 0), request_handler,
+            self.request_state)
         self.server_thread = threading.Thread(target=self.server.serve_forever,
                                               kwargs=dict(poll_interval=0.01))
         self.server_thread.start()

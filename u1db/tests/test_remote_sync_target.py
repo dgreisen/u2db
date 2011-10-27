@@ -34,12 +34,6 @@ class TestRemoteSyncTarget(tests.TestCaseWithSyncServer):
             self.startServer()
         return sync_target.RemoteSyncTarget.connect(self.getURL(path))
 
-    def switchToTempDir(self):
-        tempdir = self.createTempDir()
-        curdir = os.getcwd()
-        os.chdir(tempdir)
-        self.addCleanup(os.chdir, curdir)
-
     def test_connect(self):
         self.startServer()
         url = self.getURL()
@@ -65,13 +59,9 @@ class TestRemoteSyncTarget(tests.TestCaseWithSyncServer):
         self.assertIsNot(None, remote_target._client)
 
     def test_get_sync_info(self):
-        self.switchToTempDir()
-        local_db = sqlite_backend.SQLitePartialExpandDatabase('test.sqlite')
-        local_db._set_machine_id('test-id')
-        local_db.set_sync_generation('other-id', 1)
-        # TODO: introduce a real close?
-        local_db._close_sqlite_handle()
-        del local_db
+        self.startServer()
+        db = self.request_state._create_database('test.sqlite')
+        db.set_sync_generation('other-id', 1)
         remote_target = self.getSyncTarget('test.sqlite')
-        self.assertEqual(('test-id', 0, 1),
+        self.assertEqual(('db-test.sqlite', 0, 1),
                          remote_target.get_sync_info('other-id'))
