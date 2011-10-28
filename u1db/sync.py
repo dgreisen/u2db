@@ -16,7 +16,7 @@
 
 
 class Synchronizer(object):
-    """Collect the state around synchronizing 2 U1DB instances.
+    """Collect the state around synchronizing 2 U1DB replicas.
 
     Synchronization is bi-directional, in that new items in the source are sent
     to the target, and new items in the target are returned to the source.
@@ -48,24 +48,24 @@ class Synchronizer(object):
 
     def sync(self, callback=None):
         sync_target = self.sync_target
-        (other_machine_id, other_gen,
-         others_my_gen) = sync_target.get_sync_info(self.source._machine_id)
+        (other_replica_uid, other_gen,
+         others_my_gen) = sync_target.get_sync_info(self.source._replica_uid)
         my_gen, changed_doc_ids = self.source.whats_changed(others_my_gen)
         docs_to_send = self.source.get_docs(changed_doc_ids,
             check_for_conflicts=False)
         docs_to_send = [x[:3] for x in docs_to_send]
-        other_last_known_gen = self.source.get_sync_generation(other_machine_id)
+        other_last_known_gen = self.source.get_sync_generation(other_replica_uid)
         (new_records, conflicted_records,
          new_gen) = sync_target.sync_exchange(docs_to_send,
-            self.source._machine_id, my_gen, other_last_known_gen)
+            self.source._replica_uid, my_gen, other_last_known_gen)
         all_records = new_records + conflicted_records
         conflict_ids, _, num_inserted = self.source.put_docs_if_newer(
             all_records)
         conflict_docs = [r for r in all_records if r[0] in conflict_ids]
         num_inserted += self._insert_conflicts(conflict_docs)
-        self.source.set_sync_generation(other_machine_id, new_gen)
+        self.source.set_sync_generation(other_replica_uid, new_gen)
         cur_gen = self.source._get_generation()
         if cur_gen == my_gen + num_inserted:
-            sync_target.record_sync_info(self.source._machine_id, cur_gen)
+            sync_target.record_sync_info(self.source._replica_uid, cur_gen)
         return my_gen
 

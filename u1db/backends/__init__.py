@@ -24,7 +24,7 @@ class CommonSyncTarget(u1db.SyncTarget):
         self._db = db
 
     def sync_exchange(self, docs_info,
-                      from_machine_id, from_machine_generation,
+                      from_replica_uid, from_replica_generation,
                       last_known_generation):
         (conflict_ids, superseded_ids,
          num_inserted) = self._db.put_docs_if_newer(docs_info)
@@ -38,12 +38,12 @@ class CommonSyncTarget(u1db.SyncTarget):
         new_docs = [x[:3] for x in new_docs]
         conflicts = self._db.get_docs(conflict_ids, check_for_conflicts=False)
         conflicts = [x[:3] for x in conflicts]
-        self._db.set_sync_generation(from_machine_id,
-                                     from_machine_generation)
+        self._db.set_sync_generation(from_replica_uid,
+                                     from_replica_generation)
         self._db._last_exchange_log = {
             'receive': {'docs': [(di, dr) for di, dr, _ in docs_info],
-                        'from_id': from_machine_id,
-                        'from_gen': from_machine_generation,
+                        'from_id': from_replica_uid,
+                        'from_gen': from_replica_generation,
                         'last_known_gen': last_known_generation},
             'return': {'new_docs': [(di, dr) for di, dr, _ in new_docs],
                        'conf_docs': [(di, dr) for di, dr, _ in conflicts],
@@ -61,7 +61,7 @@ class CommonBackend(u1db.Database):
 
     def _allocate_doc_rev(self, old_doc_rev):
         vcr = VectorClockRev(old_doc_rev)
-        vcr.increment(self._machine_id)
+        vcr.increment(self._replica_uid)
         return vcr.as_str()
 
     def _get_generation(self):
@@ -148,5 +148,5 @@ class CommonBackend(u1db.Database):
         vcr = VectorClockRev(cur_rev)
         for rev in extra_revs:
             vcr.maximize(VectorClockRev(rev))
-        vcr.increment(self._machine_id)
+        vcr.increment(self._replica_uid)
         return vcr.as_str()

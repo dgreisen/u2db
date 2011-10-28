@@ -48,25 +48,25 @@ simple_doc = '{"key": "value"}'
 nested_doc = '{"key": "value", "sub": {"doc": "underneath"}}'
 
 
-def create_memory_database(machine_id):
-    return inmemory.InMemoryDatabase(machine_id)
+def create_memory_database(replica_uid):
+    return inmemory.InMemoryDatabase(replica_uid)
 
 
-def create_sqlite_expanded(machine_id):
+def create_sqlite_expanded(replica_uid):
     db = sqlite_backend.SQLiteExpandedDatabase(':memory:')
-    db._set_machine_id(machine_id)
+    db._set_replica_uid(replica_uid)
     return db
 
 
-def create_sqlite_partial_expanded(machine_id):
+def create_sqlite_partial_expanded(replica_uid):
     db = sqlite_backend.SQLitePartialExpandDatabase(':memory:')
-    db._set_machine_id(machine_id)
+    db._set_replica_uid(replica_uid)
     return db
 
 
-def create_sqlite_only_expanded(machine_id):
+def create_sqlite_only_expanded(replica_uid):
     db = sqlite_backend.SQLiteOnlyExpandedDatabase(':memory:')
-    db._set_machine_id(machine_id)
+    db._set_replica_uid(replica_uid)
     return db
 
 

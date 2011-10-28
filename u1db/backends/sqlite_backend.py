@@ -29,7 +29,7 @@ class SQLiteDatabase(CommonBackend):
     def __init__(self, sqlite_file):
         """Create a new sqlite file."""
         self._db_handle = dbapi2.connect(sqlite_file)
-        self._real_machine_id = None
+        self._real_replica_uid = None
         self._ensure_schema()
 
     def get_sync_target(self):
@@ -107,7 +107,7 @@ class SQLiteDatabase(CommonBackend):
             c.execute("CREATE INDEX document_fields_field_value_doc_idx"
                       " ON document_fields(field_name, value, doc_id)")
             c.execute("CREATE TABLE sync_log ("
-                      " machine_id TEXT PRIMARY KEY,"
+                      " replica_uid TEXT PRIMARY KEY,"
                       " known_generation INTEGER)")
             c.execute("CREATE TABLE conflicts ("
                       " doc_id TEXT,"
@@ -136,26 +136,26 @@ class SQLiteDatabase(CommonBackend):
     def _extra_schema_init(self, c):
         """Add any extra fields, etc to the basic table definitions."""
 
-    def _set_machine_id(self, machine_id):
-        """Force the machine_id to be set."""
+    def _set_replica_uid(self, replica_uid):
+        """Force the replica_uid to be set."""
         with self._db_handle:
             c = self._db_handle.cursor()
-            c.execute("INSERT INTO u1db_config VALUES ('machine_id', ?)",
-                      (machine_id,))
-        self._real_machine_id = machine_id
+            c.execute("INSERT INTO u1db_config VALUES ('replica_uid', ?)",
+                      (replica_uid,))
+        self._real_replica_uid = replica_uid
 
-    def _get_machine_id(self):
-        if self._real_machine_id is not None:
-            return self._real_machine_id
+    def _get_replica_uid(self):
+        if self._real_replica_uid is not None:
+            return self._real_replica_uid
         c = self._db_handle.cursor()
-        c.execute("SELECT value FROM u1db_config WHERE name = 'machine_id'")
+        c.execute("SELECT value FROM u1db_config WHERE name = 'replica_uid'")
         val = c.fetchone()
         if val is None:
             return None
-        self._real_machine_id = val[0]
-        return self._real_machine_id
+        self._real_replica_uid = val[0]
+        return self._real_replica_uid
 
-    _machine_id = property(_get_machine_id)
+    _replica_uid = property(_get_replica_uid)
 
     def _get_generation(self):
         c = self._db_handle.cursor()
@@ -295,10 +295,10 @@ class SQLiteDatabase(CommonBackend):
             this_doc_rev, this_doc = self._get_doc(doc_id)
         return [(this_doc_rev, this_doc)] + conflict_docs
 
-    def get_sync_generation(self, other_db_id):
+    def get_sync_generation(self, other_replica_uid):
         c = self._db_handle.cursor()
-        c.execute("SELECT known_generation FROM sync_log WHERE machine_id = ?",
-                  (other_db_id,))
+        c.execute("SELECT known_generation FROM sync_log WHERE replica_uid = ?",
+                  (other_replica_uid,))
         val = c.fetchone()
         if val is None:
             other_gen = 0
@@ -306,12 +306,12 @@ class SQLiteDatabase(CommonBackend):
             other_gen = val[0]
         return other_gen
 
-    def set_sync_generation(self, other_db_id, other_generation):
+    def set_sync_generation(self, other_replica_uid, other_generation):
         with self._db_handle:
             c = self._db_handle.cursor()
             my_gen = self._get_generation()
             c.execute("INSERT OR REPLACE INTO sync_log VALUES (?, ?)",
-                      (other_db_id, other_generation))
+                      (other_replica_uid, other_generation))
 
     def _compare_and_insert_doc(self, doc_id, doc_rev, doc):
         with self._db_handle:
@@ -455,14 +455,14 @@ class SQLiteDatabase(CommonBackend):
 
 class SQLiteSyncTarget(CommonSyncTarget):
 
-    def get_sync_info(self, other_machine_id):
-        other_gen = self._db.get_sync_generation(other_machine_id)
+    def get_sync_info(self, other_replica_uid):
+        other_gen = self._db.get_sync_generation(other_replica_uid)
         my_gen = self._db._get_generation()
-        return self._db._machine_id, my_gen, other_gen
+        return self._db._replica_uid, my_gen, other_gen
 
-    def record_sync_info(self, other_machine_id, other_machine_generation):
-        self._db.set_sync_generation(other_machine_id,
-                                     other_machine_generation)
+    def record_sync_info(self, other_replica_uid, other_replica_generation):
+        self._db.set_sync_generation(other_replica_uid,
+                                     other_replica_generation)
 
 
 class SQLiteExpandedDatabase(SQLiteDatabase):

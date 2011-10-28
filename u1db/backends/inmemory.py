@@ -23,23 +23,23 @@ from u1db.backends import CommonBackend, CommonSyncTarget
 class InMemoryDatabase(CommonBackend):
     """A database that only stores the data internally."""
 
-    def __init__(self, machine_id):
+    def __init__(self, replica_uid):
         self._transaction_log = []
         self._docs = {}
         # Map from doc_id => [(doc_rev, doc)] conflicts beyond 'winner'
         self._conflicts = {}
         self._other_generations = {}
         self._indexes = {}
-        self._machine_id = machine_id
+        self._replica_uid = replica_uid
         self._last_exchange_log = None
 
-    def get_sync_generation(self, other_db_id):
-        return self._other_generations.get(other_db_id, 0)
+    def get_sync_generation(self, other_replica_uid):
+        return self._other_generations.get(other_replica_uid, 0)
 
-    def set_sync_generation(self, other_db_id, other_generation):
+    def set_sync_generation(self, other_replica_uid, other_generation):
         # TODO: to handle race conditions, we may want to check if the current
         #       value is greater than this new value.
-        self._other_generations[other_db_id] = other_generation
+        self._other_generations[other_replica_uid] = other_generation
 
     def get_sync_target(self):
         return InMemorySyncTarget(self)
@@ -265,11 +265,11 @@ class InMemoryIndex(object):
 
 class InMemorySyncTarget(CommonSyncTarget):
 
-    def get_sync_info(self, other_machine_id):
-        other_gen = self._db.get_sync_generation(other_machine_id)
-        return self._db._machine_id, len(self._db._transaction_log), other_gen
+    def get_sync_info(self, other_replica_uid):
+        other_gen = self._db.get_sync_generation(other_replica_uid)
+        return self._db._replica_uid, len(self._db._transaction_log), other_gen
 
-    def record_sync_info(self, other_machine_id, other_machine_generation):
-        self._db.set_sync_generation(other_machine_id,
-                                     other_machine_generation)
+    def record_sync_info(self, other_replica_uid, other_replica_generation):
+        self._db.set_sync_generation(other_replica_uid,
+                                     other_replica_generation)
 

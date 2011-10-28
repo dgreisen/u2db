@@ -152,11 +152,13 @@ class RPCGetSyncInfo(SyncTargetRPC):
 
     name = "get_sync_info"
 
-    def handle_args(self, path, other_db_id):
+    def handle_args(self, path, other_replica_uid):
         self._get_sync_target(path)
-        result = self.target.get_sync_info(other_db_id)
-        self._result(this_db_id=result[0], this_db_generation=result[1],
-            other_db_id=other_db_id, other_db_generation=result[2])
+        result = self.target.get_sync_info(other_replica_uid)
+        self._result(this_replica_uid=result[0],
+                     this_replica_generation=result[1],
+                     other_replica_uid=other_replica_uid,
+                     other_replica_generation=result[2])
 
 RPCGetSyncInfo.register()
 
@@ -165,9 +167,10 @@ class RPCRecordSyncInfo(SyncTargetRPC):
 
     name = "record_sync_info"
 
-    def handle_args(self, path, other_db_id, other_db_generation):
+    def handle_args(self, path, other_replica_uid, other_replica_generation):
         self._get_sync_target(path)
-        self.target.record_sync_info(other_db_id, other_db_generation)
+        self.target.record_sync_info(other_replica_uid,
+                                     other_replica_generation)
         self._result()
 
 RPCRecordSyncInfo.register()

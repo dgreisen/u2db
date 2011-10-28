@@ -35,7 +35,7 @@ class TestSQLiteExpandedDatabase(tests.TestCase):
     def setUp(self):
         super(TestSQLiteExpandedDatabase, self).setUp()
         self.db = sqlite_backend.SQLiteExpandedDatabase(':memory:')
-        self.db._set_machine_id('test')
+        self.db._set_replica_uid('test')
 
     def test_create_database(self):
         raw_db = self.db._get_sqlite_handle()
@@ -52,7 +52,7 @@ class TestSQLiteExpandedDatabase(tests.TestCase):
         c = raw_db.cursor()
         c.execute("SELECT * FROM u1db_config")
         config = dict([(r[0], r[1]) for r in c.fetchall()])
-        self.assertEqual({'sql_schema': '0', 'machine_id': 'test',
+        self.assertEqual({'sql_schema': '0', 'replica_uid': 'test',
                           'index_storage': 'expanded'}, config)
 
         # These tables must exist, though we don't care what is in them yet
@@ -63,22 +63,22 @@ class TestSQLiteExpandedDatabase(tests.TestCase):
         c.execute("SELECT * FROM conflicts")
         c.execute("SELECT * FROM index_definitions")
 
-    def test__set_machine_id(self):
-        # Start from scratch, so that machine_id isn't set.
+    def test__set_replica_uid(self):
+        # Start from scratch, so that replica_uid isn't set.
         self.db = sqlite_backend.SQLiteExpandedDatabase(':memory:')
-        self.assertEqual(None, self.db._real_machine_id)
-        self.assertEqual(None, self.db._machine_id)
-        self.db._set_machine_id('foo')
+        self.assertEqual(None, self.db._real_replica_uid)
+        self.assertEqual(None, self.db._replica_uid)
+        self.db._set_replica_uid('foo')
         c = self.db._get_sqlite_handle().cursor()
-        c.execute("SELECT value FROM u1db_config WHERE name='machine_id'")
+        c.execute("SELECT value FROM u1db_config WHERE name='replica_uid'")
         self.assertEqual(('foo',), c.fetchone())
-        self.assertEqual('foo', self.db._real_machine_id)
-        self.assertEqual('foo', self.db._machine_id)
+        self.assertEqual('foo', self.db._real_replica_uid)
+        self.assertEqual('foo', self.db._replica_uid)
         self.db._close_sqlite_handle()
-        self.assertEqual('foo', self.db._machine_id)
+        self.assertEqual('foo', self.db._replica_uid)
 
     def test__get_generation(self):
-        self.db._set_machine_id('foo')
+        self.db._set_replica_uid('foo')
         self.assertEqual(0, self.db._get_generation())
 
     def test__allocate_doc_id(self):
@@ -174,14 +174,14 @@ class TestSQLitePartialExpandDatabase(tests.TestCase):
     def setUp(self):
         super(TestSQLitePartialExpandDatabase, self).setUp()
         self.db = sqlite_backend.SQLitePartialExpandDatabase(':memory:')
-        self.db._set_machine_id('test')
+        self.db._set_replica_uid('test')
 
     def test_u1db_config_settings(self):
         raw_db = self.db._get_sqlite_handle()
         c = raw_db.cursor()
         c.execute("SELECT * FROM u1db_config")
         config = dict([(r[0], r[1]) for r in c.fetchall()])
-        self.assertEqual({'sql_schema': '0', 'machine_id': 'test',
+        self.assertEqual({'sql_schema': '0', 'replica_uid': 'test',
                           'index_storage': 'expand referenced'}, config)
 
     def test_no_indexes_no_document_fields(self):
@@ -232,14 +232,14 @@ class TestSQLiteOnlyExpandedDatabase(tests.TestCase):
     def setUp(self):
         super(TestSQLiteOnlyExpandedDatabase, self).setUp()
         self.db = sqlite_backend.SQLiteOnlyExpandedDatabase(':memory:')
-        self.db._set_machine_id('test')
+        self.db._set_replica_uid('test')
 
     def test_u1db_config_settings(self):
         raw_db = self.db._get_sqlite_handle()
         c = raw_db.cursor()
         c.execute("SELECT * FROM u1db_config")
         config = dict([(r[0], r[1]) for r in c.fetchall()])
-        self.assertEqual({'sql_schema': '0', 'machine_id': 'test',
+        self.assertEqual({'sql_schema': '0', 'replica_uid': 'test',
                           'index_storage': 'only expanded'}, config)
 
     def test_no_document_content(self):

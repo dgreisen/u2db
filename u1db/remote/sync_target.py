@@ -44,16 +44,16 @@ class RemoteSyncTarget(SyncTarget):
         self._conn.connect((self._url.hostname, self._url.port))
         self._client = client.Client(self._conn)
 
-    def get_sync_info(self, other_db_id):
+    def get_sync_info(self, other_replica_uid):
         self._ensure_connection()
         res = self._client.call_returning_args("get_sync_info",
-            path=self._url.path, other_db_id=other_db_id)
-        return (res['this_db_id'], res['this_db_generation'],
-                res['other_db_generation'])
+            path=self._url.path, other_replica_uid=other_replica_uid)
+        return (res['this_replica_uid'], res['this_replica_generation'],
+                res['other_replica_generation'])
 
-    def record_sync_info(self, other_db_id, other_db_generation):
+    def record_sync_info(self, other_replica_uid, other_replica_generation):
         self._ensure_connection()
         self._client.call_returning_args("record_sync_info",
-                                      path=self._url.path,
-                                      other_db_id=other_db_id,
-                                      other_db_generation=other_db_generation)
+                             path=self._url.path,
+                             other_replica_uid=other_replica_uid,
+                             other_replica_generation=other_replica_generation)
