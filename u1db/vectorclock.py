@@ -16,12 +16,12 @@
 
 
 class VectorClockRev(object):
-    """Track vector clocks for multiple machine ids.
+    """Track vector clocks for multiple replica ids.
 
     This allows simple comparison to determine if one VectorClockRev is
     newer/older/in-conflict-with another VectorClockRev without having to
-    examine history. Every machine has a strictly increasing revision. When
-    creating a new revision, they include all revisions for all other machines
+    examine history. Every replica has a strictly increasing revision. When
+    creating a new revision, they include all revisions for all other replicas
     which the new revision dominates, and increment their own revision to
     something greater than the current value.
     """
@@ -42,10 +42,10 @@ class VectorClockRev(object):
         result = {}
         if value is None:
             return result
-        for machine_info in value.split('|'):
-            machine_id, counter = machine_info.split(':')
+        for replica_info in value.split('|'):
+            replica_uid, counter = replica_info.split(':')
             counter = int(counter)
-            result[machine_id] = counter
+            result[replica_uid] = counter
         return result
 
     def is_newer(self, other):
@@ -70,18 +70,18 @@ class VectorClockRev(object):
             return False
         return this_is_newer
 
-    def increment(self, machine_id):
-        """Increase the 'machine_id' section of this vector clock.
+    def increment(self, replica_uid):
+        """Increase the 'replica_uid' section of this vector clock.
 
         :return: A string representing the new vector clock value
         """
-        self._values[machine_id] = self._values.get(machine_id, 0) + 1
+        self._values[replica_uid] = self._values.get(replica_uid, 0) + 1
 
     def maximize(self, other_vcr):
-        for machine_id, counter in other_vcr._values.iteritems():
-            if machine_id not in self._values:
-                self._values[machine_id] = counter
+        for replica_uid, counter in other_vcr._values.iteritems():
+            if replica_uid not in self._values:
+                self._values[replica_uid] = counter
             else:
-                this_counter = self._values[machine_id]
+                this_counter = self._values[replica_uid]
                 if this_counter < counter:
-                    self._values[machine_id] = counter
+                    self._values[replica_uid] = counter

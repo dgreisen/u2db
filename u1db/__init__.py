@@ -223,26 +223,26 @@ class Database(object):
         """
         raise NotImplementedError(self.get_sync_target)
 
-    def get_sync_generation(self, other_db_id):
-        """Return the last known database generation of 'other'.
+    def get_sync_generation(self, other_replica_uid):
+        """Return the last known database generation of the other db replica.
 
-        When you do a synchronization with another database, the Database keeps
-        track of what generation the other database was at. This way we only
-        have to request data that is newer.
+        When you do a synchronization with another replica, the Database keeps
+        track of what generation the other database replica  was at.
+        This way we only have to request data that is newer.
 
-        :param other_db_id: The identifier for the other database.
+        :param other_replica_uid: The identifier for the other replica.
         :return: The generation we encountered during synchronization. If we've
-            never synchronized with the machine, this is 0.
+            never synchronized with the replica, this is 0.
         """
         raise NotImplementedError(self.get_sync_generation)
 
-    def set_sync_generation(self, other_db_id, other_generation):
-        """Set the last-known generation for the other database.
+    def set_sync_generation(self, other_replica_uid, other_generation):
+        """Set the last-known generation for the other database replica.
 
         We have just performed some synchronization, and we want to track what
-        generation the other database was at. See also get_sync_generation.
-        :param other_db_id: The U1DB identifier for the other database.
-        :param other_generation: The generation number for the other db.
+        generation the other replica was at. See also get_sync_generation.
+        :param other_replica_uid: The U1DB identifier for the other replica.
+        :param other_generation: The generation number for the other replica.
         :return: None
         """
         raise NotImplementedError(self.get_sync_generation)
@@ -251,24 +251,24 @@ class Database(object):
 class SyncTarget(object):
     """Functionality for using a Database as a synchronization target."""
 
-    def get_sync_info(self, other_machine_id):
+    def get_sync_info(self, other_replica_uid):
         """Return information about known state.
 
-        Return the machine_id and the current database generation of this
-        database, and the last-seen database generation for other_machine_id
+        Return the replica_uid and the current database generation of this
+        database, and the last-seen database generation for other_replica_uid
 
-        :param other_machine_id: Another machine which we might have
+        :param other_replica_uid: Another replica which we might have
             synchronized with in the past.
-        :return: (this_machine_id, this_machine_generation,
-                  other_machine_last_known_generation)
+        :return: (this_replica_uid, this_replica_generation,
+                  other_replica_last_known_generation)
         """
         raise NotImplementedError(self.get_sync_info)
 
-    def record_sync_info(self, other_machine_id, other_machine_generation):
-        """Record tip information for another machine.
+    def record_sync_info(self, other_replica_uid, other_replica_generation):
+        """Record tip information for another replica.
 
         After sync_exchange has been processed, the caller will have received
-        new content from this machine. This call allows the machine instigating
+        new content from this replica. This call allows the replica instigating
         the sync to inform us what their generation became after
         applying the documents we returned.
 
@@ -277,30 +277,30 @@ class SyncTarget(object):
         wrong time, there can be database records that will never be
         synchronized.
 
-        :param other_machine_id: The identifier for the other machine.
-        :param other_machine_generation:
-             The database generation for other_machine
+        :param other_replica_uid: The identifier for the other replica.
+        :param other_replica_generation:
+             The database generation for other replica.
         :return: None
         """
         raise NotImplementedError(self.record_sync_info)
 
     def sync_exchange(self, docs_info,
-                      from_machine_id, from_machine_generation,
+                      from_replica_uid, from_replica_generation,
                       last_known_generation):
-        """Incorporate the documents sent from the other machine.
+        """Incorporate the documents sent from the other replica.
 
         This is not meant to be called by client code directly, but is used as
         part of sync().
 
         This adds docs to the local store, and determines documents that need
-        to be returned to the other machine.
+        to be returned to the other replica.
 
         :param docs_info: A list of [(doc_id, doc_rev, doc)] tuples indicating
-            documents which should be updated on this machine.
-        :param from_machine_id: The other machines' identifier
-        :param from_machine_generation: The db generation for the other machine
+            documents which should be updated on this replica.
+        :param from_replica_uid: The other replica's identifier
+        :param from_replica_generation: The db generation for the other replica
             indicating the tip of data being sent by docs_info.
-        :param last_known_generation: The last generation that other_machine
+        :param last_known_generation: The last generation that other replica
             knows about this
         :return: (new_records, conflicted_records, new_generation)
             new_records - A list of [(doc_id, doc_rev, doc)] that have changed
@@ -309,7 +309,7 @@ class SyncTarget(object):
                 which were sent in docs_info, but which cannot be applied
                 because it would conflict.
             new_generation - After applying docs_info,
-                this is the current generation for this machine
+                this is the current generation for this replica
         """
         raise NotImplementedError(self.sync_exchange)
 

@@ -397,8 +397,8 @@ class DatabaseIndexTests(tests.DatabaseBaseTests):
         other_rev = 'test:1|z:2'
         st = self.db.get_sync_target()
         result = st.sync_exchange([(doc_id, other_rev, new_doc)],
-                                  'other-machine',
-                                  from_machine_generation=10,
+                                  'other-replica',
+                                  from_replica_generation=10,
                                   last_known_generation=0)
         self.assertEqual((other_rev, new_doc, False), self.db.get_doc(doc_id))
         self.assertEqual([(doc_id, other_rev, new_doc)],

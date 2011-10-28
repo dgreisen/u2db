@@ -46,26 +46,26 @@ class DatabaseSyncTargetTests(tests.DatabaseBaseTests):
         self.assertEqual(('test', 1, 0), self.st.get_sync_info('other'))
 
     def test_record_sync_info(self):
-        self.assertEqual(('test', 0, 0), self.st.get_sync_info('machine'))
-        self.st.record_sync_info('machine', 10)
-        self.assertEqual(('test', 0, 10), self.st.get_sync_info('machine'))
+        self.assertEqual(('test', 0, 0), self.st.get_sync_info('replica'))
+        self.st.record_sync_info('replica', 10)
+        self.assertEqual(('test', 0, 10), self.st.get_sync_info('replica'))
 
     def test_sync_exchange(self):
-        result = self.st.sync_exchange([('doc-id', 'machine:1', simple_doc)],
-                                       'machine', from_machine_generation=10,
+        result = self.st.sync_exchange([('doc-id', 'replica:1', simple_doc)],
+                                       'replica', from_replica_generation=10,
                                        last_known_generation=0)
-        self.assertEqual(('machine:1', simple_doc, False),
+        self.assertEqual(('replica:1', simple_doc, False),
                          self.db.get_doc('doc-id'))
         self.assertEqual(['doc-id'], self.db._get_transaction_log())
         self.assertEqual(([], [], 1), result)
-        self.assertEqual(10, self.st.get_sync_info('machine')[-1])
+        self.assertEqual(10, self.st.get_sync_info('replica')[-1])
 
     def test_sync_exchange_refuses_conflicts(self):
         doc_id, doc_rev = self.db.create_doc(simple_doc)
         self.assertEqual([doc_id], self.db._get_transaction_log())
         new_doc = '{"key": "altval"}'
-        result = self.st.sync_exchange([(doc_id, 'machine:1', new_doc)],
-                                       'machine', from_machine_generation=10,
+        result = self.st.sync_exchange([(doc_id, 'replica:1', new_doc)],
+                                       'replica', from_replica_generation=10,
                                        last_known_generation=0)
         self.assertEqual([doc_id], self.db._get_transaction_log())
         self.assertEqual(([], [(doc_id, doc_rev, simple_doc)], 1), result)
@@ -74,7 +74,7 @@ class DatabaseSyncTargetTests(tests.DatabaseBaseTests):
         doc_id, doc_rev = self.db.create_doc(simple_doc)
         self.assertEqual([doc_id], self.db._get_transaction_log())
         result = self.st.sync_exchange([(doc_id, doc_rev, simple_doc)],
-                                       'machine', from_machine_generation=10,
+                                       'replica', from_replica_generation=10,
                                        last_known_generation=1)
         self.assertEqual([doc_id], self.db._get_transaction_log())
         self.assertEqual(([], [], 1), result)
@@ -82,8 +82,8 @@ class DatabaseSyncTargetTests(tests.DatabaseBaseTests):
     def test_sync_exchange_returns_new_docs(self):
         doc_id, doc_rev = self.db.create_doc(simple_doc)
         self.assertEqual([doc_id], self.db._get_transaction_log())
-        result = self.st.sync_exchange([], 'other-machine',
-                                       from_machine_generation=10,
+        result = self.st.sync_exchange([], 'other-replica',
+                                       from_replica_generation=10,
                                        last_known_generation=0)
         self.assertEqual([doc_id], self.db._get_transaction_log())
         self.assertEqual(([(doc_id, doc_rev, simple_doc)], [], 1), result)
@@ -93,8 +93,8 @@ class DatabaseSyncTargetTests(tests.DatabaseBaseTests):
         self.assertEqual([doc_id], self.db._get_transaction_log())
         new_doc = '{"key": "altval"}'
         result = self.st.sync_exchange([(doc_id, 'test:1|z:2', new_doc)],
-                                       'other-machine',
-                                       from_machine_generation=10,
+                                       'other-replica',
+                                       from_replica_generation=10,
                                        last_known_generation=0)
         self.assertEqual([doc_id, doc_id], self.db._get_transaction_log())
         self.assertEqual(([], [], 2), result)
@@ -110,8 +110,8 @@ class DatabaseSyncTargetTests(tests.DatabaseBaseTests):
         self.db.whats_changed = after_whatschanged
         new_doc = '{"key": "altval"}'
         result = self.st.sync_exchange([(doc_id, 'test:1|z:2', new_doc)],
-                                       'other-machine',
-                                       from_machine_generation=10,
+                                       'other-replica',
+                                       from_replica_generation=10,
                                        last_known_generation=0)
         self.assertEqual(([], [], 2), result)
 

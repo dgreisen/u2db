@@ -40,11 +40,11 @@ class TestInMemoryDatabaseInternals(tests.TestCase):
         self.assertEqual('test:2', self.db._allocate_doc_rev('test:1'))
 
     def test__allocate_doc_rev_other(self):
-        self.assertEqual('machine:1|test:1',
-                         self.db._allocate_doc_rev('machine:1'))
+        self.assertEqual('replica:1|test:1',
+                         self.db._allocate_doc_rev('replica:1'))
 
-    def test__get_machine_id(self):
-        self.assertEqual('test', self.db._machine_id)
+    def test__get_replica_uid(self):
+        self.assertEqual('test', self.db._replica_uid)
 
 
 class TestInMemoryIndex(tests.TestCase):

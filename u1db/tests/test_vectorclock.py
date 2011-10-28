@@ -44,9 +44,9 @@ class TestVectorClockRev(tests.TestCase):
         vcr = vectorclock.VectorClockRev(None)
         self.assertEqual('', vcr.as_str())
 
-    def assertIncrement(self, original, machine_id, after_increment):
+    def assertIncrement(self, original, replica_uid, after_increment):
         vcr = vectorclock.VectorClockRev(original)
-        vcr.increment(machine_id)
+        vcr.increment(replica_uid)
         self.assertEqual(after_increment, vcr.as_str())
 
     def test_increment(self):
