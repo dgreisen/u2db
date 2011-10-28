@@ -174,3 +174,28 @@ class RPCRecordSyncInfo(SyncTargetRPC):
         self._result()
 
 RPCRecordSyncInfo.register()
+
+
+class RPCSyncExchange(SyncTargetRPC):
+
+    name = "sync_exchange"
+
+    def handle_args(self, path, from_replica_uid, from_replica_generation,
+                    last_known_generation):
+        self._get_sync_target(path)
+        self.from_replica_uid = from_replica_uid
+        self.from_replica_generation = from_replica_generation
+        self.last_known_generation = last_known_generation
+
+    def handle_stream_entry(self, entry):
+        self.target._insert_other_doc(*entry)
+
+    def handle_end(self):
+        def xxx(*args):
+            pass
+        new_gen = self.target._finish_sync_exchange(self.from_replica_uid,
+                                               self.from_replica_generation,
+                                               self.last_known_generation, xxx)
+        self._result(other_new_generation=new_gen)
+
+RPCSyncExchange.register()

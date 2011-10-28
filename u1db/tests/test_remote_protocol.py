@@ -54,6 +54,9 @@ class StructureToLogging(object):
     def received_args(self, args):
         self.actions.append(('args', args))
 
+    def received_stream_entry(self, stream_entry):
+        self.actions.append(('stream', stream_entry))
+
     def received_end(self):
         self.actions.append(('end',))
 
@@ -133,6 +136,26 @@ class TestProtocolDecoder(tests.TestCase):
         self.assertEqual([
             ('header', {'client_version': '0.1.1.dev.0', 'request': 'foo'}),
             ('args', {'arg': 1, 'val': 'bar'}),
+            ('end',),
+            ], self.handler.actions)
+        self.assertEqual('', decoder.unused_bytes())
+        self.assertTrue(decoder.request_finished)
+
+    def test_process_proto_and_request_and_stream(self):
+        decoder = self.makeDecoder()
+        self.assertEqual(decoder._state_expecting_protocol_header,
+                         decoder._state)
+        client_header = '{"client_version": "0.1.1.dev.0", "request": "foo"}'
+        decoder.accept_bytes(protocol.PROTOCOL_HEADER_V1
+            + 'h\x00\x00\x00\x33' + client_header
+            + 'a\x00\x00\x00\x18{"arg": 1, "val": "bar"}'
+            + 'x\x00\x00\x00\x13{"stream_entry": 1}'
+            + 'e\x00\x00\x00\x00')
+        self.assertEqual(decoder._state_finished, decoder._state)
+        self.assertEqual([
+            ('header', {'client_version': '0.1.1.dev.0', 'request': 'foo'}),
+            ('args', {'arg': 1, 'val': 'bar'}),
+            ('stream', {'stream_entry': 1}),
             ('end',),
             ], self.handler.actions)
         self.assertEqual('', decoder.unused_bytes())

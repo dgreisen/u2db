@@ -167,6 +167,10 @@ class StructureToRequest(object):
         self._request.handle_args(**kwargs)
         self._check_send_response()
 
+    def received_stream_entry(self, entry):
+        self._request.handle_stream_entry(entry)
+        self._check_send_response()
+
     def received_end(self):
         self._request.handle_end()
         self._check_send_response()

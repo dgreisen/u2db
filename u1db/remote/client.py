@@ -65,7 +65,7 @@ class Client(object):
     def _read_from_server(self):
         return self._conn.recv(READ_CHUNK_SIZE)
 
-    def _encode_request(self, request_name, kwargs):
+    def _encode_request(self, request_name, kwargs, stream=None):
         buf = buffers.BufferedWriter(self._write_to_server, BUFFER_SIZE)
         buf.write(protocol.PROTOCOL_HEADER_V1)
         encoder = protocol.ProtocolEncoderV1(buf.write)
@@ -76,6 +76,9 @@ class Client(object):
         encoder.encode_dict('h', request_header)
         if kwargs:
             encoder.encode_dict('a', kwargs)
+        if stream:
+            for dic in stream:
+                encoder.encode_dict('x', dic)
         encoder.encode_end()
         buf.flush()
 
@@ -109,6 +112,17 @@ class Client(object):
         back to the client.
         """
         self._encode_request(rpc_name, kwargs)
+        response_handler = StructureToResponse()
+        decoder = protocol.ProtocolDecoder(response_handler)
+        self._wait_for_response_end(response_handler, decoder)
+        return response_handler.kwargs
+
+    def call_with_streaming(self, rpc_name, stream, take_doc, **kwargs):
+        """Place a call to the remote server.
+
+        Send and expect streams of documents.
+        """
+        self._encode_request(rpc_name, kwargs, stream)
         response_handler = StructureToResponse()
         decoder = protocol.ProtocolDecoder(response_handler)
         self._wait_for_response_end(response_handler, decoder)

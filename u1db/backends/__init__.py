@@ -51,10 +51,11 @@ class CommonSyncTarget(u1db.SyncTarget):
                       last_known_generation, take_other_doc):
         for doc_id, doc_rev, doc in docs_info:
             self._insert_other_doc(doc_id, doc_rev, doc)
-        return self._finish_exchange(from_replica_uid, from_replica_generation,
-                                     last_known_generation, take_other_doc)
+        return self._finish_sync_exchange(from_replica_uid,
+                                         from_replica_generation,
+                                         last_known_generation, take_other_doc)
 
-    def _finish_exchange(self, from_replica_uid, from_replica_generation,
+    def _finish_sync_exchange(self, from_replica_uid, from_replica_generation,
                          last_known_generation, take_other_doc):
         seen_ids = self.seen_ids
         conflict_ids = self.conflict_ids

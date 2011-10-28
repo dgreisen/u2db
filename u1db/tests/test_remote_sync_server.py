@@ -160,6 +160,9 @@ class HelloRequest(requests.RPCRequest):
     def handle_args(self, **kwargs):
         self._args = kwargs
 
+    def handle_stream_entry(self, entry):
+        self._stream_entry = entry
+
     def handle_end(self):
         self._finished = True
         self.response = requests.RPCSuccessfulResponse(self.name)
@@ -231,6 +234,15 @@ class TestStructureToRequest(tests.TestCase):
                                  'request': 'hello'})
         handler.received_args({'arg': 1})
         self.assertEqual(handler._request._args, {'arg': 1})
+
+    def test_call_stream_entry(self):
+        handler = self.makeStructToRequest()
+        handler.received_header({'client_version': '1',
+                                 'request': 'hello'})
+        handler.received_args({'args': 1})
+        handler.received_stream_entry({'stream_entry': 1})
+        self.assertEqual(handler._request._args, {'args': 1})
+        self.assertEqual(handler._request._stream_entry, {'stream_entry': 1})
 
     def test_call_end(self):
         handler = self.makeStructToRequest()

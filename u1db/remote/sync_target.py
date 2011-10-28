@@ -57,3 +57,15 @@ class RemoteSyncTarget(SyncTarget):
                              path=self._url.path,
                              other_replica_uid=other_replica_uid,
                              other_replica_generation=other_replica_generation)
+
+    def sync_exchange(self, docs_info, from_replica_uid,
+                      from_replica_generation,
+                      last_known_generation, take_other_doc):
+        self._ensure_connection()
+        res = self._client.call_with_streaming("sync_exchange", docs_info,
+                               take_other_doc,
+                               path=self._url.path,
+                               from_replica_uid=from_replica_uid,
+                               from_replica_generation=from_replica_generation,
+                               last_known_generation=last_known_generation)
+        return res['other_new_generation']
