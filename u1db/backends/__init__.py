@@ -22,13 +22,34 @@ class CommonSyncTarget(u1db.SyncTarget):
 
     def __init__(self, db):
         self._db = db
+        self.conflict_ids = set()
+        self.seen_ids = set() # not superseded
+
+    def _insert_other_doc(self, doc_id, doc_rev, doc):
+        """Try to insert synced over document.
+
+        :return: None
+        """
+        state = self._db.put_doc_if_newer(doc_id, doc_rev, doc)
+        if state == 'inserted':
+            self.seen_ids.add(doc_id)
+        elif state == 'converged':
+            # magical convergence
+            self.seen_ids.add(doc_id)
+        elif state == 'superseded':
+            pass
+        else:
+            assert state == 'conflicted'
+            self.seen_ids.add(doc_id)
+            self.conflict_ids.add(doc_id)
 
     def sync_exchange(self, docs_info,
                       from_replica_uid, from_replica_generation,
                       last_known_generation):
-        (conflict_ids, superseded_ids,
-         num_inserted) = self._db.put_docs_if_newer(docs_info)
-        seen_ids = [x[0] for x in docs_info if x[0] not in superseded_ids]
+        for doc_id, doc_rev, doc in docs_info:
+            self._insert_other_doc(doc_id, doc_rev, doc)
+        seen_ids = self.seen_ids
+        conflict_ids = self.conflict_ids
         new_docs = []
         my_gen, changed_doc_ids = self._db.whats_changed(last_known_generation)
         doc_ids_to_return = [doc_id for doc_id in changed_doc_ids
@@ -125,24 +146,9 @@ class CommonBackend(u1db.Database):
                       for doc_id in doc_ids]
         return result
 
-    def put_docs_if_newer(self, docs_info):
-        superseded_ids = set()
-        conflict_ids = set()
-        num_inserted = 0
-        for doc_id, doc_rev, doc in docs_info:
-            old_doc, state = self._compare_and_insert_doc(doc_id, doc_rev, doc)
-            if state == 'inserted':
-                num_inserted += 1
-            elif state == 'converged':
-                # magical convergence
-                continue
-            elif state == 'superseded':
-                superseded_ids.add(doc_id)
-                continue
-            else:
-                assert state == 'conflicted'
-                conflict_ids.add(doc_id)
-        return conflict_ids, superseded_ids, num_inserted
+    def put_doc_if_newer(self, doc_id, doc_rev, doc):
+        _, state = self._compare_and_insert_doc(doc_id, doc_rev, doc)
+        return state
 
     def _ensure_maximal_rev(self, cur_rev, extra_revs):
         vcr = VectorClockRev(cur_rev)

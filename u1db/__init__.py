@@ -89,24 +89,22 @@ class Database(object):
         """
         raise NotImplementedError(self.put_doc)
 
-    def put_docs_if_newer(self, docs_info):
-        """Insert/update many documents into the database.
+    def put_doc_if_newer(self, doc_id, doc_rev, doc):
+        """Insert/update document into the database with a given revision.
 
-        This api is used during synchronization operations. It is possible to
-        also use for client code, but put_doc() is more obvious.
+        This api is used during synchronization operations.
 
-        :param: A list of [(doc_id, doc_rev, doc_content)]. If we don't have
-            doc_id already, or if doc_rev supersedes the existing document
-            revision, then the content will be inserted, and num_inserted will
-            be incremented.
-            If doc_rev is less than or equal to the existing revision, then the
-            put is ignored.
-            If doc_rev is not strictly superseded or supersedes, then the
-            document id is added to the set of conflicted documents.
-        :return: (would_conflict_ids, superseded_ids, num_inserted), the
-            document_ids that that could not be inserted (and were not
-            superseded), the document ids that we already had something newer,
-            and the count of entries that were successfully added.
+        :param doc_id: The unique handle for a document.
+        :param doc_rev: The document revision to try to store.
+        :param doc: The actual JSON document string.
+        :return: state -  If we don't have doc_id already, or if doc_rev
+            supersedes the existing document revision, then the content will
+            be inserted, and state is 'inserted'.
+            If doc_rev is less than or equal to the existing revision,
+            then the put is ignored and state is respecitvely 'superseded'
+            or 'converged'.
+            If doc_rev is not strictly superseded or supersedes, then
+            state is 'conflicted' and again the document is not inserted.
         """
         raise NotImplementedError(self.put_docs)
 

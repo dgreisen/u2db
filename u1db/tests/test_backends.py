@@ -77,30 +77,33 @@ class DatabaseTests(tests.DatabaseBaseTests):
         self.assertEqual((new_rev, simple_doc, False),
                          self.db.get_doc('my_doc_id'))
 
-    def test_simple_put_docs_if_newer(self):
-        self.assertEqual((set(), set(), 2), self.db.put_docs_if_newer(
-            [('my-doc-id', 'test:1', simple_doc),
-             ('my-doc2-id', 'test:1', nested_doc)]))
+    def test_simple_put_doc_if_newer(self):
+        state = self.db.put_doc_if_newer('my-doc-id', 'test:1', simple_doc)
+        self.assertEqual('inserted', state)
         self.assertEqual(('test:1', simple_doc, False),
                          self.db.get_doc('my-doc-id'))
-        self.assertEqual(('test:1', nested_doc, False),
-                         self.db.get_doc('my-doc2-id'))
 
-    def test_put_docs_if_newer_already_superseded(self):
+    def test_put_doc_if_newer_already_superseded(self):
         orig_doc = '{"new": "doc"}'
         doc1_id, doc1_rev1 = self.db.create_doc(orig_doc)
         doc1_rev2 = self.db.put_doc(doc1_id, doc1_rev1, simple_doc)
         # Nothing is inserted, because the document is already superseded
-        self.assertEqual((set(), set([doc1_id]), 0), self.db.put_docs_if_newer(
-            [(doc1_id, doc1_rev1, orig_doc)]))
+        state = self.db.put_doc_if_newer(doc1_id, doc1_rev1, orig_doc)
+        self.assertEqual('superseded', state)
         self.assertEqual((doc1_rev2, simple_doc, False),
                          self.db.get_doc(doc1_id))
 
-    def test_put_docs_if_newer_conflicted(self):
+    def test_put_doc_if_newer_already_converged(self):
+        orig_doc = '{"new": "doc"}'
+        doc1_id, doc1_rev1 = self.db.create_doc(orig_doc)
+        state = self.db.put_doc_if_newer(doc1_id, doc1_rev1, orig_doc)
+        self.assertEqual('converged', state)
+
+    def test_put_doc_if_newer_conflicted(self):
         doc1_id, doc1_rev1 = self.db.create_doc(simple_doc)
         # Nothing is inserted, the document id is returned as would-conflict
-        self.assertEqual((set([doc1_id]), set(), 0), self.db.put_docs_if_newer(
-            [(doc1_id, 'alternate:1', nested_doc)]))
+        state = self.db.put_doc_if_newer(doc1_id, 'alternate:1', nested_doc)
+        self.assertEqual('conflicted', state)
         # The database wasn't altered
         self.assertEqual((doc1_rev1, simple_doc, False),
                          self.db.get_doc(doc1_id))
