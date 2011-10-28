@@ -77,9 +77,9 @@ class TestSQLiteExpandedDatabase(tests.TestCase):
         self.db._close_sqlite_handle()
         self.assertEqual('foo', self.db._machine_id)
 
-    def test__get_db_rev(self):
+    def test__get_generation(self):
         self.db._set_machine_id('foo')
-        self.assertEqual(0, self.db._get_db_rev())
+        self.assertEqual(0, self.db._get_generation())
 
     def test__allocate_doc_id(self):
         self.assertEqual('doc-0', self.db._allocate_doc_id())

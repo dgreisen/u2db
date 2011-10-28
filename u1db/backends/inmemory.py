@@ -28,18 +28,18 @@ class InMemoryDatabase(CommonBackend):
         self._docs = {}
         # Map from doc_id => [(doc_rev, doc)] conflicts beyond 'winner'
         self._conflicts = {}
-        self._other_revs = {}
+        self._other_generations = {}
         self._indexes = {}
         self._machine_id = machine_id
         self._last_exchange_log = None
 
     def get_sync_generation(self, other_db_id):
-        return self._other_revs.get(other_db_id, 0)
+        return self._other_generations.get(other_db_id, 0)
 
     def set_sync_generation(self, other_db_id, other_generation):
         # TODO: to handle race conditions, we may want to check if the current
         #       value is greater than this new value.
-        self._other_revs[other_db_id] = other_generation
+        self._other_generations[other_db_id] = other_generation
 
     def get_sync_target(self):
         return InMemorySyncTarget(self)
@@ -50,7 +50,7 @@ class InMemoryDatabase(CommonBackend):
     def _get_transaction_log(self):
         return self._transaction_log
 
-    def _get_db_rev(self):
+    def _get_generation(self):
         return len(self._transaction_log)
 
     def put_doc(self, doc_id, old_doc_rev, doc):
@@ -151,9 +151,9 @@ class InMemoryDatabase(CommonBackend):
             result.append((doc_id, doc_rev, doc))
         return result
 
-    def whats_changed(self, old_db_rev=0):
+    def whats_changed(self, old_generation=0):
         return (len(self._transaction_log),
-                set(self._transaction_log[old_db_rev:]))
+                set(self._transaction_log[old_generation:]))
 
     def force_doc_sync_conflict(self, doc_id, doc_rev, doc):
         my_doc_rev, my_doc = self._docs[doc_id]
@@ -266,9 +266,10 @@ class InMemoryIndex(object):
 class InMemorySyncTarget(CommonSyncTarget):
 
     def get_sync_info(self, other_machine_id):
-        other_rev = self._db.get_sync_generation(other_machine_id)
-        return self._db._machine_id, len(self._db._transaction_log), other_rev
+        other_gen = self._db.get_sync_generation(other_machine_id)
+        return self._db._machine_id, len(self._db._transaction_log), other_gen
 
-    def record_sync_info(self, other_machine_id, other_machine_rev):
-        self._db.set_sync_generation(other_machine_id, other_machine_rev)
+    def record_sync_info(self, other_machine_id, other_machine_generation):
+        self._db.set_sync_generation(other_machine_id,
+                                     other_machine_generation)
 

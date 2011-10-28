@@ -168,9 +168,9 @@ class DatabaseTests(tests.DatabaseBaseTests):
 
     def test_delete_updates_transaction_log(self):
         doc_id, doc_rev = self.db.create_doc(simple_doc)
-        db_rev, _ = self.db.whats_changed()
+        db_gen, _ = self.db.whats_changed()
         self.db.delete_doc(doc_id, doc_rev)
-        self.assertEqual((2, set([doc_id])), self.db.whats_changed(db_rev))
+        self.assertEqual((2, set([doc_id])), self.db.whats_changed(db_gen))
 
     def test_whats_changed_initial_database(self):
         self.assertEqual((0, set()), self.db.whats_changed())
@@ -397,8 +397,9 @@ class DatabaseIndexTests(tests.DatabaseBaseTests):
         other_rev = 'test:1|z:2'
         st = self.db.get_sync_target()
         result = st.sync_exchange([(doc_id, other_rev, new_doc)],
-                                  'other-machine', from_machine_rev=10,
-                                  last_known_rev=0)
+                                  'other-machine',
+                                  from_machine_generation=10,
+                                  last_known_generation=0)
         self.assertEqual((other_rev, new_doc, False), self.db.get_doc(doc_id))
         self.assertEqual([(doc_id, other_rev, new_doc)],
                          self.db.get_from_index('test-idx', [('altval',)]))
