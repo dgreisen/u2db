@@ -284,7 +284,7 @@ class SyncTarget(object):
 
     def sync_exchange(self, docs_info,
                       from_replica_uid, from_replica_generation,
-                      last_known_generation):
+                      last_known_generation, take_other_doc):
         """Incorporate the documents sent from the other replica.
 
         This is not meant to be called by client code directly, but is used as
@@ -300,14 +300,15 @@ class SyncTarget(object):
             indicating the tip of data being sent by docs_info.
         :param last_known_generation: The last generation that other replica
             knows about this
-        :return: (new_records, conflicted_records, new_generation)
-            new_records - A list of [(doc_id, doc_rev, doc)] that have changed
-                          since other_my_rev
-            conflicted_records - A list of [(doc_id, doc_rev, doc)] for entries
+        :param: take_other_doc(doc_id, doc_rev, doc): is a callback
+                used to return documents to the other replica,
+                it will be invoked in turn with values
+                (doc_id, doc_rev, doc) that have changed since other_my_rev,
+                and then with values (doc_id, doc_rev, doc) for entries
                 which were sent in docs_info, but which cannot be applied
                 because it would conflict.
-            new_generation - After applying docs_info,
-                this is the current generation for this replica
+        :return: new_generation - After applying docs_info, this is
+            the current generation for this replica
         """
         raise NotImplementedError(self.sync_exchange)
 

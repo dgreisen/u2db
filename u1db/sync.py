@@ -67,14 +67,9 @@ class Synchronizer(object):
             check_for_conflicts=False)
         docs_to_send = [x[:3] for x in docs_to_send]
         other_last_known_gen = self.source.get_sync_generation(other_replica_uid)
-        (new_records, conflicted_records,
-         new_gen) = sync_target.sync_exchange(docs_to_send,
-            self.source._replica_uid, my_gen, other_last_known_gen)
-
-        all_records = new_records + conflicted_records
-        for doc_id, doc_rev, doc in all_records:
-            self._insert_other_doc(doc_id, doc_rev, doc)
-
+        new_gen = sync_target.sync_exchange(docs_to_send,
+                        self.source._replica_uid, my_gen, other_last_known_gen,
+                        take_other_doc=self._insert_other_doc)
         self.source.set_sync_generation(other_replica_uid, new_gen)
         cur_gen = self.source._get_generation()
         if cur_gen == my_gen + self.num_inserted:

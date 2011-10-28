@@ -399,10 +399,13 @@ class DatabaseIndexTests(tests.DatabaseBaseTests):
         new_doc = '{"key": "altval"}'
         other_rev = 'test:1|z:2'
         st = self.db.get_sync_target()
+        def ignore(doc_id, doc_rev, doc):
+            pass
         result = st.sync_exchange([(doc_id, other_rev, new_doc)],
                                   'other-replica',
                                   from_replica_generation=10,
-                                  last_known_generation=0)
+                                  last_known_generation=0,
+                                  take_other_doc = ignore)
         self.assertEqual((other_rev, new_doc, False), self.db.get_doc(doc_id))
         self.assertEqual([(doc_id, other_rev, new_doc)],
                          self.db.get_from_index('test-idx', [('altval',)]))

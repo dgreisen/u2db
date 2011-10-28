@@ -24,6 +24,7 @@ class CommonSyncTarget(u1db.SyncTarget):
         self._db = db
         self.conflict_ids = set()
         self.seen_ids = set() # not superseded
+        self._docs_trace = [] # for tests
 
     def _insert_other_doc(self, doc_id, doc_rev, doc):
         """Try to insert synced over document.
@@ -42,12 +43,19 @@ class CommonSyncTarget(u1db.SyncTarget):
             assert state == 'conflicted'
             self.seen_ids.add(doc_id)
             self.conflict_ids.add(doc_id)
+        # for tests
+        self._docs_trace.append((doc_id, doc_rev))
 
     def sync_exchange(self, docs_info,
                       from_replica_uid, from_replica_generation,
-                      last_known_generation):
+                      last_known_generation, take_other_doc):
         for doc_id, doc_rev, doc in docs_info:
             self._insert_other_doc(doc_id, doc_rev, doc)
+        return self._finish_exchange(from_replica_uid, from_replica_generation,
+                                     last_known_generation, take_other_doc)
+
+    def _finish_exchange(self, from_replica_uid, from_replica_generation,
+                         last_known_generation, take_other_doc):
         seen_ids = self.seen_ids
         conflict_ids = self.conflict_ids
         new_docs = []
@@ -56,21 +64,23 @@ class CommonSyncTarget(u1db.SyncTarget):
                              if doc_id not in seen_ids]
         new_docs = self._db.get_docs(doc_ids_to_return,
                                      check_for_conflicts=False)
-        new_docs = [x[:3] for x in new_docs]
+        for doc_id, doc_rev, doc, _ in new_docs:
+            take_other_doc(doc_id, doc_rev, doc)
         conflicts = self._db.get_docs(conflict_ids, check_for_conflicts=False)
-        conflicts = [x[:3] for x in conflicts]
+        for doc_id, doc_rev, doc, _ in conflicts:
+            take_other_doc(doc_id, doc_rev, doc)
         self._db.set_sync_generation(from_replica_uid,
                                      from_replica_generation)
         self._db._last_exchange_log = {
-            'receive': {'docs': [(di, dr) for di, dr, _ in docs_info],
+            'receive': {'docs': self._docs_trace,
                         'from_id': from_replica_uid,
                         'from_gen': from_replica_generation,
                         'last_known_gen': last_known_generation},
-            'return': {'new_docs': [(di, dr) for di, dr, _ in new_docs],
-                       'conf_docs': [(di, dr) for di, dr, _ in conflicts],
+            'return': {'new_docs': [(di, dr) for di, dr, _, _ in new_docs],
+                       'conf_docs': [(di, dr) for di, dr, _, _ in conflicts],
                        'last_gen': my_gen}
         }
-        return new_docs, conflicts, my_gen
+        return my_gen
 
 
 
