@@ -36,14 +36,13 @@ class StructureToResponse(object):
         self.request_name = None
         # self._responder = responder
         self.server_version = None
-        self.status = None
+        self.status = 'success'
         self.kwargs = None
         self.finished = False
 
     def received_header(self, headers):
         self.server_version = headers['server_version']
         self.request_name = headers['request']
-        self.status = headers['status']
 
     def received_args(self, kwargs):
         self.kwargs = kwargs

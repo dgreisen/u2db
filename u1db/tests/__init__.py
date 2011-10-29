@@ -106,6 +106,16 @@ class ServerStateForTests(requests.ServerState):
         return db
 
 
+class ResponderForTests(object):
+    """Responder for tests."""
+    _sent_response = False
+    status = 'success'
+
+    def send_response(self, **kwargs):
+        self._sent_response = True
+        self.kwargs = kwargs
+
+
 class TestCaseWithSyncServer(TestCase):
 
     def setUp(self):

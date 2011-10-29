@@ -68,11 +68,11 @@ class RPCRequest(object):
         if cls.name in RPCRequest.requests:
             RPCRequest.requests.pop(cls.name)
 
-    def __init__(self, state):
+    def __init__(self, state, responder):
         # This will get instantiated once we receive the "header" portion of
         # the request.
         self.state = state
-        self.response = None
+        self.responder = responder
 
     def handle_args(self, **kwargs):
         """This will be called when a request passes an 'args' section.
@@ -88,40 +88,16 @@ class RPCRequest(object):
         # The default implementation is to just ignore the end.
 
 
-class RPCResponse(object):
-    """Base class for responses to RPC requests."""
-
-
-class RPCSuccessfulResponse(RPCResponse):
-    """Used to indicate that the request was successful.
-    """
-
-    status = 'success'
-
-    def __init__(self, request_name, **response_kwargs):
-        """Create a new Successful Response.
-
-        Pass in whatever arguments you want to return to the client.
-        """
-        self.request_name = request_name
-        self.response_kwargs = response_kwargs
-
-
-class RPCFailureResponse(RPCResponse):
-    """Used to indicate there was a failure processing the request."""
-
-    status = 'fail'
-
-
-
 class RPCServerVersion(RPCRequest):
     """Return the version of the server."""
 
     name = 'version'
 
-    def __init__(self, state):
-        super(RPCServerVersion, self).__init__(state)
-        self.response = RPCSuccessfulResponse(self.name, version=_u1db_version)
+    def __init__(self, state, responder):
+        super(RPCServerVersion, self).__init__(state, responder)
+
+    def handle_end(self):
+        self.responder.send_response(version=_u1db_version)
 
 RPCServerVersion.register()
 
@@ -139,7 +115,7 @@ class SyncTargetRPC(RPCRequest):
         self.target = self.db.get_sync_target()
 
     def _result(self, **kwargs):
-        self.response = RPCSuccessfulResponse(self.name, **kwargs)
+        self.responder.send_response(**kwargs)
         # If we have a result, then we can close this db connection.
         self._close()
 
