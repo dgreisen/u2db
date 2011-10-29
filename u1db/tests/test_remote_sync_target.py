@@ -87,3 +87,18 @@ class TestRemoteSyncTarget(tests.TestCaseWithSyncServer):
         self.assertEqual(1, new_gen)
         self.assertEqual(('replica:1', {'value': 'here'}, False),
                          db.get_doc('doc-here'))
+
+    def test_sync_exchange_receive(self):
+        self.startServer()
+        db = self.request_state._create_database('test.sqlite')
+        doc_id, doc_rev = db.create_doc({'value': 'there'})
+        remote_target = self.getSyncTarget('test.sqlite')
+        other_docs = []
+        def take_other_doc(doc_id, doc_rev, doc):
+            other_docs.append((doc_id, doc_rev, doc))
+        new_gen = remote_target.sync_exchange(
+                        [],
+                        'replica', from_replica_generation=10,
+                        last_known_generation=0, take_other_doc=take_other_doc)
+        self.assertEqual(1, new_gen)
+        self.assertEqual([(doc_id, doc_rev, {'value': 'there'})], other_docs)

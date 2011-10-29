@@ -287,4 +287,17 @@ class TestResponder(tests.TestCase):
             + 'e\x00\x00\x00\x00',
             client_sock.recv(4096))
 
+    def test_send_stream_entry(self):
+        server_sock, client_sock = tests.socket_pair()
+        responder = sync_server.Responder(server_sock)
+        responder.request_name = 'request'
+        responder.send_stream_entry({'entry': True})
+        responder.send_response()
+        self.assertEqual(
+            'u1db-1\n'
+            'h%s{"server_version": "%s", "request": "request"}'
+            % (struct.pack('!L', 44 + len(_u1db_version)), _u1db_version)
+            + 'x\x00\x00\x00\x0f{"entry": true}'
+            + 'e\x00\x00\x00\x00',
+            client_sock.recv(4096))
 

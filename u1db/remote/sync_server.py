@@ -176,10 +176,9 @@ class StructureToRequest(object):
                 " for Request: %s" % (self._request,))
 
 class Responder(object):
-    """Encoder responses from the server back to the client."""
+    """Encode responses from the server back to the client."""
 
     def __init__(self, conn):
-        """Turn an RPCResponse into bytes-on-the-wire."""
         self._conn = conn
         self._out_buffer = buffers.BufferedWriter(self._write_to_client,
             BUFFER_SIZE)
@@ -204,8 +203,13 @@ class Responder(object):
 
     # have a way to transmit an error
 
+    def send_stream_entry(self, entry):
+        "send stream entry as part of the response."
+        self._start_response()
+        self._encoder.encode_dict('x', entry)
+
     def send_response(self, **kwargs):
-        """Send a RPCResponse back to the caller."""
+        """send/finalize response."""
         self._start_response()
         if kwargs:
             self._encoder.encode_dict('a', kwargs)

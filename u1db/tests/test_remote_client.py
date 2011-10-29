@@ -49,6 +49,17 @@ class TestStructureToResponse(tests.TestCase):
         self.assertEqual({'arg': 2, 'arg2': 'value'}, response_handler.kwargs)
         self.assertFalse(response_handler.finished)
 
+    def test_received_stream_entry(self):
+        entries = []
+        def take_entry(entry):
+            entries.append(entry)
+        response_handler = client.StructureToResponse(take_entry)
+        response_handler.received_header(
+            {'server_version': '1', 'request': 'hello'})
+        response_handler.received_stream_entry({'entry': True})
+        self.assertEqual([{'entry': True}], entries)
+        self.assertFalse(response_handler.finished)
+
     def test_received_end(self):
         response_handler = client.StructureToResponse()
         response_handler.received_header(
@@ -74,6 +85,9 @@ class WithStreamRequest(requests.RPCRequest):
         self._entries.append(entry)
 
     def handle_end(self):
+        for entry in self._entries:
+            v = entry['outgoing'] * 5
+            self.responder.send_stream_entry({'incoming': v})
         self.responder.send_response(**self._args)
 
 
@@ -186,12 +200,18 @@ class TestClient(tests.TestCase):
             'u1db-1\n'
             'h%s{"server_version": "%s", "request": "withstream"}'
             % (struct.pack('!L', 47 + len(_u1db_version)), _u1db_version)
+            + 'x\x00\x00\x00\x10{"incoming": 50}'
+            + 'x\x00\x00\x00\x11{"incoming": 100}'
             + 'a\x00\x00\x00\x0a{"one": 1}'
             + 'e\x00\x00\x00\x00',
             content)
-        response_handler = client.StructureToResponse()
+        entries = []
+        def take_entry(entry):
+            entries.append(entry)
+        response_handler = client.StructureToResponse(take_entry)
         decoder = protocol.ProtocolDecoder(response_handler)
         decoder.accept_bytes(content)
+        self.assertEqual([{'incoming': 50}, {'incoming': 100}], entries)
         self.assertEqual({'one': 1}, response_handler.kwargs)
         self.assertEqual('withstream', response_handler.request_name)
         self.assertEqual(_u1db_version, response_handler.server_version)

@@ -32,17 +32,21 @@ BUFFER_SIZE = sync_server.BUFFER_SIZE
 class StructureToResponse(object):
     """Take structured byte streams and turn them into a Response."""
 
-    def __init__(self):
+    def __init__(self, take_entry=None):
         self.request_name = None
         # self._responder = responder
         self.server_version = None
         self.status = 'success'
+        self.take_entry = take_entry
         self.kwargs = None
         self.finished = False
 
     def received_header(self, headers):
         self.server_version = headers['server_version']
         self.request_name = headers['request']
+
+    def received_stream_entry(self, entry):
+        self.take_entry(entry)
 
     def received_args(self, kwargs):
         self.kwargs = kwargs
@@ -65,6 +69,7 @@ class Client(object):
         return self._conn.recv(READ_CHUNK_SIZE)
 
     def _encode_request(self, request_name, kwargs, stream=None):
+        # should stream be callback based?
         buf = buffers.BufferedWriter(self._write_to_server, BUFFER_SIZE)
         buf.write(protocol.PROTOCOL_HEADER_V1)
         encoder = protocol.ProtocolEncoderV1(buf.write)
@@ -122,7 +127,7 @@ class Client(object):
         Send and expect streams of documents.
         """
         self._encode_request(rpc_name, kwargs, stream)
-        response_handler = StructureToResponse()
+        response_handler = StructureToResponse(take_doc)
         decoder = protocol.ProtocolDecoder(response_handler)
         self._wait_for_response_end(response_handler, decoder)
         return response_handler.kwargs

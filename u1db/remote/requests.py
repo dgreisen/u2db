@@ -167,11 +167,12 @@ class RPCSyncExchange(SyncTargetRPC):
         self.target._insert_other_doc(*entry)
 
     def handle_end(self):
-        def xxx(*args):
-            pass
+        def send_doc(doc_id, doc_rev, doc):
+            self.responder.send_stream_entry((doc_id, doc_rev, doc))
         new_gen = self.target._finish_sync_exchange(self.from_replica_uid,
                                                self.from_replica_generation,
-                                               self.last_known_generation, xxx)
+                                               self.last_known_generation,
+                                               send_doc)
         self._result(other_new_generation=new_gen)
 
 RPCSyncExchange.register()
