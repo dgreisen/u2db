@@ -75,20 +75,17 @@ class WithStreamRequest(requests.RPCRequest):
 
     def __init__(self, state, responder):
         super(WithStreamRequest, self).__init__(state, responder)
-        self._args = None
-        self._entries = []
 
     def handle_args(self, **kwargs):
-        self._args = kwargs
+        self.responder.send_response(**kwargs)
 
     def handle_stream_entry(self, entry):
-        self._entries.append(entry)
+        v = entry['outgoing'] * 5
+        self.responder.stream_entry({'incoming': v})
 
     def handle_end(self):
-        for entry in self._entries:
-            v = entry['outgoing'] * 5
-            self.responder.send_stream_entry({'incoming': v})
-        self.responder.send_response(**self._args)
+        pass
+
 
 
 class TestClient(tests.TestCase):
@@ -200,9 +197,9 @@ class TestClient(tests.TestCase):
             'u1db-1\n'
             'h%s{"server_version": "%s", "request": "withstream"}'
             % (struct.pack('!L', 47 + len(_u1db_version)), _u1db_version)
+            + 'a\x00\x00\x00\x0a{"one": 1}'
             + 'x\x00\x00\x00\x10{"incoming": 50}'
             + 'x\x00\x00\x00\x11{"incoming": 100}'
-            + 'a\x00\x00\x00\x0a{"one": 1}'
             + 'e\x00\x00\x00\x00',
             content)
         entries = []

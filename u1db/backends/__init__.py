@@ -24,6 +24,8 @@ class CommonSyncTarget(u1db.SyncTarget):
         self._db = db
         self.conflict_ids = set()
         self.seen_ids = set() # not superseded
+        self.my_gen = None
+        self.changed_doc_ids = None
         self._docs_trace = [] # for tests
 
     def _insert_other_doc(self, doc_id, doc_rev, doc):
@@ -51,16 +53,28 @@ class CommonSyncTarget(u1db.SyncTarget):
                       last_known_generation, take_other_doc):
         for doc_id, doc_rev, doc in docs_info:
             self._insert_other_doc(doc_id, doc_rev, doc)
-        return self._finish_sync_exchange(from_replica_uid,
-                                         from_replica_generation,
-                                         last_known_generation, take_other_doc)
+        my_gen = self._checkpoint_sync_exchange(from_replica_uid,
+                                                from_replica_generation,
+                                                last_known_generation)
+        self._finish_sync_exchange(from_replica_uid,
+                                   from_replica_generation,
+                                   last_known_generation, take_other_doc)
+        return my_gen
+
+    def _checkpoint_sync_exchange(self, from_replica_uid,
+                                  from_replica_generation,
+                                  last_known_generation):
+        my_gen, changed_doc_ids = self._db.whats_changed(last_known_generation)
+        self.my_gen = my_gen
+        self.changed_doc_ids = changed_doc_ids
+        return my_gen
 
     def _finish_sync_exchange(self, from_replica_uid, from_replica_generation,
                          last_known_generation, take_other_doc):
         seen_ids = self.seen_ids
         conflict_ids = self.conflict_ids
-        new_docs = []
-        my_gen, changed_doc_ids = self._db.whats_changed(last_known_generation)
+        my_gen = self.my_gen
+        changed_doc_ids = self.changed_doc_ids
         doc_ids_to_return = [doc_id for doc_id in changed_doc_ids
                              if doc_id not in seen_ids]
         new_docs = self._db.get_docs(doc_ids_to_return,
