@@ -17,42 +17,13 @@ import os
 import socket
 import subprocess
 import sys
-import time
 
 from u1db import (
     __version__ as _u1db_version,
     tests,
     )
 from u1db.remote import client
-
-
-def safe_close(process, timeout=0.1):
-    """Shutdown the process in the nicest fashion you can manage.
-
-    :param process: A subprocess.Popen object.
-    :param timeout: We'll try to send 'SIGTERM' but if the process is alive
-        longer that 'timeout', we'll send SIGKILL.
-    """
-    if process.poll() is not None:
-        return
-    try:
-        process.terminate()
-    except OSError, e:
-        if e.errno in (errno.ESRCH,):
-            # Process has exited
-            return
-    tend = time.time() + timeout
-    while time.time() < tend:
-        if process.poll() is not None:
-            return
-        time.sleep(0.01)
-    try:
-        process.kill()
-    except OSError, e:
-        if e.errno in (errno.ESRCH,):
-            # Process has exited
-            return
-    process.wait()
+from u1db.tests.commandline import safe_close
 
 
 class TestU1DBServe(tests.TestCase):
