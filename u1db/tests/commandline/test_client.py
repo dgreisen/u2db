@@ -127,6 +127,25 @@ class TestGet(TestCaseWithDB):
                          err.getvalue())
 
 
+class TestPut(TestCaseWithDB):
+
+    def setUp(self):
+        super(TestPut, self).setUp()
+        _, self.doc_rev = self.db.create_doc(tests.simple_doc,
+                                             doc_id='my-test-doc')
+
+    def test_put_simple(self):
+        inf = cStringIO.StringIO(tests.nested_doc)
+        out = cStringIO.StringIO()
+        client.cmd_put(self.db_path, 'my-test-doc', self.doc_rev,
+                       inf, out)
+        doc_rev, doc, has_conflicts = self.db.get_doc('my-test-doc')
+        self.assertEqual(tests.nested_doc, doc)
+        self.assertFalse(has_conflicts)
+        self.assertEqual('doc_rev: %s\n' % (doc_rev,),
+                         out.getvalue())
+
+
 class TestCommandLine(TestCaseWithDB):
 
     def _get_u1db_client_path(self):
@@ -142,7 +161,19 @@ class TestCommandLine(TestCaseWithDB):
         self.addCleanup(safe_close, p)
         return p
 
-    def test_create(self):
+    def run_main(self, args, stdin=None):
+        if stdin is not None:
+            self.patch(sys, 'stdin', cStringIO.StringIO(stdin))
+        stdout = cStringIO.StringIO()
+        stderr = cStringIO.StringIO()
+        self.patch(sys, 'stdout', stdout)
+        self.patch(sys, 'stderr', stderr)
+        ret = client.main(args)
+        if ret is None:
+            ret = 0
+        return ret, stdout.getvalue(), stderr.getvalue()
+
+    def test_create_subprocess(self):
         p = self.runU1DBClient(['create', '--doc-id', 'test-id', self.db_path])
         stdout, stderr = p.communicate(tests.simple_doc)
         self.assertEqual(0, p.returncode)
@@ -152,3 +183,22 @@ class TestCommandLine(TestCaseWithDB):
         self.assertFalse(has_conflicts)
         self.assertEqual('doc_id: test-id\ndoc_rev: %s\n' % (doc_rev,),
                          stdout)
+
+    def test_get(self):
+        _, doc_rev = self.db.create_doc(tests.simple_doc, doc_id='test-id')
+        ret, stdout, stderr = self.run_main(['get', self.db_path, 'test-id'])
+        self.assertEqual(0, ret)
+        self.assertEqual(tests.simple_doc, stdout)
+        self.assertEqual('doc_rev: %s\n' % (doc_rev,), stderr)
+
+    def test_put(self):
+        _, doc_rev = self.db.create_doc(tests.simple_doc, doc_id='test-id')
+        ret, stdout, stderr = self.run_main(
+            ['put', self.db_path, 'test-id', doc_rev],
+            stdin=tests.nested_doc)
+        doc_rev, doc, has_conflicts = self.db.get_doc('test-id')
+        self.assertFalse(has_conflicts)
+        self.assertEqual(tests.nested_doc, doc)
+        self.assertEqual(0, ret)
+        self.assertEqual('doc_rev: %s\n' % (doc_rev,), stdout)
+        self.assertEqual('', stderr)

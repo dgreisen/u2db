@@ -49,14 +49,20 @@ def cmd_get(database, doc_id, out_file, err_file):
 
 def client_get(args):
     """Run 'get_doc' for this client"""
-    return do_get(args.database, args.doc_id, args.outfile, sys.stderr)
+    return cmd_get(args.database, args.doc_id, args.outfile, sys.stderr)
 
 
 def cmd_put(database, doc_id, old_doc_rev, in_file, out_file):
     """run 'put_doc' and update the data."""
+    db = sqlite_backend.SQLiteDatabase.open_database(database)
+    doc_rev = db.put_doc(doc_id, old_doc_rev, in_file.read())
+    out_file.write('doc_rev: %s\n' % (doc_rev,))
+
 
 def client_put(args):
     """Run 'put_doc'"""
+    return cmd_put(args.database, args.doc_id, args.doc_rev, args.infile,
+                   sys.stdout)
 
 
 def client_sync(args):
