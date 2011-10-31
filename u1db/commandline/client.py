@@ -84,7 +84,7 @@ def setup_arg_parser():
     p = argparse.ArgumentParser(description='Run actions from the U1DB client')
     p.add_argument('-V', '--version', action='version', version=_u1db_version)
     p.add_argument('-v', '--verbose', action='store_true', help='be chatty')
-    subs = p.add_subparsers(title='subcommands')
+    subs = p.add_subparsers(title='commands')
     parser_create = subs.add_parser('create',
         help='Create a new document from scratch')
     parser_create.add_argument('database', help='The database to update')
