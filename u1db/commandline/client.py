@@ -19,6 +19,7 @@ import sys
 
 from u1db import (
     __version__ as _u1db_version,
+    sync,
     )
 from u1db.backends import sqlite_backend
 from u1db.remote import (
@@ -65,8 +66,18 @@ def client_put(args):
                    sys.stdout)
 
 
+def cmd_sync(source_db, target_db):
+    """Start a Sync request."""
+    source = sqlite_backend.SQLiteDatabase.open_database(source_db)
+    target = sqlite_backend.SQLiteDatabase.open_database(target_db)
+    st = target.get_sync_target()
+    syncer = sync.Synchronizer(source, st)
+    syncer.sync()
+
+
 def client_sync(args):
     """Run sync"""
+    return cmd_sync(args.source, args.target)
 
 
 def setup_arg_parser():
