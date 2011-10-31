@@ -13,26 +13,38 @@
 # You should have received a copy of the GNU General Public License along
 # with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-import u1db
+import sys
+from u1db import (
+    __version__ as _u1db_version,
+    )
+from u1db.remote import (
+    sync_server,
+    requests,
+    )
 
 
 def main(args):
     import argparse
     p = argparse.ArgumentParser(usage='%(prog)s [options]',
         description='Run the U1DB server')
-    p.add_argument('--version', action='version', version=u1db.__version__)
+    p.add_argument('--version', action='version', version=_u1db_version)
     p.add_argument('--verbose', action='store_true', help='be chatty')
-    p.add_argument('--database', '-d', default=None, metavar='DB',
-        help='Use this file as the database')
-    p.add_argument('--port', '-p', default=None, metavar='PORT',
+    p.add_argument('--port', '-p', default=0, metavar='PORT',
         help='Bind to this port when serving.')
 
     args = p.parse_args(args)
 
+    state = requests.ServerState()
+    state.set_workingdir('.')
+    server = sync_server.TCPSyncServer(('127.0.0.1', args.port),
+        sync_server.TCPSyncRequestHandler, state)
+    sys.stdout.write('listening on port: %s\n' % (server.server_address[1],))
+    sys.stdout.flush()
+    server.serve_forever()
+
 
 if __name__ == '__main__':
-    import sys
-    main(sys.argv[1:])
+    sys.exit(main(sys.argv[1:]))
 
 
 # vim: ft=python

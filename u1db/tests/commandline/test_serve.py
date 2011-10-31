@@ -14,11 +14,16 @@
 
 import errno
 import os
+import socket
 import subprocess
 import sys
 import time
 
-from u1db import tests
+from u1db import (
+    __version__ as _u1db_version,
+    tests,
+    )
+from u1db.remote import client
 
 
 def safe_close(process, timeout=0.1):
@@ -65,9 +70,22 @@ class TestU1DBServe(tests.TestCase):
         self.addCleanup(safe_close, p)
         return p
 
-    def test_shows_help(self):
+    def test_help(self):
         p = self.startU1DBServe(['--help'])
         stdout, stderr = p.communicate()
         self.assertEqual('', stderr)
         self.assertEqual(0, p.returncode)
         self.assertIn('Run the U1DB server', stdout)
+
+    def test_bind_to_port(self):
+        p = self.startU1DBServe([])
+        starts = 'listening on port:'
+        x = p.stdout.readline()
+        self.assertTrue(x.startswith(starts))
+        port = int(x[len(starts):])
+        s = socket.socket()
+        s.connect(('127.0.0.1', port))
+        self.addCleanup(s.close)
+        c = client.Client(s)
+        self.assertEqual({'version': _u1db_version},
+                         c.call_returning_args('version'))
