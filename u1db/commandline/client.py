@@ -24,6 +24,7 @@ from u1db import (
 from u1db.backends import sqlite_backend
 from u1db.remote import (
     client,
+    sync_target,
     )
 
 
@@ -51,6 +52,15 @@ def cmd_get(database, doc_id, out_file, err_file):
 def client_get(args):
     """Run 'get_doc' for this client"""
     return cmd_get(args.database, args.doc_id, args.outfile, sys.stderr)
+
+
+def cmd_init_db(database):
+    """Create a new database"""
+    sqlite_backend.SQLitePartialExpandDatabase(database)
+
+
+def client_init_db(args):
+    return cmd_init_db(args.database)
 
 
 def cmd_put(database, doc_id, old_doc_rev, in_file, out_file):
@@ -85,6 +95,9 @@ def setup_arg_parser():
     p.add_argument('-V', '--version', action='version', version=_u1db_version)
     p.add_argument('-v', '--verbose', action='store_true', help='be chatty')
     subs = p.add_subparsers(title='commands')
+    parser_init_db = subs.add_parser('init-db', help='Create a new database')
+    parser_init_db.add_argument('database', help='The database to create')
+    parser_init_db.set_defaults(func=client_init_db)
     parser_create = subs.add_parser('create',
         help='Create a new document from scratch')
     parser_create.add_argument('database', help='The database to update')
