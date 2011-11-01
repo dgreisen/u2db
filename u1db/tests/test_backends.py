@@ -72,6 +72,9 @@ class DatabaseTests(tests.DatabaseBaseTests):
             sorted(self.db.get_docs([doc1_id, doc2_id],
                                     check_for_conflicts=False)))
 
+    def test_get_docs_empty_list(self):
+        self.assertEqual([], self.db.get_docs([]))
+
     def test_put_doc_creating_initial(self):
         new_rev = self.db.put_doc('my_doc_id', None, simple_doc)
         self.assertEqual((new_rev, simple_doc, False),
