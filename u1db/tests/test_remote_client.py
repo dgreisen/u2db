@@ -80,8 +80,8 @@ class WithStreamRequest(requests.RPCRequest):
         self.responder.send_response(**kwargs)
 
     def handle_stream_entry(self, entry):
-        v = entry['outgoing'] * 5
-        self.responder.stream_entry({'incoming': v})
+        v = entry['to_server'] * 5
+        self.responder.stream_entry({'to_client': v})
 
     def handle_end(self):
         pass
@@ -171,8 +171,8 @@ class TestClient(tests.TestCase):
         server_sock, client_sock = tests.socket_pair()
         cli = client.Client(client_sock)
         def stream():
-            yield {'outgoing': 10}
-            yield {'outgoing': 20}
+            yield {'to_server': 10}
+            yield {'to_server': 20}
         cli._encode_request('withstream', {'one': 1}, stream())
         reqs = {'withstream': WithStreamRequest}
         responder = sync_server.Responder(server_sock)
@@ -186,8 +186,8 @@ class TestClient(tests.TestCase):
             'h%s{"client_version": "%s", "request": "withstream"}'
             % (struct.pack('!L', 47 + len(_u1db_version)), _u1db_version)
             + 'a\x00\x00\x00\x0a{"one": 1}'
-            + 'x\x00\x00\x00\x10{"outgoing": 10}'
-            + 'x\x00\x00\x00\x10{"outgoing": 20}'
+            + 'x\x00\x00\x00\x11{"to_server": 10}'
+            + 'x\x00\x00\x00\x11{"to_server": 20}'
             + 'e\x00\x00\x00\x00',
             content)
         decoder.accept_bytes(content)
@@ -198,8 +198,8 @@ class TestClient(tests.TestCase):
             'h%s{"server_version": "%s", "request": "withstream"}'
             % (struct.pack('!L', 47 + len(_u1db_version)), _u1db_version)
             + 'a\x00\x00\x00\x0a{"one": 1}'
-            + 'x\x00\x00\x00\x10{"incoming": 50}'
-            + 'x\x00\x00\x00\x11{"incoming": 100}'
+            + 'x\x00\x00\x00\x11{"to_client": 50}'
+            + 'x\x00\x00\x00\x12{"to_client": 100}'
             + 'e\x00\x00\x00\x00',
             content)
         entries = []
@@ -208,7 +208,7 @@ class TestClient(tests.TestCase):
         response_handler = client.StructureToResponse(take_entry)
         decoder = protocol.ProtocolDecoder(response_handler)
         decoder.accept_bytes(content)
-        self.assertEqual([{'incoming': 50}, {'incoming': 100}], entries)
+        self.assertEqual([{'to_client': 50}, {'to_client': 100}], entries)
         self.assertEqual({'one': 1}, response_handler.kwargs)
         self.assertEqual('withstream', response_handler.request_name)
         self.assertEqual(_u1db_version, response_handler.server_version)
