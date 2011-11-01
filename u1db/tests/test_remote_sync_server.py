@@ -160,19 +160,12 @@ class HelloRequest(requests.RPCRequest):
     def handle_args(self, **kwargs):
         self._args = kwargs
 
+    def handle_stream_entry(self, entry):
+        self._stream_entry = entry
+
     def handle_end(self):
         self._finished = True
-        self.response = requests.RPCSuccessfulResponse(self.name)
-
-
-class FastRequest(requests.RPCRequest):
-
-    name = 'fast'
-
-    def __init__(self, state):
-        super(FastRequest, self).__init__(state)
-        self.response = requests.RPCSuccessfulResponse(self.name,
-            value=True)
+        self.responder.send_response()
 
 
 class ArgRequest(requests.RPCRequest):
@@ -180,8 +173,7 @@ class ArgRequest(requests.RPCRequest):
     name = 'arg'
 
     def handle_args(self, **kwargs):
-        self.response = requests.RPCSuccessfulResponse(self.name,
-            **kwargs)
+        self.responder.send_response(**kwargs)
 
 
 class EndRequest(requests.RPCRequest):
@@ -189,25 +181,14 @@ class EndRequest(requests.RPCRequest):
     name = 'end'
 
     def handle_end(self):
-        self.response = requests.RPCSuccessfulResponse(self.name,
-            finished=True)
-
-
-class ResponderForTests(object):
-
-    def __init__(self):
-        self.response = None
-
-    def send_response(self, response):
-        self.response = response
+        self.responder.send_response(finished=True)
 
 
 class TestStructureToRequest(tests.TestCase):
 
     def makeStructToRequest(self):
-        reqs = {"hello": HelloRequest, 'fast': FastRequest,
-                    "arg": ArgRequest, 'end': EndRequest}
-        responder = ResponderForTests()
+        reqs = {"hello": HelloRequest, "arg": ArgRequest, 'end': EndRequest}
+        responder = tests.ResponderForTests()
         handler = sync_server.StructureToRequest(reqs, responder,
             tests.ServerStateForTests())
         return handler
@@ -232,6 +213,15 @@ class TestStructureToRequest(tests.TestCase):
         handler.received_args({'arg': 1})
         self.assertEqual(handler._request._args, {'arg': 1})
 
+    def test_call_stream_entry(self):
+        handler = self.makeStructToRequest()
+        handler.received_header({'client_version': '1',
+                                 'request': 'hello'})
+        handler.received_args({'args': 1})
+        handler.received_stream_entry({'stream_entry': 1})
+        self.assertEqual(handler._request._args, {'args': 1})
+        self.assertEqual(handler._request._stream_entry, {'stream_entry': 1})
+
     def test_call_end(self):
         handler = self.makeStructToRequest()
         handler.received_header({'client_version': '1',
@@ -239,31 +229,25 @@ class TestStructureToRequest(tests.TestCase):
         handler.received_end()
         self.assertTrue(handler._request._finished)
 
-    def test_send_response_after_header(self):
-        handler = self.makeStructToRequest()
-        handler.received_header({'client_version': '1', 'request': 'fast'})
-        self.assertIsNot(None, handler._responder.response)
-        handler.received_end()
-
     def test_send_response_after_args(self):
         handler = self.makeStructToRequest()
         handler.received_header({'client_version': '1', 'request': 'arg'})
-        self.assertIs(None, handler._responder.response)
+        self.assertFalse(handler._responder.sent_response)
         handler.received_args({'arg': 'value', 'foo': 1})
-        self.assertIsNot(None, handler._responder.response)
+        self.assertTrue(handler._responder.sent_response)
         handler.received_end()
 
     def test_send_response_after_end(self):
         handler = self.makeStructToRequest()
         handler.received_header({'client_version': '1', 'request': 'end'})
-        self.assertIs(None, handler._responder.response)
+        self.assertFalse(handler._responder.sent_response)
         handler.received_end()
-        self.assertIsNot(None, handler._responder.response)
+        self.assertTrue(handler._responder.sent_response)
 
     def test_end_no_response(self):
         handler = self.makeStructToRequest()
         handler.received_header({'client_version': '1', 'request': 'arg'})
-        self.assertIs(None, handler._responder.response)
+        self.assertFalse(handler._responder.sent_response)
         self.assertRaises(errors.BadProtocolStream,
                           handler.received_end)
 
@@ -271,7 +255,7 @@ class TestStructureToRequest(tests.TestCase):
 class TestProtocolDecodingIntoRequest(tests.TestCase):
 
     def makeDecoder(self):
-        responder = ResponderForTests()
+        responder = tests.ResponderForTests()
         reqs = {'hello': HelloRequest}
         self.handler = sync_server.StructureToRequest(
             reqs, responder, tests.ServerStateForTests())
@@ -293,8 +277,8 @@ class TestResponder(tests.TestCase):
     def test_send_response(self):
         server_sock, client_sock = tests.socket_pair()
         responder = sync_server.Responder(server_sock)
-        responder.send_response(
-            requests.RPCSuccessfulResponse('request', value='success'))
+        responder.request_name = 'request'
+        responder.send_response(value='success')
         self.assertEqual(
             'u1db-1\n'
             'h%s{"server_version": "%s", "request": "request", "status": "success"}'
@@ -303,4 +287,43 @@ class TestResponder(tests.TestCase):
             + 'e\x00\x00\x00\x00',
             client_sock.recv(4096))
 
+    def test_send_response_status_fail(self):
+        server_sock, client_sock = tests.socket_pair()
+        responder = sync_server.Responder(server_sock)
+        responder.request_name = 'request'
+        responder.send_response(status='fail')
+        self.assertEqual(
+            'u1db-1\n'
+            'h%s{"server_version": "%s", "request": "request", "status": "fail"}'
+            % (struct.pack('!L', 62 + len(_u1db_version)), _u1db_version)
+            + 'e\x00\x00\x00\x00',
+            client_sock.recv(4096))
+
+    def test_start_finish_response_status_fail(self):
+        server_sock, client_sock = tests.socket_pair()
+        responder = sync_server.Responder(server_sock)
+        responder.request_name = 'request'
+        responder.start_response(status='fail')
+        responder.finish_response()
+        self.assertEqual(
+            'u1db-1\n'
+            'h%s{"server_version": "%s", "request": "request", "status": "fail"}'
+            % (struct.pack('!L', 62 + len(_u1db_version)), _u1db_version)
+            + 'e\x00\x00\x00\x00',
+            client_sock.recv(4096))
+
+    def test_send_stream_entry(self):
+        server_sock, client_sock = tests.socket_pair()
+        responder = sync_server.Responder(server_sock)
+        responder.request_name = 'request'
+        responder.start_response()
+        responder.stream_entry({'entry': True})
+        responder.finish_response()
+        self.assertEqual(
+            'u1db-1\n'
+            'h%s{"server_version": "%s", "request": "request", "status": "success"}'
+            % (struct.pack('!L', 65 + len(_u1db_version)), _u1db_version)
+            + 's\x00\x00\x00\x0f{"entry": true}'
+            + 'e\x00\x00\x00\x00',
+            client_sock.recv(4096))
 
