@@ -115,15 +115,8 @@ class TestClient(tests.TestCase):
     def test__encode_request_with_stream(self):
         server_sock, client_sock = tests.socket_pair()
         cli = client.Client(client_sock)
-        class EntrySource():
-            def __init__(self):
-                self.i = 0
-            def cb(self):
-                if self.i < 2:
-                    self.i += 1
-                    return {'stream_entry': self.i}
-                return None
-        entry_source = EntrySource()
+        entry_source = client.EntrySource([{'stream_entry': 1},
+                                           {'stream_entry': 2}])
         cli._encode_request('name', dict(a=1), entry_source_cb=entry_source.cb)
         self.assertEqual(
             'u1db-1\n'

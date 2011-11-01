@@ -63,7 +63,7 @@ class EntrySource(object):
         self.entries = entries
 
     @staticmethod
-    def prepare(self, entry):
+    def prepare(entry):
         return entry
 
     def cb(self):
