@@ -69,7 +69,7 @@ class Synchronizer(object):
         other_last_known_gen = self.source.get_sync_generation(other_replica_uid)
         new_gen = sync_target.sync_exchange(docs_to_send,
                         self.source._replica_uid, my_gen, other_last_known_gen,
-                        take_other_doc=self._insert_other_doc)
+                        return_doc_cb=self._insert_other_doc)
         self.source.set_sync_generation(other_replica_uid, new_gen)
         cur_gen = self.source._get_generation()
         if cur_gen == my_gen + self.num_inserted:

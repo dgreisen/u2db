@@ -284,7 +284,7 @@ class SyncTarget(object):
 
     def sync_exchange(self, docs_info,
                       from_replica_uid, from_replica_generation,
-                      last_known_generation, take_other_doc):
+                      last_known_generation, return_doc_cb):
         """Incorporate the documents sent from the other replica.
 
         This is not meant to be called by client code directly, but is used as
@@ -300,7 +300,7 @@ class SyncTarget(object):
             indicating the tip of data being sent by docs_info.
         :param last_known_generation: The last generation that other replica
             knows about this
-        :param: take_other_doc(doc_id, doc_rev, doc): is a callback
+        :param: return_doc_cb(doc_id, doc_rev, doc): is a callback
                 used to return documents to the other replica,
                 it will be invoked in turn with values
                 (doc_id, doc_rev, doc) that have changed since other_my_rev,

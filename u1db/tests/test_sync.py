@@ -35,7 +35,7 @@ class DatabaseSyncTargetTests(tests.DatabaseBaseTests):
         self.st = self.db.get_sync_target()
         self.other_docs = []
 
-    def take_other_doc(self, doc_id, doc_rev, doc):
+    def receive_doc(self, doc_id, doc_rev, doc):
         self.other_docs.append((doc_id, doc_rev, doc))
 
     def test_get_sync_target(self):
@@ -58,7 +58,7 @@ class DatabaseSyncTargetTests(tests.DatabaseBaseTests):
         new_gen = self.st.sync_exchange([('doc-id', 'replica:1', simple_doc)],
                                         'replica', from_replica_generation=10,
                                         last_known_generation=0,
-                                        take_other_doc=self.take_other_doc)
+                                        return_doc_cb=self.receive_doc)
         self.assertEqual(('replica:1', simple_doc, False),
                          self.db.get_doc('doc-id'))
         self.assertEqual(['doc-id'], self.db._get_transaction_log())
@@ -72,7 +72,7 @@ class DatabaseSyncTargetTests(tests.DatabaseBaseTests):
         new_gen = self.st.sync_exchange([(doc_id, 'replica:1', new_doc)],
                                         'replica', from_replica_generation=10,
                                         last_known_generation=0,
-                                        take_other_doc=self.take_other_doc)
+                                        return_doc_cb=self.receive_doc)
         self.assertEqual([doc_id], self.db._get_transaction_log())
         self.assertEqual(([(doc_id, doc_rev, simple_doc)], 1),
                          (self.other_docs, new_gen))
@@ -86,7 +86,7 @@ class DatabaseSyncTargetTests(tests.DatabaseBaseTests):
         new_gen = self.st.sync_exchange([(doc_id, doc_rev, simple_doc)],
                                         'replica', from_replica_generation=10,
                                         last_known_generation=1,
-                                        take_other_doc=self.take_other_doc)
+                                        return_doc_cb=self.receive_doc)
         self.assertEqual([doc_id], self.db._get_transaction_log())
         self.assertEqual(([], 1), (self.other_docs, new_gen))
 
@@ -96,7 +96,7 @@ class DatabaseSyncTargetTests(tests.DatabaseBaseTests):
         new_gen = self.st.sync_exchange([], 'other-replica',
                                         from_replica_generation=10,
                                         last_known_generation=0,
-                                        take_other_doc=self.take_other_doc)
+                                        return_doc_cb=self.receive_doc)
         self.assertEqual([doc_id], self.db._get_transaction_log())
         self.assertEqual(([(doc_id, doc_rev, simple_doc)], 1),
                          (self.other_docs, new_gen))
@@ -112,7 +112,7 @@ class DatabaseSyncTargetTests(tests.DatabaseBaseTests):
                                         'other-replica',
                                         from_replica_generation=10,
                                         last_known_generation=0,
-                                        take_other_doc=self.take_other_doc)
+                                        return_doc_cb=self.receive_doc)
         self.assertEqual([doc_id, doc_id], self.db._get_transaction_log())
         self.assertEqual(([], 2), (self.other_docs, new_gen))
 
@@ -130,7 +130,7 @@ class DatabaseSyncTargetTests(tests.DatabaseBaseTests):
                                         'other-replica',
                                         from_replica_generation=10,
                                         last_known_generation=0,
-                                        take_other_doc=self.take_other_doc)
+                                        return_doc_cb=self.receive_doc)
         self.assertEqual(([], 2), (self.other_docs, new_gen))
 
 

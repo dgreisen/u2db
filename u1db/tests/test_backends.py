@@ -405,7 +405,7 @@ class DatabaseIndexTests(tests.DatabaseBaseTests):
                                   'other-replica',
                                   from_replica_generation=10,
                                   last_known_generation=0,
-                                  take_other_doc = ignore)
+                                  return_doc_cb=ignore)
         self.assertEqual((other_rev, new_doc, False), self.db.get_doc(doc_id))
         self.assertEqual([(doc_id, other_rev, new_doc)],
                          self.db.get_from_index('test-idx', [('altval',)]))

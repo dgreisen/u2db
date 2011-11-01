@@ -50,7 +50,7 @@ class CommonSyncTarget(u1db.SyncTarget):
 
     def sync_exchange(self, docs_info,
                       from_replica_uid, from_replica_generation,
-                      last_known_generation, take_other_doc):
+                      last_known_generation, return_doc_cb):
         for doc_id, doc_rev, doc in docs_info:
             self._insert_other_doc(doc_id, doc_rev, doc)
         my_gen = self._checkpoint_sync_exchange(from_replica_uid,
@@ -58,7 +58,7 @@ class CommonSyncTarget(u1db.SyncTarget):
                                                 last_known_generation)
         self._finish_sync_exchange(from_replica_uid,
                                    from_replica_generation,
-                                   last_known_generation, take_other_doc)
+                                   last_known_generation, return_doc_cb)
         return my_gen
 
     def _checkpoint_sync_exchange(self, from_replica_uid,
@@ -70,7 +70,7 @@ class CommonSyncTarget(u1db.SyncTarget):
         return my_gen
 
     def _finish_sync_exchange(self, from_replica_uid, from_replica_generation,
-                         last_known_generation, take_other_doc):
+                         last_known_generation, return_doc_cb):
         seen_ids = self.seen_ids
         conflict_ids = self.conflict_ids
         my_gen = self.my_gen
@@ -80,10 +80,10 @@ class CommonSyncTarget(u1db.SyncTarget):
         new_docs = self._db.get_docs(doc_ids_to_return,
                                      check_for_conflicts=False)
         for doc_id, doc_rev, doc, _ in new_docs:
-            take_other_doc(doc_id, doc_rev, doc)
+            return_doc_cb(doc_id, doc_rev, doc)
         conflicts = self._db.get_docs(conflict_ids, check_for_conflicts=False)
         for doc_id, doc_rev, doc, _ in conflicts:
-            take_other_doc(doc_id, doc_rev, doc)
+            return_doc_cb(doc_id, doc_rev, doc)
         self._db.set_sync_generation(from_replica_uid,
                                      from_replica_generation)
         self._db._last_exchange_log = {
