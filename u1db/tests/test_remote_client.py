@@ -34,18 +34,18 @@ class TestStructureToResponse(tests.TestCase):
     def test_received_header(self):
         response_handler = client.StructureToResponse()
         response_handler.received_header(
-            {'server_version': '1', 'request': 'hello'})
+            {'server_version': '1', 'request': 'hello', 'status': 'success'})
         self.assertEqual('hello', response_handler.request_name)
         self.assertEqual('1', response_handler.server_version)
+        self.assertEqual('success', response_handler.status)
         self.assertEqual(None, response_handler.kwargs)
         self.assertFalse(response_handler.finished)
 
     def test_received_args(self):
         response_handler = client.StructureToResponse()
         response_handler.received_header(
-            {'server_version': '1', 'request': 'hello'})
+            {'server_version': '1', 'request': 'hello', 'status': 'success'})
         response_handler.received_args({'arg': 2, 'arg2': 'value'})
-        self.assertEqual('success', response_handler.status)
         self.assertEqual({'arg': 2, 'arg2': 'value'}, response_handler.kwargs)
         self.assertFalse(response_handler.finished)
 
@@ -55,7 +55,7 @@ class TestStructureToResponse(tests.TestCase):
             entries.append(entry)
         response_handler = client.StructureToResponse(take_entry)
         response_handler.received_header(
-            {'server_version': '1', 'request': 'hello'})
+            {'server_version': '1', 'request': 'hello', 'status': 'success'})
         response_handler.received_stream_entry({'entry': True})
         self.assertEqual([{'entry': True}], entries)
         self.assertFalse(response_handler.finished)
@@ -63,7 +63,7 @@ class TestStructureToResponse(tests.TestCase):
     def test_received_end(self):
         response_handler = client.StructureToResponse()
         response_handler.received_header(
-            {'server_version': '1', 'request': 'hello'})
+            {'server_version': '1', 'request': 'hello', 'status': 'success'})
         response_handler.received_args({'arg': 2, 'arg2': 'value'})
         response_handler.received_end()
         self.assertTrue(response_handler.finished)
@@ -77,15 +77,14 @@ class WithStreamRequest(requests.RPCRequest):
         super(WithStreamRequest, self).__init__(state, responder)
 
     def handle_args(self, **kwargs):
-        self.responder.send_response(**kwargs)
+        self.responder.start_response(**kwargs)
 
     def handle_stream_entry(self, entry):
         v = entry['to_server'] * 5
         self.responder.stream_entry({'to_client': v})
 
     def handle_end(self):
-        pass
-
+        self.responder.finish_response()
 
 
 class TestClient(tests.TestCase):
@@ -153,8 +152,8 @@ class TestClient(tests.TestCase):
         content = client_sock.recv(4096)
         self.assertEqual(
             'u1db-1\n'
-            'h%s{"server_version": "%s", "request": "arg"}'
-            % (struct.pack('!L', 40 + len(_u1db_version)), _u1db_version)
+            'h%s{"server_version": "%s", "request": "arg", "status": "success"}'
+            % (struct.pack('!L', 61 + len(_u1db_version)), _u1db_version)
             + 'a\x00\x00\x00\x0a{"one": 1}'
             + 'e\x00\x00\x00\x00',
             content)
@@ -195,8 +194,9 @@ class TestClient(tests.TestCase):
         content = client_sock.recv(4096)
         self.assertEqual(
             'u1db-1\n'
-            'h%s{"server_version": "%s", "request": "withstream"}'
-            % (struct.pack('!L', 47 + len(_u1db_version)), _u1db_version)
+            'h%s{"server_version": "%s", "request": "withstream", '
+            '"status": "success"}'
+            % (struct.pack('!L', 68 + len(_u1db_version)), _u1db_version)
             + 'a\x00\x00\x00\x0a{"one": 1}'
             + 's\x00\x00\x00\x11{"to_client": 50}'
             + 's\x00\x00\x00\x12{"to_client": 100}'

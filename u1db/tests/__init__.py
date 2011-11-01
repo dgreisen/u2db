@@ -109,15 +109,20 @@ class ServerStateForTests(requests.ServerState):
 class ResponderForTests(object):
     """Responder for tests."""
     _started = False
-    _sent_response = False
-    status = 'success'
+    sent_response = False
+    status = None
 
-    def send_response(self, **kwargs):
+    def start_response(self, status='success', **kwargs):
         self._started = True
+        self.status = status
         self.kwargs = kwargs
 
-    def _finish_response(self):
-        self._sent_response = True
+    def send_response(self, status='success', **kwargs):
+        self.start_response(status, **kwargs)
+        self.finish_response()
+
+    def finish_response(self):
+        self.sent_response = True
 
 
 class TestCaseWithSyncServer(TestCase):

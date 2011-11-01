@@ -98,7 +98,6 @@ class CommonSyncTarget(u1db.SyncTarget):
         return my_gen
 
 
-
 class CommonBackend(u1db.Database):
 
     def _allocate_doc_id(self):

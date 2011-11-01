@@ -36,7 +36,7 @@ class StructureToResponse(object):
         self.request_name = None
         # self._responder = responder
         self.server_version = None
-        self.status = 'success'
+        self.status = None
         self.take_entry = take_entry
         self.kwargs = None
         self.finished = False
@@ -44,6 +44,7 @@ class StructureToResponse(object):
     def received_header(self, headers):
         self.server_version = headers['server_version']
         self.request_name = headers['request']
+        self.status = headers['status']
 
     def received_stream_entry(self, entry):
         self.take_entry(entry)

@@ -173,11 +173,12 @@ class RPCSyncExchange(SyncTargetRPC):
                                                   self.from_replica_uid,
                                                   self.from_replica_generation,
                                                   self.last_known_generation)
-        self.responder.send_response(other_new_generation=new_gen)
+        self.responder.start_response(other_new_generation=new_gen)
         new_gen = self.target._finish_sync_exchange(self.from_replica_uid,
                                                self.from_replica_generation,
                                                self.last_known_generation,
                                                send_doc)
+        self.responder.finish_response()
         self._close()
 
 RPCSyncExchange.register()

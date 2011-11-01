@@ -136,8 +136,8 @@ class TestTCPSyncServer(tests.TestCaseWithSyncServer):
             + 'h\x00\x00\x00\x31{"client_version": "0.1.1", "request": "version"}'
             + 'e\x00\x00\x00\x00')
         self.assertEqual(protocol.PROTOCOL_HEADER_V1
-            + 'h%s{"server_version": "%s", "request": "version"}'
-              % (struct.pack('!L', 44 + len(_u1db_version)), _u1db_version)
+            + 'h%s{"server_version": "%s", "request": "version", "status": "success"}'
+              % (struct.pack('!L', 65 + len(_u1db_version)), _u1db_version)
             + 'a%s{"version": "%s"}'
               % (struct.pack('!L', 15 + len(_u1db_version)), _u1db_version)
             + 'e\x00\x00\x00\x00',
@@ -232,22 +232,22 @@ class TestStructureToRequest(tests.TestCase):
     def test_send_response_after_args(self):
         handler = self.makeStructToRequest()
         handler.received_header({'client_version': '1', 'request': 'arg'})
-        self.assertFalse(handler._responder._started)
+        self.assertFalse(handler._responder.sent_response)
         handler.received_args({'arg': 'value', 'foo': 1})
-        self.assertTrue(handler._responder._started)
+        self.assertTrue(handler._responder.sent_response)
         handler.received_end()
 
     def test_send_response_after_end(self):
         handler = self.makeStructToRequest()
         handler.received_header({'client_version': '1', 'request': 'end'})
-        self.assertFalse(handler._responder._started)
+        self.assertFalse(handler._responder.sent_response)
         handler.received_end()
-        self.assertTrue(handler._responder._sent_response)
+        self.assertTrue(handler._responder.sent_response)
 
     def test_end_no_response(self):
         handler = self.makeStructToRequest()
         handler.received_header({'client_version': '1', 'request': 'arg'})
-        self.assertFalse(handler._responder._started)
+        self.assertFalse(handler._responder.sent_response)
         self.assertRaises(errors.BadProtocolStream,
                           handler.received_end)
 
@@ -279,12 +279,36 @@ class TestResponder(tests.TestCase):
         responder = sync_server.Responder(server_sock)
         responder.request_name = 'request'
         responder.send_response(value='success')
-        responder._finish_response()
         self.assertEqual(
             'u1db-1\n'
-            'h%s{"server_version": "%s", "request": "request"}'
-            % (struct.pack('!L', 44 + len(_u1db_version)), _u1db_version)
+            'h%s{"server_version": "%s", "request": "request", "status": "success"}'
+            % (struct.pack('!L', 65 + len(_u1db_version)), _u1db_version)
             + 'a\x00\x00\x00\x14{"value": "success"}'
+            + 'e\x00\x00\x00\x00',
+            client_sock.recv(4096))
+
+    def test_send_response_status_fail(self):
+        server_sock, client_sock = tests.socket_pair()
+        responder = sync_server.Responder(server_sock)
+        responder.request_name = 'request'
+        responder.send_response(status='fail')
+        self.assertEqual(
+            'u1db-1\n'
+            'h%s{"server_version": "%s", "request": "request", "status": "fail"}'
+            % (struct.pack('!L', 62 + len(_u1db_version)), _u1db_version)
+            + 'e\x00\x00\x00\x00',
+            client_sock.recv(4096))
+
+    def test_start_finish_response_status_fail(self):
+        server_sock, client_sock = tests.socket_pair()
+        responder = sync_server.Responder(server_sock)
+        responder.request_name = 'request'
+        responder.start_response(status='fail')
+        responder.finish_response()
+        self.assertEqual(
+            'u1db-1\n'
+            'h%s{"server_version": "%s", "request": "request", "status": "fail"}'
+            % (struct.pack('!L', 62 + len(_u1db_version)), _u1db_version)
             + 'e\x00\x00\x00\x00',
             client_sock.recv(4096))
 
@@ -292,13 +316,13 @@ class TestResponder(tests.TestCase):
         server_sock, client_sock = tests.socket_pair()
         responder = sync_server.Responder(server_sock)
         responder.request_name = 'request'
-        responder.send_response()
+        responder.start_response()
         responder.stream_entry({'entry': True})
-        responder._finish_response()
+        responder.finish_response()
         self.assertEqual(
             'u1db-1\n'
-            'h%s{"server_version": "%s", "request": "request"}'
-            % (struct.pack('!L', 44 + len(_u1db_version)), _u1db_version)
+            'h%s{"server_version": "%s", "request": "request", "status": "success"}'
+            % (struct.pack('!L', 65 + len(_u1db_version)), _u1db_version)
             + 's\x00\x00\x00\x0f{"entry": true}'
             + 'e\x00\x00\x00\x00',
             client_sock.recv(4096))
