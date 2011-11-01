@@ -166,6 +166,26 @@ class TestCmdSync(TestCaseWithDB):
                          self.db.get_doc('my-test-id'))
 
 
+class TestCmdSyncRemote(tests.TestCaseWithSyncServer, TestCaseWithDB):
+
+    def setUp(self):
+        super(TestCmdSyncRemote, self).setUp()
+        self.startServer()
+        self.db2 = self.request_state._create_database('test2.db')
+
+    def test_sync_remote(self):
+        doc1_id, doc1_rev = self.db.create_doc(tests.simple_doc)
+        doc2_id, doc2_rev = self.db2.create_doc(tests.nested_doc)
+        db2_url = self.getURL('test2.db')
+        self.assertTrue(db2_url.startswith('u1db://'))
+        self.assertTrue(db2_url.endswith('/test2.db'))
+        client.cmd_sync(self.db_path, db2_url)
+        self.assertEqual((doc1_rev, tests.simple_doc, False),
+                         self.db2.get_doc(doc1_id))
+        self.assertEqual((doc2_rev, tests.nested_doc, False),
+                         self.db.get_doc(doc2_id))
+
+
 class TestCommandLine(TestCaseWithDB):
 
     def _get_u1db_client_path(self):

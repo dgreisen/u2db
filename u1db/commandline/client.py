@@ -24,6 +24,7 @@ from u1db import (
 from u1db.backends import sqlite_backend
 from u1db.remote import (
     client,
+    sync_target,
     )
 
 
@@ -66,12 +67,20 @@ def client_put(args):
                    sys.stdout)
 
 
+def _open_target(target_db):
+    if target_db.startswith('u1db://'):
+        target = sync_target.RemoteSyncTarget.connect(target_db)
+    else:
+        db = sqlite_backend.SQLiteDatabase.open_database(target_db)
+        target = db.get_sync_target()
+    return target
+
+
 def cmd_sync(source_db, target_db):
     """Start a Sync request."""
     source = sqlite_backend.SQLiteDatabase.open_database(source_db)
-    target = sqlite_backend.SQLiteDatabase.open_database(target_db)
-    st = target.get_sync_target()
-    syncer = sync.Synchronizer(source, st)
+    target = _open_target(target_db)
+    syncer = sync.Synchronizer(source, target)
     syncer.sync()
 
 
