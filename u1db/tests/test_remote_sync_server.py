@@ -299,7 +299,7 @@ class TestResponder(tests.TestCase):
             'u1db-1\n'
             'h%s{"server_version": "%s", "request": "request"}'
             % (struct.pack('!L', 44 + len(_u1db_version)), _u1db_version)
-            + 'x\x00\x00\x00\x0f{"entry": true}'
+            + 's\x00\x00\x00\x0f{"entry": true}'
             + 'e\x00\x00\x00\x00',
             client_sock.recv(4096))
 

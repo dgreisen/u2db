@@ -82,7 +82,7 @@ class Client(object):
             encoder.encode_dict('a', kwargs)
         if stream:
             for dic in stream:
-                encoder.encode_dict('x', dic)
+                encoder.encode_dict('s', dic)
         encoder.encode_end()
         buf.flush()
 

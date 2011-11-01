@@ -212,7 +212,7 @@ class Responder(object):
     def stream_entry(self, entry):
         "send stream entry as part of the response."
         self._start_response()
-        self._encoder.encode_dict('x', entry)
+        self._encoder.encode_dict('s', entry)
 
     def _finish_response(self):
         self._encoder.encode_end()

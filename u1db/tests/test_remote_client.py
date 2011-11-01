@@ -125,8 +125,8 @@ class TestClient(tests.TestCase):
             'h%s{"client_version": "%s", "request": "name"}'
             % (struct.pack('!L', 41 + len(_u1db_version)), _u1db_version)
             + 'a\x00\x00\x00\x08{"a": 1}'
-            + 'x\x00\x00\x00\x13{"stream_entry": 1}'
-            + 'x\x00\x00\x00\x13{"stream_entry": 2}'
+            + 's\x00\x00\x00\x13{"stream_entry": 1}'
+            + 's\x00\x00\x00\x13{"stream_entry": 2}'
             + 'e\x00\x00\x00\x00',
             server_sock.recv(4096))
 
@@ -186,8 +186,8 @@ class TestClient(tests.TestCase):
             'h%s{"client_version": "%s", "request": "withstream"}'
             % (struct.pack('!L', 47 + len(_u1db_version)), _u1db_version)
             + 'a\x00\x00\x00\x0a{"one": 1}'
-            + 'x\x00\x00\x00\x11{"to_server": 10}'
-            + 'x\x00\x00\x00\x11{"to_server": 20}'
+            + 's\x00\x00\x00\x11{"to_server": 10}'
+            + 's\x00\x00\x00\x11{"to_server": 20}'
             + 'e\x00\x00\x00\x00',
             content)
         decoder.accept_bytes(content)
@@ -198,8 +198,8 @@ class TestClient(tests.TestCase):
             'h%s{"server_version": "%s", "request": "withstream"}'
             % (struct.pack('!L', 47 + len(_u1db_version)), _u1db_version)
             + 'a\x00\x00\x00\x0a{"one": 1}'
-            + 'x\x00\x00\x00\x11{"to_client": 50}'
-            + 'x\x00\x00\x00\x12{"to_client": 100}'
+            + 's\x00\x00\x00\x11{"to_client": 50}'
+            + 's\x00\x00\x00\x12{"to_client": 100}'
             + 'e\x00\x00\x00\x00',
             content)
         entries = []

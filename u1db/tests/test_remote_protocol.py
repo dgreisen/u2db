@@ -149,7 +149,7 @@ class TestProtocolDecoder(tests.TestCase):
         decoder.accept_bytes(protocol.PROTOCOL_HEADER_V1
             + 'h\x00\x00\x00\x33' + client_header
             + 'a\x00\x00\x00\x18{"arg": 1, "val": "bar"}'
-            + 'x\x00\x00\x00\x13{"stream_entry": 1}'
+            + 's\x00\x00\x00\x13{"stream_entry": 1}'
             + 'e\x00\x00\x00\x00')
         self.assertEqual(decoder._state_finished, decoder._state)
         self.assertEqual([

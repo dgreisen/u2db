@@ -79,7 +79,7 @@ class _ProtocolDecoderV1(object):
         elif struct_type == 'a':
             self._structure_handler.received_args(
                 simplejson.loads(content))
-        elif struct_type == 'x':
+        elif struct_type == 's':
             self._structure_handler.received_stream_entry(
                 simplejson.loads(content))
         elif struct_type == 'e':
