@@ -60,23 +60,23 @@ class TestRemoteSyncTarget(tests.TestCaseWithSyncServer):
 
     def test_get_sync_info(self):
         self.startServer()
-        db = self.request_state._create_database('test.sqlite')
+        db = self.request_state._create_database('test')
         db.set_sync_generation('other-id', 1)
-        remote_target = self.getSyncTarget('test.sqlite')
-        self.assertEqual(('db-test.sqlite', 0, 1),
+        remote_target = self.getSyncTarget('test')
+        self.assertEqual(('db-test', 0, 1),
                          remote_target.get_sync_info('other-id'))
 
     def test_record_sync_info(self):
         self.startServer()
-        db = self.request_state._create_database('test.sqlite')
-        remote_target = self.getSyncTarget('test.sqlite')
+        db = self.request_state._create_database('test')
+        remote_target = self.getSyncTarget('test')
         remote_target.record_sync_info('other-id', 2)
         self.assertEqual(db.get_sync_generation('other-id'), 2)
 
     def test_sync_exchange_send(self):
         self.startServer()
-        db = self.request_state._create_database('test.sqlite')
-        remote_target = self.getSyncTarget('test.sqlite')
+        db = self.request_state._create_database('test')
+        remote_target = self.getSyncTarget('test')
         other_docs = []
         def take_other_doc(doc_id, doc_rev, doc):
             other_docs.append((doc_id, doc_id, doc))
@@ -90,9 +90,9 @@ class TestRemoteSyncTarget(tests.TestCaseWithSyncServer):
 
     def test_sync_exchange_receive(self):
         self.startServer()
-        db = self.request_state._create_database('test.sqlite')
+        db = self.request_state._create_database('test')
         doc_id, doc_rev = db.create_doc({'value': 'there'})
-        remote_target = self.getSyncTarget('test.sqlite')
+        remote_target = self.getSyncTarget('test')
         other_docs = []
         def take_other_doc(doc_id, doc_rev, doc):
             other_docs.append((doc_id, doc_rev, doc))
