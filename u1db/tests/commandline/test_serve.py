@@ -89,3 +89,18 @@ class TestU1DBServe(tests.TestCase):
         c = client.Client(s)
         self.assertEqual({'version': _u1db_version},
                          c.call_returning_args('version'))
+
+    def test_supply_port(self):
+        s = socket.socket()
+        s.bind(('127.0.0.1', 0))
+        host, port = s.getsockname()
+        s.close()
+        p = self.startU1DBServe(['--port', str(port)])
+        x = p.stdout.readline()
+        self.assertEqual('listening on port: %s\n' % (port,), x)
+        s = socket.socket()
+        s.connect(('127.0.0.1', port))
+        self.addCleanup(s.close)
+        c = client.Client(s)
+        self.assertEqual({'version': _u1db_version},
+                         c.call_returning_args('version'))

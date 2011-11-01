@@ -29,7 +29,7 @@ def main(args):
         description='Run the U1DB server')
     p.add_argument('--version', action='version', version=_u1db_version)
     p.add_argument('--verbose', action='store_true', help='be chatty')
-    p.add_argument('--port', '-p', default=0, metavar='PORT',
+    p.add_argument('--port', '-p', default=0, metavar='PORT', type=int,
         help='Bind to this port when serving.')
 
     args = p.parse_args(args)
