@@ -24,7 +24,6 @@ from u1db import (
 from u1db.backends import sqlite_backend
 from u1db.remote import (
     client,
-    sync_target,
     )
 
 
@@ -54,13 +53,14 @@ def client_get(args):
     return cmd_get(args.database, args.doc_id, args.outfile, sys.stderr)
 
 
-def cmd_init_db(database):
+def cmd_init_db(database, replica_uid):
     """Create a new database"""
-    sqlite_backend.SQLitePartialExpandDatabase(database)
+    db = sqlite_backend.SQLitePartialExpandDatabase(database)
+    db._set_replica_uid(replica_uid)
 
 
 def client_init_db(args):
-    return cmd_init_db(args.database)
+    return cmd_init_db(args.database, args.replica_uid)
 
 
 def cmd_put(database, doc_id, old_doc_rev, in_file, out_file):
@@ -97,6 +97,8 @@ def setup_arg_parser():
     subs = p.add_subparsers(title='commands')
     parser_init_db = subs.add_parser('init-db', help='Create a new database')
     parser_init_db.add_argument('database', help='The database to create')
+    parser_init_db.add_argument('replica_uid',
+        help='The unique identifier for this database')
     parser_init_db.set_defaults(func=client_init_db)
     parser_create = subs.add_parser('create',
         help='Create a new document from scratch')
