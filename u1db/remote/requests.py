@@ -164,8 +164,8 @@ class RPCSyncExchange(SyncTargetRPC):
         self.last_known_generation = last_known_generation
 
     def handle_stream_entry(self, entry):
-        self.target._insert_other_doc(entry['doc_id'], entry['doc_rev'],
-                                      entry['doc'])
+        self.target._insert_doc_from_source(entry['doc_id'], entry['doc_rev'],
+                                            entry['doc'])
 
     def handle_end(self):
         def send_doc(doc_id, doc_rev, doc):

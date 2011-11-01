@@ -28,8 +28,8 @@ class CommonSyncTarget(u1db.SyncTarget):
         self.changed_doc_ids = None
         self._docs_trace = [] # for tests
 
-    def _insert_other_doc(self, doc_id, doc_rev, doc):
-        """Try to insert synced over document.
+    def _insert_doc_from_source(self, doc_id, doc_rev, doc):
+        """Try to insert synced document from source.
 
         :return: None
         """
@@ -52,7 +52,7 @@ class CommonSyncTarget(u1db.SyncTarget):
                       from_replica_uid, from_replica_generation,
                       last_known_generation, return_doc_cb):
         for doc_id, doc_rev, doc in docs_info:
-            self._insert_other_doc(doc_id, doc_rev, doc)
+            self._insert_doc_from_source(doc_id, doc_rev, doc)
         my_gen = self._checkpoint_sync_exchange(from_replica_uid,
                                                 from_replica_generation,
                                                 last_known_generation)
