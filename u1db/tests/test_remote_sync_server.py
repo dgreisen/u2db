@@ -232,22 +232,22 @@ class TestStructureToRequest(tests.TestCase):
     def test_send_response_after_args(self):
         handler = self.makeStructToRequest()
         handler.received_header({'client_version': '1', 'request': 'arg'})
-        self.assertFalse(handler._responder._sent_response)
+        self.assertFalse(handler._responder._started)
         handler.received_args({'arg': 'value', 'foo': 1})
-        self.assertTrue(handler._responder._sent_response)
+        self.assertTrue(handler._responder._started)
         handler.received_end()
 
     def test_send_response_after_end(self):
         handler = self.makeStructToRequest()
         handler.received_header({'client_version': '1', 'request': 'end'})
-        self.assertFalse(handler._responder._sent_response)
+        self.assertFalse(handler._responder._started)
         handler.received_end()
         self.assertTrue(handler._responder._sent_response)
 
     def test_end_no_response(self):
         handler = self.makeStructToRequest()
         handler.received_header({'client_version': '1', 'request': 'arg'})
-        self.assertFalse(handler._responder._sent_response)
+        self.assertFalse(handler._responder._started)
         self.assertRaises(errors.BadProtocolStream,
                           handler.received_end)
 
@@ -279,6 +279,7 @@ class TestResponder(tests.TestCase):
         responder = sync_server.Responder(server_sock)
         responder.request_name = 'request'
         responder.send_response(value='success')
+        responder._finish_response()
         self.assertEqual(
             'u1db-1\n'
             'h%s{"server_version": "%s", "request": "request"}'
@@ -291,8 +292,9 @@ class TestResponder(tests.TestCase):
         server_sock, client_sock = tests.socket_pair()
         responder = sync_server.Responder(server_sock)
         responder.request_name = 'request'
-        responder.send_stream_entry({'entry': True})
         responder.send_response()
+        responder.stream_entry({'entry': True})
+        responder._finish_response()
         self.assertEqual(
             'u1db-1\n'
             'h%s{"server_version": "%s", "request": "request"}'

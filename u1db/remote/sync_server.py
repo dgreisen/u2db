@@ -170,10 +170,11 @@ class StructureToRequest(object):
 
     def received_end(self):
         self._request.handle_end()
-        if not self._responder._sent_response:
+        if not self._responder._started:
             raise errors.BadProtocolStream("Client sent end-of-message,"
                 " but the Request did not generate a response."
                 " for Request: %s" % (self._request,))
+        self._responder._finish_response()
 
 class Responder(object):
     """Encode responses from the server back to the client."""
@@ -184,7 +185,6 @@ class Responder(object):
             BUFFER_SIZE)
         self._encoder = protocol.ProtocolEncoderV1(self._out_buffer.write)
         self._started = False
-        self._sent_response = False
         self.request_name = ''
 
     def _write_to_client(self, content):
@@ -203,18 +203,17 @@ class Responder(object):
 
     # have a way to transmit an error
 
-    def send_stream_entry(self, entry):
-        "send stream entry as part of the response."
-        self._start_response()
-        self._encoder.encode_dict('x', entry)
-
     def send_response(self, **kwargs):
         """send/finalize response."""
         self._start_response()
         if kwargs:
             self._encoder.encode_dict('a', kwargs)
+
+    def stream_entry(self, entry):
+        "send stream entry as part of the response."
+        self._start_response()
+        self._encoder.encode_dict('x', entry)
+
+    def _finish_response(self):
         self._encoder.encode_end()
         self._out_buffer.flush()
-        self._sent_response = True
-
-

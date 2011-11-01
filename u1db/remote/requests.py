@@ -168,11 +168,16 @@ class RPCSyncExchange(SyncTargetRPC):
 
     def handle_end(self):
         def send_doc(doc_id, doc_rev, doc):
-            self.responder.send_stream_entry((doc_id, doc_rev, doc))
+            self.responder.stream_entry((doc_id, doc_rev, doc))
+        new_gen = self.target._checkpoint_sync_exchange(
+                                                  self.from_replica_uid,
+                                                  self.from_replica_generation,
+                                                  self.last_known_generation)
+        self.responder.send_response(other_new_generation=new_gen)
         new_gen = self.target._finish_sync_exchange(self.from_replica_uid,
                                                self.from_replica_generation,
                                                self.last_known_generation,
                                                send_doc)
-        self._result(other_new_generation=new_gen)
+        self._close()
 
 RPCSyncExchange.register()
