@@ -32,12 +32,12 @@ BUFFER_SIZE = sync_server.BUFFER_SIZE
 class StructureToResponse(object):
     """Take structured byte streams and turn them into a Response."""
 
-    def __init__(self, take_entry=None):
+    def __init__(self, return_entry_cb=None):
         self.request_name = None
         # self._responder = responder
         self.server_version = None
         self.status = None
-        self.take_entry = take_entry
+        self.return_entry_cb = return_entry_cb
         self.kwargs = None
         self.finished = False
 
@@ -47,13 +47,31 @@ class StructureToResponse(object):
         self.status = headers['status']
 
     def received_stream_entry(self, entry):
-        self.take_entry(entry)
+        self.return_entry_cb(entry)
 
     def received_args(self, kwargs):
         self.kwargs = kwargs
 
     def received_end(self):
         self.finished = True
+
+
+class EntrySource(object):
+
+    def __init__(self, entries):
+        self.i = 0
+        self.entries = entries
+
+    @staticmethod
+    def prepare(self, entry):
+        return entry
+
+    def cb(self):
+        if self.i >= len(self.entries):
+            return None
+        entry = self.prepare(self.entries[self.i])
+        self.i += 1
+        return entry
 
 
 class Client(object):
@@ -69,8 +87,7 @@ class Client(object):
     def _read_from_server(self):
         return self._conn.recv(READ_CHUNK_SIZE)
 
-    def _encode_request(self, request_name, kwargs, stream=None):
-        # should stream be callback based?
+    def _encode_request(self, request_name, kwargs, entry_source_cb=None):
         buf = buffers.BufferedWriter(self._write_to_server, BUFFER_SIZE)
         buf.write(protocol.PROTOCOL_HEADER_V1)
         encoder = protocol.ProtocolEncoderV1(buf.write)
@@ -81,9 +98,12 @@ class Client(object):
         encoder.encode_dict('h', request_header)
         if kwargs:
             encoder.encode_dict('a', kwargs)
-        if stream:
-            for dic in stream:
-                encoder.encode_dict('s', dic)
+        if entry_source_cb:
+            while True:
+                entry = entry_source_cb()
+                if entry is None:
+                    break
+                encoder.encode_dict('s', entry)
         encoder.encode_end()
         buf.flush()
 
@@ -122,13 +142,14 @@ class Client(object):
         self._wait_for_response_end(response_handler, decoder)
         return response_handler.kwargs
 
-    def call_with_streaming(self, rpc_name, stream, take_doc, **kwargs):
+    def call_with_streaming(self, rpc_name, entry_source_cb, return_entry_cb,
+                            **kwargs):
         """Place a call to the remote server.
 
         Send and expect streams of documents.
         """
-        self._encode_request(rpc_name, kwargs, stream)
-        response_handler = StructureToResponse(take_doc)
+        self._encode_request(rpc_name, kwargs, entry_source_cb)
+        response_handler = StructureToResponse(return_entry_cb)
         decoder = protocol.ProtocolDecoder(response_handler)
         self._wait_for_response_end(response_handler, decoder)
         return response_handler.kwargs

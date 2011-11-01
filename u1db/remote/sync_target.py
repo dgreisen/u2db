@@ -24,6 +24,11 @@ from u1db.remote import (
     client,
     )
 
+class _DocSource(client.EntrySource):
+
+    @staticmethod
+    def prepare((doc_id, doc_rev, doc)):
+        return dict(doc_id=doc_id, doc_rev=doc_rev, doc=doc)
 
 class RemoteSyncTarget(SyncTarget):
     """Implement the SyncTarget api to a remote server."""
@@ -62,9 +67,12 @@ class RemoteSyncTarget(SyncTarget):
                       from_replica_generation,
                       last_known_generation, return_doc_cb):
         self._ensure_connection()
+        # xxx docs_info itself should be replaced by a callback one level up
+        doc_source = _DocSource(docs_info)
         def take_entry(entry):
-            return_doc_cb(*entry)
-        res = self._client.call_with_streaming("sync_exchange", docs_info,
+            return_doc_cb(entry['doc_id'], entry['doc_rev'], entry['doc'])
+        res = self._client.call_with_streaming("sync_exchange",
+                               doc_source.cb,
                                take_entry,
                                path=self._url.path,
                                from_replica_uid=from_replica_uid,

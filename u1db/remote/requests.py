@@ -164,11 +164,13 @@ class RPCSyncExchange(SyncTargetRPC):
         self.last_known_generation = last_known_generation
 
     def handle_stream_entry(self, entry):
-        self.target._insert_other_doc(*entry)
+        self.target._insert_other_doc(entry['doc_id'], entry['doc_rev'],
+                                      entry['doc'])
 
     def handle_end(self):
         def send_doc(doc_id, doc_rev, doc):
-            self.responder.stream_entry((doc_id, doc_rev, doc))
+            entry = dict(doc_id=doc_id, doc_rev=doc_rev, doc=doc)
+            self.responder.stream_entry(entry)
         new_gen = self.target._checkpoint_sync_exchange(
                                                   self.from_replica_uid,
                                                   self.from_replica_generation,

@@ -115,10 +115,16 @@ class TestClient(tests.TestCase):
     def test__encode_request_with_stream(self):
         server_sock, client_sock = tests.socket_pair()
         cli = client.Client(client_sock)
-        def stream():
-            yield {'stream_entry': 1}
-            yield {'stream_entry': 2}
-        cli._encode_request('name', dict(a=1), stream=stream())
+        class EntrySource():
+            def __init__(self):
+                self.i = 0
+            def cb(self):
+                if self.i < 2:
+                    self.i += 1
+                    return {'stream_entry': self.i}
+                return None
+        entry_source = EntrySource()
+        cli._encode_request('name', dict(a=1), entry_source_cb=entry_source.cb)
         self.assertEqual(
             'u1db-1\n'
             'h%s{"client_version": "%s", "request": "name"}'
@@ -169,10 +175,13 @@ class TestClient(tests.TestCase):
     def test_client_to_server_and_back_with_streaming(self):
         server_sock, client_sock = tests.socket_pair()
         cli = client.Client(client_sock)
-        def stream():
-            yield {'to_server': 10}
-            yield {'to_server': 20}
-        cli._encode_request('withstream', {'one': 1}, stream())
+        class ToServerEntrySource(client.EntrySource):
+            @staticmethod
+            def prepare(entry):
+                return {'to_server': entry}
+        entry_source = ToServerEntrySource([10, 20])
+        cli._encode_request('withstream', {'one': 1},
+                            entry_source_cb=entry_source.cb)
         reqs = {'withstream': WithStreamRequest}
         responder = sync_server.Responder(server_sock)
         handler = sync_server.StructureToRequest(reqs, responder,
