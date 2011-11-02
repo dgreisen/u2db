@@ -15,6 +15,7 @@
 """The in-memory Database class for U1DB."""
 
 import simplejson
+import string
 
 from u1db import errors
 from u1db.backends import CommonBackend, CommonSyncTarget
@@ -161,6 +162,222 @@ class InMemoryDatabase(CommonBackend):
         self._put_and_update_indexes(doc_id, my_doc, doc_rev, doc)
 
 
+class Getter(object):
+    """Get a value from a document based on a specification."""
+
+    def get(self, doc):
+        """Get a value from the document.
+
+        :param doc: the doc to get the value from.
+        :return: the value, possibly None
+        """
+        raise NotImplementedError(self.get)
+
+
+class StaticGetter(Getter):
+    """A getter that returns a defined value."""
+
+    def __init__(self, value):
+        """Create a StaticGetter.
+
+        :param value: the value to return when get is called.
+        """
+        self.value = value
+
+    def get(self, value):
+        return self.value
+
+
+class ExtractField(Getter):
+    """Extract a field from the document."""
+
+    def __init__(self, field):
+        """Create an ExtractField object.
+
+        When a document is passed to get() this will return a value
+        from the docuemnt based on the field specifier passed to
+        the constructor.
+
+        If the field specifier refers to a field in the document
+        that is not present, then None will be returned.
+
+        :param field: a specifier for the field to return.
+            This is either a field name, or a dotted field name.
+        """
+        self.field = field
+
+    def get(self, value):
+        for subfield in self.field.split('.'):
+            if isinstance(value, dict):
+                value = value.get(subfield)
+            else:
+                value = None
+                break
+        if isinstance(value, dict):
+            value = None
+        if isinstance(value, list):
+            for val in value:
+                if isinstance(val, dict) or isinstance(val, list):
+                    value = None
+                    break
+        return value
+
+
+class Transformation(Getter):
+    """A transformation on a value from another Getter."""
+
+    def __init__(self, inner):
+        """Create a transformation.
+
+        :param inner: the Getter to transform the value for.
+        """
+        self.inner = inner
+
+    def get(self, value):
+        inner_value = self.inner.get(value)
+        return self.transform(inner_value)
+
+    def transform(self, value):
+        """Transform the value.
+
+        This should be implemented by subclasses to transform the
+        value when get() is called.
+
+        :param value: the value from the other Getter. May be None.
+        :return: the transformed value.
+        """
+        raise NotImplementedError(self.transform)
+
+
+class Lower(Transformation):
+    """Lowercase a string.
+
+    This transformation will return None for non-string inputs. However,
+    it will lowercase any strings in a list, dropping any elements
+    that are not strings.
+    """
+
+    def _can_transform(self, val):
+        if isinstance(val, int):
+            return False
+        if isinstance(val, bool):
+            return False
+        if isinstance(val, float):
+            return False
+        return True
+
+    def transform(self, value):
+        if value is None:
+            return value
+        if isinstance(value, list):
+            return [val.lower() for val in value if self._can_transform(val)]
+        else:
+            if self._can_transform(value):
+                return value.lower()
+            return None
+
+
+class SplitWords(Transformation):
+    """Split a string on whitespace.
+
+    This Getter will return None for non-string inputs. It will however
+    split any strings in an input list, discarding any elements that
+    are not strings.
+    """
+
+    def _can_transform(self, val):
+        if isinstance(val, int):
+            return False
+        if isinstance(val, bool):
+            return False
+        if isinstance(val, float):
+            return False
+        return True
+
+    def transform(self, value):
+        if value is None:
+            return value
+        if isinstance(value, list):
+            joined_values = []
+            for val in value:
+                if self._can_transform(val):
+                    # XXX: de-duplicate?
+                    joined_values.extend(val.split())
+            return joined_values
+        else:
+            if self._can_transform(value):
+                return value.split()
+            return None
+
+
+class IsNull(Transformation):
+    """Indicate whether the input is None.
+
+    This Getter returns a bool indicating whether the input is nil.
+    """
+
+    def transform(self, value):
+        return value is None
+
+
+class EnsureListTransformation(Transformation):
+    """A Getter than ensures a list is returned.
+
+    Unless the input is None, the output will be a list. If the input
+    is a list then it is returned unchanged, otherwise the input is
+    made the only element of the returned list.
+    """
+
+    def transform(self, value):
+        if value is None:
+            return value
+        if isinstance(value, list):
+            return value
+        return [value]
+
+
+class Parser(object):
+
+    OPERATIONS = {
+        "lower": Lower,
+        "split_words": SplitWords,
+        "is_null": IsNull,
+        }
+
+    def _take_word(self, partial):
+        i = 0
+        word = ""
+        while i < len(partial):
+            char = partial[i]
+            if char in string.lowercase + string.uppercase + "._" + string.digits:
+                word += char
+                i += 1
+            else:
+                break
+        return word, partial[i:]
+
+    def parse(self, field):
+        inner = self._inner_parse(field)
+        inner = EnsureListTransformation(inner)
+        return inner
+
+    def _inner_parse(self, field):
+        # XXX: crappy parser
+        word, field = self._take_word(field)
+        if field.startswith("("):
+            # We have an operation
+            assert field.endswith(")")
+            op = self.OPERATIONS.get(word, None)
+            if op is None:
+                raise AssertionError("Unknown operation: %s" % word)
+            inner = self._inner_parse(field[1:-1])
+            return op(inner)
+        else:
+            assert len(field) == 0, "Unparsed chars: %s" % field
+            assert len(word), "Missing field specifier"
+            return ExtractField(word)
+
+
 class InMemoryIndex(object):
     """Interface for managing an Index."""
 
@@ -176,30 +393,38 @@ class InMemoryIndex(object):
 
     def evaluate(self, obj):
         """Evaluate a dict object, applying this definition."""
-        result = []
+        all_rows = [[]]
+        parser = Parser()
         for field in self._definition:
+            new_rows = []
             val = obj
-            for subfield in field.split('.'):
-                val = val.get(subfield)
-            if val is None:
+            getter = parser.parse(field)
+            keys = getter.get(val)
+            if keys is None:
                 return None
-            result.append(val)
-        return '\x01'.join(result)
+            for key in keys:
+                new_rows.extend([row + [key] for row in all_rows])
+            all_rows = new_rows
+        all_rows = ['\x01'.join(row) for row in all_rows]
+        return all_rows
 
     def add_json(self, doc_id, doc):
         """Add this json doc to the index."""
-        key = self.evaluate_json(doc)
-        if key is None:
+        keys = self.evaluate_json(doc)
+        if not keys:
             return
-        self._values.setdefault(key, []).append(doc_id)
+        for key in keys:
+            self._values.setdefault(key, []).append(doc_id)
 
     def remove_json(self, doc_id, doc):
         """Remove this json doc from the index."""
-        key = self.evaluate_json(doc)
-        doc_ids = self._values[key]
-        doc_ids.remove(doc_id)
-        if not doc_ids:
-            del self._values[key]
+        keys = self.evaluate_json(doc)
+        if keys:
+            for key in keys:
+                doc_ids = self._values[key]
+                doc_ids.remove(doc_id)
+                if not doc_ids:
+                    del self._values[key]
 
     def _find_non_wildcards(self, values):
         """Check if this should be a wildcard match.
