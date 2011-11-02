@@ -72,6 +72,9 @@ class Transformation(Getter):
         """
         self.inner = inner
 
+    name = None
+    """The name that the transform has in a query string."""
+
     def get(self, raw_doc):
         inner_value = self.inner.get(raw_doc)
         return self.transform(inner_value)
@@ -95,6 +98,8 @@ class Lower(Transformation):
     it will lowercase any strings in a list, dropping any elements
     that are not strings.
     """
+
+    name = "lower"
 
     def _can_transform(self, val):
         if isinstance(val, int):
@@ -127,6 +132,8 @@ class SplitWords(Transformation):
     split any strings in an input list, discarding any elements that
     are not strings.
     """
+
+    name = "split_words"
 
     def _can_transform(self, val):
         if isinstance(val, int):
@@ -163,6 +170,8 @@ class IsNull(Transformation):
     This Getter returns a bool indicating whether the input is nil.
     """
 
+    name = "is_null"
+
     def transform(self, value):
         return value is None
 
@@ -189,11 +198,7 @@ class ParseError(Exception):
 
 class Parser(object):
 
-    OPERATIONS = {
-        "lower": Lower,
-        "split_words": SplitWords,
-        "is_null": IsNull,
-        }
+    _transformations = {}
 
     def _take_word(self, partial):
         i = 0
@@ -219,7 +224,7 @@ class Parser(object):
             # We have an operation
             if not field.endswith(")"):
                 raise ParseError("Invalid transformation function: %s" % field)
-            op = self.OPERATIONS.get(word, None)
+            op = self._transformations.get(word, None)
             if op is None:
                 raise AssertionError("Unknown operation: %s" % word)
             inner = self._inner_parse(field[1:-1])
@@ -234,3 +239,15 @@ class Parser(object):
 
     def parse_all(self, fields):
         return [self.parse(field) for field in fields]
+
+    @classmethod
+    def register_transormation(cls, transform):
+        assert transform.name not in cls._transformations, (
+                "Transform %s already registered for %s"
+                % (transform.name, cls._transformations[transform.name]))
+        cls._transformations[transform.name] = transform
+
+
+Parser.register_transormation(SplitWords)
+Parser.register_transormation(Lower)
+Parser.register_transormation(IsNull)
