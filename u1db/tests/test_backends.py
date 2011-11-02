@@ -72,35 +72,41 @@ class DatabaseTests(tests.DatabaseBaseTests):
             sorted(self.db.get_docs([doc1_id, doc2_id],
                                     check_for_conflicts=False)))
 
+    def test_get_docs_empty_list(self):
+        self.assertEqual([], self.db.get_docs([]))
+
     def test_put_doc_creating_initial(self):
         new_rev = self.db.put_doc('my_doc_id', None, simple_doc)
         self.assertEqual((new_rev, simple_doc, False),
                          self.db.get_doc('my_doc_id'))
 
-    def test_simple_put_docs_if_newer(self):
-        self.assertEqual((set(), set(), 2), self.db.put_docs_if_newer(
-            [('my-doc-id', 'test:1', simple_doc),
-             ('my-doc2-id', 'test:1', nested_doc)]))
+    def test_simple_put_doc_if_newer(self):
+        state = self.db.put_doc_if_newer('my-doc-id', 'test:1', simple_doc)
+        self.assertEqual('inserted', state)
         self.assertEqual(('test:1', simple_doc, False),
                          self.db.get_doc('my-doc-id'))
-        self.assertEqual(('test:1', nested_doc, False),
-                         self.db.get_doc('my-doc2-id'))
 
-    def test_put_docs_if_newer_already_superseded(self):
+    def test_put_doc_if_newer_already_superseded(self):
         orig_doc = '{"new": "doc"}'
         doc1_id, doc1_rev1 = self.db.create_doc(orig_doc)
         doc1_rev2 = self.db.put_doc(doc1_id, doc1_rev1, simple_doc)
         # Nothing is inserted, because the document is already superseded
-        self.assertEqual((set(), set([doc1_id]), 0), self.db.put_docs_if_newer(
-            [(doc1_id, doc1_rev1, orig_doc)]))
+        state = self.db.put_doc_if_newer(doc1_id, doc1_rev1, orig_doc)
+        self.assertEqual('superseded', state)
         self.assertEqual((doc1_rev2, simple_doc, False),
                          self.db.get_doc(doc1_id))
 
-    def test_put_docs_if_newer_conflicted(self):
+    def test_put_doc_if_newer_already_converged(self):
+        orig_doc = '{"new": "doc"}'
+        doc1_id, doc1_rev1 = self.db.create_doc(orig_doc)
+        state = self.db.put_doc_if_newer(doc1_id, doc1_rev1, orig_doc)
+        self.assertEqual('converged', state)
+
+    def test_put_doc_if_newer_conflicted(self):
         doc1_id, doc1_rev1 = self.db.create_doc(simple_doc)
         # Nothing is inserted, the document id is returned as would-conflict
-        self.assertEqual((set([doc1_id]), set(), 0), self.db.put_docs_if_newer(
-            [(doc1_id, 'alternate:1', nested_doc)]))
+        state = self.db.put_doc_if_newer(doc1_id, 'alternate:1', nested_doc)
+        self.assertEqual('conflicted', state)
         # The database wasn't altered
         self.assertEqual((doc1_rev1, simple_doc, False),
                          self.db.get_doc(doc1_id))
@@ -263,6 +269,15 @@ class DatabaseIndexTests(tests.DatabaseBaseTests):
         self.assertEqual([(doc_id, new_doc_rev, new_doc)],
             self.db.get_from_index('test-idx', [('altval',)]))
 
+    def test_put_updates_when_adding_key(self):
+        doc_id, doc_rev = self.db.create_doc("{}")
+        self.db.create_index('test-idx', ['key'])
+        self.assertEqual([],
+            self.db.get_from_index('test-idx', [('*',)]))
+        new_doc_rev = self.db.put_doc(doc_id, doc_rev, simple_doc)
+        self.assertEqual([(doc_id, new_doc_rev, simple_doc)],
+            self.db.get_from_index('test-idx', [('*',)]))
+
     def test_get_all_from_index(self):
         self.db.create_index('test-idx', ['key'])
         doc1_id, doc1_rev = self.db.create_doc(simple_doc)
@@ -396,10 +411,13 @@ class DatabaseIndexTests(tests.DatabaseBaseTests):
         new_doc = '{"key": "altval"}'
         other_rev = 'test:1|z:2'
         st = self.db.get_sync_target()
+        def ignore(doc_id, doc_rev, doc):
+            pass
         result = st.sync_exchange([(doc_id, other_rev, new_doc)],
                                   'other-replica',
                                   from_replica_generation=10,
-                                  last_known_generation=0)
+                                  last_known_generation=0,
+                                  return_doc_cb=ignore)
         self.assertEqual((other_rev, new_doc, False), self.db.get_doc(doc_id))
         self.assertEqual([(doc_id, other_rev, new_doc)],
                          self.db.get_from_index('test-idx', [('altval',)]))

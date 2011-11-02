@@ -22,35 +22,80 @@ class CommonSyncTarget(u1db.SyncTarget):
 
     def __init__(self, db):
         self._db = db
+        self.conflict_ids = set()
+        self.seen_ids = set() # not superseded
+        self.my_gen = None
+        self.changed_doc_ids = None
+        self._docs_trace = [] # for tests
+
+    def _insert_doc_from_source(self, doc_id, doc_rev, doc):
+        """Try to insert synced document from source.
+
+        :return: None
+        """
+        state = self._db.put_doc_if_newer(doc_id, doc_rev, doc)
+        if state == 'inserted':
+            self.seen_ids.add(doc_id)
+        elif state == 'converged':
+            # magical convergence
+            self.seen_ids.add(doc_id)
+        elif state == 'superseded':
+            pass
+        else:
+            assert state == 'conflicted'
+            self.seen_ids.add(doc_id)
+            self.conflict_ids.add(doc_id)
+        # for tests
+        self._docs_trace.append((doc_id, doc_rev))
 
     def sync_exchange(self, docs_info,
                       from_replica_uid, from_replica_generation,
-                      last_known_generation):
-        (conflict_ids, superseded_ids,
-         num_inserted) = self._db.put_docs_if_newer(docs_info)
-        seen_ids = [x[0] for x in docs_info if x[0] not in superseded_ids]
-        new_docs = []
+                      last_known_generation, return_doc_cb):
+        for doc_id, doc_rev, doc in docs_info:
+            self._insert_doc_from_source(doc_id, doc_rev, doc)
+        my_gen = self._checkpoint_sync_exchange(from_replica_uid,
+                                                from_replica_generation,
+                                                last_known_generation)
+        self._finish_sync_exchange(from_replica_uid,
+                                   from_replica_generation,
+                                   last_known_generation, return_doc_cb)
+        return my_gen
+
+    def _checkpoint_sync_exchange(self, from_replica_uid,
+                                  from_replica_generation,
+                                  last_known_generation):
         my_gen, changed_doc_ids = self._db.whats_changed(last_known_generation)
+        self.my_gen = my_gen
+        self.changed_doc_ids = changed_doc_ids
+        return my_gen
+
+    def _finish_sync_exchange(self, from_replica_uid, from_replica_generation,
+                         last_known_generation, return_doc_cb):
+        seen_ids = self.seen_ids
+        conflict_ids = self.conflict_ids
+        my_gen = self.my_gen
+        changed_doc_ids = self.changed_doc_ids
         doc_ids_to_return = [doc_id for doc_id in changed_doc_ids
                              if doc_id not in seen_ids]
         new_docs = self._db.get_docs(doc_ids_to_return,
                                      check_for_conflicts=False)
-        new_docs = [x[:3] for x in new_docs]
+        for doc_id, doc_rev, doc, _ in new_docs:
+            return_doc_cb(doc_id, doc_rev, doc)
         conflicts = self._db.get_docs(conflict_ids, check_for_conflicts=False)
-        conflicts = [x[:3] for x in conflicts]
+        for doc_id, doc_rev, doc, _ in conflicts:
+            return_doc_cb(doc_id, doc_rev, doc)
         self._db.set_sync_generation(from_replica_uid,
                                      from_replica_generation)
         self._db._last_exchange_log = {
-            'receive': {'docs': [(di, dr) for di, dr, _ in docs_info],
+            'receive': {'docs': self._docs_trace,
                         'from_id': from_replica_uid,
                         'from_gen': from_replica_generation,
                         'last_known_gen': last_known_generation},
-            'return': {'new_docs': [(di, dr) for di, dr, _ in new_docs],
-                       'conf_docs': [(di, dr) for di, dr, _ in conflicts],
+            'return': {'new_docs': [(di, dr) for di, dr, _, _ in new_docs],
+                       'conf_docs': [(di, dr) for di, dr, _, _ in conflicts],
                        'last_gen': my_gen}
         }
-        return new_docs, conflicts, my_gen
-
+        return my_gen
 
 
 class CommonBackend(u1db.Database):
@@ -125,24 +170,9 @@ class CommonBackend(u1db.Database):
                       for doc_id in doc_ids]
         return result
 
-    def put_docs_if_newer(self, docs_info):
-        superseded_ids = set()
-        conflict_ids = set()
-        num_inserted = 0
-        for doc_id, doc_rev, doc in docs_info:
-            old_doc, state = self._compare_and_insert_doc(doc_id, doc_rev, doc)
-            if state == 'inserted':
-                num_inserted += 1
-            elif state == 'converged':
-                # magical convergence
-                continue
-            elif state == 'superseded':
-                superseded_ids.add(doc_id)
-                continue
-            else:
-                assert state == 'conflicted'
-                conflict_ids.add(doc_id)
-        return conflict_ids, superseded_ids, num_inserted
+    def put_doc_if_newer(self, doc_id, doc_rev, doc):
+        _, state = self._compare_and_insert_doc(doc_id, doc_rev, doc)
+        return state
 
     def _ensure_maximal_rev(self, cur_rev, extra_revs):
         vcr = VectorClockRev(cur_rev)

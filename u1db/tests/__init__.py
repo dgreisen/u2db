@@ -106,6 +106,25 @@ class ServerStateForTests(requests.ServerState):
         return db
 
 
+class ResponderForTests(object):
+    """Responder for tests."""
+    _started = False
+    sent_response = False
+    status = None
+
+    def start_response(self, status='success', **kwargs):
+        self._started = True
+        self.status = status
+        self.kwargs = kwargs
+
+    def send_response(self, status='success', **kwargs):
+        self.start_response(status, **kwargs)
+        self.finish_response()
+
+    def finish_response(self):
+        self.sent_response = True
+
+
 class TestCaseWithSyncServer(TestCase):
 
     def setUp(self):

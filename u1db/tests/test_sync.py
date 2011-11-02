@@ -33,6 +33,10 @@ class DatabaseSyncTargetTests(tests.DatabaseBaseTests):
         super(DatabaseSyncTargetTests, self).setUp()
         self.db = self.create_database('test')
         self.st = self.db.get_sync_target()
+        self.other_docs = []
+
+    def receive_doc(self, doc_id, doc_rev, doc):
+        self.other_docs.append((doc_id, doc_rev, doc))
 
     def test_get_sync_target(self):
         self.assertIsNot(None, self.st)
@@ -51,53 +55,66 @@ class DatabaseSyncTargetTests(tests.DatabaseBaseTests):
         self.assertEqual(('test', 0, 10), self.st.get_sync_info('replica'))
 
     def test_sync_exchange(self):
-        result = self.st.sync_exchange([('doc-id', 'replica:1', simple_doc)],
-                                       'replica', from_replica_generation=10,
-                                       last_known_generation=0)
+        new_gen = self.st.sync_exchange([('doc-id', 'replica:1', simple_doc)],
+                                        'replica', from_replica_generation=10,
+                                        last_known_generation=0,
+                                        return_doc_cb=self.receive_doc)
         self.assertEqual(('replica:1', simple_doc, False),
                          self.db.get_doc('doc-id'))
         self.assertEqual(['doc-id'], self.db._get_transaction_log())
-        self.assertEqual(([], [], 1), result)
+        self.assertEqual(([], 1), (self.other_docs, new_gen))
         self.assertEqual(10, self.st.get_sync_info('replica')[-1])
 
     def test_sync_exchange_refuses_conflicts(self):
         doc_id, doc_rev = self.db.create_doc(simple_doc)
         self.assertEqual([doc_id], self.db._get_transaction_log())
         new_doc = '{"key": "altval"}'
-        result = self.st.sync_exchange([(doc_id, 'replica:1', new_doc)],
-                                       'replica', from_replica_generation=10,
-                                       last_known_generation=0)
+        new_gen = self.st.sync_exchange([(doc_id, 'replica:1', new_doc)],
+                                        'replica', from_replica_generation=10,
+                                        last_known_generation=0,
+                                        return_doc_cb=self.receive_doc)
         self.assertEqual([doc_id], self.db._get_transaction_log())
-        self.assertEqual(([], [(doc_id, doc_rev, simple_doc)], 1), result)
+        self.assertEqual(([(doc_id, doc_rev, simple_doc)], 1),
+                         (self.other_docs, new_gen))
+        self.assertEqual(self.db._last_exchange_log['return'],
+                         {'last_gen': 1, 'conf_docs': [(doc_id, doc_rev)],
+                          'new_docs': []})
 
     def test_sync_exchange_ignores_convergence(self):
         doc_id, doc_rev = self.db.create_doc(simple_doc)
         self.assertEqual([doc_id], self.db._get_transaction_log())
-        result = self.st.sync_exchange([(doc_id, doc_rev, simple_doc)],
-                                       'replica', from_replica_generation=10,
-                                       last_known_generation=1)
+        new_gen = self.st.sync_exchange([(doc_id, doc_rev, simple_doc)],
+                                        'replica', from_replica_generation=10,
+                                        last_known_generation=1,
+                                        return_doc_cb=self.receive_doc)
         self.assertEqual([doc_id], self.db._get_transaction_log())
-        self.assertEqual(([], [], 1), result)
+        self.assertEqual(([], 1), (self.other_docs, new_gen))
 
     def test_sync_exchange_returns_new_docs(self):
         doc_id, doc_rev = self.db.create_doc(simple_doc)
         self.assertEqual([doc_id], self.db._get_transaction_log())
-        result = self.st.sync_exchange([], 'other-replica',
-                                       from_replica_generation=10,
-                                       last_known_generation=0)
+        new_gen = self.st.sync_exchange([], 'other-replica',
+                                        from_replica_generation=10,
+                                        last_known_generation=0,
+                                        return_doc_cb=self.receive_doc)
         self.assertEqual([doc_id], self.db._get_transaction_log())
-        self.assertEqual(([(doc_id, doc_rev, simple_doc)], [], 1), result)
+        self.assertEqual(([(doc_id, doc_rev, simple_doc)], 1),
+                         (self.other_docs, new_gen))
+        self.assertEqual(self.db._last_exchange_log['return'],
+                         {'last_gen': 1, 'new_docs': [(doc_id, doc_rev)],
+                          'conf_docs': []})
 
     def test_sync_exchange_getting_newer_docs(self):
         doc_id, doc_rev = self.db.create_doc(simple_doc)
         self.assertEqual([doc_id], self.db._get_transaction_log())
         new_doc = '{"key": "altval"}'
-        result = self.st.sync_exchange([(doc_id, 'test:1|z:2', new_doc)],
-                                       'other-replica',
-                                       from_replica_generation=10,
-                                       last_known_generation=0)
+        new_gen = self.st.sync_exchange([(doc_id, 'test:1|z:2', new_doc)],
+                                        'other-replica',
+                                        from_replica_generation=10,
+                                        last_known_generation=0,
+                                        return_doc_cb=self.receive_doc)
         self.assertEqual([doc_id, doc_id], self.db._get_transaction_log())
-        self.assertEqual(([], [], 2), result)
+        self.assertEqual(([], 2), (self.other_docs, new_gen))
 
     def test_sync_exchange_with_concurrent_updates(self):
         doc_id, doc_rev = self.db.create_doc(simple_doc)
@@ -109,11 +126,12 @@ class DatabaseSyncTargetTests(tests.DatabaseBaseTests):
             return val
         self.db.whats_changed = after_whatschanged
         new_doc = '{"key": "altval"}'
-        result = self.st.sync_exchange([(doc_id, 'test:1|z:2', new_doc)],
-                                       'other-replica',
-                                       from_replica_generation=10,
-                                       last_known_generation=0)
-        self.assertEqual(([], [], 2), result)
+        new_gen = self.st.sync_exchange([(doc_id, 'test:1|z:2', new_doc)],
+                                        'other-replica',
+                                        from_replica_generation=10,
+                                        last_known_generation=0,
+                                        return_doc_cb=self.receive_doc)
+        self.assertEqual(([], 2), (self.other_docs, new_gen))
 
 
 class DatabaseSyncTests(tests.DatabaseBaseTests):
@@ -170,12 +188,15 @@ class DatabaseSyncTests(tests.DatabaseBaseTests):
         # with a new record. When we finish synchronizing, we can notice that
         # something locally was updated, and we cannot tell c2 our new updated
         # generation
-        orig = self.db1.put_docs_if_newer
-        def after_put_docs_if_newer(*args, **kwargs):
+        orig = self.db1.put_doc_if_newer
+        once = [None]
+        def after_put_doc_if_newer(*args, **kwargs):
             result = orig(*args, **kwargs)
-            self.db1.create_doc(simple_doc)
+            if once:
+                self.db1.create_doc(simple_doc)
+                once.pop()
             return result
-        self.db1.put_docs_if_newer = after_put_docs_if_newer
+        self.db1.put_doc_if_newer = after_put_doc_if_newer
         self.assertEqual(0, self.sync(self.db1, self.db2))
         self.assertEqual({'receive': {'docs': [], 'from_id': 'test1',
                                       'from_gen': 0, 'last_known_gen': 0},

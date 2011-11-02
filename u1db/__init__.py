@@ -89,24 +89,22 @@ class Database(object):
         """
         raise NotImplementedError(self.put_doc)
 
-    def put_docs_if_newer(self, docs_info):
-        """Insert/update many documents into the database.
+    def put_doc_if_newer(self, doc_id, doc_rev, doc):
+        """Insert/update document into the database with a given revision.
 
-        This api is used during synchronization operations. It is possible to
-        also use for client code, but put_doc() is more obvious.
+        This api is used during synchronization operations.
 
-        :param: A list of [(doc_id, doc_rev, doc_content)]. If we don't have
-            doc_id already, or if doc_rev supersedes the existing document
-            revision, then the content will be inserted, and num_inserted will
-            be incremented.
-            If doc_rev is less than or equal to the existing revision, then the
-            put is ignored.
-            If doc_rev is not strictly superseded or supersedes, then the
-            document id is added to the set of conflicted documents.
-        :return: (would_conflict_ids, superseded_ids, num_inserted), the
-            document_ids that that could not be inserted (and were not
-            superseded), the document ids that we already had something newer,
-            and the count of entries that were successfully added.
+        :param doc_id: The unique handle for a document.
+        :param doc_rev: The document revision to try to store.
+        :param doc: The actual JSON document string.
+        :return: state -  If we don't have doc_id already, or if doc_rev
+            supersedes the existing document revision, then the content will
+            be inserted, and state is 'inserted'.
+            If doc_rev is less than or equal to the existing revision,
+            then the put is ignored and state is respecitvely 'superseded'
+            or 'converged'.
+            If doc_rev is not strictly superseded or supersedes, then
+            state is 'conflicted' and again the document is not inserted.
         """
         raise NotImplementedError(self.put_docs)
 
@@ -286,7 +284,7 @@ class SyncTarget(object):
 
     def sync_exchange(self, docs_info,
                       from_replica_uid, from_replica_generation,
-                      last_known_generation):
+                      last_known_generation, return_doc_cb):
         """Incorporate the documents sent from the other replica.
 
         This is not meant to be called by client code directly, but is used as
@@ -302,14 +300,15 @@ class SyncTarget(object):
             indicating the tip of data being sent by docs_info.
         :param last_known_generation: The last generation that other replica
             knows about this
-        :return: (new_records, conflicted_records, new_generation)
-            new_records - A list of [(doc_id, doc_rev, doc)] that have changed
-                          since other_my_rev
-            conflicted_records - A list of [(doc_id, doc_rev, doc)] for entries
+        :param: return_doc_cb(doc_id, doc_rev, doc): is a callback
+                used to return documents to the other replica,
+                it will be invoked in turn with values
+                (doc_id, doc_rev, doc) that have changed since other_my_rev,
+                and then with values (doc_id, doc_rev, doc) for entries
                 which were sent in docs_info, but which cannot be applied
                 because it would conflict.
-            new_generation - After applying docs_info,
-                this is the current generation for this replica
+        :return: new_generation - After applying docs_info, this is
+            the current generation for this replica
         """
         raise NotImplementedError(self.sync_exchange)
 

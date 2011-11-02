@@ -68,11 +68,11 @@ class RPCRequest(object):
         if cls.name in RPCRequest.requests:
             RPCRequest.requests.pop(cls.name)
 
-    def __init__(self, state):
+    def __init__(self, state, responder):
         # This will get instantiated once we receive the "header" portion of
         # the request.
         self.state = state
-        self.response = None
+        self.responder = responder
 
     def handle_args(self, **kwargs):
         """This will be called when a request passes an 'args' section.
@@ -88,40 +88,16 @@ class RPCRequest(object):
         # The default implementation is to just ignore the end.
 
 
-class RPCResponse(object):
-    """Base class for responses to RPC requests."""
-
-
-class RPCSuccessfulResponse(RPCResponse):
-    """Used to indicate that the request was successful.
-    """
-
-    status = 'success'
-
-    def __init__(self, request_name, **response_kwargs):
-        """Create a new Successful Response.
-
-        Pass in whatever arguments you want to return to the client.
-        """
-        self.request_name = request_name
-        self.response_kwargs = response_kwargs
-
-
-class RPCFailureResponse(RPCResponse):
-    """Used to indicate there was a failure processing the request."""
-
-    status = 'fail'
-
-
-
 class RPCServerVersion(RPCRequest):
     """Return the version of the server."""
 
     name = 'version'
 
-    def __init__(self, state):
-        super(RPCServerVersion, self).__init__(state)
-        self.response = RPCSuccessfulResponse(self.name, version=_u1db_version)
+    def __init__(self, state, responder):
+        super(RPCServerVersion, self).__init__(state, responder)
+
+    def handle_end(self):
+        self.responder.send_response(version=_u1db_version)
 
 RPCServerVersion.register()
 
@@ -139,7 +115,7 @@ class SyncTargetRPC(RPCRequest):
         self.target = self.db.get_sync_target()
 
     def _result(self, **kwargs):
-        self.response = RPCSuccessfulResponse(self.name, **kwargs)
+        self.responder.send_response(**kwargs)
         # If we have a result, then we can close this db connection.
         self._close()
 
@@ -174,3 +150,37 @@ class RPCRecordSyncInfo(SyncTargetRPC):
         self._result()
 
 RPCRecordSyncInfo.register()
+
+
+class RPCSyncExchange(SyncTargetRPC):
+
+    name = "sync_exchange"
+
+    def handle_args(self, path, from_replica_uid, from_replica_generation,
+                    last_known_generation):
+        self._get_sync_target(path)
+        self.from_replica_uid = from_replica_uid
+        self.from_replica_generation = from_replica_generation
+        self.last_known_generation = last_known_generation
+
+    def handle_stream_entry(self, entry):
+        self.target._insert_doc_from_source(entry['doc_id'], entry['doc_rev'],
+                                            entry['doc'])
+
+    def handle_end(self):
+        def send_doc(doc_id, doc_rev, doc):
+            entry = dict(doc_id=doc_id, doc_rev=doc_rev, doc=doc)
+            self.responder.stream_entry(entry)
+        new_gen = self.target._checkpoint_sync_exchange(
+                                                  self.from_replica_uid,
+                                                  self.from_replica_generation,
+                                                  self.last_known_generation)
+        self.responder.start_response(other_new_generation=new_gen)
+        new_gen = self.target._finish_sync_exchange(self.from_replica_uid,
+                                               self.from_replica_generation,
+                                               self.last_known_generation,
+                                               send_doc)
+        self.responder.finish_response()
+        self._close()
+
+RPCSyncExchange.register()

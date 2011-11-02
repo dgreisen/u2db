@@ -32,19 +32,31 @@ class Synchronizer(object):
         """
         self.source = source
         self.sync_target = sync_target
+        self.num_inserted = 0
 
-    def _insert_conflicts(self, docs_info):
-        """Record all of docs_info as conflicted documents.
+    def _insert_doc_from_target(self, doc_id, doc_rev, doc):
+        """Try to insert synced document from target.
 
-        Because of the 'TAKE_OTHER' semantics, any document which is marked as
-        conflicted takes docs_info as the official value.
-        This will update index definitions, etc.
+        Because of the 'TAKE_OTHER' semantics, any document which is
+        marked as conflicted takes the other value as the official
+        value.  This will update index definitions, etc. Increases
+        self.num_inserted depending whether the document
+        was effectively inserted.
 
-        :return: The number of documents inserted into the db.
+        :return: None
         """
-        for doc_id, doc_rev, doc in docs_info:
+        state = self.source.put_doc_if_newer(doc_id, doc_rev, doc)
+        if state == 'inserted':
+            self.num_inserted += 1
+        elif state == 'converged':
+            # magical convergence
+            pass
+        elif state == 'superseded':
+            pass
+        else:
+            assert state == 'conflicted'
             self.source.force_doc_sync_conflict(doc_id, doc_rev, doc)
-        return len(docs_info)
+            self.num_inserted += 1
 
     def sync(self, callback=None):
         sync_target = self.sync_target
@@ -55,17 +67,11 @@ class Synchronizer(object):
             check_for_conflicts=False)
         docs_to_send = [x[:3] for x in docs_to_send]
         other_last_known_gen = self.source.get_sync_generation(other_replica_uid)
-        (new_records, conflicted_records,
-         new_gen) = sync_target.sync_exchange(docs_to_send,
-            self.source._replica_uid, my_gen, other_last_known_gen)
-        all_records = new_records + conflicted_records
-        conflict_ids, _, num_inserted = self.source.put_docs_if_newer(
-            all_records)
-        conflict_docs = [r for r in all_records if r[0] in conflict_ids]
-        num_inserted += self._insert_conflicts(conflict_docs)
+        new_gen = sync_target.sync_exchange(docs_to_send,
+                        self.source._replica_uid, my_gen, other_last_known_gen,
+                        return_doc_cb=self._insert_doc_from_target)
         self.source.set_sync_generation(other_replica_uid, new_gen)
         cur_gen = self.source._get_generation()
-        if cur_gen == my_gen + num_inserted:
+        if cur_gen == my_gen + self.num_inserted:
             sync_target.record_sync_info(self.source._replica_uid, cur_gen)
         return my_gen
-

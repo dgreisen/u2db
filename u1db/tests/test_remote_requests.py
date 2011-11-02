@@ -46,12 +46,13 @@ class TestRPCRequest(tests.TestCase):
         self.assertEqual(requests.RPCServerVersion, factory)
         self.assertEqual('version', factory.name)
         state = tests.ServerStateForTests()
-        instance = factory(state)
+        responder = tests.ResponderForTests()
+        instance = factory(state, responder)
         self.assertEqual('version', instance.name)
         # 'version' doesn't require arguments, it just returns the response
-        self.assertIsNot(None, instance.response)
-        self.assertEqual({'version': _u1db_version},
-                         instance.response.response_kwargs)
+        instance.handle_end()
+        self.assertEqual('success', responder.status)
+        self.assertEqual({'version': _u1db_version}, responder.kwargs)
         self.assertIs(state, instance.state)
 
 
