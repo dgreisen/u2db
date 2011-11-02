@@ -26,7 +26,6 @@ from u1db.backends import (
     sqlite_backend,
     )
 
-from test_sync import SyncTargetTests
 
 class TestRemoteSyncTarget(tests.TestCaseWithSyncServer):
 
@@ -107,17 +106,3 @@ class TestRemoteSyncTarget(tests.TestCaseWithSyncServer):
                         last_known_generation=0, return_doc_cb=receive_doc)
         self.assertEqual(1, new_gen)
         self.assertEqual([(doc_id, doc_rev, {'value': 'there'})], other_docs)
-
-
-class RemoteSyncTargetTests(SyncTargetTests, tests.TestCaseWithSyncServer):
-
-    def create_sync_target(self):
-        self.startServer()
-        db = self.request_state._create_database('test')
-        st = sync_target.RemoteSyncTarget.connect(self.getURL('test'))
-        return db, st
-
-    def tearDown(self):
-        del self.st # let it be gced
-        super(SyncTargetTests, self).tearDown()
-

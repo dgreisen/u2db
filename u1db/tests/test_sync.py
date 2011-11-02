@@ -21,21 +21,50 @@ from u1db import (
     tests,
     vectorclock,
     )
+from u1db.remote import (
+    sync_target,
+    )
 
 
 simple_doc = tests.simple_doc
 nested_doc = tests.nested_doc
 
-class SyncTargetTests(object):
 
-    def create_sync_target(self):
-        st = self.db.get_sync_target()
-        return self.db, st
+def _make_local_db_and_target(test):
+    db = test.create_database('test')
+    st = db.get_sync_target()
+    return db, st
+
+
+def _make_local_db_and_remote_target(test):
+    test.startServer()
+    db = test.request_state._create_database('test')
+    st = sync_target.RemoteSyncTarget.connect(test.getURL('test'))
+    return db, st
+
+
+target_scenarios = [
+    ('local', {'create_db_and_target': _make_local_db_and_target}),
+    ('remote', {'create_db_and_target': _make_local_db_and_remote_target}),
+    ]
+
+
+class DatabaseSyncTargetTests(tests.DatabaseBaseTests,
+                              tests.TestCaseWithSyncServer):
+
+    scenarios = tests.multiply_scenarios(tests.DatabaseBaseTests.scenarios,
+                                         target_scenarios)
 
     def setUp(self):
-        super(SyncTargetTests, self).setUp()
-        self.db, self.st = self.create_sync_target()
+        super(DatabaseSyncTargetTests, self).setUp()
+        self.db, self.st = self.create_db_and_target(self)
         self.other_docs = []
+
+    def tearDown(self):
+        # We delete them explicitly, so that connections are cleanly closed
+        del self.db
+        del self.st
+        super(DatabaseSyncTargetTests, self).tearDown()
 
     def receive_doc(self, doc_id, doc_rev, doc):
         self.other_docs.append((doc_id, doc_rev, doc))
@@ -134,10 +163,6 @@ class SyncTargetTests(object):
                                         last_known_generation=0,
                                         return_doc_cb=self.receive_doc)
         self.assertEqual(([], 2), (self.other_docs, new_gen))
-
-
-class DatabaseSyncTargetTests(SyncTargetTests, tests.DatabaseBaseTests):
-    pass
 
 
 class DatabaseSyncTests(tests.DatabaseBaseTests):
