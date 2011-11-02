@@ -135,6 +135,10 @@ class SplitWords(Transformation):
             return False
         if isinstance(val, float):
             return False
+        if isinstance(val, list):
+            return False
+        if isinstance(val, dict):
+            return False
         return True
 
     def transform(self, value):

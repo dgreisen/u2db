@@ -175,6 +175,18 @@ class SplitWordsTests(tests.TestCase):
         val = getter.get('zap')
         self.assertEqual(['foo', 'baz','bar', 'sux'], val)
 
+    def test_inner_returns_list_containing_list(self):
+        getter = query_parser.SplitWords(
+            query_parser.StaticGetter(['foo baz', ["baa"], 'bar sux']))
+        val = getter.get('zap')
+        self.assertEqual(['foo', 'baz','bar', 'sux'], val)
+
+    def test_inner_returns_list_containing_dict(self):
+        getter = query_parser.SplitWords(
+            query_parser.StaticGetter(['foo baz', dict(baa="xam"), 'bar sux']))
+        val = getter.get('zap')
+        self.assertEqual(['foo', 'baz','bar', 'sux'], val)
+
 
 class IsNullTests(tests.TestCase):
 
