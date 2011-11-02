@@ -84,12 +84,12 @@ class SyncExchange(object):
 
     def __init__(self, db):
         self._db = db
+        self.seen_ids = set() # incoming ids not superseded (or conflicted)
+        self.doc_ids_to_return = None
         self.conflict_ids = set()
-        self.seen_ids = set() # not superseded
-        self.my_gen = None
-        self.changed_doc_ids = None
+        self.new_gen = None
         # for tests
-        self._docs_trace = []
+        self._incoming_trace = []
         self._last_known_generation = None
 
     def insert_doc_from_source(self, doc_id, doc_rev, doc):
@@ -113,13 +113,15 @@ class SyncExchange(object):
             # magical convergence
             self.seen_ids.add(doc_id)
         elif state == 'superseded':
+            # we have something newer that we will return
             pass
         else:
+            # conflict, returned independently
             assert state == 'conflicted'
             self.seen_ids.add(doc_id)
             self.conflict_ids.add(doc_id)
         # for tests
-        self._docs_trace.append((doc_id, doc_rev))
+        self._incoming_trace.append((doc_id, doc_rev))
 
     def find_docs_to_return(self, last_known_generation):
         """Find and mark all documents to return to the sync source,
@@ -135,10 +137,14 @@ class SyncExchange(object):
             considering also all the inserted incoming documents.
         """
         self._last_known_generation = last_known_generation # for tests
-        my_gen, changed_doc_ids = self._db.whats_changed(last_known_generation)
-        self.my_gen = my_gen
-        self.changed_doc_ids = changed_doc_ids
-        return my_gen
+        new_gen, changed_doc_ids = self._db.whats_changed(last_known_generation)
+        self.new_gen = new_gen
+        seen_ids = self.seen_ids
+        # changed docs that weren't superseded by or converged with
+        # nor conflicted, conflicts are returned independently
+        self.doc_ids_to_return = set(doc_id for doc_id in changed_doc_ids
+                                     if doc_id not in seen_ids)
+        return new_gen
 
     def return_docs_and_record_sync(self,
                                     from_replica_uid, from_replica_generation,
@@ -157,12 +163,9 @@ class SyncExchange(object):
                 used to return the marked documents to the target replica,
         :return: None
         """
-        seen_ids = self.seen_ids
+        doc_ids_to_return = self.doc_ids_to_return
         conflict_ids = self.conflict_ids
-        my_gen = self.my_gen
-        changed_doc_ids = self.changed_doc_ids
-        doc_ids_to_return = [doc_id for doc_id in changed_doc_ids
-                             if doc_id not in seen_ids]
+        # return docs
         new_docs = self._db.get_docs(doc_ids_to_return,
                                      check_for_conflicts=False)
         for doc_id, doc_rev, doc, _ in new_docs:
@@ -170,18 +173,19 @@ class SyncExchange(object):
         conflicts = self._db.get_docs(conflict_ids, check_for_conflicts=False)
         for doc_id, doc_rev, doc, _ in conflicts:
             return_doc_cb(doc_id, doc_rev, doc)
+        # record sync point
         self._db.set_sync_generation(from_replica_uid,
                                      from_replica_generation)
+        # for tests
         self._db._last_exchange_log = {
-            'receive': {'docs': self._docs_trace,
+            'receive': {'docs': self._incoming_trace,
                         'from_id': from_replica_uid,
                         'from_gen': from_replica_generation,
                         'last_known_gen': self._last_known_generation},
             'return': {'new_docs': [(di, dr) for di, dr, _, _ in new_docs],
                        'conf_docs': [(di, dr) for di, dr, _, _ in conflicts],
-                       'last_gen': my_gen}
+                       'last_gen': self.new_gen}
         }
-        return my_gen
 
 
 class LocalSyncTarget(u1db.SyncTarget):
