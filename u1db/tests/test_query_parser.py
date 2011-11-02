@@ -113,6 +113,16 @@ class LowerTests(tests.TestCase):
         val = getter.get('zap')
         self.assertEqual(['foo', 'bar'], val)
 
+    def test_inner_returns_list_containing_list(self):
+        getter = query_parser.Lower(query_parser.StaticGetter(['fOo', ['bAa'], 'bAr']))
+        val = getter.get('zap')
+        self.assertEqual(['foo', 'bar'], val)
+
+    def test_inner_returns_list_containing_dict(self):
+        getter = query_parser.Lower(query_parser.StaticGetter(['fOo', dict(baa="xam"), 'bAr']))
+        val = getter.get('zap')
+        self.assertEqual(['foo', 'bar'], val)
+
 
 class SplitWordsTests(tests.TestCase):
 
