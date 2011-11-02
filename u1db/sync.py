@@ -54,25 +54,39 @@ class Synchronizer(object):
             # magical convergence
             pass
         elif state == 'superseded':
+            # we have something newer, will be taken care of at the next sync
             pass
         else:
             assert state == 'conflicted'
+            # take doc as the official value, stores the current
+            # alongside as conflict
             self.source.force_doc_sync_conflict(doc_id, doc_rev, doc)
             self.num_inserted += 1
 
     def sync(self, callback=None):
         sync_target = self.sync_target
+        # get target identifier, its current generation,
+        # and its last-seen database generation for this source
         (other_replica_uid, other_gen,
          others_my_gen) = sync_target.get_sync_info(self.source._replica_uid)
+        # what's changed since that generation and this current gen
         my_gen, changed_doc_ids = self.source.whats_changed(others_my_gen)
+        # prepare to send all the changed docs
         docs_to_send = self.source.get_docs(changed_doc_ids,
             check_for_conflicts=False)
         docs_to_send = [x[:3] for x in docs_to_send]
+
+        # this source last-seen database generation for the target
         other_last_known_gen = self.source.get_sync_generation(other_replica_uid)
+        # exchange documents and try to insert the returned ones with
+        # the target, return target synced-up-to gen
         new_gen = sync_target.sync_exchange(docs_to_send,
                         self.source._replica_uid, my_gen, other_last_known_gen,
                         return_doc_cb=self._insert_doc_from_target)
+        # record target synced-up-to generation
         self.source.set_sync_generation(other_replica_uid, new_gen)
+        # if there were no updates but the insertion of received docs
+        # record this source current gen as synced-up-to gen on the target
         cur_gen = self.source._get_generation()
         if cur_gen == my_gen + self.num_inserted:
             sync_target.record_sync_info(self.source._replica_uid, cur_gen)

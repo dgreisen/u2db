@@ -156,6 +156,8 @@ class RPCSyncExchange(SyncTargetRPC):
 
     name = "sync_exchange"
 
+    # Implements the same logic as LocalSyncTarget.sync_exchange
+
     def handle_args(self, path, from_replica_uid, from_replica_generation,
                     last_known_generation):
         self._get_sync_target(path)
