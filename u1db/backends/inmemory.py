@@ -196,6 +196,8 @@ class InMemoryIndex(object):
     def remove_json(self, doc_id, doc):
         """Remove this json doc from the index."""
         key = self.evaluate_json(doc)
+        if key is None:
+            return
         doc_ids = self._values[key]
         doc_ids.remove(doc_id)
         if not doc_ids:

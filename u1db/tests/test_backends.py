@@ -269,6 +269,15 @@ class DatabaseIndexTests(tests.DatabaseBaseTests):
         self.assertEqual([(doc_id, new_doc_rev, new_doc)],
             self.db.get_from_index('test-idx', [('altval',)]))
 
+    def test_put_updates_when_adding_key(self):
+        doc_id, doc_rev = self.db.create_doc("{}")
+        self.db.create_index('test-idx', ['key'])
+        self.assertEqual([],
+            self.db.get_from_index('test-idx', [('*',)]))
+        new_doc_rev = self.db.put_doc(doc_id, doc_rev, simple_doc)
+        self.assertEqual([(doc_id, new_doc_rev, simple_doc)],
+            self.db.get_from_index('test-idx', [('*',)]))
+
     def test_get_all_from_index(self):
         self.db.create_index('test-idx', ['key'])
         doc1_id, doc1_rev = self.db.create_doc(simple_doc)
