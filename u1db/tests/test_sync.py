@@ -26,13 +26,15 @@ from u1db import (
 simple_doc = tests.simple_doc
 nested_doc = tests.nested_doc
 
+class SyncTargetTests(object):
 
-class DatabaseSyncTargetTests(tests.DatabaseBaseTests):
+    def create_sync_target(self):
+        st = self.db.get_sync_target()
+        return self.db, st
 
     def setUp(self):
-        super(DatabaseSyncTargetTests, self).setUp()
-        self.db = self.create_database('test')
-        self.st = self.db.get_sync_target()
+        super(SyncTargetTests, self).setUp()
+        self.db, self.st = self.create_sync_target()
         self.other_docs = []
 
     def receive_doc(self, doc_id, doc_rev, doc):
@@ -132,6 +134,10 @@ class DatabaseSyncTargetTests(tests.DatabaseBaseTests):
                                         last_known_generation=0,
                                         return_doc_cb=self.receive_doc)
         self.assertEqual(([], 2), (self.other_docs, new_gen))
+
+
+class DatabaseSyncTargetTests(SyncTargetTests, tests.DatabaseBaseTests):
+    pass
 
 
 class DatabaseSyncTests(tests.DatabaseBaseTests):

@@ -101,7 +101,7 @@ class ServerStateForTests(requests.ServerState):
         return self._dbs[path]
 
     def _create_database(self, path):
-        db = inmemory.InMemoryDatabase('db-%s' % path)
+        db = inmemory.InMemoryDatabase(path)
         self._dbs[path] = db
         return db
 
