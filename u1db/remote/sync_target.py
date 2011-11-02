@@ -79,3 +79,6 @@ class RemoteSyncTarget(SyncTarget):
                                from_replica_generation=from_replica_generation,
                                last_known_generation=last_known_generation)
         return res['other_new_generation']
+
+    def get_sync_exchange(self):
+        return None # not a local target

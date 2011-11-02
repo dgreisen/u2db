@@ -162,24 +162,22 @@ class RPCSyncExchange(SyncTargetRPC):
         self.from_replica_uid = from_replica_uid
         self.from_replica_generation = from_replica_generation
         self.last_known_generation = last_known_generation
+        self.sync_exch = self.target.get_sync_exchange()
 
     def handle_stream_entry(self, entry):
-        self.target._insert_doc_from_source(entry['doc_id'], entry['doc_rev'],
-                                            entry['doc'])
+        self.sync_exch.insert_doc_from_source(entry['doc_id'], entry['doc_rev'],
+                                              entry['doc'])
 
     def handle_end(self):
         def send_doc(doc_id, doc_rev, doc):
             entry = dict(doc_id=doc_id, doc_rev=doc_rev, doc=doc)
             self.responder.stream_entry(entry)
-        new_gen = self.target._checkpoint_sync_exchange(
+        new_gen = self.sync_exch.find_docs_to_return(self.last_known_generation)
+        self.responder.start_response(other_new_generation=new_gen)
+        new_gen = self.sync_exch.return_docs_and_record_sync(
                                                   self.from_replica_uid,
                                                   self.from_replica_generation,
-                                                  self.last_known_generation)
-        self.responder.start_response(other_new_generation=new_gen)
-        new_gen = self.target._finish_sync_exchange(self.from_replica_uid,
-                                               self.from_replica_generation,
-                                               self.last_known_generation,
-                                               send_doc)
+                                                  send_doc)
         self.responder.finish_response()
         self._close()
 

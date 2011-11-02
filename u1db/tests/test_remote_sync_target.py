@@ -48,6 +48,10 @@ class TestRemoteSyncTarget(tests.TestCaseWithSyncServer):
         self.assertEqual(12345, remote_target._url.port)
         self.assertEqual('/', remote_target._url.path)
 
+    def test_no_sync_exchange_object(self):
+        remote_target = self.getSyncTarget()
+        self.assertEqual(None, remote_target.get_sync_exchange())
+
     def test__ensure_connection(self):
         remote_target = self.getSyncTarget()
         self.assertIs(None, remote_target._conn)
