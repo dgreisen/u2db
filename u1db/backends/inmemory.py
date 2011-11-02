@@ -336,6 +336,10 @@ class EnsureListTransformation(Transformation):
         return [value]
 
 
+class ParseError(Exception):
+    pass
+
+
 class Parser(object):
 
     OPERATIONS = {
@@ -366,7 +370,8 @@ class Parser(object):
         word, field = self._take_word(field)
         if field.startswith("("):
             # We have an operation
-            assert field.endswith(")")
+            if not field.endswith(")"):
+                raise ParseError("Invalid transformation function: %s" % field)
             op = self.OPERATIONS.get(word, None)
             if op is None:
                 raise AssertionError("Unknown operation: %s" % word)
@@ -374,7 +379,10 @@ class Parser(object):
             return op(inner)
         else:
             assert len(field) == 0, "Unparsed chars: %s" % field
-            assert len(word), "Missing field specifier"
+            if len(word) <= 0:
+                raise ParseError("Missing field specifier")
+            if word.endswith("."):
+                raise ParseError("Invalid field specifier: %s" % word)
             return ExtractField(word)
 
 

@@ -360,6 +360,44 @@ class EnsureListTransformationTests(tests.TestCase):
         self.assertEqual([True], val)
 
 
+class ParserTests(tests.TestCase):
+
+    def parse(self, spec):
+        parser = inmemory.Parser()
+        return parser.parse(spec)
+
+    def test_parse_empty_string(self):
+        self.assertRaises(inmemory.ParseError, self.parse, "")
+
+    def test_parse_field(self):
+        getter = self.parse("a")
+        self.assertIsInstance(getter, inmemory.EnsureListTransformation)
+        self.assertIsInstance(getter.inner, inmemory.ExtractField)
+        self.assertEqual("a", getter.inner.field)
+
+    def test_parse_dotted_field(self):
+        getter = self.parse("a.b")
+        self.assertIsInstance(getter, inmemory.EnsureListTransformation)
+        self.assertIsInstance(getter.inner, inmemory.ExtractField)
+        self.assertEqual("a.b", getter.inner.field)
+
+    def test_parse_dotted_field_nothing_after_dot(self):
+        self.assertRaises(inmemory.ParseError, self.parse, "a.")
+
+    def test_parse_missing_close_on_transformation(self):
+        self.assertRaises(inmemory.ParseError, self.parse, "lower(a")
+
+    def test_parse_missing_field_in_transformation(self):
+        self.assertRaises(inmemory.ParseError, self.parse, "lower()")
+
+    def test_parse_transformation(self):
+        getter = self.parse("lower(a)")
+        self.assertIsInstance(getter, inmemory.EnsureListTransformation)
+        self.assertIsInstance(getter.inner, inmemory.Lower)
+        self.assertIsInstance(getter.inner.inner, inmemory.ExtractField)
+        self.assertEqual("a", getter.inner.inner.field)
+
+
 class IndexTests(tests.TestCase):
 
     def test_index_lower(self):
