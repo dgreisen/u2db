@@ -385,6 +385,11 @@ class InMemoryIndex(object):
         self._name = index_name
         self._definition = index_definition
         self._values = {}
+        parser = Parser()
+        self._getters = []
+        for field in self._definition:
+            getter = parser.parse(field)
+            self._getters.append(getter)
 
     def evaluate_json(self, doc):
         """Determine the 'key' after applying this index to the doc."""
@@ -394,12 +399,9 @@ class InMemoryIndex(object):
     def evaluate(self, obj):
         """Evaluate a dict object, applying this definition."""
         all_rows = [[]]
-        parser = Parser()
-        for field in self._definition:
+        for getter in self._getters:
             new_rows = []
-            val = obj
-            getter = parser.parse(field)
-            keys = getter.get(val)
+            keys = getter.get(obj)
             if keys is None:
                 return None
             for key in keys:
