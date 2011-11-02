@@ -4,10 +4,10 @@ import string
 class Getter(object):
     """Get a value from a document based on a specification."""
 
-    def get(self, doc):
+    def get(self, raw_doc):
         """Get a value from the document.
 
-        :param doc: the doc to get the value from.
+        :param raw_doc: the doc to get the value from.
         :return: the value, possibly None
         """
         raise NotImplementedError(self.get)
@@ -23,7 +23,7 @@ class StaticGetter(Getter):
         """
         self.value = value
 
-    def get(self, value):
+    def get(self, raw_doc):
         return self.value
 
 
@@ -45,21 +45,21 @@ class ExtractField(Getter):
         """
         self.field = field
 
-    def get(self, value):
+    def get(self, raw_doc):
         for subfield in self.field.split('.'):
-            if isinstance(value, dict):
-                value = value.get(subfield)
+            if isinstance(raw_doc, dict):
+                raw_doc = raw_doc.get(subfield)
             else:
-                value = None
+                raw_doc = None
                 break
-        if isinstance(value, dict):
-            value = None
-        if isinstance(value, list):
-            for val in value:
+        if isinstance(raw_doc, dict):
+            raw_doc = None
+        if isinstance(raw_doc, list):
+            for val in raw_doc:
                 if isinstance(val, dict) or isinstance(val, list):
-                    value = None
+                    raw_doc = None
                     break
-        return value
+        return raw_doc
 
 
 class Transformation(Getter):
@@ -72,8 +72,8 @@ class Transformation(Getter):
         """
         self.inner = inner
 
-    def get(self, value):
-        inner_value = self.inner.get(value)
+    def get(self, raw_doc):
+        inner_value = self.inner.get(raw_doc)
         return self.transform(inner_value)
 
     def transform(self, value):
