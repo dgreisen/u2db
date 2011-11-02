@@ -385,6 +385,9 @@ class Parser(object):
                 raise ParseError("Invalid field specifier: %s" % word)
             return ExtractField(word)
 
+    def parse_all(self, fields):
+        return [self.parse(field) for field in fields]
+
 
 class InMemoryIndex(object):
     """Interface for managing an Index."""

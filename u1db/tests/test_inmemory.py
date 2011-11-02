@@ -366,6 +366,10 @@ class ParserTests(tests.TestCase):
         parser = inmemory.Parser()
         return parser.parse(spec)
 
+    def parse_all(self, specs):
+        parser = inmemory.Parser()
+        return parser.parse_all(specs)
+
     def test_parse_empty_string(self):
         self.assertRaises(inmemory.ParseError, self.parse, "")
 
@@ -396,6 +400,16 @@ class ParserTests(tests.TestCase):
         self.assertIsInstance(getter.inner, inmemory.Lower)
         self.assertIsInstance(getter.inner.inner, inmemory.ExtractField)
         self.assertEqual("a", getter.inner.inner.field)
+
+    def test_parse_all(self):
+        getters = self.parse_all(["a", "b"])
+        self.assertEqual(2, len(getters))
+        self.assertIsInstance(getters[0], inmemory.EnsureListTransformation)
+        self.assertIsInstance(getters[0].inner, inmemory.ExtractField)
+        self.assertEqual("a", getters[0].inner.field)
+        self.assertIsInstance(getters[1], inmemory.EnsureListTransformation)
+        self.assertIsInstance(getters[1].inner, inmemory.ExtractField)
+        self.assertEqual("b", getters[1].inner.field)
 
 
 class IndexTests(tests.TestCase):
