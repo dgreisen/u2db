@@ -37,14 +37,15 @@ class Synchronizer(object):
     def _insert_doc_from_target(self, doc_id, doc_rev, doc):
         """Try to insert synced document from target.
 
-        Because of the 'TAKE_OTHER' semantics, any document which is
-        marked as conflicted takes the other value as the official
-        value.  This will update index definitions, etc. Increases
-        self.num_inserted depending whether the document
-        was effectively inserted.
+        Implements TAKE OTHER semantics: any document from the target
+        that is in conflict will be taken as the new official value,
+        while the current conflicting value will be stored alongside
+        as a conflict. In the process indexes will be updated etc.
 
         :return: None
         """
+        # Increases self.num_inserted depending whether the document
+        # was effectively inserted.
         state = self.source.put_doc_if_newer(doc_id, doc_rev, doc)
         if state == 'inserted':
             self.num_inserted += 1
