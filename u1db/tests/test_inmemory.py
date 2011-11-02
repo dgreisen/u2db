@@ -14,6 +14,8 @@
 
 """Test in-memory backend internals."""
 
+import json
+
 from u1db import (
     errors,
     tests,
@@ -286,35 +288,35 @@ class SplitWordsTests(tests.TestCase):
         self.assertEqual(['foo', 'baz','bar', 'sux'], val)
 
 
-class IsNoneTests(tests.TestCase):
+class IsNullTests(tests.TestCase):
 
     def test_inner_returns_None(self):
-        getter = inmemory.IsNone(inmemory.StaticGetter(None))
+        getter = inmemory.IsNull(inmemory.StaticGetter(None))
         val = getter.get('foo')
         self.assertEqual(True, val)
 
     def test_inner_returns_string(self):
-        getter = inmemory.IsNone(inmemory.StaticGetter('foo'))
+        getter = inmemory.IsNull(inmemory.StaticGetter('foo'))
         val = getter.get('zap')
         self.assertEqual(False, val)
 
     def test_inner_returns_list(self):
-        getter = inmemory.IsNone(inmemory.StaticGetter(['foo', 'bar']))
+        getter = inmemory.IsNull(inmemory.StaticGetter(['foo', 'bar']))
         val = getter.get('zap')
         self.assertEqual(False, val)
 
     def test_inner_returns_int(self):
-        getter = inmemory.IsNone(inmemory.StaticGetter(9))
+        getter = inmemory.IsNull(inmemory.StaticGetter(9))
         val = getter.get('zap')
         self.assertEqual(False, val)
 
     def test_inner_returns_float(self):
-        getter = inmemory.IsNone(inmemory.StaticGetter(9.0))
+        getter = inmemory.IsNull(inmemory.StaticGetter(9.0))
         val = getter.get('zap')
         self.assertEqual(False, val)
 
     def test_inner_returns_bool(self):
-        getter = inmemory.IsNone(inmemory.StaticGetter(True))
+        getter = inmemory.IsNull(inmemory.StaticGetter(True))
         val = getter.get('zap')
         self.assertEqual(False, val)
 
@@ -356,3 +358,33 @@ class EnsureListTransformationTests(tests.TestCase):
                 inmemory.StaticGetter(True))
         val = getter.get('zap')
         self.assertEqual([True], val)
+
+
+class IndexTests(tests.TestCase):
+
+    def test_index_lower(self):
+        db = inmemory.InMemoryIndex("foo", ["lower(name)"])
+        db.add_json("bar", json.dumps(dict(name="Foo")))
+        rows = db.lookup([("foo", )])
+        self.assertEqual(1, len(rows))
+        self.assertEqual("bar", rows[0])
+
+    def test_index_lower_with_lower(self):
+        db = inmemory.InMemoryIndex("foo", ["lower(name)"])
+        db.add_json("bar", json.dumps(dict(name="foo")))
+        rows = db.lookup([("foo", )])
+        self.assertEqual(1, len(rows))
+        self.assertEqual("bar", rows[0])
+
+    def test_index_lower_doesnt_match(self):
+        db = inmemory.InMemoryIndex("foo", ["lower(name)"])
+        db.add_json("bar", json.dumps(dict(name="foo")))
+        rows = db.lookup([("Foo", )])
+        self.assertEqual(0, len(rows))
+
+    def test_index_list(self):
+        db = inmemory.InMemoryIndex("foo", ["name"])
+        db.add_json("bar", json.dumps(dict(name=["foo", "baz"])))
+        rows = db.lookup([("baz", )])
+        self.assertEqual(1, len(rows))
+        self.assertEqual("bar", rows[0])
