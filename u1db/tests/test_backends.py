@@ -353,6 +353,36 @@ class DatabaseIndexTests(tests.DatabaseBaseTests):
             (doc1_id, doc1_rev, simple_doc)]),
             self.db.get_from_index('test-idx', [('*',)]))
 
+    def test_get_from_index_with_lower(self):
+        self.db.create_index("index", ["lower(name)"])
+        doc = '{"name": "Foo"}'
+        doc_id = self.db.create_doc(doc)
+        rows = self.db.get_from_index("index", [("foo", )])
+        self.assertEqual(1, len(rows))
+        self.assertEqual(list(doc_id) + [doc], list(rows[0]))
+
+    def test_get_from_index_with_lower_matches_same_case(self):
+        self.db.create_index("index", ["lower(name)"])
+        doc = '{"name": "foo"}'
+        doc_id = self.db.create_doc(doc)
+        rows = self.db.get_from_index("index", [("foo", )])
+        self.assertEqual(1, len(rows))
+        self.assertEqual(list(doc_id) + [doc], list(rows[0]))
+
+    def test_index_lower_doesnt_match_different_case(self):
+        self.db.create_index("index", ["lower(name)"])
+        doc = '{"name": "Foo"}'
+        doc_id = self.db.create_doc(doc)
+        rows = self.db.get_from_index("index", [("Foo", )])
+        self.assertEqual(0, len(rows))
+
+    def test_index_list(self):
+        self.db.create_index("index", ["name"])
+        doc = '{"name": ["foo", "bar"]}'
+        doc_id = self.db.create_doc(doc)
+        rows = self.db.get_from_index("index", [("bar", )])
+        self.assertEqual(list(doc_id) + [doc], list(rows[0]))
+
     def test_get_partial_from_index(self):
         doc1 = '{"k1": "v1", "k2": "v2"}'
         doc2 = '{"k1": "v1", "k2": "x2"}'

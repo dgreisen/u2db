@@ -38,7 +38,6 @@ document strings. Something of the form::
         doc_id TEXT,
         field_name TEXT,
         value TEXT,
-        CONSTRAINT document_fields_pkey PRIMARY KEY (doc_id, field_name)
     );
 
 So if you had two documents of the form::

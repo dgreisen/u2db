@@ -18,7 +18,7 @@ import simplejson
 from sqlite3 import dbapi2
 
 from u1db.backends import CommonBackend, CommonSyncTarget
-from u1db import compat, errors
+from u1db import compat, errors, query_parser
 
 
 class SQLiteDatabase(CommonBackend):
@@ -97,9 +97,7 @@ class SQLiteDatabase(CommonBackend):
             c.execute("CREATE TABLE document_fields ("
                       " doc_id TEXT,"
                       " field_name TEXT,"
-                      " value TEXT,"
-                      " CONSTRAINT document_fields_pkey"
-                      " PRIMARY KEY (doc_id, field_name))")
+                      " value TEXT)")
             # TODO: Should we include doc_id or not? By including it, the
             #       content can be returned directly from the index, and
             #       matched with the documents table, roughly saving 1 btree
@@ -513,18 +511,17 @@ class SQLitePartialExpandDatabase(SQLiteDatabase):
 
     def _evaluate_index(self, raw_doc, field):
         val = raw_doc
-        for subfield in field.split('.'):
-            if val is None:
-                return None
-            val = val.get(subfield, None)
-        return val
+        parser = query_parser.Parser()
+        getter = parser.parse(field)
+        return getter.get(raw_doc)
 
     def _update_indexes(self, doc_id, raw_doc, fields, db_cursor):
         values = []
         for field_name in fields:
-            idx_value = self._evaluate_index(raw_doc, field_name)
-            if idx_value is not None:
-                values.append((doc_id, field_name, idx_value))
+            idx_values = self._evaluate_index(raw_doc, field_name)
+            if idx_values:
+                for idx_value in idx_values:
+                    values.append((doc_id, field_name, idx_value))
         if values:
             db_cursor.executemany(
                 "INSERT INTO document_fields VALUES (?, ?, ?)", values)

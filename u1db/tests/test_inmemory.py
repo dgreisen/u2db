@@ -14,8 +14,6 @@
 
 """Test in-memory backend internals."""
 
-import json
-
 from u1db import (
     errors,
     tests,
@@ -124,33 +122,3 @@ class TestInMemoryIndex(tests.TestCase):
             idx._find_non_wildcards, ('a', 'b', 'c', 'd'))
         self.assertRaises(errors.InvalidValueForIndex,
             idx._find_non_wildcards, ('*', 'b', 'c'))
-
-
-class IndexTests(tests.TestCase):
-
-    def test_index_lower(self):
-        db = inmemory.InMemoryIndex("foo", ["lower(name)"])
-        db.add_json("bar", json.dumps(dict(name="Foo")))
-        rows = db.lookup([("foo", )])
-        self.assertEqual(1, len(rows))
-        self.assertEqual("bar", rows[0])
-
-    def test_index_lower_with_lower(self):
-        db = inmemory.InMemoryIndex("foo", ["lower(name)"])
-        db.add_json("bar", json.dumps(dict(name="foo")))
-        rows = db.lookup([("foo", )])
-        self.assertEqual(1, len(rows))
-        self.assertEqual("bar", rows[0])
-
-    def test_index_lower_doesnt_match(self):
-        db = inmemory.InMemoryIndex("foo", ["lower(name)"])
-        db.add_json("bar", json.dumps(dict(name="foo")))
-        rows = db.lookup([("Foo", )])
-        self.assertEqual(0, len(rows))
-
-    def test_index_list(self):
-        db = inmemory.InMemoryIndex("foo", ["name"])
-        db.add_json("bar", json.dumps(dict(name=["foo", "baz"])))
-        rows = db.lookup([("baz", )])
-        self.assertEqual(1, len(rows))
-        self.assertEqual("bar", rows[0])
