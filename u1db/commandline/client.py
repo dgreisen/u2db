@@ -27,15 +27,16 @@ from u1db.remote import (
     )
 
 
-def cmd_create(database, doc_id, in_file, out_file):
+def cmd_create(database, doc_id, in_file, out_file, err_file):
     """Run 'create_doc'."""
     db = sqlite_backend.SQLiteDatabase.open_database(database)
     doc_id, doc_rev = db.create_doc(in_file.read(), doc_id=doc_id)
-    out_file.write('doc_id: %s\ndoc_rev: %s\n' % (doc_id, doc_rev))
+    err_file.write('doc_id: %s\ndoc_rev: %s\n' % (doc_id, doc_rev))
 
 
 def client_create(args):
-    return cmd_create(args.database, args.doc_id, args.infile, sys.stdout)
+    return cmd_create(args.database, args.doc_id, args.infile, sys.stdout,
+                      sys.stderr)
 
 
 def cmd_get(database, doc_id, out_file, err_file):
@@ -53,17 +54,17 @@ def client_get(args):
     return cmd_get(args.database, args.doc_id, args.outfile, sys.stderr)
 
 
-def cmd_put(database, doc_id, old_doc_rev, in_file, out_file):
+def cmd_put(database, doc_id, old_doc_rev, in_file, out_file, err_file):
     """run 'put_doc' and update the data."""
     db = sqlite_backend.SQLiteDatabase.open_database(database)
     doc_rev = db.put_doc(doc_id, old_doc_rev, in_file.read())
-    out_file.write('doc_rev: %s\n' % (doc_rev,))
+    err_file.write('doc_rev: %s\n' % (doc_rev,))
 
 
 def client_put(args):
     """Run 'put_doc'"""
     return cmd_put(args.database, args.doc_id, args.doc_rev, args.infile,
-                   sys.stdout)
+                   sys.stdout, sys.stderr)
 
 
 def cmd_sync(source_db, target_db):

@@ -102,13 +102,15 @@ class TestCmdCreate(TestCaseWithDB):
 
     def test_create(self):
         out = cStringIO.StringIO()
+        err = cStringIO.StringIO()
         inf = cStringIO.StringIO(tests.simple_doc)
-        client.cmd_create(self.db_path, 'test-id', inf, out)
+        client.cmd_create(self.db_path, 'test-id', inf, out, err)
         doc_rev, doc, has_conflicts = self.db.get_doc('test-id')
         self.assertEqual(tests.simple_doc, doc)
         self.assertFalse(has_conflicts)
+        self.assertEqual('', out.getvalue())
         self.assertEqual('doc_id: test-id\ndoc_rev: %s\n' % (doc_rev,),
-                         out.getvalue())
+                         err.getvalue())
 
 
 class TestCmdGet(TestCaseWithDB):
@@ -137,13 +139,15 @@ class TestCmdPut(TestCaseWithDB):
     def test_put_simple(self):
         inf = cStringIO.StringIO(tests.nested_doc)
         out = cStringIO.StringIO()
+        err = cStringIO.StringIO()
         client.cmd_put(self.db_path, 'my-test-doc', self.doc_rev,
-                       inf, out)
+                       inf, out, err)
         doc_rev, doc, has_conflicts = self.db.get_doc('my-test-doc')
         self.assertEqual(tests.nested_doc, doc)
         self.assertFalse(has_conflicts)
+        self.assertEqual('', out.getvalue())
         self.assertEqual('doc_rev: %s\n' % (doc_rev,),
-                         out.getvalue())
+                         err.getvalue())
 
 
 class TestCmdSync(TestCaseWithDB):
@@ -197,12 +201,12 @@ class TestCommandLine(TestCaseWithDB):
         p = self.runU1DBClient(['create', '--doc-id', 'test-id', self.db_path])
         stdout, stderr = p.communicate(tests.simple_doc)
         self.assertEqual(0, p.returncode)
-        self.assertEqual('', stderr)
+        self.assertEqual('', stdout)
         doc_rev, doc, has_conflicts = self.db.get_doc('test-id')
         self.assertEqual(tests.simple_doc, doc)
         self.assertFalse(has_conflicts)
         self.assertEqual('doc_id: test-id\ndoc_rev: %s\n' % (doc_rev,),
-                         stdout)
+                         stderr)
 
     def test_get(self):
         _, doc_rev = self.db.create_doc(tests.simple_doc, doc_id='test-id')
@@ -220,8 +224,8 @@ class TestCommandLine(TestCaseWithDB):
         self.assertFalse(has_conflicts)
         self.assertEqual(tests.nested_doc, doc)
         self.assertEqual(0, ret)
-        self.assertEqual('doc_rev: %s\n' % (doc_rev,), stdout)
-        self.assertEqual('', stderr)
+        self.assertEqual('', stdout)
+        self.assertEqual('doc_rev: %s\n' % (doc_rev,), stderr)
 
     def test_sync(self):
         _, doc_rev = self.db.create_doc(tests.simple_doc, doc_id='test-id')
