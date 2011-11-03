@@ -59,7 +59,6 @@ class Command(object):
     """
 
     name = None
-    _known_commands = {}
 
     def __init__(self, stdin, stdout, stderr):
         self.stdin = stdin
