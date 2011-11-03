@@ -301,14 +301,20 @@ class SyncTarget(object):
         :param last_known_generation: The last generation that other replica
             knows about this
         :param: return_doc_cb(doc_id, doc_rev, doc): is a callback
-                used to return documents to the other replica,
-                it will be invoked in turn with values
-                (doc_id, doc_rev, doc) that have changed since other_my_rev,
-                and then with values (doc_id, doc_rev, doc) for entries
-                which were sent in docs_info, but which cannot be applied
-                because it would conflict.
+                used to return documents to the other replica, it will
+                be invoked in turn with values (doc_id, doc_rev, doc)
+                for documents that  have changed since last_known_generation.
         :return: new_generation - After applying docs_info, this is
             the current generation for this replica
         """
         raise NotImplementedError(self.sync_exchange)
+
+    def get_sync_exchange(self):
+        """Return a sync.SyncExchange object to carry through directly
+        the steps for a sync exchange.
+
+        :return: An instance of sync.SyncExchange or
+            None if this is not a local target
+        """
+        raise NotImplementedError(self.get_sync_exchange)
 
