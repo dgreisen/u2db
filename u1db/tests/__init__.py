@@ -44,6 +44,19 @@ class TestCase(testtools.TestCase):
         return tempdir
 
 
+def multiply_scenarios(a_scenarios, b_scenarios):
+    """Create the cross-product of scenarios."""
+
+    all_scenarios = []
+    for a_name, a_attrs in a_scenarios:
+        for b_name, b_attrs in b_scenarios:
+            name = '%s,%s' % (a_name, b_name)
+            attrs = dict(a_attrs)
+            attrs.update(b_attrs)
+            all_scenarios.append((name, attrs))
+    return all_scenarios
+
+
 simple_doc = '{"key": "value"}'
 nested_doc = '{"key": "value", "sub": {"doc": "underneath"}}'
 
@@ -101,7 +114,7 @@ class ServerStateForTests(requests.ServerState):
         return self._dbs[path]
 
     def _create_database(self, path):
-        db = inmemory.InMemoryDatabase('db-%s' % path)
+        db = inmemory.InMemoryDatabase(path)
         self._dbs[path] = db
         return db
 
