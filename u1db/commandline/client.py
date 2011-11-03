@@ -46,10 +46,10 @@ class CmdCreate(command.Command):
 
     def run(self, database, infile, doc_id):
         if infile is None:
-            infile = self.in_file
+            infile = self.stdin
         db = sqlite_backend.SQLiteDatabase.open_database(database)
         doc_id, doc_rev = db.create_doc(infile.read(), doc_id=doc_id)
-        self.err_file.write('id: %s\nrev: %s\n' % (doc_id, doc_rev))
+        self.stderr.write('id: %s\nrev: %s\n' % (doc_id, doc_rev))
 
 client_commands.register(CmdCreate)
 
@@ -69,11 +69,11 @@ class CmdGet(command.Command):
 
     def run(self, database, doc_id, outfile):
         if outfile is None:
-            outfile = self.out_file
+            outfile = self.stdout
         db = sqlite_backend.SQLiteDatabase.open_database(database)
         doc_rev, doc, has_conflicts = db.get_doc(doc_id)
         outfile.write(doc)
-        self.err_file.write('rev: %s\n' % (doc_rev,))
+        self.stderr.write('rev: %s\n' % (doc_rev,))
         if has_conflicts:
             pass
 
@@ -97,10 +97,10 @@ class CmdPut(command.Command):
 
     def run(self, database, doc_id, doc_rev, infile):
         if infile is None:
-            infile = self.in_file
+            infile = self.stdin
         db = sqlite_backend.SQLiteDatabase.open_database(database)
         doc_rev = db.put_doc(doc_id, doc_rev, infile.read())
-        self.err_file.write('rev: %s\n' % (doc_rev,))
+        self.stderr.write('rev: %s\n' % (doc_rev,))
 
 client_commands.register(CmdPut)
 

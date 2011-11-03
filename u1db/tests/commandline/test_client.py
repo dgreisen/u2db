@@ -112,9 +112,9 @@ class TestCmdCreate(TestCaseWithDB):
         doc_rev, doc, has_conflicts = self.db.get_doc('test-id')
         self.assertEqual(tests.simple_doc, doc)
         self.assertFalse(has_conflicts)
-        self.assertEqual('', cmd.out_file.getvalue())
+        self.assertEqual('', cmd.stdout.getvalue())
         self.assertEqual('id: test-id\nrev: %s\n' % (doc_rev,),
-                         cmd.err_file.getvalue())
+                         cmd.stderr.getvalue())
 
 
 class TestCmdGet(TestCaseWithDB):
@@ -127,9 +127,9 @@ class TestCmdGet(TestCaseWithDB):
     def test_get_simple(self):
         cmd = self.make_command(client.CmdGet)
         cmd.run(self.db_path, 'my-test-doc', None)
-        self.assertEqual(tests.simple_doc, cmd.out_file.getvalue())
+        self.assertEqual(tests.simple_doc, cmd.stdout.getvalue())
         self.assertEqual('rev: %s\n' % (self.doc_rev,),
-                         cmd.err_file.getvalue())
+                         cmd.stderr.getvalue())
 
 
 class TestCmdPut(TestCaseWithDB):
@@ -146,9 +146,9 @@ class TestCmdPut(TestCaseWithDB):
         doc_rev, doc, has_conflicts = self.db.get_doc('my-test-doc')
         self.assertEqual(tests.nested_doc, doc)
         self.assertFalse(has_conflicts)
-        self.assertEqual('', cmd.out_file.getvalue())
+        self.assertEqual('', cmd.stdout.getvalue())
         self.assertEqual('rev: %s\n' % (doc_rev,),
-                         cmd.err_file.getvalue())
+                         cmd.stderr.getvalue())
 
 
 class TestCmdSync(TestCaseWithDB):

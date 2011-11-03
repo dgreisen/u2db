@@ -34,7 +34,7 @@ class MyTestCommand(command.Command):
         parser.add_argument('--bar', dest='nbar', type=int)
 
     def run(self, foo, nbar):
-        self.out_file.write('foo: %s nbar: %d' % (foo, nbar))
+        self.stdout.write('foo: %s nbar: %d' % (foo, nbar))
 
 
 def make_stdin_out_err():
@@ -90,9 +90,9 @@ class TestCommand(tests.TestCase):
 
     def test__init__(self):
         cmd = self.make_command()
-        self.assertIsNot(None, cmd.in_file)
-        self.assertIsNot(None, cmd.out_file)
-        self.assertIsNot(None, cmd.err_file)
+        self.assertIsNot(None, cmd.stdin)
+        self.assertIsNot(None, cmd.stdout)
+        self.assertIsNot(None, cmd.stderr)
 
     def test_run_args(self):
         stdin, stdout, stderr = make_stdin_out_err()

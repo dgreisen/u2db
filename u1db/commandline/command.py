@@ -61,10 +61,10 @@ class Command(object):
     name = None
     _known_commands = {}
 
-    def __init__(self, in_file, out_file, err_file):
-        self.in_file = in_file
-        self.out_file = out_file
-        self.err_file = err_file
+    def __init__(self, stdin, stdout, stderr):
+        self.stdin = stdin
+        self.stdout = stdout
+        self.stderr = stderr
 
     @classmethod
     def _populate_subparser(cls, parser):
