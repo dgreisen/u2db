@@ -22,17 +22,41 @@ from u1db import (
     sync,
     )
 from u1db.backends import sqlite_backend
+from u1db.commandline import command
 from u1db.remote import (
     client,
     )
 
 
+client = command.CommandGroup()
+
+class CmdCreate(command.Command):
+    """Create a new document from scratch"""
+
+    name = 'create'
+
+    @classmethod
+    def _populate_subparser(cls, parser):
+        parser.add_argument('database', help='The database to update')
+        parser.add_argument('infile', nargs='?', default=None,
+            help='The file to read content from.')
+        parser.add_argument('--doc-id', default=None,
+            help='Set the document identifier')
+
+    def run(self):
+        if self.args.infile is None:
+            in_file = self.in_file
+        else:
+            in_file = self.args.infile
+        db = sqlite_backend.SQLiteDatabase.open_database(self.args.database)
+        doc_id, doc_rev = db.create_doc(in_file.read(), doc_id=self.args.doc_id)
+        self.err_file.write('id: %s\nrev: %s\n' % (doc_id, doc_rev))
+
+
 def cmd_create(database, doc_id, in_file, out_file, err_file):
     """Run 'create_doc'."""
-    db = sqlite_backend.SQLiteDatabase.open_database(database)
-    doc_id, doc_rev = db.create_doc(in_file.read(), doc_id=doc_id)
-    err_file.write('id: %s\nrev: %s\n' % (doc_id, doc_rev))
-
+    return CmdCreate.run_with_args(stdin=in_file, stdout=out_file,
+        stderr=err_file, database=database, doc_id=doc_id, infile=None)
 
 def client_create(args):
     return cmd_create(args.database, args.doc_id, args.infile, sys.stdout,
