@@ -376,11 +376,44 @@ class DatabaseIndexTests(tests.DatabaseBaseTests):
         rows = self.db.get_from_index("index", [("Foo", )])
         self.assertEqual(0, len(rows))
 
+    def test_index_lower_doesnt_match_other_index(self):
+        self.db.create_index("index", ["lower(name)"])
+        self.db.create_index("other_index", ["name"])
+        doc = '{"name": "Foo"}'
+        doc_id = self.db.create_doc(doc)
+        rows = self.db.get_from_index("index", [("Foo", )])
+        self.assertEqual(0, len(rows))
+
     def test_index_list(self):
         self.db.create_index("index", ["name"])
         doc = '{"name": ["foo", "bar"]}'
         doc_id = self.db.create_doc(doc)
         rows = self.db.get_from_index("index", [("bar", )])
+        self.assertEqual(1, len(rows))
+        self.assertEqual(list(doc_id) + [doc], list(rows[0]))
+
+    def test_index_split_words_match_first(self):
+        self.db.create_index("index", ["split_words(name)"])
+        doc = '{"name": "foo bar"}'
+        doc_id = self.db.create_doc(doc)
+        rows = self.db.get_from_index("index", [("foo", )])
+        self.assertEqual(1, len(rows))
+        self.assertEqual(list(doc_id) + [doc], list(rows[0]))
+
+    def test_index_split_words_match_second(self):
+        self.db.create_index("index", ["split_words(name)"])
+        doc = '{"name": "foo bar"}'
+        doc_id = self.db.create_doc(doc)
+        rows = self.db.get_from_index("index", [("bar", )])
+        self.assertEqual(1, len(rows))
+        self.assertEqual(list(doc_id) + [doc], list(rows[0]))
+
+    def test_index_split_words_match_both(self):
+        self.db.create_index("index", ["split_words(name)"])
+        doc = '{"name": "foo foo"}'
+        doc_id = self.db.create_doc(doc)
+        rows = self.db.get_from_index("index", [("foo", )])
+        self.assertEqual(1, len(rows))
         self.assertEqual(list(doc_id) + [doc], list(rows[0]))
 
     def test_get_partial_from_index(self):

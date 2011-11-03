@@ -155,12 +155,17 @@ class SplitWords(Transformation):
             joined_values = []
             for val in value:
                 if self._can_transform(val):
-                    # XXX: de-duplicate?
-                    joined_values.extend(val.split())
+                    for word in val.split():
+                        if word not in joined_values:
+                            joined_values.append(word)
             return joined_values
         else:
             if self._can_transform(value):
-                return value.split()
+                values = []
+                for word in value.split():
+                    if word not in values:
+                        values.append(word)
+                return values
             return None
 
 

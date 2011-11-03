@@ -75,9 +75,7 @@ class DatabaseBaseTests(TestCase):
     create_database = None
     scenarios = [
         ('mem', {'create_database': create_memory_database}),
-        ('sql_expand', {'create_database': create_sqlite_expanded}),
         ('sql_partexpand', {'create_database': create_sqlite_partial_expanded}),
-        ('sql_onlyexpand', {'create_database': create_sqlite_only_expanded}),
         ]
 
     def setUp(self):
