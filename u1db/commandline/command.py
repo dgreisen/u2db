@@ -15,6 +15,7 @@
 """Command infrastructure for u1db"""
 
 import argparse
+import inspect
 
 
 class CommandGroup(object):
@@ -42,8 +43,12 @@ class CommandGroup(object):
         """Run a command, from a sys.argv[1:] style input."""
         parser = self.make_argparser()
         args = parser.parse_args(argv)
-        cmd = args.subcommand(stdin, stdout, stderr, args)
-        cmd.run()
+        cmd = args.subcommand(stdin, stdout, stderr)
+        params, _, _, _ = inspect.getargspec(cmd.run)
+        vals = []
+        for param in params[1:]:
+            vals.append(getattr(args, param))
+        cmd.run(*vals)
 
 
 class Command(object):
@@ -56,24 +61,17 @@ class Command(object):
     name = None
     _known_commands = {}
 
-    def __init__(self, in_file, out_file, err_file, args):
+    def __init__(self, in_file, out_file, err_file):
         self.in_file = in_file
         self.out_file = out_file
         self.err_file = err_file
-        self.args = args
-
-    @classmethod
-    def run_with_args(cls, stdin, stdout, stderr, **kwargs):
-        args = argparse.Namespace(**kwargs)
-        cmd = cls(stdin, stdout, stderr, args)
-        return cmd.run()
 
     @classmethod
     def _populate_subparser(cls, parser):
         """Child classes should override this to provide their arguments."""
         raise NotImplementedError(cls._populate_subparser)
 
-    def run(self):
+    def run(self, *args):
         """This is where the magic happens.
 
         Subclasses should implement this, requesting their specific arguments.

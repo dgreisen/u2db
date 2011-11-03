@@ -43,20 +43,18 @@ class CmdCreate(command.Command):
         parser.add_argument('--doc-id', default=None,
             help='Set the document identifier')
 
-    def run(self):
-        if self.args.infile is None:
-            in_file = self.in_file
-        else:
-            in_file = self.args.infile
-        db = sqlite_backend.SQLiteDatabase.open_database(self.args.database)
-        doc_id, doc_rev = db.create_doc(in_file.read(), doc_id=self.args.doc_id)
+    def run(self, database, infile, doc_id):
+        if infile is None:
+            infile = self.in_file
+        db = sqlite_backend.SQLiteDatabase.open_database(database)
+        doc_id, doc_rev = db.create_doc(infile.read(), doc_id=doc_id)
         self.err_file.write('id: %s\nrev: %s\n' % (doc_id, doc_rev))
 
 
 def cmd_create(database, doc_id, in_file, out_file, err_file):
     """Run 'create_doc'."""
-    return CmdCreate.run_with_args(stdin=in_file, stdout=out_file,
-        stderr=err_file, database=database, doc_id=doc_id, infile=None)
+    cmd = CmdCreate(None, out_file, err_file)
+    cmd.run(database, in_file, doc_id)
 
 def client_create(args):
     return cmd_create(args.database, args.doc_id, args.infile, sys.stdout,

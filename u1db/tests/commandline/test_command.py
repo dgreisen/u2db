@@ -31,10 +31,10 @@ class MyTestCommand(command.Command):
     @classmethod
     def _populate_subparser(cls, parser):
         parser.add_argument('foo')
-        parser.add_argument('--bar', type=int)
+        parser.add_argument('--bar', dest='nbar', type=int)
 
-    def run(self):
-        self.out_file.write('args: %s\n' % (self.args,))
+    def run(self, foo, nbar):
+        self.out_file.write('foo: %s nbar: %d' % (foo, nbar))
 
 
 def make_stdin_out_err():
@@ -70,7 +70,7 @@ class TestCommandGroup(tests.TestCase):
         parser = group.make_argparser()
         args = self.parse_args(parser, ['mycmd', 'foozizle', '--bar=10'])
         self.assertEqual('foozizle', args.foo)
-        self.assertEqual(10, args.bar)
+        self.assertEqual(10, args.nbar)
         self.assertEqual(MyTestCommand, args.subcommand)
 
     def test_run_argv(self):
@@ -86,7 +86,7 @@ class TestCommand(tests.TestCase):
 
     def make_command(self):
         stdin, stdout, stderr = make_stdin_out_err()
-        return command.Command(stdin, stdout, stderr, None)
+        return command.Command(stdin, stdout, stderr)
 
     def test__init__(self):
         cmd = self.make_command()
@@ -94,7 +94,8 @@ class TestCommand(tests.TestCase):
         self.assertIsNot(None, cmd.out_file)
         self.assertIsNot(None, cmd.err_file)
 
-    def test_run_with_args(self):
+    def test_run_args(self):
         stdin, stdout, stderr = make_stdin_out_err()
-        res = MyTestCommand.run_with_args(stdin=stdin, stdout=stdout,
-                                          stderr=stderr, foo='foozizle', bar=10)
+        cmd = MyTestCommand(stdin, stdout, stderr)
+        res = cmd.run(foo='foozizle', nbar=10)
+        self.assertEqual('foo: foozizle nbar: 10', stdout.getvalue())
