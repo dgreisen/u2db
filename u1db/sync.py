@@ -63,6 +63,26 @@ class Synchronizer(object):
             self.source.force_doc_sync_conflict(doc_id, doc_rev, doc)
             self.num_inserted += 1
 
+    def _record_sync_info_with_the_target(self, start_generation):
+        """Record our new after sync generation with the target if gapless.
+
+        Any documents received from the target will cause the local
+        database to increment its generation. We do not want to send
+        them back to the target in a future sync. However, there could
+        also be concurrent updates from another process doing eg
+        'put_doc' while the sync was running. And we do want to
+        synchronize those documents.  We can tell if there was a
+        concurrent update by comparing our new generation number
+        versus the generation we started, and how many documents we
+        inserted from the target. If it matches exactly, then we can
+        record with the target that they are fully up to date with our
+        new generation.
+        """
+        cur_gen = self.source._get_generation()
+        if cur_gen == start_generation + self.num_inserted:
+            self.sync_target.record_sync_info(self.source._replica_uid,
+                                              cur_gen)
+
     def sync(self, callback=None):
         sync_target = self.sync_target
         # get target identifier, its current generation,
@@ -85,11 +105,10 @@ class Synchronizer(object):
                         return_doc_cb=self._insert_doc_from_target)
         # record target synced-up-to generation
         self.source.set_sync_generation(other_replica_uid, new_gen)
-        # if there were no updates but the insertion of received docs
-        # record this source current gen as synced-up-to gen on the target
-        cur_gen = self.source._get_generation()
-        if cur_gen == my_gen + self.num_inserted:
-            sync_target.record_sync_info(self.source._replica_uid, cur_gen)
+
+        # if gapless record current reached generation with target
+        self._record_sync_info_with_the_target(my_gen)
+
         return my_gen
 
 
@@ -138,17 +157,16 @@ class SyncExchange(object):
         self._incoming_trace.append((doc_id, doc_rev))
 
     def find_docs_to_return(self, last_known_generation):
-        """Find and mark all documents to return to the sync source,
-        either because they changed since the last known generation
-        the source has for the target, including ones that were sent
-        over but there is conflict.
+        """Find and further mark documents to return to the sync source.
 
-        The is the 2nd step of a sync exchange.
+        This finds the document identifiers for any documents that
+        have been updated since last_known_generation. It excludes
+        documents ids that have already been considered (marked conflicts,
+        or superseded by the sender, etc).
 
-        :param last_known_generation: The last generation that the source
-            knows about this
-        :return:  new_generation -  The current generation for the target
-            considering also all the inserted incoming documents.
+        :return: new_generation - the generation of this database
+            which the caller can consider themselves to be synchronized after
+            processing the returned documents.
         """
         self._last_known_generation = last_known_generation # for tests
         new_gen, changed_doc_ids = self._db.whats_changed(last_known_generation)

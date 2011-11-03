@@ -303,10 +303,7 @@ class SyncTarget(object):
         :param: return_doc_cb(doc_id, doc_rev, doc): is a callback
                 used to return documents to the other replica, it will
                 be invoked in turn with values (doc_id, doc_rev, doc)
-                that have changed since last_known_generation and then
-                with values (doc_id, doc_rev, doc) for entries which
-                were sent in docs_info, but which cannot be applied
-                because it would conflict.
+                for documents that  have changed since last_known_generation.
         :return: new_generation - After applying docs_info, this is
             the current generation for this replica
         """
