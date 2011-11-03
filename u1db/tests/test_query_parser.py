@@ -34,7 +34,6 @@ class ExtractFieldTests(tests.TestCase):
     def test_get_value_dict(self):
         getter = query_parser.ExtractField('foo')
         val = getter.get(dict(foo=dict(baz="bar")))
-        # XXX: should give None or error?
         self.assertEqual(None, val)
 
     def test_get_value_list(self):
@@ -48,9 +47,6 @@ class ExtractFieldTests(tests.TestCase):
         self.assertEqual(None, val)
 
     def test_get_value_int(self):
-        # XXX: is the API defined to store and return numbers as
-        # numbers as strings?
-        # i.e. do we need a "number" transformation?
         getter = query_parser.ExtractField('foo')
         val = getter.get(dict(foo=9))
         self.assertEqual(9, val)

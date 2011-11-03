@@ -223,7 +223,6 @@ class Parser(object):
         return inner
 
     def _inner_parse(self, field):
-        # XXX: crappy parser
         word, field = self._take_word(field)
         if field.startswith("("):
             # We have an operation
