@@ -36,7 +36,7 @@ def main(args):
 
     state = requests.ServerState()
     state.set_workingdir('.')
-    server = sync_server.TCPSyncServer(('127.0.0.1', args.port),
+    server = sync_server.TCPSyncServer(('', args.port),
         sync_server.TCPSyncRequestHandler, state)
     sys.stdout.write('listening on port: %s\n' % (server.server_address[1],))
     sys.stdout.flush()
