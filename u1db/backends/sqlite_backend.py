@@ -500,7 +500,10 @@ SQLiteDatabase.register_implementation(SQLiteExpandedDatabase)
 
 
 class SQLitePartialExpandDatabase(SQLiteDatabase):
-    """Similar to SQLiteExpandedDatabase, but only indexed fields are expanded.
+    """An SQLite Backend that expands documents into a document_field table.
+
+    It stores the original document text in document.doc. For fields that are
+    indexed, the data goes into document_fields.
     """
 
     _index_storage_value = 'expand referenced'
@@ -582,85 +585,3 @@ class SQLitePartialExpandDatabase(SQLiteDatabase):
             self._update_indexes(doc_id, raw_doc, new_fields, c)
 
 SQLiteDatabase.register_implementation(SQLitePartialExpandDatabase)
-
-
-class SQLiteOnlyExpandedDatabase(SQLiteDatabase):
-    """Documents are only stored by their fields.
-
-    Rather than storing the raw content as text, we split it into fields and
-    store it in an indexable table.
-    """
-
-    _index_storage_value = 'only expanded'
-
-    def _extra_schema_init(self, c):
-        c.execute("ALTER TABLE document_fields ADD COLUMN offset INT")
-
-    def _put_and_update_indexes(self, doc_id, old_doc, new_rev, doc):
-        c = self._db_handle.cursor()
-        if doc:
-            raw_doc = simplejson.loads(doc,
-                object_pairs_hook=compat.OrderedDict)
-            doc_content = None
-        else:
-            raw_doc = {}
-            doc_content = '<deleted>'
-        if old_doc:
-            c.execute("UPDATE document SET doc_rev=?, doc=?"
-                      " WHERE doc_id = ?", (new_rev, doc_content, doc_id))
-            c.execute("DELETE FROM document_fields WHERE doc_id = ?",
-                      (doc_id,))
-        else:
-            c.execute("INSERT INTO document VALUES (?, ?, ?)",
-                      (doc_id, new_rev, doc_content))
-        values = self._expand_to_fields(doc_id, None, raw_doc, save_none=True)
-        c.executemany("INSERT INTO document_fields VALUES (?, ?, ?, ?)",
-                      values)
-        c.execute("INSERT INTO transaction_log(doc_id) VALUES (?)",
-                  (doc_id,))
-
-    def _get_doc(self, doc_id):
-        """Get just the document content, without fancy handling."""
-        c = self._db_handle.cursor()
-        c.execute("SELECT doc_rev, doc FROM document WHERE doc_id = ?",
-                  (doc_id,))
-        val = c.fetchone()
-        if val is None:
-            return None, None
-        # TODO: There is a race condition here, where we select the document
-        #       revision info before we select the actual content fields.
-        #       We probably need a transaction (readonly) to ensure
-        #       consistency.
-        doc_rev, doc_content = val
-        if doc_content == '<deleted>':
-            return doc_rev, None
-        c.execute("SELECT field_name, value FROM document_fields"
-                  " WHERE doc_id = ? ORDER BY offset", (doc_id,))
-        # TODO: What about nested docs?
-        raw_doc = compat.OrderedDict()
-        for field, value in c.fetchall():
-            if '.' in field: # A nested document
-                split = field.split('.')
-                cur = raw_doc
-                for subfield in split[:-1]:
-                    if subfield not in cur:
-                        cur[subfield] = {}
-                    cur = cur[subfield]
-                cur[split[-1]] = value
-            else:
-                raw_doc[field] = value
-        doc = simplejson.dumps(raw_doc)
-        return doc_rev, doc
-
-    def get_from_index(self, index_name, key_values):
-        # The base implementation does all the complex index joining. But it
-        # doesn't manage to extract the actual document content correctly.
-        # To do that, we add a loop around self._get_doc
-        base = super(SQLiteOnlyExpandedDatabase, self).get_from_index(
-            index_name, key_values)
-        result = [(doc_id, doc_rev, self._get_doc(doc_id)[1])
-                  for doc_id, doc_rev, _ in base]
-        return result
-
-
-SQLiteDatabase.register_implementation(SQLiteOnlyExpandedDatabase)
