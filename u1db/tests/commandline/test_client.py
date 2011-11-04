@@ -33,7 +33,7 @@ class TestArgs(tests.TestCase):
 
     def setUp(self):
         super(TestArgs, self).setUp()
-        self.parser = client.setup_arg_parser()
+        self.parser = client.client_commands.make_argparser()
 
     def parse_args(self, args):
         # ArgumentParser.parse_args doesn't play very nicely with a test suite,
@@ -44,46 +44,45 @@ class TestArgs(tests.TestCase):
         except SystemExit, e:
             raise AssertionError('got SystemExit')
 
-
     def test_create(self):
         args = self.parse_args(['create', 'test.db'])
-        self.assertEqual(client.client_create, args.func)
+        self.assertEqual(client.CmdCreate, args.subcommand)
         self.assertEqual('test.db', args.database)
         self.assertEqual(None, args.doc_id)
-        self.assertEqual(sys.stdin, args.infile)
+        self.assertEqual(None, args.infile)
 
     def test_create_custom_doc_id(self):
-        args = self.parse_args(['create', '--doc-id', 'xyz', 'test.db'])
-        self.assertEqual(client.client_create, args.func)
+        args = self.parse_args(['create', '--id', 'xyz', 'test.db'])
+        self.assertEqual(client.CmdCreate, args.subcommand)
         self.assertEqual('test.db', args.database)
         self.assertEqual('xyz', args.doc_id)
-        self.assertEqual(sys.stdin, args.infile)
+        self.assertEqual(None, args.infile)
 
     def test_get(self):
         args = self.parse_args(['get', 'test.db', 'doc-id'])
-        self.assertEqual(client.client_get, args.func)
+        self.assertEqual(client.CmdGet, args.subcommand)
         self.assertEqual('test.db', args.database)
         self.assertEqual('doc-id', args.doc_id)
-        self.assertEqual(sys.stdout, args.outfile)
+        self.assertEqual(None, args.outfile)
 
     def test_get_dash(self):
         args = self.parse_args(['get', 'test.db', 'doc-id', '-'])
-        self.assertEqual(client.client_get, args.func)
+        self.assertEqual(client.CmdGet, args.subcommand)
         self.assertEqual('test.db', args.database)
         self.assertEqual('doc-id', args.doc_id)
         self.assertEqual(sys.stdout, args.outfile)
 
     def test_put(self):
         args = self.parse_args(['put', 'test.db', 'doc-id', 'old-doc-rev'])
-        self.assertEqual(client.client_put, args.func)
+        self.assertEqual(client.CmdPut, args.subcommand)
         self.assertEqual('test.db', args.database)
         self.assertEqual('doc-id', args.doc_id)
         self.assertEqual('old-doc-rev', args.doc_rev)
-        self.assertEqual(sys.stdin, args.infile)
+        self.assertEqual(None, args.infile)
 
     def test_sync(self):
         args = self.parse_args(['sync', 'source', 'target'])
-        self.assertEqual(client.client_sync, args.func)
+        self.assertEqual(client.CmdSync, args.subcommand)
         self.assertEqual('source', args.source)
         self.assertEqual('target', args.target)
 
@@ -97,20 +96,25 @@ class TestCaseWithDB(tests.TestCase):
         self.db = sqlite_backend.SQLitePartialExpandDatabase(self.db_path)
         self.db._set_replica_uid('test')
 
+    def make_command(self, cls, stdin_content=''):
+        inf = cStringIO.StringIO(stdin_content)
+        out = cStringIO.StringIO()
+        err = cStringIO.StringIO()
+        return cls(inf, out, err)
+
 
 class TestCmdCreate(TestCaseWithDB):
 
     def test_create(self):
-        out = cStringIO.StringIO()
-        err = cStringIO.StringIO()
+        cmd = self.make_command(client.CmdCreate)
         inf = cStringIO.StringIO(tests.simple_doc)
-        client.cmd_create(self.db_path, 'test-id', inf, out, err)
+        cmd.run(self.db_path, inf, 'test-id')
         doc_rev, doc, has_conflicts = self.db.get_doc('test-id')
         self.assertEqual(tests.simple_doc, doc)
         self.assertFalse(has_conflicts)
-        self.assertEqual('', out.getvalue())
+        self.assertEqual('', cmd.stdout.getvalue())
         self.assertEqual('id: test-id\nrev: %s\n' % (doc_rev,),
-                         err.getvalue())
+                         cmd.stderr.getvalue())
 
 
 class TestCmdGet(TestCaseWithDB):
@@ -121,12 +125,11 @@ class TestCmdGet(TestCaseWithDB):
                                              doc_id='my-test-doc')
 
     def test_get_simple(self):
-        out = cStringIO.StringIO()
-        err = cStringIO.StringIO()
-        client.cmd_get(self.db_path, 'my-test-doc', out_file=out, err_file=err)
-        self.assertEqual(tests.simple_doc, out.getvalue())
+        cmd = self.make_command(client.CmdGet)
+        cmd.run(self.db_path, 'my-test-doc', None)
+        self.assertEqual(tests.simple_doc, cmd.stdout.getvalue())
         self.assertEqual('rev: %s\n' % (self.doc_rev,),
-                         err.getvalue())
+                         cmd.stderr.getvalue())
 
 
 class TestCmdPut(TestCaseWithDB):
@@ -137,17 +140,15 @@ class TestCmdPut(TestCaseWithDB):
                                              doc_id='my-test-doc')
 
     def test_put_simple(self):
+        cmd = self.make_command(client.CmdPut)
         inf = cStringIO.StringIO(tests.nested_doc)
-        out = cStringIO.StringIO()
-        err = cStringIO.StringIO()
-        client.cmd_put(self.db_path, 'my-test-doc', self.doc_rev,
-                       inf, out, err)
+        cmd.run(self.db_path, 'my-test-doc', self.doc_rev, inf)
         doc_rev, doc, has_conflicts = self.db.get_doc('my-test-doc')
         self.assertEqual(tests.nested_doc, doc)
         self.assertFalse(has_conflicts)
-        self.assertEqual('', out.getvalue())
+        self.assertEqual('', cmd.stdout.getvalue())
         self.assertEqual('rev: %s\n' % (doc_rev,),
-                         err.getvalue())
+                         cmd.stderr.getvalue())
 
 
 class TestCmdSync(TestCaseWithDB):
@@ -163,7 +164,8 @@ class TestCmdSync(TestCaseWithDB):
                                                doc_id='my-test-id')
 
     def test_sync(self):
-        client.cmd_sync(self.db_path, self.db2_path)
+        cmd = self.make_command(client.CmdSync)
+        cmd.run(self.db_path, self.db2_path)
         self.assertEqual((self.doc_rev, tests.simple_doc, False),
                          self.db2.get_doc('test-id'))
         self.assertEqual((self.doc2_rev, tests.nested_doc, False),
@@ -198,7 +200,7 @@ class TestCommandLine(TestCaseWithDB):
         return ret, stdout.getvalue(), stderr.getvalue()
 
     def test_create_subprocess(self):
-        p = self.runU1DBClient(['create', '--doc-id', 'test-id', self.db_path])
+        p = self.runU1DBClient(['create', '--id', 'test-id', self.db_path])
         stdout, stderr = p.communicate(tests.simple_doc)
         self.assertEqual(0, p.returncode)
         self.assertEqual('', stdout)
