@@ -41,7 +41,7 @@ class CmdCreate(command.Command):
         parser.add_argument('database', help='The database to update')
         parser.add_argument('infile', nargs='?', default=None,
             help='The file to read content from.')
-        parser.add_argument('--doc-id', default=None,
+        parser.add_argument('--id', dest='doc_id', default=None,
             help='Set the document identifier')
 
     def run(self, database, infile, doc_id):

@@ -52,7 +52,7 @@ class TestArgs(tests.TestCase):
         self.assertEqual(None, args.infile)
 
     def test_create_custom_doc_id(self):
-        args = self.parse_args(['create', '--doc-id', 'xyz', 'test.db'])
+        args = self.parse_args(['create', '--id', 'xyz', 'test.db'])
         self.assertEqual(client.CmdCreate, args.subcommand)
         self.assertEqual('test.db', args.database)
         self.assertEqual('xyz', args.doc_id)
@@ -200,7 +200,7 @@ class TestCommandLine(TestCaseWithDB):
         return ret, stdout.getvalue(), stderr.getvalue()
 
     def test_create_subprocess(self):
-        p = self.runU1DBClient(['create', '--doc-id', 'test-id', self.db_path])
+        p = self.runU1DBClient(['create', '--id', 'test-id', self.db_path])
         stdout, stderr = p.communicate(tests.simple_doc)
         self.assertEqual(0, p.returncode)
         self.assertEqual('', stdout)
