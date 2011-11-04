@@ -81,6 +81,24 @@ class CmdGet(command.Command):
 client_commands.register(CmdGet)
 
 
+class CmdInitDB(command.Command):
+    """Create a new database"""
+
+    name = 'init-db'
+
+    @classmethod
+    def _populate_subparser(cls, parser):
+        parser.add_argument('database', help='The database to create')
+        parser.add_argument('replica_uid',
+            help='The unique identifier for this database')
+
+    def run(self, database, replica_uid):
+        db = sqlite_backend.SQLitePartialExpandDatabase(database)
+        db._set_replica_uid(replica_uid)
+
+client_commands.register(CmdInitDB)
+
+
 class CmdPut(command.Command):
     """Add a document to the database"""
 

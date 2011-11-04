@@ -72,6 +72,12 @@ class TestArgs(tests.TestCase):
         self.assertEqual('doc-id', args.doc_id)
         self.assertEqual(sys.stdout, args.outfile)
 
+    def test_init_db(self):
+        args = self.parse_args(['init-db', 'test.db', 'replica-uid'])
+        self.assertEqual(client.CmdInitDB, args.subcommand)
+        self.assertEqual('test.db', args.database)
+        self.assertEqual('replica-uid', args.replica_uid)
+
     def test_put(self):
         args = self.parse_args(['put', 'test.db', 'doc-id', 'old-doc-rev'])
         self.assertEqual(client.CmdPut, args.subcommand)
@@ -130,6 +136,18 @@ class TestCmdGet(TestCaseWithDB):
         self.assertEqual(tests.simple_doc, cmd.stdout.getvalue())
         self.assertEqual('rev: %s\n' % (self.doc_rev,),
                          cmd.stderr.getvalue())
+
+
+class TestCmdInit(TestCaseWithDB):
+
+    def test_init_new(self):
+        path = self.working_dir + '/test2.db'
+        self.assertFalse(os.path.exists(path))
+        cmd = self.make_command(client.CmdInitDB)
+        cmd.run(path, 'test-uid')
+        self.assertTrue(os.path.exists(path))
+        db = sqlite_backend.SQLiteDatabase.open_database(path)
+        self.assertEqual('test-uid', db._replica_uid)
 
 
 class TestCmdPut(TestCaseWithDB):
@@ -237,6 +255,11 @@ class TestCommandLine(TestCaseWithDB):
         self.assertEqual(0, ret)
         self.assertEqual(tests.simple_doc, stdout)
         self.assertEqual('rev: %s\n' % (doc_rev,), stderr)
+
+    def test_init_db(self):
+        path = self.working_dir + '/test2.db'
+        ret, stdout, stderr = self.run_main(['init-db', path, 'uid'])
+        db2 = sqlite_backend.SQLiteDatabase.open_database(path)
 
     def test_put(self):
         _, doc_rev = self.db.create_doc(tests.simple_doc, doc_id='test-id')
