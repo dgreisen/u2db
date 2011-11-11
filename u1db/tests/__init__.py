@@ -140,20 +140,27 @@ class ResponderForTests(object):
 
 class TestCaseWithSyncServer(TestCase):
 
+    @staticmethod
+    def scenario_defineServer():
+        return (sync_server.TCPSyncServer, sync_server.TCPSyncRequestHandler,
+                "force_shutdown")
+
     def setUp(self):
         super(TestCaseWithSyncServer, self).setUp()
         self.server = self.server_thread = None
 
-    def startServer(self, request_handler=sync_server.TCPSyncRequestHandler):
+    def startServer(self, other_request_handler=None):
+        server_def = self.scenario_defineServer()
+        server_class, request_handler, shutdown_meth = server_def
+        request_handler = other_request_handler or request_handler
         self.request_state = ServerStateForTests()
-        self.server = sync_server.TCPSyncServer(
-            ('127.0.0.1', 0), request_handler,
-            self.request_state)
+        self.server = server_class(('127.0.0.1', 0), request_handler,
+                                   self.request_state)
         self.server_thread = threading.Thread(target=self.server.serve_forever,
                                               kwargs=dict(poll_interval=0.01))
         self.server_thread.start()
         self.addCleanup(self.server_thread.join)
-        self.addCleanup(self.server.force_shutdown)
+        self.addCleanup(getattr(self.server, shutdown_meth))
 
     def getURL(self, path=None):
         host, port = self.server.server_address
