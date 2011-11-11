@@ -121,6 +121,10 @@ class HTTPResponder(object):
         self._write(json.dumps(entry)+"\r\n")
 
 
+class BadRequest(Exception):
+    """Bad request."""
+
+
 class HTTPInvocationByMethodWithBody(object):
     """Invoke methods on a resource."""
 
@@ -128,24 +132,33 @@ class HTTPInvocationByMethodWithBody(object):
         self.resource = resource
         self.environ = environ
 
+    def _lookup(self, method):
+        try:
+            return getattr(self.resource, method)
+        except AttributeError:
+            raise BadRequest()
+
     def __call__(self):
         args = urlparse.parse_qsl(self.environ['QUERY_STRING'],
                                   strict_parsing=False)
-        args = dict((k.decode('utf-8'), v.decode('utf-8')) for k,v in args)
+        try:
+            args = dict((k.decode('utf-8'), v.decode('utf-8')) for k,v in args)
+        except ValueError:
+            raise BadRequest()
         method = self.environ['REQUEST_METHOD'].lower()
         if method in ('get', 'delete'):
-            meth = getattr(self.resource, method)
+            meth = self._lookup(method)
             return meth(args)
         else:
             content_type = self.environ.get('CONTENT_TYPE')
             if content_type == 'application/json':
-                meth = getattr(self.resource, method)
+                meth = self._lookup(method)
                 body = self.environ['wsgi.input'].read()
                 return meth(body, args)
             elif content_type == 'application/x-u1db-multi-json':
-                meth_args = getattr(self.resource, '%s_args' % method)
-                meth_entry = getattr(self.resource, '%s_stream_entry' % method)
-                meth_end = getattr(self.resource, '%s_end' % method)
+                meth_args = self._lookup('%s_args' % method)
+                meth_entry = self._lookup('%s_stream_entry' % method)
+                meth_end = self._lookup('%s_end' % method)
                 body_readline = self.environ['wsgi.input'].readline
                 args.update(json.loads(body_readline()))
                 meth_args(args)
@@ -157,7 +170,7 @@ class HTTPInvocationByMethodWithBody(object):
                     meth_entry(entry)
                 return meth_end()
             else:
-                raise ValueError
+                raise BadRequest()
 
 
 class HTTPApp(object):
@@ -165,18 +178,22 @@ class HTTPApp(object):
     def __init__(self, state):
         self.state = state
 
-    def __call__(self, environ, start_response):
-        responder = HTTPResponder(start_response)
-        parts = environ['PATH_INFO'].split('/')
-        resource = None
+    def _lookup_resource(self, environ, responder):
         # xxx proper dispatch logic
-        # xxx error handling
+        parts = environ['PATH_INFO'].split('/')
         if len(parts) == 4 and parts[2] == 'doc':
             resource = DocResource(parts[1], parts[3], self.state, responder)
         elif len(parts) == 4 and parts[2] == 'sync-from':
             resource = SyncResource(parts[1], parts[3], self.state, responder)
-        if resource:
-            HTTPInvocationByMethodWithBody(resource, environ)()
         else:
+            raise BadRequest()
+        return resource
+
+    def __call__(self, environ, start_response):
+        responder = HTTPResponder(start_response)
+        try:
+            resource = self._lookup_resource(environ, responder)
+            HTTPInvocationByMethodWithBody(resource, environ)()
+        except BadRequest:
             responder.send_response(400)
         return []

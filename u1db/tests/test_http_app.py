@@ -89,6 +89,41 @@ class TestHTTPInvocationByMethodWithBody(testtools.TestCase):
         self.assertEqual(['{"entry": "x"}', '{"entry": "y"}'], resource.entries)
         self.assertEqual(['a', 's', 's', 'e'], resource.order)
 
+    def test_bad_request_decode_failure(self):
+        resource = TestResource()
+        environ = {'QUERY_STRING': 'a=\xff', 'REQUEST_METHOD': 'PUT',
+                   'wsgi.input': StringIO.StringIO('{}'),
+                   'CONTENT_TYPE': 'application/json'}
+        invoke = http_app.HTTPInvocationByMethodWithBody(resource, environ)
+        self.assertRaises(http_app.BadRequest, invoke)
+
+    def test_bad_request_unsupported_content_type(self):
+        resource = TestResource()
+        environ = {'QUERY_STRING': '', 'REQUEST_METHOD': 'PUT',
+                   'wsgi.input': StringIO.StringIO('{}'),
+                   'CONTENT_TYPE': 'text/plain'}
+        invoke = http_app.HTTPInvocationByMethodWithBody(resource, environ)
+        self.assertRaises(http_app.BadRequest, invoke)
+
+    def test_bad_request_unsupported_method_get_like(self):
+        environ = {'QUERY_STRING': '', 'REQUEST_METHOD': 'DELETE'}
+        invoke = http_app.HTTPInvocationByMethodWithBody(None, environ)
+        self.assertRaises(http_app.BadRequest, invoke)
+
+    def test_bad_request_unsupported_method_put_like(self):
+        environ = {'QUERY_STRING': '', 'REQUEST_METHOD': 'PUT',
+                   'wsgi.input': StringIO.StringIO('{}'),
+                   'CONTENT_TYPE': 'application/json'}
+        invoke = http_app.HTTPInvocationByMethodWithBody(None, environ)
+        self.assertRaises(http_app.BadRequest, invoke)
+
+    def test_bad_request_unsupported_method_put_like_multi_json(self):
+        environ = {'QUERY_STRING': '', 'REQUEST_METHOD': 'POST',
+                   'wsgi.input': StringIO.StringIO('{}\r\n{}\r\n'),
+                   'CONTENT_TYPE': 'application/x-u1db-multi-json'}
+        invoke = http_app.HTTPInvocationByMethodWithBody(None, environ)
+        self.assertRaises(http_app.BadRequest, invoke)
+
 
 class TestHTTPResponder(testtools.TestCase):
 
@@ -146,6 +181,18 @@ class TestHTTPApp(testtools.TestCase):
         application = http_app.HTTPApp(self.state)
         self.app = paste.fixture.TestApp(application)
         self.db0 = self.state._create_database('db0')
+
+    def test_bad_request_broken(self):
+        resp = self.app.put('/db0/doc/doc1', params='{"x": 1}',
+                            headers={'content-type': 'application/foo'},
+                            expect_errors=True)
+        self.assertEqual(400, resp.status)
+
+    def test_bad_request_dispatch(self):
+        resp = self.app.put('/db0/foo/doc1', params='{"x": 1}',
+                            headers={'content-type': 'application/json'},
+                            expect_errors=True)
+        self.assertEqual(400, resp.status)
 
     def test_put_doc(self):
         resp = self.app.put('/db0/doc/doc1', params='{"x": 1}',
