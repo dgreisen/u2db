@@ -18,7 +18,7 @@ import json
 import urlparse
 
 
-class Doc(object):
+class DocResource(object):
     """Document resource."""
 
     def __init__(self, dbname, id, state, responder):
@@ -31,7 +31,7 @@ class Doc(object):
         self.responder.send_response(rev=doc_rev) # xxx some other 20x status
 
 
-class Sync(object):
+class SyncResource(object):
     """Sync endpoint resource."""
 
     def __init__(self, dbname, from_replica_uid, state, responder):
@@ -171,9 +171,9 @@ class HTTPApp(object):
         # xxx proper dispatch logic
         # xxx error handling
         if len(parts) == 4 and parts[2] == 'doc':
-            resource = Doc(parts[1], parts[3], self.state, responder)
+            resource = DocResource(parts[1], parts[3], self.state, responder)
         elif len(parts) == 4 and parts[2] == 'sync-from':
-            resource = Sync(parts[1], parts[3], self.state, responder)
+            resource = SyncResource(parts[1], parts[3], self.state, responder)
         if resource:
             HTTPInvocationByMethodWithBody(resource, environ)()
         else:
