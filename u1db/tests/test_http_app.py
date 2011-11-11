@@ -104,14 +104,16 @@ class TestHTTPResponder(testtools.TestCase):
         responder = http_app.HTTPResponder(self.start_response)
         responder.send_response(value='success')
         self.assertEqual('200 OK', self.status)
-        self.assertEqual({'content-type': 'application/json'}, self.headers)
+        self.assertEqual({'content-type': 'application/json',
+                          'cache-control': 'no-cache'}, self.headers)
         self.assertEqual(['{"value": "success"}\r\n'], self.response_body)
 
     def test_send_response_status_fail(self):
         responder = http_app.HTTPResponder(self.start_response)
         responder.send_response(400)
         self.assertEqual('400 Bad Request', self.status)
-        self.assertEqual({'content-type': 'application/json'}, self.headers)
+        self.assertEqual({'content-type': 'application/json',
+                          'cache-control': 'no-cache'}, self.headers)
         self.assertEqual([], self.response_body)
 
     def test_start_finish_response_status_fail(self):
@@ -119,7 +121,8 @@ class TestHTTPResponder(testtools.TestCase):
         responder.start_response(404, error='not found')
         responder.finish_response()
         self.assertEqual('404 Not Found', self.status)
-        self.assertEqual({'content-type': 'application/json'}, self.headers)
+        self.assertEqual({'content-type': 'application/json',
+                          'cache-control': 'no-cache'}, self.headers)
         self.assertEqual(['{"error": "not found"}\r\n'], self.response_body)
 
     def test_send_stream_entry(self):
@@ -129,8 +132,8 @@ class TestHTTPResponder(testtools.TestCase):
         responder.stream_entry({'entry': True})
         responder.finish_response()
         self.assertEqual('200 OK', self.status)
-        self.assertEqual({'content-type': 'application/x-u1db-multi-json'},
-                         self.headers)
+        self.assertEqual({'content-type': 'application/x-u1db-multi-json',
+                          'cache-control': 'no-cache'}, self.headers)
         self.assertEqual(['{"one": 1}\r\n',
                           '{"entry": true}\r\n'], self.response_body)
 

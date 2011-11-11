@@ -100,7 +100,8 @@ class HTTPResponder(object):
         self._started = True
         status_text = httplib.responses[status]
         self._write = self._start_response('%d %s' % (status, status_text),
-                                         [('content-type', self.content_type)])
+                                         [('content-type', self.content_type),
+                                          ('cache-control', 'no-cache')])
         # xxx version in headers
         if kwargs:
             self._write(json.dumps(kwargs)+"\r\n")
