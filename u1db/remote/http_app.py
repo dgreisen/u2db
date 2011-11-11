@@ -13,11 +13,52 @@
 # with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 """HTTP Application exposing U1DB."""
+
 import functools
 import httplib
 import inspect
 import json
+import sys
 import urlparse
+
+
+class FencedReader(object):
+    """Read and get lines from a file but not past a given length."""
+
+    MAXCHUNK = 8192
+
+    # xxx do checks for maximum admissible total size
+    # and maximum admissible line size
+
+    def __init__(self, rfile, total):
+        self.rfile = rfile
+        self.remaining = total
+        self.kept = None
+
+    def read_chunk(self, atmost):
+        if self.kept is not None:
+            return self.kept
+        if self.remaining == 0:
+            return ''
+        data = self.rfile.read(min(self.remaining, atmost))
+        self.remaining -= len(data)
+        return data
+
+    def getline(self):
+        line_parts = []
+        while True:
+            chunk = self.read_chunk(self.MAXCHUNK)
+            if chunk == '':
+                break
+            nl = chunk.find("\n")
+            if nl != -1:
+                line_parts.append(chunk[:nl+1])
+                rest = chunk[nl+1:]
+                self.kept = rest or None
+                break
+            else:
+                line_parts.append(chunk)
+        return ''.join(line_parts)
 
 
 class BadRequest(Exception):
@@ -213,19 +254,26 @@ class HTTPInvocationByMethodWithBody(object):
             meth = self._lookup(method)
             return meth(args, None)
         else:
+            try:
+                content_length = int(self.environ.get('CONTENT_LENGTH', 0))
+            except ValueError:
+                content_length = 0
+            reader = FencedReader(self.environ['wsgi.input'], content_length)
             content_type = self.environ.get('CONTENT_TYPE')
             if content_type == 'application/json':
+                assert content_length
                 meth = self._lookup(method)
-                body = self.environ['wsgi.input'].read()
+                body = reader.read_chunk(sys.maxint)
                 return meth(args, body)
             elif content_type == 'application/x-u1db-multi-json':
+                assert content_length
                 meth_args = self._lookup('%s_args' % method)
                 meth_entry = self._lookup('%s_stream_entry' % method)
                 meth_end = self._lookup('%s_end' % method)
-                body_readline = self.environ['wsgi.input'].readline
-                meth_args(args, body_readline())
+                body_getline = reader.getline
+                meth_args(args, body_getline())
                 while True:
-                    line = body_readline()
+                    line = body_getline()
                     if not line:
                         break
                     entry = line.strip()
