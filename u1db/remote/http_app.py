@@ -13,9 +13,73 @@
 # with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 """HTTP Application exposing U1DB."""
+import functools
 import httplib
+import inspect
 import json
 import urlparse
+
+
+class BadRequest(Exception):
+    """Bad request."""
+
+
+def http_method(**control):
+    """Decoration for handling of query arguments and content for a HTTP method.
+
+       Match query arguments to python method arguments:
+           w = http_method()(f)
+           w(self, args, content) => args["content"]=content;
+                                     f(self, *args)
+
+       JSON deserialize content to arguments:
+           w = http_method(content_unserialized_as_args=True,...)(f)
+           w(self, args, content) => args.update(json.loads(content));
+                                     f(self, *args)
+
+       Support conversions (e.g int):
+           w = http_method(Arg=Conv,...)(f)
+           w(self, args, content) => args["Arg"]=Conv(args["Arg"]);
+                                     f(self, *args)
+
+       Enforce no use of query arguments:
+           w = http_method(no_query=True,...)(f)
+           w(self, args, content) raises BadRequest if args is not empty
+
+       Argument mismatches, deserialisation failures produce BadRequest.
+    """
+    content_as_args = control.pop('content_unserialized_as_args', False)
+    no_query = control.pop('no_query', False)
+    conversions = control.items()
+    def wrap(f):
+        argspec = inspect.getargspec(f)
+        assert argspec.args[0] == "self"
+        nargs = len(argspec.args)
+        ndefaults = len(argspec.defaults or ())
+        required_args = set(argspec.args[1:nargs-ndefaults])
+        all_args = set(argspec.args)
+        @functools.wraps(f)
+        def wrapper(self, args, content):
+            if no_query and args:
+                raise BadRequest()
+            if content is not None:
+                if content_as_args:
+                    try:
+                        args.update(json.loads(content))
+                    except ValueError:
+                        raise BadRequest()
+                else:
+                    args["content"] = content
+            if not (required_args <= set(args) <= all_args):
+                raise BadRequest()
+            for name, conv in conversions:
+                try:
+                    args[name] = conv(args[name])
+                except ValueError:
+                    raise BadRequest()
+            return f(self, **args)
+        return wrapper
+    return wrap
 
 
 class DocResource(object):
@@ -26,8 +90,9 @@ class DocResource(object):
         self.responder = responder
         self.db = state.open_database(dbname)
 
-    def put(self, body, args):
-        doc_rev = self.db.put_doc(self.id, None, body)
+    @http_method()
+    def put(self, content):
+        doc_rev = self.db.put_doc(self.id, None, content)
         self.responder.send_response(rev=doc_rev) # xxx some other 20x status
 
 
@@ -39,30 +104,32 @@ class SyncResource(object):
         self.responder = responder
         self.target = state.open_database(dbname).get_sync_target()
 
-    def get(self, args):
+    @http_method()
+    def get(self):
         result = self.target.get_sync_info(self.from_replica_uid)
         self.responder.send_response(this_replica_uid=result[0],
                                      this_replica_generation=result[1],
                                      other_replica_uid=self.from_replica_uid,
                                      other_replica_generation=result[2])
 
-    def put(self, body, args): # xxx ask for the upper layers to unserialize
-        data = json.loads(body)
-        self.target.record_sync_info(self.from_replica_uid,
-                                     data['generation'])
+    @http_method(generation=int,
+                 content_unserialized_as_args=True, no_query=True)
+    def put(self, generation):
+        self.target.record_sync_info(self.from_replica_uid, generation)
         self.responder.send_response(ok=True)
 
     # Implements the same logic as LocalSyncTarget.sync_exchange
 
-    def post_args(self, args):
-        self.from_replica_generation = args['from_replica_generation']
-        self.last_known_generation = args['last_known_generation']
+    @http_method(from_replica_generation=int, last_known_generation=int,
+                 content_unserialized_as_args=True)
+    def post_args(self, last_known_generation, from_replica_generation):
+        self.from_replica_generation = from_replica_generation
+        self.last_known_generation = last_known_generation
         self.sync_exch = self.target.get_sync_exchange()
 
-    def post_stream_entry(self, entry):
-        entry = json.loads(entry)
-        self.sync_exch.insert_doc_from_source(entry['id'], entry['rev'],
-                                              entry['doc'])
+    @http_method(content_unserialized_as_args=True)
+    def post_stream_entry(self, id, rev, doc):
+        self.sync_exch.insert_doc_from_source(id, rev, doc)
 
     def post_end(self):
         def send_doc(doc_id, doc_rev, doc):
@@ -121,10 +188,6 @@ class HTTPResponder(object):
         self._write(json.dumps(entry)+"\r\n")
 
 
-class BadRequest(Exception):
-    """Bad request."""
-
-
 class HTTPInvocationByMethodWithBody(object):
     """Invoke methods on a resource."""
 
@@ -148,26 +211,25 @@ class HTTPInvocationByMethodWithBody(object):
         method = self.environ['REQUEST_METHOD'].lower()
         if method in ('get', 'delete'):
             meth = self._lookup(method)
-            return meth(args)
+            return meth(args, None)
         else:
             content_type = self.environ.get('CONTENT_TYPE')
             if content_type == 'application/json':
                 meth = self._lookup(method)
                 body = self.environ['wsgi.input'].read()
-                return meth(body, args)
+                return meth(args, body)
             elif content_type == 'application/x-u1db-multi-json':
                 meth_args = self._lookup('%s_args' % method)
                 meth_entry = self._lookup('%s_stream_entry' % method)
                 meth_end = self._lookup('%s_end' % method)
                 body_readline = self.environ['wsgi.input'].readline
-                args.update(json.loads(body_readline()))
-                meth_args(args)
+                meth_args(args, body_readline())
                 while True:
                     line = body_readline()
                     if not line:
                         break
                     entry = line.strip()
-                    meth_entry(entry)
+                    meth_entry({}, entry)
                 return meth_end()
             else:
                 raise BadRequest()

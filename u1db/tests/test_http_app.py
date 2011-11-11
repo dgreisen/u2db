@@ -28,24 +28,94 @@ from u1db.remote import (
     )
 
 
+class TestHTTPMethodDecorator(testtools.TestCase):
+
+    def test_args(self):
+        @http_app.http_method()
+        def f(self, a, b):
+            return self, a, b
+        res = f("self", {"a": "x", "b": "y"}, None)
+        self.assertEqual(("self", "x", "y"), res)
+
+    def test_args_missing(self):
+        @http_app.http_method()
+        def f(self, a, b):
+            return a, b
+        self.assertRaises(http_app.BadRequest, f, "self", {"a": "x"}, None)
+
+    def test_args_unexpected(self):
+        @http_app.http_method()
+        def f(self, a):
+            return a
+        self.assertRaises(http_app.BadRequest, f, "self",
+                                                  {"a": "x", "c": "z"}, None)
+
+    def test_args_default(self):
+        @http_app.http_method()
+        def f(self, a, b="z"):
+            return a, b
+        res = f("self", {"a": "x"}, None)
+        self.assertEqual(("x", "z"), res)
+
+    def test_args_conversion(self):
+        @http_app.http_method(b=int)
+        def f(self, a, b):
+            return self, a, b
+        res = f("self", {"a": "x", "b": "2"}, None)
+        self.assertEqual(("self", "x", 2), res)
+
+        self.assertRaises(http_app.BadRequest, f, "self",
+                                                  {"a": "x", "b": "foo"}, None)
+
+    def test_args_content(self):
+        @http_app.http_method()
+        def f(self, a, content):
+            return a, content
+        res = f(self, {"a": "x"}, "CONTENT")
+        self.assertEqual(("x", "CONTENT"), res)
+
+    def test_args_content_unserialized_as_args(self):
+        @http_app.http_method(b=int, content_unserialized_as_args=True)
+        def f(self, a, b):
+            return self, a, b
+        res = f("self", {"a": "x"}, '{"b": "2"}')
+        self.assertEqual(("self", "x", 2), res)
+
+        self.assertRaises(http_app.BadRequest, f, "self", {}, 'not-json')
+
+    def test_args_content_no_query(self):
+        @http_app.http_method(no_query=True,
+                              content_unserialized_as_args=True)
+        def f(self, b):
+            return b
+        res = f("self", {}, '{"b": 2}')
+        self.assertEqual(2, res)
+
+        self.assertRaises(http_app.BadRequest, f, "self", {'a': 'x'},
+                          '{"b": 2}')
+
 class TestResource(object):
 
-    def get(self, args):
-        self.args = args
+    @http_app.http_method()
+    def get(self, a, b):
+        self.args = dict(a=a, b=b)
         return 'Get'
 
-    def put(self, body, args):
-        self.body = body
-        self.args = args
+    @http_app.http_method()
+    def put(self, a, content):
+        self.args = dict(a=a)
+        self.content = content
         return 'Put'
 
-    def put_args(self, args):
-        self.args = args
+    @http_app.http_method(content_unserialized_as_args=True)
+    def put_args(self, a, b):
+        self.args = dict(a=a, b=b)
         self.order = ['a']
         self.entries = []
 
-    def put_stream_entry(self, entry):
-        self.entries.append(entry)
+    @http_app.http_method()
+    def put_stream_entry(self, content):
+        self.entries.append(content)
         self.order.append('s')
 
     def put_end(self):
@@ -71,7 +141,7 @@ class TestHTTPInvocationByMethodWithBody(testtools.TestCase):
         res = invoke()
         self.assertEqual('Put', res)
         self.assertEqual({'a': '1'}, resource.args)
-        self.assertEqual('{"body": true}', resource.body)
+        self.assertEqual('{"body": true}', resource.content)
 
     def test_put_multi_json(self):
         resource = TestResource()
