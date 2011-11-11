@@ -28,6 +28,94 @@ from u1db.remote import (
     )
 
 
+class TestFencedReader(testtools.TestCase):
+
+    def test_init(self):
+        reader = http_app.FencedReader(StringIO.StringIO(""), 25)
+        self.assertEqual(25, reader.remaining)
+
+    def test_read_chunk(self):
+        inp = StringIO.StringIO("abcdef")
+        reader = http_app.FencedReader(inp, 5)
+        data = reader.read_chunk(2)
+        self.assertEqual("ab", data)
+        self.assertEqual(2, inp.tell())
+        self.assertEqual(3, reader.remaining)
+
+    def test_read_chunk_remaining(self):
+        inp = StringIO.StringIO("abcdef")
+        reader = http_app.FencedReader(inp, 4)
+        data = reader.read_chunk(9999)
+        self.assertEqual("abcd", data)
+        self.assertEqual(4, inp.tell())
+        self.assertEqual(0, reader.remaining)
+
+    def test_read_chunk_nothing_left(self):
+        inp = StringIO.StringIO("abc")
+        reader = http_app.FencedReader(inp, 2)
+        reader.read_chunk(2)
+        self.assertEqual(2, inp.tell())
+        self.assertEqual(0, reader.remaining)
+        data = reader.read_chunk(2)
+        self.assertEqual("", data)
+        self.assertEqual(2, inp.tell())
+        self.assertEqual(0, reader.remaining)
+
+    def test_read_chunk_kept(self):
+        inp = StringIO.StringIO("abcde")
+        reader = http_app.FencedReader(inp, 4)
+        reader.kept = "xyz"
+        data = reader.read_chunk(2) # atmost ignored
+        self.assertEqual("xyz", data)
+        self.assertEqual(0, inp.tell())
+        self.assertEqual(4, reader.remaining)
+
+    def test_getline(self):
+        inp = StringIO.StringIO("abc\r\nde")
+        reader = http_app.FencedReader(inp, 6)
+        reader.MAXCHUNK = 6
+        line = reader.getline()
+        self.assertEqual("abc\r\n", line)
+        self.assertEqual("d", reader.kept)
+
+    def test_getline_exact(self):
+        inp = StringIO.StringIO("abcd\r\nef")
+        reader = http_app.FencedReader(inp, 6)
+        reader.MAXCHUNK = 6
+        line = reader.getline()
+        self.assertEqual("abcd\r\n", line)
+        self.assertIs(None, reader.kept)
+
+    def test_getline_no_newline(self):
+        inp = StringIO.StringIO("abcd")
+        reader = http_app.FencedReader(inp, 4)
+        reader.MAXCHUNK = 6
+        line = reader.getline()
+        self.assertEqual("abcd", line)
+
+    def test_getline_many_chunks(self):
+        inp = StringIO.StringIO("abcde\r\nf")
+        reader = http_app.FencedReader(inp, 8)
+        reader.MAXCHUNK = 4
+        line = reader.getline()
+        self.assertEqual("abcde\r\n", line)
+        self.assertEqual("f", reader.kept)
+
+    def test_getline_empty(self):
+        inp = StringIO.StringIO("")
+        reader = http_app.FencedReader(inp, 0)
+        reader.MAXCHUNK = 4
+        line = reader.getline()
+        self.assertEqual("", line)
+        inp = StringIO.StringIO("\r\n")
+        reader = http_app.FencedReader(inp, 2)
+        reader.MAXCHUNK = 4
+        line = reader.getline()
+        self.assertEqual("\r\n", line)
+        line = reader.getline()
+        self.assertEqual("", line)
+
+
 class TestHTTPMethodDecorator(testtools.TestCase):
 
     def test_args(self):
@@ -134,8 +222,10 @@ class TestHTTPInvocationByMethodWithBody(testtools.TestCase):
 
     def test_put_json(self):
         resource = TestResource()
+        body = '{"body": true}'
         environ = {'QUERY_STRING': 'a=1', 'REQUEST_METHOD': 'PUT',
-                   'wsgi.input': StringIO.StringIO('{"body": true}'),
+                   'wsgi.input': StringIO.StringIO(body),
+                   'CONTENT_LENGTH': str(len(body)),
                    'CONTENT_TYPE': 'application/json'}
         invoke = http_app.HTTPInvocationByMethodWithBody(resource, environ)
         res = invoke()
@@ -145,12 +235,14 @@ class TestHTTPInvocationByMethodWithBody(testtools.TestCase):
 
     def test_put_multi_json(self):
         resource = TestResource()
+        body = (
+            '{"b": 2}\r\n'       # args
+            '{"entry": "x"}\r\n' # stream entry
+            '{"entry": "y"}\r\n' # stream entry
+            )
         environ = {'QUERY_STRING': 'a=1', 'REQUEST_METHOD': 'PUT',
-                   'wsgi.input': StringIO.StringIO(
-                       '{"b": 2}\r\n'       # args
-                       '{"entry": "x"}\r\n' # stream entry
-                       '{"entry": "y"}\r\n' # stream entry
-                       ),
+                   'wsgi.input': StringIO.StringIO(body),
+                   'CONTENT_LENGTH': str(len(body)),
                    'CONTENT_TYPE': 'application/x-u1db-multi-json'}
         invoke = http_app.HTTPInvocationByMethodWithBody(resource, environ)
         res = invoke()
@@ -163,6 +255,7 @@ class TestHTTPInvocationByMethodWithBody(testtools.TestCase):
         resource = TestResource()
         environ = {'QUERY_STRING': 'a=\xff', 'REQUEST_METHOD': 'PUT',
                    'wsgi.input': StringIO.StringIO('{}'),
+                   'CONTENT_LENGTH': '2',
                    'CONTENT_TYPE': 'application/json'}
         invoke = http_app.HTTPInvocationByMethodWithBody(resource, environ)
         self.assertRaises(http_app.BadRequest, invoke)
@@ -171,6 +264,7 @@ class TestHTTPInvocationByMethodWithBody(testtools.TestCase):
         resource = TestResource()
         environ = {'QUERY_STRING': '', 'REQUEST_METHOD': 'PUT',
                    'wsgi.input': StringIO.StringIO('{}'),
+                   'CONTENT_LENGTH': '2',
                    'CONTENT_TYPE': 'text/plain'}
         invoke = http_app.HTTPInvocationByMethodWithBody(resource, environ)
         self.assertRaises(http_app.BadRequest, invoke)
@@ -183,13 +277,16 @@ class TestHTTPInvocationByMethodWithBody(testtools.TestCase):
     def test_bad_request_unsupported_method_put_like(self):
         environ = {'QUERY_STRING': '', 'REQUEST_METHOD': 'PUT',
                    'wsgi.input': StringIO.StringIO('{}'),
+                   'CONTENT_LENGTH': '2',
                    'CONTENT_TYPE': 'application/json'}
         invoke = http_app.HTTPInvocationByMethodWithBody(None, environ)
         self.assertRaises(http_app.BadRequest, invoke)
 
     def test_bad_request_unsupported_method_put_like_multi_json(self):
+        body = '{}\r\n{}\r\n'
         environ = {'QUERY_STRING': '', 'REQUEST_METHOD': 'POST',
-                   'wsgi.input': StringIO.StringIO('{}\r\n{}\r\n'),
+                   'wsgi.input': StringIO.StringIO(body),
+                   'CONTENT_LENGTH': str(len(body)),
                    'CONTENT_TYPE': 'application/x-u1db-multi-json'}
         invoke = http_app.HTTPInvocationByMethodWithBody(None, environ)
         self.assertRaises(http_app.BadRequest, invoke)
