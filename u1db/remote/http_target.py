@@ -43,7 +43,7 @@ class HTTPSyncTarget(SyncTarget):
         self._ensure_connection()
         self._client.request('GET', '%s/sync-from/%s' % (self._url.path,
                                                          other_replica_uid))
-        # xxx check
+        # xxx check for errors with status
         res = json.loads(self._client.getresponse().read())
         return (res['this_replica_uid'], res['this_replica_generation'],
                 res['other_replica_generation'])
@@ -55,7 +55,7 @@ class HTTPSyncTarget(SyncTarget):
                                                other_replica_uid),
                           json.dumps({'generation': other_replica_generation}),
                           {'content-type': 'application/json'})
-        self._client.getresponse().read() # xxx check
+        self._client.getresponse().read() # xxx check for errors with status
 
     def sync_exchange(self, docs_info, from_replica_uid,
                       from_replica_generation,
@@ -80,7 +80,7 @@ class HTTPSyncTarget(SyncTarget):
         for entry in entries:
             self._client.send(entry)
         entries = None
-        resp = self._client.getresponse() # xxx check
+        resp = self._client.getresponse() # xxx check for errors with status
         data = resp.read().splitlines() # one at a time
         res = json.loads(data[0])
         for entry in data[1:]:
