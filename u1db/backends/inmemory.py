@@ -34,8 +34,9 @@ class InMemoryDatabase(CommonBackend):
         self._last_exchange_log = None
 
     def close(self):
-        self._indexes.clear()
-        self._docs.clear()
+        # This is a no-op, We don't want to free the data because one client
+        # may be closing it, while another wants to inspect the results.
+        pass
 
     def get_sync_generation(self, other_replica_uid):
         return self._other_generations.get(other_replica_uid, 0)
