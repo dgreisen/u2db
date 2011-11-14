@@ -16,7 +16,7 @@
 
 import os
 from wsgiref import simple_server
-from paste import httpserver
+#from paste import httpserver
 
 from u1db import (
     tests,

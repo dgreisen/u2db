@@ -14,6 +14,7 @@
 
 """The Synchronization class for U1DB."""
 
+from wsgiref import simple_server
 
 from u1db import (
     errors,
@@ -23,6 +24,8 @@ from u1db import (
     )
 from u1db.remote import (
     sync_target,
+    http_app,
+    http_target,
     )
 
 
@@ -43,9 +46,35 @@ def _make_local_db_and_remote_target(test):
     return db, st
 
 
+def http_defineServer():
+    def make_server(host_port, handler, state):
+        application = http_app.HTTPApp(state)
+        srv = simple_server.WSGIServer(host_port, handler)
+        srv.set_app(application)
+        #srv = httpserver.WSGIServerBase(application,
+        #                                host_port,
+        #                                handler
+        #                                )
+        return srv
+    class req_handler(simple_server.WSGIRequestHandler):
+        #def log_request(*args):
+        #    pass # suppress
+        pass
+    #rh = httpserver.WSGIHandler
+    return make_server, req_handler, "shutdown"
+
+
+def _make_local_db_and_http_target(test):
+    test.startServer()
+    db = test.request_state._create_database('test')
+    st = http_target.HTTPSyncTarget.connect(test.getURL('test'))
+    return db, st
+
 target_scenarios = [
     ('local', {'create_db_and_target': _make_local_db_and_target}),
     ('remote', {'create_db_and_target': _make_local_db_and_remote_target}),
+    ('http', {'create_db_and_target': _make_local_db_and_http_target,
+              'scenario_defineServer': http_defineServer}),
     ]
 
 
