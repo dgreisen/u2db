@@ -101,6 +101,7 @@ class TestCaseWithDB(tests.TestCase):
         self.db_path = self.working_dir + '/test.db'
         self.db = sqlite_backend.SQLitePartialExpandDatabase(self.db_path)
         self.db._set_replica_uid('test')
+        self.addCleanup(self.db.close)
 
     def make_command(self, cls, stdin_content=''):
         inf = cStringIO.StringIO(stdin_content)
@@ -175,6 +176,7 @@ class TestCmdSync(TestCaseWithDB):
         super(TestCmdSync, self).setUp()
         self.db2_path = self.working_dir + '/test2.db'
         self.db2 = sqlite_backend.SQLitePartialExpandDatabase(self.db2_path)
+        self.addCleanup(self.db2.close)
         self.db2._set_replica_uid('test2')
         _, self.doc_rev = self.db.create_doc(tests.simple_doc,
                                              doc_id='test-id')
@@ -247,7 +249,7 @@ class TestCommandLine(TestCaseWithDB):
         self.assertEqual(tests.simple_doc, doc)
         self.assertFalse(has_conflicts)
         self.assertEqual('id: test-id\nrev: %s\n' % (doc_rev,),
-                         stderr)
+                         stderr.replace('\r\n', '\n'))
 
     def test_get(self):
         _, doc_rev = self.db.create_doc(tests.simple_doc, doc_id='test-id')
@@ -277,6 +279,7 @@ class TestCommandLine(TestCaseWithDB):
         _, doc_rev = self.db.create_doc(tests.simple_doc, doc_id='test-id')
         self.db2_path = self.working_dir + '/test2.db'
         self.db2 = sqlite_backend.SQLitePartialExpandDatabase(self.db2_path)
+        self.addCleanup(self.db2.close)
         ret, stdout, stderr = self.run_main(
             ['sync', self.db_path, self.db2_path])
         self.assertEqual(0, ret)

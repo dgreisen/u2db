@@ -33,6 +33,10 @@ class InMemoryDatabase(CommonBackend):
         self._replica_uid = replica_uid
         self._last_exchange_log = None
 
+    def close(self):
+        self._indexes.clear()
+        self._docs.clear()
+
     def get_sync_generation(self, other_replica_uid):
         return self._other_generations.get(other_replica_uid, 0)
 
