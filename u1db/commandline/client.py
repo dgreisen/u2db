@@ -148,6 +148,7 @@ class CmdSync(command.Command):
         st = self._open_target(target)
         syncer = sync.Synchronizer(source_db, st)
         syncer.sync()
+        source_db.close()
 
 client_commands.register(CmdSync)
 
