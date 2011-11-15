@@ -365,12 +365,23 @@ class TestHTTPApp(testtools.TestCase):
                             expect_errors=True)
         self.assertEqual(400, resp.status)
 
-    def test_put_doc(self):
+    def test_put_doc_create(self):
         resp = self.app.put('/db0/doc/doc1', params='{"x": 1}',
                             headers={'content-type': 'application/json'})
         doc_rev, doc, _ = self.db0.get_doc('doc1')
-        self.assertEqual(200, resp.status)
+        self.assertEqual(201, resp.status) # created
         self.assertEqual('{"x": 1}', doc)
+        self.assertEqual('application/json', resp.header('content-type'))
+        self.assertEqual({'rev': doc_rev}, json.loads(resp.body))
+
+    def test_put_doc(self):
+        doc_id, orig_rev = self.db0.create_doc('doc1', '{"x": 1}')
+        resp = self.app.put('/db0/doc/doc1?old_rev=%s' % orig_rev,
+                            params='{"x": 2}',
+                            headers={'content-type': 'application/json'})
+        doc_rev, doc, _ = self.db0.get_doc('doc1')
+        self.assertEqual(200, resp.status)
+        self.assertEqual('{"x": 2}', doc)
         self.assertEqual('application/json', resp.header('content-type'))
         self.assertEqual({'rev': doc_rev}, json.loads(resp.body))
 
