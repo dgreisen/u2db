@@ -245,6 +245,10 @@ class Database(object):
         """
         raise NotImplementedError(self.get_sync_generation)
 
+    def close(self):
+        """Release any resources associated with this database."""
+        raise NotImplementedError(self.close)
+
 
 class SyncTarget(object):
     """Functionality for using a Database as a synchronization target."""
