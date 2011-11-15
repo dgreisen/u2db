@@ -68,6 +68,9 @@ class SQLiteDatabase(CommonBackend):
         """Release access to the underlying sqlite database."""
         self._db_handle.close()
 
+    def close(self):
+        self._close_sqlite_handle()
+
     def _is_initialized(self, c):
         """Check if this database has been initialized."""
         c.execute("PRAGMA case_sensitive_like=ON")

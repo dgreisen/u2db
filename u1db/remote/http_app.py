@@ -132,9 +132,13 @@ class DocResource(object):
         self.db = state.open_database(dbname)
 
     @http_method()
-    def put(self, content):
-        doc_rev = self.db.put_doc(self.id, None, content)
-        self.responder.send_response(rev=doc_rev) # xxx some other 20x status
+    def put(self, content, old_rev=None):
+        doc_rev = self.db.put_doc(self.id, old_rev, content)
+        if old_rev is None:
+            status = 201 # created
+        else:
+            status = 200
+        self.responder.send_response(status, rev=doc_rev)
 
 
 class SyncResource(object):
