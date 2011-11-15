@@ -26,6 +26,9 @@ nested_doc = tests.nested_doc
 
 class DatabaseTests(tests.DatabaseBaseTests):
 
+    def test_close(self):
+        self.db.close()
+
     def test_create_doc_allocating_doc_id(self):
         doc_id, new_rev = self.db.create_doc(simple_doc)
         self.assertNotEqual(None, doc_id)
