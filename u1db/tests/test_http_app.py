@@ -107,6 +107,10 @@ class TestFencedReader(testtools.TestCase):
         reader.MAXCHUNK = 4
         line = reader.getline()
         self.assertEqual("", line)
+        line = reader.getline()
+        self.assertEqual("", line)
+
+    def test_getline_just_newline(self):
         inp = StringIO.StringIO("\r\n")
         reader = http_app.FencedReader(inp, 2)
         reader.MAXCHUNK = 4
