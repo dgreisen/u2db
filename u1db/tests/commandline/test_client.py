@@ -27,6 +27,7 @@ from u1db.backends import (
     )
 from u1db.commandline import client
 from u1db.tests.commandline import safe_close
+from u1db.tests import test_remote_sync_server
 
 
 class TestArgs(tests.TestCase):
@@ -192,7 +193,11 @@ class TestCmdSync(TestCaseWithDB):
                          self.db.get_doc('my-test-id'))
 
 
-class TestCmdSyncRemote(tests.TestCaseWithSyncServer, TestCaseWithDB):
+class TestCmdSyncRemote(tests.TestCaseWithServer, TestCaseWithDB):
+
+    @staticmethod
+    def server_def():
+        return test_remote_sync_server.TestTCPSyncServer.server_def()
 
     def setUp(self):
         super(TestCmdSyncRemote, self).setUp()

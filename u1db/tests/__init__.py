@@ -138,20 +138,25 @@ class ResponderForTests(object):
         self.sent_response = True
 
 
-class TestCaseWithSyncServer(TestCase):
+class TestCaseWithServer(TestCase):
 
     @staticmethod
-    def scenario_defineServer():
-        return (sync_server.TCPSyncServer, sync_server.TCPSyncRequestHandler,
-                "force_shutdown")
+    def server_def():
+        # should return (ServerClass, RequestHandlerClass,
+        #                "shutdown method name", "url_scheme")
+        raise NotImplementedError(TestCaseWithServer.server_def)
 
     def setUp(self):
-        super(TestCaseWithSyncServer, self).setUp()
+        super(TestCaseWithServer, self).setUp()
         self.server = self.server_thread = None
 
+    @property
+    def url_scheme(self):
+        return self.server_def()[-1]
+
     def startServer(self, other_request_handler=None):
-        server_def = self.scenario_defineServer()
-        server_class, request_handler, shutdown_meth = server_def
+        server_def = self.server_def()
+        server_class, request_handler, shutdown_meth, _ = server_def
         request_handler = other_request_handler or request_handler
         self.request_state = ServerStateForTests()
         self.server = server_class(('127.0.0.1', 0), request_handler,
@@ -166,7 +171,7 @@ class TestCaseWithSyncServer(TestCase):
         host, port = self.server.server_address
         if path is None:
             path = ''
-        return 'u1db://%s:%s/%s' % (host, port, path)
+        return '%s://%s:%s/%s' % (self.url_scheme, host, port, path)
 
 
 def socket_pair():

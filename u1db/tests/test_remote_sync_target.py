@@ -12,7 +12,7 @@
 # You should have received a copy of the GNU General Public License along
 # with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-"""Tests for the RemoteSyncTarget"""
+"""Tests for the remote sync targets"""
 
 import os
 from wsgiref import simple_server
@@ -22,6 +22,7 @@ from u1db import (
     tests,
     )
 from u1db.remote import (
+    sync_server,
     sync_target,
     http_app,
     http_target
@@ -31,10 +32,11 @@ from u1db.backends import (
     )
 
 
-def remote_defineServer():
-    return tests.TestCaseWithSyncServer.scenario_defineServer()
+def remote_server_def():
+    return (sync_server.TCPSyncServer, sync_server.TCPSyncRequestHandler,
+            "force_shutdown", "u1db")
 
-def http_defineServer():
+def http_server_def():
     def make_server(host_port, handler, state):
         application = http_app.HTTPApp(state)
         srv = simple_server.WSGIServer(host_port, handler)
@@ -48,40 +50,34 @@ def http_defineServer():
         def log_request(*args):
             pass # suppress
     #rh = httpserver.WSGIHandler
-    return make_server, req_handler, "shutdown"
-
-def remote_getSyncTarget(test, path):
-    return sync_target.RemoteSyncTarget.connect(test.getURL(path))
-
-def http_getSyncTarget(test, path):
-    return http_target.HTTPSyncTarget.connect(test.getURL(path))
+    return make_server, req_handler, "shutdown", "http"
 
 
-class TestRemoteSyncTarget(tests.TestCaseWithSyncServer):
-
+class TestRemoteSyncTargets(tests.TestCaseWithServer):
 
     scenarios = [
-        ('http', {'scenario_defineServer': http_defineServer,
-                  'scenario_getSyncTarget': http_getSyncTarget}),
-        ('remote', {'scenario_defineServer': remote_defineServer,
-                    'scenario_getSyncTarget': remote_getSyncTarget}),
+        ('http', {'server_def': http_server_def,
+                  'sync_target_class': http_target.HTTPSyncTarget}),
+        ('remote', {'server_def': remote_server_def,
+                    'sync_target_class': sync_target.RemoteSyncTarget}),
         ]
 
     def getSyncTarget(self, path=None):
         if self.server is None:
             self.startServer()
-        return self.scenario_getSyncTarget(self, path)
+        return self.sync_target_class(self.getURL(path))
 
     def test_connect(self):
         self.startServer()
         url = self.getURL()
-        remote_target = sync_target.RemoteSyncTarget.connect(url)
+        remote_target = self.sync_target_class.connect(url)
         self.assertEqual(url, remote_target._url.geturl())
         self.assertIs(None, remote_target._client)
 
     def test_parse_url(self):
-        remote_target = sync_target.RemoteSyncTarget('u1db://127.0.0.1:12345/')
-        self.assertEqual('u1db', remote_target._url.scheme)
+        remote_target = self.sync_target_class(
+                                     '%s://127.0.0.1:12345/' % self.url_scheme)
+        self.assertEqual(self.url_scheme, remote_target._url.scheme)
         self.assertEqual('127.0.0.1', remote_target._url.hostname)
         self.assertEqual(12345, remote_target._url.port)
         self.assertEqual('/', remote_target._url.path)

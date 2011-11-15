@@ -51,15 +51,12 @@ class TwoMessageHandler(SocketServer.BaseRequestHandler):
         self.request.sendall('goodbye\n')
 
 
-class TestTestCaseWithSyncServer(tests.TestCaseWithSyncServer):
+class TestTCPSyncServer(tests.TestCaseWithServer):
 
-    def test_getURL(self):
-        self.startServer()
-        url = self.getURL()
-        self.assertTrue(url.startswith('u1db://127.0.0.1:'))
-
-
-class TestTCPSyncServer(tests.TestCaseWithSyncServer):
+    @staticmethod
+    def server_def():
+        return (sync_server.TCPSyncServer, sync_server.TCPSyncRequestHandler,
+                "force_shutdown", "u1db")
 
     def connectToServer(self):
         client_sock = socket.socket()
