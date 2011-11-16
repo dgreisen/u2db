@@ -17,7 +17,7 @@
 import functools
 import httplib
 import inspect
-import json
+import simplejson
 import sys
 import urlparse
 
@@ -75,7 +75,7 @@ def http_method(**control):
 
        JSON deserialize content to arguments:
            w = http_method(content_unserialized_as_args=True,...)(f)
-           w(self, args, content) => args.update(json.loads(content));
+           w(self, args, content) => args.update(simplejson.loads(content));
                                      f(self, *args)
 
        Support conversions (e.g int):
@@ -106,7 +106,7 @@ def http_method(**control):
             if content is not None:
                 if content_as_args:
                     try:
-                        args.update(json.loads(content))
+                        args.update(simplejson.loads(content))
                     except ValueError:
                         raise BadRequest()
                 else:
@@ -216,7 +216,7 @@ class HTTPResponder(object):
                                           ('cache-control', 'no-cache')])
         # xxx version in headers
         if kwargs:
-            self._write(json.dumps(kwargs)+"\r\n")
+            self._write(simplejson.dumps(kwargs)+"\r\n")
 
     def finish_response(self):
         """finish sending response."""
@@ -230,7 +230,7 @@ class HTTPResponder(object):
     def stream_entry(self, entry):
         "send stream entry as part of the response."
         assert self._started
-        self._write(json.dumps(entry)+"\r\n")
+        self._write(simplejson.dumps(entry)+"\r\n")
 
 
 class HTTPInvocationByMethodWithBody(object):

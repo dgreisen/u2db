@@ -16,7 +16,7 @@
 
 import testtools
 import paste.fixture
-import json
+import simplejson
 import StringIO
 
 from u1db import (
@@ -372,7 +372,7 @@ class TestHTTPApp(testtools.TestCase):
         self.assertEqual(201, resp.status) # created
         self.assertEqual('{"x": 1}', doc)
         self.assertEqual('application/json', resp.header('content-type'))
-        self.assertEqual({'rev': doc_rev}, json.loads(resp.body))
+        self.assertEqual({'rev': doc_rev}, simplejson.loads(resp.body))
 
     def test_put_doc(self):
         doc_id, orig_rev = self.db0.create_doc('doc1', '{"x": 1}')
@@ -383,7 +383,7 @@ class TestHTTPApp(testtools.TestCase):
         self.assertEqual(200, resp.status)
         self.assertEqual('{"x": 2}', doc)
         self.assertEqual('application/json', resp.header('content-type'))
-        self.assertEqual({'rev': doc_rev}, json.loads(resp.body))
+        self.assertEqual({'rev': doc_rev}, simplejson.loads(resp.body))
 
     def test_get_sync_info(self):
         self.db0.set_sync_generation('other-id', 1)
@@ -394,7 +394,7 @@ class TestHTTPApp(testtools.TestCase):
                               this_replica_generation=0,
                               other_replica_uid='other-id',
                               other_replica_generation=1),
-                              json.loads(resp.body))
+                              simplejson.loads(resp.body))
 
     def test_record_sync_info(self):
         resp = self.app.put('/db0/sync-from/other-id',
@@ -402,15 +402,15 @@ class TestHTTPApp(testtools.TestCase):
                             headers={'content-type': 'application/json'})
         self.assertEqual(200, resp.status)
         self.assertEqual('application/json', resp.header('content-type'))
-        self.assertEqual({'ok': True}, json.loads(resp.body))
+        self.assertEqual({'ok': True}, simplejson.loads(resp.body))
         self.assertEqual(self.db0.get_sync_generation('other-id'), 2)
 
     def test_sync_exchange_send(self):
         entry = {'id': 'doc-here', 'rev': 'replica:1', 'doc':
                  '{"value": "here"}'}
         args = dict(from_replica_generation=10, last_known_generation=0)
-        body = ("%s\r\n" % json.dumps(args) +
-                "%s\r\n" % json.dumps(entry))
+        body = ("%s\r\n" % simplejson.dumps(args) +
+                "%s\r\n" % simplejson.dumps(entry))
         resp = self.app.post('/db0/sync-from/replica',
                             params=body,
                             headers={'content-type':
@@ -418,14 +418,14 @@ class TestHTTPApp(testtools.TestCase):
         self.assertEqual(200, resp.status)
         self.assertEqual('application/x-u1db-multi-json',
                          resp.header('content-type'))
-        self.assertEqual({'new_generation': 1}, json.loads(resp.body))
+        self.assertEqual({'new_generation': 1}, simplejson.loads(resp.body))
         self.assertEqual(('replica:1', '{"value": "here"}', False),
                          self.db0.get_doc('doc-here'))
 
     def test_sync_exchange_receive(self):
         doc_id, doc_rev = self.db0.create_doc('{"value": "there"}')
         args = dict(from_replica_generation=10, last_known_generation=0)
-        body = "%s\r\n" % json.dumps(args)
+        body = "%s\r\n" % simplejson.dumps(args)
         resp = self.app.post('/db0/sync-from/replica',
                             params=body,
                             headers={'content-type':
@@ -435,6 +435,7 @@ class TestHTTPApp(testtools.TestCase):
                          resp.header('content-type'))
         parts = resp.body.splitlines()
         self.assertEqual(2, len(parts))
-        self.assertEqual({'new_generation': 1}, json.loads(parts[0]))
+        self.assertEqual({'new_generation': 1}, simplejson.loads(parts[0]))
         self.assertEqual({'doc': '{"value": "there"}',
-                          'rev': doc_rev, 'id': doc_id}, json.loads(parts[1]))
+                          'rev': doc_rev, 'id': doc_id},
+                         simplejson.loads(parts[1]))
