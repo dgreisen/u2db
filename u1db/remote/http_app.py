@@ -68,20 +68,23 @@ class BadRequest(Exception):
 def http_method(**control):
     """Decoration for handling of query arguments and content for a HTTP method.
 
+       args and content here are the query arguments and body of the incoming
+       HTTP requests.
+
        Match query arguments to python method arguments:
            w = http_method()(f)
            w(self, args, content) => args["content"]=content;
-                                     f(self, *args)
+                                     f(self, **args)
 
        JSON deserialize content to arguments:
-           w = http_method(content_unserialized_as_args=True,...)(f)
+           w = http_method(content_as_args=True,...)(f)
            w(self, args, content) => args.update(simplejson.loads(content));
-                                     f(self, *args)
+                                     f(self, **args)
 
        Support conversions (e.g int):
            w = http_method(Arg=Conv,...)(f)
            w(self, args, content) => args["Arg"]=Conv(args["Arg"]);
-                                     f(self, *args)
+                                     f(self, **args)
 
        Enforce no use of query arguments:
            w = http_method(no_query=True,...)(f)
@@ -89,7 +92,7 @@ def http_method(**control):
 
        Argument mismatches, deserialisation failures produce BadRequest.
     """
-    content_as_args = control.pop('content_unserialized_as_args', False)
+    content_as_args = control.pop('content_as_args', False)
     no_query = control.pop('no_query', False)
     conversions = control.items()
     def wrap(f):
@@ -158,7 +161,7 @@ class SyncResource(object):
                                      other_replica_generation=result[2])
 
     @http_method(generation=int,
-                 content_unserialized_as_args=True, no_query=True)
+                 content_as_args=True, no_query=True)
     def put(self, generation):
         self.target.record_sync_info(self.from_replica_uid, generation)
         self.responder.send_response(ok=True)
@@ -166,13 +169,13 @@ class SyncResource(object):
     # Implements the same logic as LocalSyncTarget.sync_exchange
 
     @http_method(from_replica_generation=int, last_known_generation=int,
-                 content_unserialized_as_args=True)
+                 content_as_args=True)
     def post_args(self, last_known_generation, from_replica_generation):
         self.from_replica_generation = from_replica_generation
         self.last_known_generation = last_known_generation
         self.sync_exch = self.target.get_sync_exchange()
 
-    @http_method(content_unserialized_as_args=True)
+    @http_method(content_as_args=True)
     def post_stream_entry(self, id, rev, doc):
         self.sync_exch.insert_doc_from_source(id, rev, doc)
 

@@ -165,8 +165,8 @@ class TestHTTPMethodDecorator(tests.TestCase):
         res = f(self, {"a": "x"}, "CONTENT")
         self.assertEqual(("x", "CONTENT"), res)
 
-    def test_args_content_unserialized_as_args(self):
-        @http_app.http_method(b=int, content_unserialized_as_args=True)
+    def test_args_content_as_args(self):
+        @http_app.http_method(b=int, content_as_args=True)
         def f(self, a, b):
             return self, a, b
         res = f("self", {"a": "x"}, '{"b": "2"}')
@@ -176,7 +176,7 @@ class TestHTTPMethodDecorator(tests.TestCase):
 
     def test_args_content_no_query(self):
         @http_app.http_method(no_query=True,
-                              content_unserialized_as_args=True)
+                              content_as_args=True)
         def f(self, b):
             return b
         res = f("self", {}, '{"b": 2}')
@@ -198,7 +198,7 @@ class TestResource(object):
         self.content = content
         return 'Put'
 
-    @http_app.http_method(content_unserialized_as_args=True)
+    @http_app.http_method(content_as_args=True)
     def put_args(self, a, b):
         self.args = dict(a=a, b=b)
         self.order = ['a']
