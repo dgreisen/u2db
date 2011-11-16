@@ -15,6 +15,7 @@
 """The backend class for U1DB. This deals with hiding storage details."""
 
 from u1db import (
+    Document,
     errors,
     tests,
     )
@@ -30,49 +31,52 @@ class DatabaseTests(tests.DatabaseBaseTests):
         self.db.close()
 
     def test_create_doc_allocating_doc_id(self):
-        doc_id, new_rev = self.db.create_doc(simple_doc)
-        self.assertNotEqual(None, doc_id)
-        self.assertNotEqual(None, new_rev)
-        self.assertEqual((new_rev, simple_doc, False), self.db.get_doc(doc_id))
+        doc = self.db.create_doc(simple_doc)
+        self.assertNotEqual(None, doc.doc_id)
+        self.assertNotEqual(None, doc.rev)
+        self.assertDocEqual(doc.doc_id, doc.rev, simple_doc, False,
+                            self.db.get_doc(doc.doc_id))
 
     def test_create_doc_with_id(self):
-        doc_id, new_rev = self.db.create_doc(simple_doc, doc_id='my-id')
-        self.assertEqual('my-id', doc_id)
-        self.assertNotEqual(None, new_rev)
-        self.assertEqual((new_rev, simple_doc, False), self.db.get_doc('my-id'))
+        doc = self.db.create_doc(simple_doc, doc_id='my-id')
+        self.assertEqual('my-id', doc.doc_id)
+        self.assertNotEqual(None, doc.rev)
+        self.assertDocEqual(doc.doc_id, doc.rev, simple_doc, False,
+                            self.db.get_doc(doc.doc_id))
 
     def test_create_doc_existing_id(self):
-        doc_id, new_rev = self.db.create_doc(simple_doc)
+        doc = self.db.create_doc(simple_doc)
         new_doc = '{"something": "else"}'
         self.assertRaises(errors.InvalidDocRev, self.db.create_doc,
-                          new_doc, doc_id)
-        self.assertEqual((new_rev, simple_doc, False), self.db.get_doc(doc_id))
+                          new_doc, doc.doc_id)
+        self.assertDocEqual(doc.doc_id, doc.rev, simple_doc, False,
+                            self.db.get_doc(doc.doc_id))
 
     def test_put_doc_refuses_no_id(self):
         self.assertRaises(errors.InvalidDocId,
             self.db.put_doc, None, None, simple_doc)
 
     def test_get_docs(self):
-        doc1_id, doc1_rev = self.db.create_doc(simple_doc)
-        doc2_id, doc2_rev = self.db.create_doc(nested_doc)
-        self.assertEqual([(doc1_id, doc1_rev, simple_doc, False),
-                          (doc2_id, doc2_rev, nested_doc, False)],
-                         self.db.get_docs([doc1_id, doc2_id]))
+        doc1 = self.db.create_doc(simple_doc)
+        doc2 = self.db.create_doc(nested_doc)
+        self.assertEqual([(doc1.doc_id, doc1.rev, simple_doc, False),
+                          (doc2.doc_id, doc2.rev, nested_doc, False)],
+                         self.db.get_docs([doc1.doc_id, doc2.doc_id]))
 
     def test_get_docs_conflicted(self):
-        doc1_id, doc1_rev = self.db.create_doc(simple_doc)
-        self.db.force_doc_sync_conflict(doc1_id, 'alternate:1', nested_doc)
-        self.assertEqual([(doc1_id, 'alternate:1', nested_doc, True)],
-                         self.db.get_docs([doc1_id]))
+        doc1 = self.db.create_doc(simple_doc)
+        self.db.force_doc_sync_conflict(doc1.doc_id, 'alternate:1', nested_doc)
+        self.assertEqual([(doc1.doc_id, 'alternate:1', nested_doc, True)],
+                         self.db.get_docs([doc1.doc_id]))
 
     def test_get_docs_conflicts_ignored(self):
-        doc1_id, doc1_rev = self.db.create_doc(simple_doc)
-        doc2_id, doc2_rev = self.db.create_doc(nested_doc)
-        self.db.force_doc_sync_conflict(doc1_id, 'alternate:1', nested_doc)
+        doc1 = self.db.create_doc(simple_doc)
+        doc2 = self.db.create_doc(nested_doc)
+        self.db.force_doc_sync_conflict(doc1.doc_id, 'alternate:1', nested_doc)
         self.assertEqual(
-            sorted([(doc1_id, 'alternate:1', nested_doc, None),
-                    (doc2_id, doc2_rev, nested_doc, None)]),
-            sorted(self.db.get_docs([doc1_id, doc2_id],
+            sorted([(doc1.doc_id, 'alternate:1', nested_doc, None),
+                    (doc2.doc_id, doc2.rev, nested_doc, None)]),
+            sorted(self.db.get_docs([doc1.doc_id, doc2.doc_id],
                                     check_for_conflicts=False)))
 
     def test_get_docs_empty_list(self):
@@ -86,8 +90,8 @@ class DatabaseTests(tests.DatabaseBaseTests):
     def test_simple_put_doc_if_newer(self):
         state = self.db.put_doc_if_newer('my-doc-id', 'test:1', simple_doc)
         self.assertEqual('inserted', state)
-        self.assertEqual(('test:1', simple_doc, False),
-                         self.db.get_doc('my-doc-id'))
+        self.assertDocEqual('my-doc-id', 'test:1', simple_doc, False,
+                            self.db.get_doc('my-doc-id'))
 
     def test_put_doc_if_newer_already_superseded(self):
         orig_doc = '{"new": "doc"}'
@@ -124,12 +128,12 @@ class DatabaseTests(tests.DatabaseBaseTests):
                          self.db.get_doc_conflicts(doc1_id))
 
     def test_get_doc_after_put(self):
-        doc_id, new_rev = self.db.create_doc(simple_doc, doc_id='my_doc_id')
-        self.assertEqual((new_rev, simple_doc, False),
-                         self.db.get_doc('my_doc_id'))
+        doc = self.db.create_doc(simple_doc, doc_id='my_doc_id')
+        self.assertDocEqual('my_doc_id', doc.rev, simple_doc, False,
+                            self.db.get_doc('my_doc_id'))
 
     def test_get_doc_nonexisting(self):
-        self.assertEqual((None, None, False), self.db.get_doc('non-existing'))
+        self.assertIs(None, self.db.get_doc('non-existing'))
 
     def test_get_sync_generation(self):
         self.assertEqual(0, self.db.get_sync_generation('other-db'))
@@ -208,41 +212,41 @@ class DatabaseIndexTests(tests.DatabaseBaseTests):
                          self.db.list_indexes())
 
     def test_create_index_evaluates_it(self):
-        doc_id, doc_rev = self.db.create_doc(simple_doc)
+        doc = self.db.create_doc(simple_doc)
         self.db.create_index('test-idx', ['key'])
-        self.assertEqual([(doc_id, doc_rev, simple_doc)],
+        self.assertEqual([(doc.doc_id, doc.rev, simple_doc)],
                          self.db.get_from_index('test-idx', [('value',)]))
 
     def test_create_index_multiple_exact_matches(self):
-        doc_id, doc_rev = self.db.create_doc(simple_doc)
-        doc2_id, doc2_rev = self.db.create_doc(simple_doc)
+        doc = self.db.create_doc(simple_doc)
+        doc2 = self.db.create_doc(simple_doc)
         self.db.create_index('test-idx', ['key'])
-        self.assertEqual([(doc_id, doc_rev, simple_doc),
-                          (doc2_id, doc2_rev, simple_doc)],
+        self.assertEqual([(doc.doc_id, doc.rev, simple_doc),
+                          (doc2.doc_id, doc2.rev, simple_doc)],
                          self.db.get_from_index('test-idx', [('value',)]))
 
     def test_get_from_index(self):
-        doc_id, doc_rev = self.db.create_doc(simple_doc)
+        doc = self.db.create_doc(simple_doc)
         self.db.create_index('test-idx', ['key'])
-        self.assertEqual([(doc_id, doc_rev, simple_doc)],
+        self.assertEqual([(doc.doc_id, doc.rev, simple_doc)],
                          self.db.get_from_index('test-idx', [('value',)]))
 
     def test_get_from_index_unmatched(self):
-        doc_id, doc_rev = self.db.create_doc(simple_doc)
+        doc = self.db.create_doc(simple_doc)
         self.db.create_index('test-idx', ['key'])
         self.assertEqual([], self.db.get_from_index('test-idx', [('novalue',)]))
 
     def test_get_from_index_some_matches(self):
-        doc_id, doc_rev = self.db.create_doc(simple_doc)
+        doc = self.db.create_doc(simple_doc)
         self.db.create_index('test-idx', ['key'])
-        self.assertEqual([(doc_id, doc_rev, simple_doc)],
+        self.assertEqual([(doc.doc_id, doc.rev, simple_doc)],
             self.db.get_from_index('test-idx', [('value',), ('novalue',)]))
 
     def test_get_from_index_multi(self):
-        doc = '{"key": "value", "key2": "value2"}'
-        doc_id, doc_rev = self.db.create_doc(doc)
+        content = '{"key": "value", "key2": "value2"}'
+        doc = self.db.create_doc(content)
         self.db.create_index('test-idx', ['key', 'key2'])
-        self.assertEqual([(doc_id, doc_rev, doc)],
+        self.assertEqual([(doc.doc_id, doc.rev, content)],
             self.db.get_from_index('test-idx', [('value', 'value2')]))
 
     def test_nested_index(self):
@@ -283,37 +287,37 @@ class DatabaseIndexTests(tests.DatabaseBaseTests):
 
     def test_get_all_from_index(self):
         self.db.create_index('test-idx', ['key'])
-        doc1_id, doc1_rev = self.db.create_doc(simple_doc)
-        doc2_id, doc2_rev = self.db.create_doc(nested_doc)
+        doc1 = self.db.create_doc(simple_doc)
+        doc2 = self.db.create_doc(nested_doc)
         # This one should not be in the index
-        doc3_id, doc3_rev = self.db.create_doc('{"no": "key"}')
+        doc3 = self.db.create_doc('{"no": "key"}')
         diff_value_doc = '{"key": "diff value"}'
-        doc4_id, doc4_rev = self.db.create_doc(diff_value_doc)
+        doc4 = self.db.create_doc(diff_value_doc)
         # This is essentially a 'prefix' match, but we match every entry.
         self.assertEqual(sorted([
-            (doc1_id, doc1_rev, simple_doc),
-            (doc2_id, doc2_rev, nested_doc),
-            (doc4_id, doc4_rev, diff_value_doc)]),
+            (doc1.doc_id, doc1.rev, simple_doc),
+            (doc2.doc_id, doc2.rev, nested_doc),
+            (doc4.doc_id, doc4.rev, diff_value_doc)]),
             sorted(self.db.get_from_index('test-idx', [('*',)])))
 
     def test_get_from_index_case_sensitive(self):
         self.db.create_index('test-idx', ['key'])
-        doc1_id, doc1_rev = self.db.create_doc(simple_doc)
+        doc1 = self.db.create_doc(simple_doc)
         self.assertEqual([], self.db.get_from_index('test-idx', [('V*',)]))
-        self.assertEqual([(doc1_id, doc1_rev, simple_doc)],
+        self.assertEqual([(doc1.doc_id, doc1.rev, simple_doc)],
                          self.db.get_from_index('test-idx', [('v*',)]))
 
     def test_get_from_index_empty_string(self):
         self.db.create_index('test-idx', ['key'])
-        doc1_id, doc1_rev = self.db.create_doc(simple_doc)
-        doc2 = '{"key": ""}'
-        doc2_id, doc2_rev = self.db.create_doc(doc2)
-        self.assertEqual([(doc2_id, doc2_rev, doc2)],
+        doc1 = self.db.create_doc(simple_doc)
+        content2 = '{"key": ""}'
+        doc2 = self.db.create_doc(content2)
+        self.assertEqual([(doc2.doc_id, doc2.rev, content2)],
                          self.db.get_from_index('test-idx', [('',)]))
         # Empty string matches the wildcard.
         self.assertEqual(sorted([
-            (doc1_id, doc1_rev, simple_doc),
-            (doc2_id, doc2_rev, doc2)]),
+            (doc1.doc_id, doc1.rev, simple_doc),
+            (doc2.doc_id, doc2.rev, content2)]),
             sorted(self.db.get_from_index('test-idx', [('*',)])))
 
     def test_get_from_index_illegal_number_of_entries(self):
@@ -334,61 +338,61 @@ class DatabaseIndexTests(tests.DatabaseBaseTests):
 
     def test_get_from_index_with_sql_wildcards(self):
         self.db.create_index('test-idx', ['key'])
-        doc1 = '{"key": "va%lue"}'
-        doc2 = '{"key": "value"}'
-        doc3 = '{"key": "va_lue"}'
-        doc1_id, doc1_rev = self.db.create_doc(doc1)
-        doc2_id, doc2_rev = self.db.create_doc(doc2)
-        doc3_id, doc3_rev = self.db.create_doc(doc3)
+        content1 = '{"key": "va%lue"}'
+        content2 = '{"key": "value"}'
+        content3 = '{"key": "va_lue"}'
+        doc1 = self.db.create_doc(content1)
+        doc2 = self.db.create_doc(content2)
+        doc3 = self.db.create_doc(content3)
         # The '%' in the search should be treated literally, not as a sql
         # globbing character.
-        self.assertEqual(sorted([(doc1_id, doc1_rev, doc1)]),
+        self.assertEqual(sorted([(doc1.doc_id, doc1.rev, content1)]),
             sorted(self.db.get_from_index('test-idx', [('va%*',)])))
         # Same for '_'
-        self.assertEqual(sorted([(doc3_id, doc3_rev, doc3)]),
+        self.assertEqual(sorted([(doc3.doc_id, doc3.rev, content3)]),
             sorted(self.db.get_from_index('test-idx', [('va_*',)])))
 
     def test_get_from_index_not_null(self):
         self.db.create_index('test-idx', ['key'])
-        doc1_id, doc1_rev = self.db.create_doc(simple_doc)
-        doc2_id, doc2_rev = self.db.create_doc('{"key": null}')
+        doc1 = self.db.create_doc(simple_doc)
+        doc2 = self.db.create_doc('{"key": null}')
         self.assertEqual(sorted([
-            (doc1_id, doc1_rev, simple_doc)]),
+            (doc1.doc_id, doc1.rev, simple_doc)]),
             self.db.get_from_index('test-idx', [('*',)]))
 
     def test_get_partial_from_index(self):
-        doc1 = '{"k1": "v1", "k2": "v2"}'
-        doc2 = '{"k1": "v1", "k2": "x2"}'
-        doc3 = '{"k1": "v1", "k2": "y2"}'
+        content1 = '{"k1": "v1", "k2": "v2"}'
+        content2 = '{"k1": "v1", "k2": "x2"}'
+        content3 = '{"k1": "v1", "k2": "y2"}'
         # doc4 has a different k1 value, so it doesn't match the prefix.
-        doc4 = '{"k1": "NN", "k2": "v2"}'
-        doc1_id, doc1_rev = self.db.create_doc(doc1)
-        doc2_id, doc2_rev = self.db.create_doc(doc2)
-        doc3_id, doc3_rev = self.db.create_doc(doc3)
-        doc4_id, doc4_rev = self.db.create_doc(doc4)
+        content4 = '{"k1": "NN", "k2": "v2"}'
+        doc1 = self.db.create_doc(content1)
+        doc2 = self.db.create_doc(content2)
+        doc3 = self.db.create_doc(content3)
+        doc4 = self.db.create_doc(content4)
         self.db.create_index('test-idx', ['k1', 'k2'])
         self.assertEqual(sorted([
-            (doc1_id, doc1_rev, doc1),
-            (doc2_id, doc2_rev, doc2),
-            (doc3_id, doc3_rev, doc3)]),
+            (doc1.doc_id, doc1.rev, content1),
+            (doc2.doc_id, doc2.rev, content2),
+            (doc3.doc_id, doc3.rev, content3)]),
             sorted(self.db.get_from_index('test-idx', [("v1", "*")])))
 
     def test_get_glob_match(self):
         # Note: the exact glob syntax is probably subject to change
-        doc1 = '{"k1": "v1", "k2": "v1"}'
-        doc2 = '{"k1": "v1", "k2": "v2"}'
-        doc3 = '{"k1": "v1", "k2": "v3"}'
+        content1 = '{"k1": "v1", "k2": "v1"}'
+        content2 = '{"k1": "v1", "k2": "v2"}'
+        content3 = '{"k1": "v1", "k2": "v3"}'
         # doc4 has a different k2 prefix value, so it doesn't match
-        doc4 = '{"k1": "v1", "k2": "ZZ"}'
+        content4 = '{"k1": "v1", "k2": "ZZ"}'
         self.db.create_index('test-idx', ['k1', 'k2'])
-        doc1_id, doc1_rev = self.db.create_doc(doc1)
-        doc2_id, doc2_rev = self.db.create_doc(doc2)
-        doc3_id, doc3_rev = self.db.create_doc(doc3)
-        doc4_id, doc4_rev = self.db.create_doc(doc4)
+        doc1 = self.db.create_doc(content1)
+        doc2 = self.db.create_doc(content2)
+        doc3 = self.db.create_doc(content3)
+        doc4 = self.db.create_doc(content4)
         self.assertEqual(sorted([
-            (doc1_id, doc1_rev, doc1),
-            (doc2_id, doc2_rev, doc2),
-            (doc3_id, doc3_rev, doc3)]),
+            (doc1.doc_id, doc1.rev, content1),
+            (doc2.doc_id, doc2.rev, content2),
+            (doc3.doc_id, doc3.rev, content3)]),
             sorted(self.db.get_from_index('test-idx', [("v1", "v*")])))
 
     def test_delete_updates_index(self):

@@ -43,12 +43,7 @@ class Database(object):
         """Get the JSON string for the given document.
 
         :param doc_id: The unique document identifier
-        :return: (doc_rev, doc, has_conflicts)
-            doc_rev- The current version of the document
-            doc- A JSON string if the document exists (possibly an empty
-                string), None/nil if the document does not exist.
-            has_conflicts- A boolean indicating if there are conflict records
-                for this document
+        :return: a Document object.
         """
         raise NotImplementedError(self.get_doc)
 
@@ -58,34 +53,29 @@ class Database(object):
         :param doc_ids: A list of document identifiers.
         :param check_for_conflicts: If set to False, then the conflict check
             will be skipped, and 'None' will be returned instead of True/False.
-        :return: [(doc_id, doc_rev, doc, is_conflicted)] for each document id.
+        :return: [Document] for each document id.
         """
         raise NotImplementedError(self.get_docs)
 
-    def create_doc(self, doc, doc_id=None):
+    def create_doc(self, content, doc_id=None):
         """Create a new document.
 
         You can optionally specify the document identifier, but the document
         must not already exist. See 'put_doc' if you want to override an
         existing document.
-        :param doc: The JSON document string
+        :param content: The JSON document string
         :param doc_id: An optional identifier specifying the document id.
-        :return: (doc_id, doc_rev) The identifier used for the document, and
-            the current revision identifier for it.
+        :return: Document
         """
         raise NotImplementedError(self.create_doc)
 
-    def put_doc(self, doc_id, old_doc_rev, doc):
+    def put_doc(self, doc):
         """Update a document.
         If the document currently has conflicts, put will fail.
 
-        :param doc_id: Unique handle for a document, if it is None, a new
-            identifier will be allocated for you.
-        :param old_doc_rev: The document revision that we know to be
-            superseding. If 'old_doc_rev' doesn't actually match the current
-            doc_rev, the put fails, indicating there is a newer version stored.
-        :param doc: The actual JSON document string.
-        :return: new_doc_rev - The new revision identifier for the document
+        :param doc: A Document with new content.
+        :return: new_doc_rev - The new revision identifier for the document.
+            The Document object will also be updated.
         """
         raise NotImplementedError(self.put_doc)
 
@@ -248,6 +238,50 @@ class Database(object):
     def close(self):
         """Release any resources associated with this database."""
         raise NotImplementedError(self.close)
+
+
+class Document(object):
+    """Container for handling a single document.
+
+    :ivar doc_id: Unique identifier for this document.
+    :ivar rev:
+    :ivar content: The JSON string for this document.
+    :ivar has_conflicts: Boolean indicating if this document has conflicts. May
+        be None if it hasn't been checked.
+    :ivar dirty: True if the content has been updated, and does not match
+        self.rev.
+    """
+
+    def __init__(self, doc_id, rev, content, has_conflicts=False):
+        self.doc_id = doc_id
+        self.rev = rev
+        self.content = content
+        self.has_conflicts = has_conflicts
+
+    def set_content(self, new_content):
+        """Update the document to indicate we have new content.
+
+        This also sets the 'dirty' flag, so we are clear that the content
+        doesn't match the revision.
+        """
+        self.dirty = True
+        self.content = new_content
+
+    def __repr__(self):
+        if self.has_conflicts:
+            extra = ', conflicted'
+        else:
+            extra = ''
+        return '%s(%s, %s%s, %r)' % (self.__class__.__name__, self.doc_id,
+                                     self.rev, extra, self.content)
+
+    def __hash__(self):
+        raise NotImplementedError(self.__hash__)
+
+    def __eq__(self, other):
+        if not isinstance(other, Document):
+            return False
+        return self.__dict__ == other.__dict__
 
 
 class SyncTarget(object):

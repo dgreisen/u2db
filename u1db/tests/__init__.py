@@ -22,6 +22,9 @@ import threading
 import testscenarios
 import testtools
 
+from u1db import (
+    Document,
+    )
 from u1db.backends import (
     inmemory,
     sqlite_backend,
@@ -31,6 +34,11 @@ from u1db.remote import (
     sync_server,
     )
 
+
+# Setting this means that failing assertions will not include this module in
+# their traceback. However testtools doesn't seem to set it, and we don't want
+# this level to be omitted, but the lower levels to be shown.
+# __unittest = 1
 
 class TestCase(testtools.TestCase):
 
@@ -42,6 +50,13 @@ class TestCase(testtools.TestCase):
         tempdir = tempfile.mkdtemp(prefix=prefix)
         self.addCleanup(shutil.rmtree, tempdir)
         return tempdir
+
+    def assertDocEqual(self, doc_id, doc_rev, content, has_conflicts, doc):
+        """Assert that a Document matches this spec."""
+        exp_doc = Document(doc_id, doc_rev, content,
+                           has_conflicts=has_conflicts)
+        self.assertEqual(exp_doc, doc)
+
 
 
 def multiply_scenarios(a_scenarios, b_scenarios):
