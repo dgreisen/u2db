@@ -30,10 +30,10 @@ simple_doc = '{"key": "value"}'
 nested_doc = '{"key": "value", "sub": {"doc": "underneath"}}'
 
 
-class TestSQLitePartialExpandedDatabase(tests.TestCase):
+class TestSQLitePartialExpandDatabase(tests.TestCase):
 
     def setUp(self):
-        super(TestSQLitePartialExpandedDatabase, self).setUp()
+        super(TestSQLitePartialExpandDatabase, self).setUp()
         self.db = sqlite_backend.SQLitePartialExpandDatabase(':memory:')
         self.db._set_replica_uid('test')
 
@@ -65,7 +65,7 @@ class TestSQLitePartialExpandedDatabase(tests.TestCase):
 
     def test__set_replica_uid(self):
         # Start from scratch, so that replica_uid isn't set.
-        self.db = sqlite_backend.SQLiteExpandedDatabase(':memory:')
+        self.db = sqlite_backend.SQLitePartialExpandDatabase(':memory:')
         self.assertEqual(None, self.db._real_replica_uid)
         self.assertEqual(None, self.db._replica_uid)
         self.db._set_replica_uid('foo')

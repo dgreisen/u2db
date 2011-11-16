@@ -468,40 +468,6 @@ class SQLiteSyncTarget(CommonSyncTarget):
                                      other_replica_generation)
 
 
-class SQLiteExpandedDatabase(SQLiteDatabase):
-    """An SQLite Backend that expands documents into a document_field table.
-
-    It stores the raw document text in document.doc, but also puts the
-    individual fields into document_fields.
-    """
-
-    _index_storage_value = 'expanded'
-
-    def _put_and_update_indexes(self, doc_id, old_doc, new_rev, doc):
-        c = self._db_handle.cursor()
-        if doc:
-            raw_doc = simplejson.loads(doc)
-        else:
-            raw_doc = {}
-        if old_doc:
-            c.execute("UPDATE document SET doc_rev=?, doc=? WHERE doc_id = ?",
-                      (new_rev, doc, doc_id))
-            c.execute("DELETE FROM document_fields WHERE doc_id = ?",
-                      (doc_id,))
-        else:
-            c.execute("INSERT INTO document VALUES (?, ?, ?)",
-                      (doc_id, new_rev, doc))
-        values = self._expand_to_fields(doc_id, None, raw_doc, save_none=False)
-        # Strip off the 'offset' column.
-        values = [x[:3] for x in values]
-        c.executemany("INSERT INTO document_fields VALUES (?, ?, ?)",
-                      values)
-        c.execute("INSERT INTO transaction_log(doc_id) VALUES (?)",
-                  (doc_id,))
-
-SQLiteDatabase.register_implementation(SQLiteExpandedDatabase)
-
-
 class SQLitePartialExpandDatabase(SQLiteDatabase):
     """An SQLite Backend that expands documents into a document_field table.
 
