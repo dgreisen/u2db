@@ -272,6 +272,32 @@ class TestHTTPInvocationByMethodWithBody(tests.TestCase):
         invoke = http_app.HTTPInvocationByMethodWithBody(resource, environ)
         self.assertRaises(http_app.BadRequest, invoke)
 
+    def test_bad_request_no_content_length(self):
+        resource = TestResource()
+        environ = {'QUERY_STRING': '', 'REQUEST_METHOD': 'PUT',
+                   'wsgi.input': StringIO.StringIO('a'),
+                   'CONTENT_TYPE': 'application/json'}
+        invoke = http_app.HTTPInvocationByMethodWithBody(resource, environ)
+        self.assertRaises(http_app.BadRequest, invoke)
+
+    def test_bad_request_invalid_content_length(self):
+        resource = TestResource()
+        environ = {'QUERY_STRING': '', 'REQUEST_METHOD': 'PUT',
+                   'wsgi.input': StringIO.StringIO('abc'),
+                   'CONTENT_LENGTH': '1unk',
+                   'CONTENT_TYPE': 'application/json'}
+        invoke = http_app.HTTPInvocationByMethodWithBody(resource, environ)
+        self.assertRaises(http_app.BadRequest, invoke)
+
+    def test_bad_request_empty_body(self):
+        resource = TestResource()
+        environ = {'QUERY_STRING': '', 'REQUEST_METHOD': 'PUT',
+                   'wsgi.input': StringIO.StringIO(''),
+                   'CONTENT_LENGTH': '0',
+                   'CONTENT_TYPE': 'application/json'}
+        invoke = http_app.HTTPInvocationByMethodWithBody(resource, environ)
+        self.assertRaises(http_app.BadRequest, invoke)
+
     def test_bad_request_unsupported_method_get_like(self):
         environ = {'QUERY_STRING': '', 'REQUEST_METHOD': 'DELETE'}
         invoke = http_app.HTTPInvocationByMethodWithBody(None, environ)

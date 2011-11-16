@@ -261,19 +261,21 @@ class HTTPInvocationByMethodWithBody(object):
             meth = self._lookup(method)
             return meth(args, None)
         else:
+            # we expect content-length > 0, reconsider if we move
+            # to support chunked enconding
             try:
-                content_length = int(self.environ.get('CONTENT_LENGTH', 0))
-            except ValueError:
-                content_length = 0
-            reader = FencedReader(self.environ['wsgi.input'], content_length)
+                content_length = int(self.environ['CONTENT_LENGTH'])
+            except (ValueError, KeyError), e:
+                raise BadRequest
+            if content_length <= 0:
+                raise BadRequest
+            reader = _FencedReader(self.environ['wsgi.input'], content_length)
             content_type = self.environ.get('CONTENT_TYPE')
             if content_type == 'application/json':
-                assert content_length
                 meth = self._lookup(method)
                 body = reader.read_chunk(sys.maxint)
                 return meth(args, body)
             elif content_type == 'application/x-u1db-multi-json':
-                assert content_length
                 meth_args = self._lookup('%s_args' % method)
                 meth_entry = self._lookup('%s_stream_entry' % method)
                 meth_end = self._lookup('%s_end' % method)
