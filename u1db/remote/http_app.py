@@ -17,12 +17,12 @@
 import functools
 import httplib
 import inspect
-import json
+import simplejson
 import sys
 import urlparse
 
 
-class FencedReader(object):
+class _FencedReader(object):
     """Read and get lines from a file but not past a given length."""
 
     MAXCHUNK = 8192
@@ -33,11 +33,12 @@ class FencedReader(object):
     def __init__(self, rfile, total):
         self.rfile = rfile
         self.remaining = total
-        self.kept = None
+        self._kept = None
 
     def read_chunk(self, atmost):
-        if self.kept is not None:
-            return self.kept
+        if self._kept is not None:
+            # ignore atmost, kept data should be a subchunk anyway
+            return self._kept
         if self.remaining == 0:
             return ''
         data = self.rfile.read(min(self.remaining, atmost))
@@ -54,7 +55,7 @@ class FencedReader(object):
             if nl != -1:
                 line_parts.append(chunk[:nl+1])
                 rest = chunk[nl+1:]
-                self.kept = rest or None
+                self._kept = rest or None
                 break
             else:
                 line_parts.append(chunk)
@@ -68,20 +69,23 @@ class BadRequest(Exception):
 def http_method(**control):
     """Decoration for handling of query arguments and content for a HTTP method.
 
+       args and content here are the query arguments and body of the incoming
+       HTTP requests.
+
        Match query arguments to python method arguments:
            w = http_method()(f)
            w(self, args, content) => args["content"]=content;
-                                     f(self, *args)
+                                     f(self, **args)
 
        JSON deserialize content to arguments:
-           w = http_method(content_unserialized_as_args=True,...)(f)
-           w(self, args, content) => args.update(json.loads(content));
-                                     f(self, *args)
+           w = http_method(content_as_args=True,...)(f)
+           w(self, args, content) => args.update(simplejson.loads(content));
+                                     f(self, **args)
 
        Support conversions (e.g int):
            w = http_method(Arg=Conv,...)(f)
            w(self, args, content) => args["Arg"]=Conv(args["Arg"]);
-                                     f(self, *args)
+                                     f(self, **args)
 
        Enforce no use of query arguments:
            w = http_method(no_query=True,...)(f)
@@ -89,7 +93,7 @@ def http_method(**control):
 
        Argument mismatches, deserialisation failures produce BadRequest.
     """
-    content_as_args = control.pop('content_unserialized_as_args', False)
+    content_as_args = control.pop('content_as_args', False)
     no_query = control.pop('no_query', False)
     conversions = control.items()
     def wrap(f):
@@ -106,7 +110,7 @@ def http_method(**control):
             if content is not None:
                 if content_as_args:
                     try:
-                        args.update(json.loads(content))
+                        args.update(simplejson.loads(content))
                     except ValueError:
                         raise BadRequest()
                 else:
@@ -158,7 +162,7 @@ class SyncResource(object):
                                      other_replica_generation=result[2])
 
     @http_method(generation=int,
-                 content_unserialized_as_args=True, no_query=True)
+                 content_as_args=True, no_query=True)
     def put(self, generation):
         self.target.record_sync_info(self.from_replica_uid, generation)
         self.responder.send_response(ok=True)
@@ -166,13 +170,13 @@ class SyncResource(object):
     # Implements the same logic as LocalSyncTarget.sync_exchange
 
     @http_method(from_replica_generation=int, last_known_generation=int,
-                 content_unserialized_as_args=True)
+                 content_as_args=True)
     def post_args(self, last_known_generation, from_replica_generation):
         self.from_replica_generation = from_replica_generation
         self.last_known_generation = last_known_generation
         self.sync_exch = self.target.get_sync_exchange()
 
-    @http_method(content_unserialized_as_args=True)
+    @http_method(content_as_args=True)
     def post_stream_entry(self, id, rev, doc):
         self.sync_exch.insert_doc_from_source(id, rev, doc)
 
@@ -216,7 +220,7 @@ class HTTPResponder(object):
                                           ('cache-control', 'no-cache')])
         # xxx version in headers
         if kwargs:
-            self._write(json.dumps(kwargs)+"\r\n")
+            self._write(simplejson.dumps(kwargs)+"\r\n")
 
     def finish_response(self):
         """finish sending response."""
@@ -230,7 +234,7 @@ class HTTPResponder(object):
     def stream_entry(self, entry):
         "send stream entry as part of the response."
         assert self._started
-        self._write(json.dumps(entry)+"\r\n")
+        self._write(simplejson.dumps(entry)+"\r\n")
 
 
 class HTTPInvocationByMethodWithBody(object):
@@ -258,19 +262,21 @@ class HTTPInvocationByMethodWithBody(object):
             meth = self._lookup(method)
             return meth(args, None)
         else:
+            # we expect content-length > 0, reconsider if we move
+            # to support chunked enconding
             try:
-                content_length = int(self.environ.get('CONTENT_LENGTH', 0))
-            except ValueError:
-                content_length = 0
-            reader = FencedReader(self.environ['wsgi.input'], content_length)
+                content_length = int(self.environ['CONTENT_LENGTH'])
+            except (ValueError, KeyError), e:
+                raise BadRequest
+            if content_length <= 0:
+                raise BadRequest
+            reader = _FencedReader(self.environ['wsgi.input'], content_length)
             content_type = self.environ.get('CONTENT_TYPE')
             if content_type == 'application/json':
-                assert content_length
                 meth = self._lookup(method)
                 body = reader.read_chunk(sys.maxint)
                 return meth(args, body)
             elif content_type == 'application/x-u1db-multi-json':
-                assert content_length
                 meth_args = self._lookup('%s_args' % method)
                 meth_entry = self._lookup('%s_stream_entry' % method)
                 meth_end = self._lookup('%s_end' % method)

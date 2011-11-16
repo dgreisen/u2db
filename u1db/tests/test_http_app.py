@@ -14,9 +14,8 @@
 
 """Test the WSGI app."""
 
-import testtools
 import paste.fixture
-import json
+import simplejson
 import StringIO
 
 from u1db import (
@@ -28,15 +27,15 @@ from u1db.remote import (
     )
 
 
-class TestFencedReader(testtools.TestCase):
+class TestFencedReader(tests.TestCase):
 
     def test_init(self):
-        reader = http_app.FencedReader(StringIO.StringIO(""), 25)
+        reader = http_app._FencedReader(StringIO.StringIO(""), 25)
         self.assertEqual(25, reader.remaining)
 
     def test_read_chunk(self):
         inp = StringIO.StringIO("abcdef")
-        reader = http_app.FencedReader(inp, 5)
+        reader = http_app._FencedReader(inp, 5)
         data = reader.read_chunk(2)
         self.assertEqual("ab", data)
         self.assertEqual(2, inp.tell())
@@ -44,7 +43,7 @@ class TestFencedReader(testtools.TestCase):
 
     def test_read_chunk_remaining(self):
         inp = StringIO.StringIO("abcdef")
-        reader = http_app.FencedReader(inp, 4)
+        reader = http_app._FencedReader(inp, 4)
         data = reader.read_chunk(9999)
         self.assertEqual("abcd", data)
         self.assertEqual(4, inp.tell())
@@ -52,7 +51,7 @@ class TestFencedReader(testtools.TestCase):
 
     def test_read_chunk_nothing_left(self):
         inp = StringIO.StringIO("abc")
-        reader = http_app.FencedReader(inp, 2)
+        reader = http_app._FencedReader(inp, 2)
         reader.read_chunk(2)
         self.assertEqual(2, inp.tell())
         self.assertEqual(0, reader.remaining)
@@ -63,8 +62,8 @@ class TestFencedReader(testtools.TestCase):
 
     def test_read_chunk_kept(self):
         inp = StringIO.StringIO("abcde")
-        reader = http_app.FencedReader(inp, 4)
-        reader.kept = "xyz"
+        reader = http_app._FencedReader(inp, 4)
+        reader._kept = "xyz"
         data = reader.read_chunk(2) # atmost ignored
         self.assertEqual("xyz", data)
         self.assertEqual(0, inp.tell())
@@ -72,38 +71,38 @@ class TestFencedReader(testtools.TestCase):
 
     def test_getline(self):
         inp = StringIO.StringIO("abc\r\nde")
-        reader = http_app.FencedReader(inp, 6)
+        reader = http_app._FencedReader(inp, 6)
         reader.MAXCHUNK = 6
         line = reader.getline()
         self.assertEqual("abc\r\n", line)
-        self.assertEqual("d", reader.kept)
+        self.assertEqual("d", reader._kept)
 
     def test_getline_exact(self):
         inp = StringIO.StringIO("abcd\r\nef")
-        reader = http_app.FencedReader(inp, 6)
+        reader = http_app._FencedReader(inp, 6)
         reader.MAXCHUNK = 6
         line = reader.getline()
         self.assertEqual("abcd\r\n", line)
-        self.assertIs(None, reader.kept)
+        self.assertIs(None, reader._kept)
 
     def test_getline_no_newline(self):
         inp = StringIO.StringIO("abcd")
-        reader = http_app.FencedReader(inp, 4)
+        reader = http_app._FencedReader(inp, 4)
         reader.MAXCHUNK = 6
         line = reader.getline()
         self.assertEqual("abcd", line)
 
     def test_getline_many_chunks(self):
         inp = StringIO.StringIO("abcde\r\nf")
-        reader = http_app.FencedReader(inp, 8)
+        reader = http_app._FencedReader(inp, 8)
         reader.MAXCHUNK = 4
         line = reader.getline()
         self.assertEqual("abcde\r\n", line)
-        self.assertEqual("f", reader.kept)
+        self.assertEqual("f", reader._kept)
 
     def test_getline_empty(self):
         inp = StringIO.StringIO("")
-        reader = http_app.FencedReader(inp, 0)
+        reader = http_app._FencedReader(inp, 0)
         reader.MAXCHUNK = 4
         line = reader.getline()
         self.assertEqual("", line)
@@ -112,7 +111,7 @@ class TestFencedReader(testtools.TestCase):
 
     def test_getline_just_newline(self):
         inp = StringIO.StringIO("\r\n")
-        reader = http_app.FencedReader(inp, 2)
+        reader = http_app._FencedReader(inp, 2)
         reader.MAXCHUNK = 4
         line = reader.getline()
         self.assertEqual("\r\n", line)
@@ -120,7 +119,7 @@ class TestFencedReader(testtools.TestCase):
         self.assertEqual("", line)
 
 
-class TestHTTPMethodDecorator(testtools.TestCase):
+class TestHTTPMethodDecorator(tests.TestCase):
 
     def test_args(self):
         @http_app.http_method()
@@ -166,8 +165,8 @@ class TestHTTPMethodDecorator(testtools.TestCase):
         res = f(self, {"a": "x"}, "CONTENT")
         self.assertEqual(("x", "CONTENT"), res)
 
-    def test_args_content_unserialized_as_args(self):
-        @http_app.http_method(b=int, content_unserialized_as_args=True)
+    def test_args_content_as_args(self):
+        @http_app.http_method(b=int, content_as_args=True)
         def f(self, a, b):
             return self, a, b
         res = f("self", {"a": "x"}, '{"b": "2"}')
@@ -177,14 +176,14 @@ class TestHTTPMethodDecorator(testtools.TestCase):
 
     def test_args_content_no_query(self):
         @http_app.http_method(no_query=True,
-                              content_unserialized_as_args=True)
-        def f(self, b):
-            return b
-        res = f("self", {}, '{"b": 2}')
-        self.assertEqual(2, res)
+                              content_as_args=True)
+        def f(self, a='a', b='b'):
+            return a, b
+        res = f("self", {}, '{"b": "y"}')
+        self.assertEqual(('a', 'y'), res)
 
         self.assertRaises(http_app.BadRequest, f, "self", {'a': 'x'},
-                          '{"b": 2}')
+                          '{"b": "y"}')
 
 class TestResource(object):
 
@@ -199,7 +198,7 @@ class TestResource(object):
         self.content = content
         return 'Put'
 
-    @http_app.http_method(content_unserialized_as_args=True)
+    @http_app.http_method(content_as_args=True)
     def put_args(self, a, b):
         self.args = dict(a=a, b=b)
         self.order = ['a']
@@ -214,7 +213,7 @@ class TestResource(object):
         self.order.append('e')
         return "Put/end"
 
-class TestHTTPInvocationByMethodWithBody(testtools.TestCase):
+class TestHTTPInvocationByMethodWithBody(tests.TestCase):
 
     def test_get(self):
         resource = TestResource()
@@ -273,6 +272,32 @@ class TestHTTPInvocationByMethodWithBody(testtools.TestCase):
         invoke = http_app.HTTPInvocationByMethodWithBody(resource, environ)
         self.assertRaises(http_app.BadRequest, invoke)
 
+    def test_bad_request_no_content_length(self):
+        resource = TestResource()
+        environ = {'QUERY_STRING': '', 'REQUEST_METHOD': 'PUT',
+                   'wsgi.input': StringIO.StringIO('a'),
+                   'CONTENT_TYPE': 'application/json'}
+        invoke = http_app.HTTPInvocationByMethodWithBody(resource, environ)
+        self.assertRaises(http_app.BadRequest, invoke)
+
+    def test_bad_request_invalid_content_length(self):
+        resource = TestResource()
+        environ = {'QUERY_STRING': '', 'REQUEST_METHOD': 'PUT',
+                   'wsgi.input': StringIO.StringIO('abc'),
+                   'CONTENT_LENGTH': '1unk',
+                   'CONTENT_TYPE': 'application/json'}
+        invoke = http_app.HTTPInvocationByMethodWithBody(resource, environ)
+        self.assertRaises(http_app.BadRequest, invoke)
+
+    def test_bad_request_empty_body(self):
+        resource = TestResource()
+        environ = {'QUERY_STRING': '', 'REQUEST_METHOD': 'PUT',
+                   'wsgi.input': StringIO.StringIO(''),
+                   'CONTENT_LENGTH': '0',
+                   'CONTENT_TYPE': 'application/json'}
+        invoke = http_app.HTTPInvocationByMethodWithBody(resource, environ)
+        self.assertRaises(http_app.BadRequest, invoke)
+
     def test_bad_request_unsupported_method_get_like(self):
         environ = {'QUERY_STRING': '', 'REQUEST_METHOD': 'DELETE'}
         invoke = http_app.HTTPInvocationByMethodWithBody(None, environ)
@@ -296,7 +321,7 @@ class TestHTTPInvocationByMethodWithBody(testtools.TestCase):
         self.assertRaises(http_app.BadRequest, invoke)
 
 
-class TestHTTPResponder(testtools.TestCase):
+class TestHTTPResponder(tests.TestCase):
 
     def start_response(self, status, headers):
         self.status = status
@@ -344,7 +369,7 @@ class TestHTTPResponder(testtools.TestCase):
                           '{"entry": true}\r\n'], self.response_body)
 
 
-class TestHTTPApp(testtools.TestCase):
+class TestHTTPApp(tests.TestCase):
 
     def setUp(self):
         super(TestHTTPApp, self).setUp()
@@ -372,7 +397,7 @@ class TestHTTPApp(testtools.TestCase):
         self.assertEqual(201, resp.status) # created
         self.assertEqual('{"x": 1}', doc)
         self.assertEqual('application/json', resp.header('content-type'))
-        self.assertEqual({'rev': doc_rev}, json.loads(resp.body))
+        self.assertEqual({'rev': doc_rev}, simplejson.loads(resp.body))
 
     def test_put_doc(self):
         doc_id, orig_rev = self.db0.create_doc('doc1', '{"x": 1}')
@@ -383,7 +408,7 @@ class TestHTTPApp(testtools.TestCase):
         self.assertEqual(200, resp.status)
         self.assertEqual('{"x": 2}', doc)
         self.assertEqual('application/json', resp.header('content-type'))
-        self.assertEqual({'rev': doc_rev}, json.loads(resp.body))
+        self.assertEqual({'rev': doc_rev}, simplejson.loads(resp.body))
 
     def test_get_sync_info(self):
         self.db0.set_sync_generation('other-id', 1)
@@ -394,7 +419,7 @@ class TestHTTPApp(testtools.TestCase):
                               this_replica_generation=0,
                               other_replica_uid='other-id',
                               other_replica_generation=1),
-                              json.loads(resp.body))
+                              simplejson.loads(resp.body))
 
     def test_record_sync_info(self):
         resp = self.app.put('/db0/sync-from/other-id',
@@ -402,15 +427,15 @@ class TestHTTPApp(testtools.TestCase):
                             headers={'content-type': 'application/json'})
         self.assertEqual(200, resp.status)
         self.assertEqual('application/json', resp.header('content-type'))
-        self.assertEqual({'ok': True}, json.loads(resp.body))
+        self.assertEqual({'ok': True}, simplejson.loads(resp.body))
         self.assertEqual(self.db0.get_sync_generation('other-id'), 2)
 
     def test_sync_exchange_send(self):
         entry = {'id': 'doc-here', 'rev': 'replica:1', 'doc':
                  '{"value": "here"}'}
         args = dict(from_replica_generation=10, last_known_generation=0)
-        body = ("%s\r\n" % json.dumps(args) +
-                "%s\r\n" % json.dumps(entry))
+        body = ("%s\r\n" % simplejson.dumps(args) +
+                "%s\r\n" % simplejson.dumps(entry))
         resp = self.app.post('/db0/sync-from/replica',
                             params=body,
                             headers={'content-type':
@@ -418,14 +443,14 @@ class TestHTTPApp(testtools.TestCase):
         self.assertEqual(200, resp.status)
         self.assertEqual('application/x-u1db-multi-json',
                          resp.header('content-type'))
-        self.assertEqual({'new_generation': 1}, json.loads(resp.body))
+        self.assertEqual({'new_generation': 1}, simplejson.loads(resp.body))
         self.assertEqual(('replica:1', '{"value": "here"}', False),
                          self.db0.get_doc('doc-here'))
 
     def test_sync_exchange_receive(self):
         doc_id, doc_rev = self.db0.create_doc('{"value": "there"}')
         args = dict(from_replica_generation=10, last_known_generation=0)
-        body = "%s\r\n" % json.dumps(args)
+        body = "%s\r\n" % simplejson.dumps(args)
         resp = self.app.post('/db0/sync-from/replica',
                             params=body,
                             headers={'content-type':
@@ -435,6 +460,7 @@ class TestHTTPApp(testtools.TestCase):
                          resp.header('content-type'))
         parts = resp.body.splitlines()
         self.assertEqual(2, len(parts))
-        self.assertEqual({'new_generation': 1}, json.loads(parts[0]))
+        self.assertEqual({'new_generation': 1}, simplejson.loads(parts[0]))
         self.assertEqual({'doc': '{"value": "there"}',
-                          'rev': doc_rev, 'id': doc_id}, json.loads(parts[1]))
+                          'rev': doc_rev, 'id': doc_id},
+                         simplejson.loads(parts[1]))
