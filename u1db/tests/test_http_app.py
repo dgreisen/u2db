@@ -14,7 +14,6 @@
 
 """Test the WSGI app."""
 
-import testtools
 import paste.fixture
 import simplejson
 import StringIO
@@ -28,7 +27,7 @@ from u1db.remote import (
     )
 
 
-class TestFencedReader(testtools.TestCase):
+class TestFencedReader(tests.TestCase):
 
     def test_init(self):
         reader = http_app.FencedReader(StringIO.StringIO(""), 25)
@@ -120,7 +119,7 @@ class TestFencedReader(testtools.TestCase):
         self.assertEqual("", line)
 
 
-class TestHTTPMethodDecorator(testtools.TestCase):
+class TestHTTPMethodDecorator(tests.TestCase):
 
     def test_args(self):
         @http_app.http_method()
@@ -214,7 +213,7 @@ class TestResource(object):
         self.order.append('e')
         return "Put/end"
 
-class TestHTTPInvocationByMethodWithBody(testtools.TestCase):
+class TestHTTPInvocationByMethodWithBody(tests.TestCase):
 
     def test_get(self):
         resource = TestResource()
@@ -296,7 +295,7 @@ class TestHTTPInvocationByMethodWithBody(testtools.TestCase):
         self.assertRaises(http_app.BadRequest, invoke)
 
 
-class TestHTTPResponder(testtools.TestCase):
+class TestHTTPResponder(tests.TestCase):
 
     def start_response(self, status, headers):
         self.status = status
@@ -344,7 +343,7 @@ class TestHTTPResponder(testtools.TestCase):
                           '{"entry": true}\r\n'], self.response_body)
 
 
-class TestHTTPApp(testtools.TestCase):
+class TestHTTPApp(tests.TestCase):
 
     def setUp(self):
         super(TestHTTPApp, self).setUp()
