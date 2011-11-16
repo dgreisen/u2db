@@ -30,11 +30,11 @@ simple_doc = '{"key": "value"}'
 nested_doc = '{"key": "value", "sub": {"doc": "underneath"}}'
 
 
-class TestSQLiteExpandedDatabase(tests.TestCase):
+class TestSQLitePartialExpandDatabase(tests.TestCase):
 
     def setUp(self):
-        super(TestSQLiteExpandedDatabase, self).setUp()
-        self.db = sqlite_backend.SQLiteExpandedDatabase(':memory:')
+        super(TestSQLitePartialExpandDatabase, self).setUp()
+        self.db = sqlite_backend.SQLitePartialExpandDatabase(':memory:')
         self.db._set_replica_uid('test')
 
     def test_create_database(self):
@@ -53,7 +53,7 @@ class TestSQLiteExpandedDatabase(tests.TestCase):
         c.execute("SELECT * FROM u1db_config")
         config = dict([(r[0], r[1]) for r in c.fetchall()])
         self.assertEqual({'sql_schema': '0', 'replica_uid': 'test',
-                          'index_storage': 'expanded'}, config)
+                          'index_storage': 'expand referenced'}, config)
 
         # These tables must exist, though we don't care what is in them yet
         c.execute("SELECT * FROM transaction_log")
@@ -65,7 +65,7 @@ class TestSQLiteExpandedDatabase(tests.TestCase):
 
     def test__set_replica_uid(self):
         # Start from scratch, so that replica_uid isn't set.
-        self.db = sqlite_backend.SQLiteExpandedDatabase(':memory:')
+        self.db = sqlite_backend.SQLitePartialExpandDatabase(':memory:')
         self.assertEqual(None, self.db._real_replica_uid)
         self.assertEqual(None, self.db._replica_uid)
         self.db._set_replica_uid('foo')
@@ -115,19 +115,33 @@ class TestSQLiteExpandedDatabase(tests.TestCase):
                           ('idx-2', ['key20', 'key21', 'key22'])],
                          self.db.list_indexes())
 
+    def test_no_indexes_no_document_fields(self):
+        doc1_id, doc1_rev = self.db.create_doc(
+            '{"key1": "val1", "key2": "val2"}')
+        c = self.db._get_sqlite_handle().cursor()
+        c.execute("SELECT doc_id, field_name, value FROM document_fields"
+                  " ORDER BY doc_id, field_name, value")
+        self.assertEqual([], c.fetchall())
+
     def test_create_extracts_fields(self):
         doc1_id, doc1_rev = self.db.create_doc('{"key1": "val1", "key2": "val2"}')
         doc2_id, doc2_rev = self.db.create_doc('{"key1": "valx", "key2": "valy"}')
         c = self.db._get_sqlite_handle().cursor()
         c.execute("SELECT doc_id, field_name, value FROM document_fields"
                   " ORDER BY doc_id, field_name, value")
-        self.assertEqual([(doc1_id, "key1", "val1"),
-                          (doc1_id, "key2", "val2"),
-                          (doc2_id, "key1", "valx"),
-                          (doc2_id, "key2", "valy"),
-                         ], c.fetchall())
+        self.assertEqual([], c.fetchall())
+        self.db.create_index('test', ['key1', 'key2'])
+        c.execute("SELECT doc_id, field_name, value FROM document_fields"
+                  " ORDER BY doc_id, field_name, value")
+        self.assertEqual(sorted(
+            [(doc1_id, "key1", "val1"),
+             (doc1_id, "key2", "val2"),
+             (doc2_id, "key1", "valx"),
+             (doc2_id, "key2", "valy"),
+            ]), sorted(c.fetchall()))
 
     def test_put_updates_fields(self):
+        self.db.create_index('test', ['key1', 'key2'])
         doc1_id, doc1_rev = self.db.create_doc(
             '{"key1": "val1", "key2": "val2"}')
         doc2_rev = self.db.put_doc(doc1_id, doc1_rev,
@@ -140,6 +154,7 @@ class TestSQLiteExpandedDatabase(tests.TestCase):
                          ], c.fetchall())
 
     def test_put_updates_nested_fields(self):
+        self.db.create_index('test', ['key', 'sub.doc'])
         doc1_id, doc1_rev = self.db.create_doc(nested_doc)
         c = self.db._get_sqlite_handle().cursor()
         c.execute("SELECT doc_id, field_name, value FROM document_fields"
@@ -152,9 +167,9 @@ class TestSQLiteExpandedDatabase(tests.TestCase):
         temp_dir = tempfile.mkdtemp(prefix='u1db-test-')
         self.addCleanup(shutil.rmtree, temp_dir)
         path = temp_dir + '/test.sqlite'
-        db = sqlite_backend.SQLiteExpandedDatabase(path)
+        db = sqlite_backend.SQLitePartialExpandDatabase(path)
         db2 = sqlite_backend.SQLiteDatabase.open_database(path)
-        self.assertIsInstance(db2, sqlite_backend.SQLiteExpandedDatabase)
+        self.assertIsInstance(db2, sqlite_backend.SQLitePartialExpandDatabase)
 
     def assertTransform(self, sql_value, value):
         transformed = sqlite_backend.SQLiteDatabase._transform_glob(value)
@@ -167,30 +182,6 @@ class TestSQLiteExpandedDatabase(tests.TestCase):
         self.assertTransform('v.%al%', 'v%al*')
         self.assertTransform('v._al%', 'v_al*')
         self.assertTransform('v..al%', 'v.al*')
-
-
-class TestSQLitePartialExpandDatabase(tests.TestCase):
-
-    def setUp(self):
-        super(TestSQLitePartialExpandDatabase, self).setUp()
-        self.db = sqlite_backend.SQLitePartialExpandDatabase(':memory:')
-        self.db._set_replica_uid('test')
-
-    def test_u1db_config_settings(self):
-        raw_db = self.db._get_sqlite_handle()
-        c = raw_db.cursor()
-        c.execute("SELECT * FROM u1db_config")
-        config = dict([(r[0], r[1]) for r in c.fetchall()])
-        self.assertEqual({'sql_schema': '0', 'replica_uid': 'test',
-                          'index_storage': 'expand referenced'}, config)
-
-    def test_no_indexes_no_document_fields(self):
-        doc1_id, doc1_rev = self.db.create_doc(
-            '{"key1": "val1", "key2": "val2"}')
-        c = self.db._get_sqlite_handle().cursor()
-        c.execute("SELECT doc_id, field_name, value FROM document_fields"
-                  " ORDER BY doc_id, field_name, value")
-        self.assertEqual([], c.fetchall())
 
     def test__get_indexed_fields(self):
         self.db.create_index('idx1', ['a', 'b'])
@@ -217,68 +208,3 @@ class TestSQLitePartialExpandDatabase(tests.TestCase):
         c.execute("SELECT doc_id, field_name, value FROM document_fields"
                   " ORDER BY doc_id, field_name, value")
         self.assertEqual([(doc1_id, 'key1', 'val1')], c.fetchall())
-
-    def test_open_database(self):
-        temp_dir = tempfile.mkdtemp(prefix='u1db-test-')
-        self.addCleanup(shutil.rmtree, temp_dir)
-        path = temp_dir + '/test.sqlite'
-        db = sqlite_backend.SQLitePartialExpandDatabase(path)
-        db2 = sqlite_backend.SQLiteDatabase.open_database(path)
-        self.assertIsInstance(db2, sqlite_backend.SQLitePartialExpandDatabase)
-
-
-class TestSQLiteOnlyExpandedDatabase(tests.TestCase):
-
-    def setUp(self):
-        super(TestSQLiteOnlyExpandedDatabase, self).setUp()
-        self.db = sqlite_backend.SQLiteOnlyExpandedDatabase(':memory:')
-        self.db._set_replica_uid('test')
-
-    def test_u1db_config_settings(self):
-        raw_db = self.db._get_sqlite_handle()
-        c = raw_db.cursor()
-        c.execute("SELECT * FROM u1db_config")
-        config = dict([(r[0], r[1]) for r in c.fetchall()])
-        self.assertEqual({'sql_schema': '0', 'replica_uid': 'test',
-                          'index_storage': 'only expanded'}, config)
-
-    def test_no_document_content(self):
-        doc1_id, doc1_rev = self.db.create_doc(
-            '{"key1": "val1", "key2": "val2"}')
-        c = self.db._get_sqlite_handle().cursor()
-        c.execute("SELECT doc_id, doc FROM document ORDER BY doc_id")
-        self.assertEqual([(doc1_id, None)], c.fetchall())
-        c.execute("SELECT doc_id, field_name, value FROM document_fields"
-                  " ORDER BY doc_id, field_name")
-        self.assertEqual([(doc1_id, 'key1', 'val1'),
-                          (doc1_id, 'key2', 'val2'),
-                         ], c.fetchall())
-
-    def test_get_doc_reassembles_content(self):
-        doc1_id, doc1_rev = self.db.create_doc(
-            '{"key1": "val1", "key2": "val2"}')
-        self.assertEqual((doc1_rev, '{"key1": "val1", "key2": "val2"}', False),
-                         self.db.get_doc(doc1_id))
-
-    def test_distinguish_deleted_from_empty_doc(self):
-        doc1_id, doc1_rev = self.db.create_doc('{}')
-        self.assertEqual((doc1_rev, '{}', False), self.db.get_doc(doc1_id))
-        doc1_rev2 = self.db.delete_doc(doc1_id, doc1_rev)
-        self.assertEqual((doc1_rev2, None, False), self.db.get_doc(doc1_id))
-
-    def test_deeply_nested(self):
-        doc1_id, doc1_rev = self.db.create_doc(
-            '{"a": {"b": {"c": {"d": "x"}}}}')
-        c = self.db._get_sqlite_handle().cursor()
-        c.execute("SELECT doc_id, field_name, value FROM document_fields"
-                  " ORDER BY doc_id, field_name")
-        self.assertEqual([(doc1_id, 'a.b.c.d', 'x'),
-                         ], c.fetchall())
-
-    def test_open_database(self):
-        temp_dir = tempfile.mkdtemp(prefix='u1db-test-')
-        self.addCleanup(shutil.rmtree, temp_dir)
-        path = temp_dir + '/test.sqlite'
-        db = sqlite_backend.SQLiteOnlyExpandedDatabase(path)
-        db2 = sqlite_backend.SQLiteDatabase.open_database(path)
-        self.assertIsInstance(db2, sqlite_backend.SQLiteOnlyExpandedDatabase)
