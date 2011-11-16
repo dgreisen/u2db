@@ -177,13 +177,13 @@ class TestHTTPMethodDecorator(tests.TestCase):
     def test_args_content_no_query(self):
         @http_app.http_method(no_query=True,
                               content_as_args=True)
-        def f(self, b):
-            return b
-        res = f("self", {}, '{"b": 2}')
-        self.assertEqual(2, res)
+        def f(self, a='a', b='b'):
+            return a, b
+        res = f("self", {}, '{"b": "y"}')
+        self.assertEqual(('a', 'y'), res)
 
         self.assertRaises(http_app.BadRequest, f, "self", {'a': 'x'},
-                          '{"b": 2}')
+                          '{"b": "y"}')
 
 class TestResource(object):
 
