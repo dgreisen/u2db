@@ -28,11 +28,11 @@ Something like::
     CREATE_INDEX(mydb, "myindex", ["field", "other.subfield", "number(third)"]) 
 
 
-Expanded Fields
----------------
+Recommended Implementation
+--------------------------
 
-One option is to create a ``document_fields`` table, which has the decomposed
-document strings. Something of the form::
+One option is to create a ``document_fields`` table, which tracks specific
+document fields. Something of the form::
 
     CREATE TABLE document_fields (
         doc_id TEXT,
@@ -46,16 +46,16 @@ So if you had two documents of the form::
     {"lastname": "meinel", "firstname": "john"}
     {"lastname": "pedroni", "firstname": "samuele"}
 
-You would end up with the entries::
+With an index on lastname and firstname, you would end up with the entries::
 
     doc_id  field_name  value
-    xxx     lastname    meinel
-    xxx     firstname   john
-    yyy     lastname    pedroni
-    yyy     firstname   samuele
+    doc-1   lastname    meinel
+    doc-1   firstname   john
+    doc-2   lastname    pedroni
+    doc-2   firstname   samuele
 
-Then if you want to match an index query, you essentially have to join
-that table against itself, for each entry that you want to match. Eg::
+Then when you match an index query, you join that table against itself. You can
+only query for one key combination per SQL query. Eg::
 
     create_index('name', ('lastname', 'firstname'))
     get_from_index('name', [('meinel', 'john'), ('pedroni', 'samuele')])
@@ -79,19 +79,14 @@ Becomes::
             AND d1.field_name = 'firstname'
             AND d1.value = 'samuele';
 
-We still need to work out if that particular SQLite syntax is the best, because
-SQLite doesn't rewrite queries like Postgres. (See EXPLAIN and especially
-EXPLAIN QUERY PLAN for ways of understanding what SQLite is doing, though
-recent docs hint that sqlite can do some reordering.)
-
-I don't believe it is possible to cheat and try to query for both index matches
-in one request. This is because you could have the document::
+Note it is not possible to cheat and try to query for both index matches in one
+request. This is because you could have the document::
 
     {"lastname": "pedroni", "firstname": "john"}
 
-Which you don't want to match.
+Which should not match the above query. 
 
-We also want another index on this table, something like [#]_::
+We also want an SQL index on this table, something like [#]_::
 
     CREATE INDEX document_fields_field_value_idx
            ON document_fields (field_name, value, doc_id);
@@ -106,26 +101,27 @@ We also want another index on this table, something like [#]_::
    The main advantage of putting ``doc_id`` into the index is that SQLite
    doesn't have to do another btree search to find the ``doc_id`` in the
    original row. The time to get 47k docs from an index goes from 0.8s to 1.2s
-   with the extra lookup. The penalty is that the size of the database goes
-   from 185MB to 195MB. In 'partial' mode it goes from 57MB to 58MB.
+   with the extra lookup. The penalty is that the size from 57MB to 58MB.
+
+   Testing with this layout shows that SQLITE is tending to use the index for
+   properly culling based on the fisrt document field, but then joins against
+   document immediately, rather than culling further with more index queries on
+   document_fields. It would be possible to force a join order with "CROSS
+   JOIN".
+
+   SQLite's document about its query planner:
+   http://www.sqlite.org/optoverview.html
 
 
-And then possibly rewriting the query as::
-
-    SELECT d.doc_id, d.doc_rev, d.doc
-      FROM document_fields d0, document_fields d1, document d
-     WHERE d0.field_name = 'lastname'
-           AND d0.value = 'pedroni'
-           AND d0.doc_id = d1.doc_id
-           AND d1.field_name = 'firstname'
-           AND d1.value = 'samuele';
-           AND d.doc_id = d1.doc_id
+Note that only fields which are indexed are put into the ``document_fields``
+table. This is because we expect most databases will not have an index on every
+field in all the documents. Also, this works more naturally when dealing with
+transformations (eg. lower()), because we can't predict ahead of time what
+transformations the user would want.
 
 Discussion
 ~~~~~~~~~~
 
-SQLite's document about its query planner:
-http://www.sqlite.org/optoverview.html
 
 1) We don't have a way to query for multiple keys concurrently. It
    seems a shame to have to do a loop in the caller.
@@ -166,31 +162,40 @@ http://www.sqlite.org/optoverview.html
    the API spec, either.
 
 
-Partial Expanded Fields
------------------------
+Alternative Implementations
+---------------------------
 
-Similar to `Expanded Fields`_ except instead of expanding every field into
-``document_fields``, you only expand fields that are mentioned in an index.
+Expand All Fields
+-----------------
 
-CREATE_INDEX then needs to make sure that all fields mentioned in the index are
-put into the document_fields table for all entries. However, you don't have to
-store eg ``lastname`` values two times if you have two indexes that include
-them.
+The same schema as defined above, except you always put every field into the
+document_fields table. 
 
 Discussion
 ~~~~~~~~~~
+
+1) The main benefit is that CREATE_INDEX can be very cheap,
+   since all the fields are already put in the indexing table. However, for
+   transformations (eg. lower()) you would still have to extract every document
+   and recompute the index value. So it isn't a big win, and it increases the
+   size of the database significantly.
+
 
 
 Only Expanded Fields
 --------------------
 
-Similar to `Expanded Fields`_, except you no longer store the `doc` column in
+Similar to `Expand All Fields`_, except you no longer store the `doc` column in
 the original ``document`` table. This avoids storing data redundantly, with the
 expense that to get a single document you have to piece it together from lots
 of separate rows.
 
 Discussion
 ~~~~~~~~~~
+
+1) This turned out to only save a small amount of disk space vs `Expand All
+   Fields`_ and had a very large overhead for extracting all documents. (18s to
+   get all vs <1s for `Expand All Fields`_.)
 
 
 Table per index
@@ -237,6 +242,8 @@ Discussion
 
 4) Data isn't shared between indexes. I imagine on-disk size will probably be
    bigger.
+
+5) Has not been implemented yet to compare with the recommended method.
 
 
 Document Tables
