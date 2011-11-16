@@ -22,7 +22,7 @@ import sys
 import urlparse
 
 
-class FencedReader(object):
+class _FencedReader(object):
     """Read and get lines from a file but not past a given length."""
 
     MAXCHUNK = 8192
@@ -33,11 +33,12 @@ class FencedReader(object):
     def __init__(self, rfile, total):
         self.rfile = rfile
         self.remaining = total
-        self.kept = None
+        self._kept = None
 
     def read_chunk(self, atmost):
-        if self.kept is not None:
-            return self.kept
+        if self._kept is not None:
+            # ignore atmost, kept data should be a subchunk anyway
+            return self._kept
         if self.remaining == 0:
             return ''
         data = self.rfile.read(min(self.remaining, atmost))
@@ -54,7 +55,7 @@ class FencedReader(object):
             if nl != -1:
                 line_parts.append(chunk[:nl+1])
                 rest = chunk[nl+1:]
-                self.kept = rest or None
+                self._kept = rest or None
                 break
             else:
                 line_parts.append(chunk)
