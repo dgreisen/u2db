@@ -68,6 +68,9 @@ class InMemoryDatabase(CommonBackend):
             old_rev, old_doc = self._docs[doc_id]
             if old_rev != old_doc_rev:
                 raise errors.InvalidDocRev()
+        else:
+            if old_doc_rev is not None:
+                raise errors.InvalidDocRev()
         new_rev = self._allocate_doc_rev(old_doc_rev)
         self._put_and_update_indexes(doc_id, old_doc, new_rev, doc)
         return new_rev
