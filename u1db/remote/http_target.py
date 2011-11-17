@@ -14,7 +14,7 @@
 
 """SyncTarget API implementation to a remote HTTP server."""
 
-import json
+import simplejson
 
 from u1db import (
     SyncTarget,
@@ -33,21 +33,14 @@ class HTTPSyncTarget(http_client.HTTPClientBase, SyncTarget):
 
     def get_sync_info(self, other_replica_uid):
         self._ensure_connection()
-        self._conn.request('GET', '%s/sync-from/%s' % (self._url.path,
-                                                         other_replica_uid))
-        # xxx check for errors with status
-        res = json.loads(self._conn.getresponse().read())
+        res, _ = self._request_json('GET', ['sync-from', other_replica_uid])
         return (res['this_replica_uid'], res['this_replica_generation'],
                 res['other_replica_generation'])
 
     def record_sync_info(self, other_replica_uid, other_replica_generation):
         self._ensure_connection()
-        self._conn.request('PUT',
-                          '%s/sync-from/%s' % (self._url.path,
-                                               other_replica_uid),
-                          json.dumps({'generation': other_replica_generation}),
-                          {'content-type': 'application/json'})
-        self._conn.getresponse().read() # xxx check for errors with status
+        self._request_json('PUT', ['sync-from', other_replica_uid], {},
+                                  {'generation': other_replica_generation})
 
     def sync_exchange(self, docs_info, from_replica_uid,
                       from_replica_generation,
@@ -60,7 +53,7 @@ class HTTPSyncTarget(http_client.HTTPClientBase, SyncTarget):
         entries = []
         size = 0
         def prepare(**dic):
-            entry = json.dumps(dic)+"\r\n"
+            entry = simplejson.dumps(dic)+"\r\n"
             entries.append(entry)
             return len(entry)
         size += prepare(last_known_generation=last_known_generation,
@@ -74,9 +67,9 @@ class HTTPSyncTarget(http_client.HTTPClientBase, SyncTarget):
         entries = None
         resp = self._conn.getresponse() # xxx check for errors with status
         data = resp.read().splitlines() # one at a time
-        res = json.loads(data[0])
+        res = simplejson.loads(data[0])
         for entry in data[1:]:
-            entry = json.loads(entry)
+            entry = simplejson.loads(entry)
             return_doc_cb(entry['id'], entry['rev'], entry['doc'])
         data = None
         return res['new_generation']
