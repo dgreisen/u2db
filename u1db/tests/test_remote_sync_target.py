@@ -12,38 +12,72 @@
 # You should have received a copy of the GNU General Public License along
 # with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-"""Tests for the RemoteSyncTarget"""
+"""Tests for the remote sync targets"""
 
 import os
+from wsgiref import simple_server
+#from paste import httpserver
 
 from u1db import (
     tests,
     )
 from u1db.remote import (
+    sync_server,
     sync_target,
+    http_app,
+    http_target
     )
 from u1db.backends import (
     sqlite_backend,
     )
 
 
-class TestRemoteSyncTarget(tests.TestCaseWithSyncServer):
+def remote_server_def():
+    return (sync_server.TCPSyncServer, sync_server.TCPSyncRequestHandler,
+            "force_shutdown", "u1db")
+
+def http_server_def():
+    def make_server(host_port, handler, state):
+        application = http_app.HTTPApp(state)
+        srv = simple_server.WSGIServer(host_port, handler)
+        srv.set_app(application)
+        #srv = httpserver.WSGIServerBase(application,
+        #                                host_port,
+        #                                handler
+        #                                )
+        return srv
+    class req_handler(simple_server.WSGIRequestHandler):
+        def log_request(*args):
+            pass # suppress
+    #rh = httpserver.WSGIHandler
+    return make_server, req_handler, "shutdown", "http"
+
+
+class TestRemoteSyncTargets(tests.TestCaseWithServer):
+
+    scenarios = [
+        ('http', {'server_def': http_server_def,
+                  'sync_target_class': http_target.HTTPSyncTarget}),
+        ('remote', {'server_def': remote_server_def,
+                    'sync_target_class': sync_target.RemoteSyncTarget}),
+        ]
 
     def getSyncTarget(self, path=None):
         if self.server is None:
             self.startServer()
-        return sync_target.RemoteSyncTarget.connect(self.getURL(path))
+        return self.sync_target_class(self.getURL(path))
 
     def test_connect(self):
         self.startServer()
         url = self.getURL()
-        remote_target = sync_target.RemoteSyncTarget.connect(url)
+        remote_target = self.sync_target_class.connect(url)
         self.assertEqual(url, remote_target._url.geturl())
-        self.assertIs(None, remote_target._conn)
+        self.assertIs(None, remote_target._client)
 
     def test_parse_url(self):
-        remote_target = sync_target.RemoteSyncTarget('u1db://127.0.0.1:12345/')
-        self.assertEqual('u1db', remote_target._url.scheme)
+        remote_target = self.sync_target_class(
+                                     '%s://127.0.0.1:12345/' % self.url_scheme)
+        self.assertEqual(self.url_scheme, remote_target._url.scheme)
         self.assertEqual('127.0.0.1', remote_target._url.hostname)
         self.assertEqual(12345, remote_target._url.port)
         self.assertEqual('/', remote_target._url.path)
@@ -54,13 +88,12 @@ class TestRemoteSyncTarget(tests.TestCaseWithSyncServer):
 
     def test__ensure_connection(self):
         remote_target = self.getSyncTarget()
-        self.assertIs(None, remote_target._conn)
+        self.assertIs(None, remote_target._client)
         remote_target._ensure_connection()
-        self.assertIsNot(None, remote_target._conn)
-        c = remote_target._conn
-        remote_target._ensure_connection()
-        self.assertIs(c, remote_target._conn)
         self.assertIsNot(None, remote_target._client)
+        cli = remote_target._client
+        remote_target._ensure_connection()
+        self.assertIs(cli, remote_target._client)
 
     def test_get_sync_info(self):
         self.startServer()
@@ -106,3 +139,5 @@ class TestRemoteSyncTarget(tests.TestCaseWithSyncServer):
                         last_known_generation=0, return_doc_cb=receive_doc)
         self.assertEqual(1, new_gen)
         self.assertEqual([(doc_id, doc_rev, {'value': 'there'})], other_docs)
+
+load_tests = tests.load_with_scenarios
