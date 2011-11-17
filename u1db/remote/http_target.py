@@ -67,14 +67,14 @@ class HTTPSyncTarget(SyncTarget):
         self._client.putheader('content-type', 'application/x-u1db-multi-json')
         entries = []
         size = 0
-        def prepare(dic):
+        def prepare(**dic):
             entry = json.dumps(dic)+"\r\n"
             entries.append(entry)
             return len(entry)
-        size += prepare(dict(last_known_generation=last_known_generation,
-                             from_replica_generation=from_replica_generation))
+        size += prepare(last_known_generation=last_known_generation,
+                        from_replica_generation=from_replica_generation)
         for doc_id, doc_rev, doc in docs_info:
-            size += prepare(dict(id=doc_id, rev=doc_rev, doc=doc))
+            size += prepare(id=doc_id, rev=doc_rev, doc=doc)
         self._client.putheader('content-length', str(size))
         self._client.endheaders()
         for entry in entries:

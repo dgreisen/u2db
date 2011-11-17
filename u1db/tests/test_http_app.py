@@ -400,7 +400,7 @@ class TestHTTPApp(tests.TestCase):
         self.assertEqual({'rev': doc_rev}, simplejson.loads(resp.body))
 
     def test_put_doc(self):
-        doc_id, orig_rev = self.db0.create_doc('doc1', '{"x": 1}')
+        doc_id, orig_rev = self.db0.create_doc('{"x": 1}', doc_id='doc1')
         resp = self.app.put('/db0/doc/doc1?old_rev=%s' % orig_rev,
                             params='{"x": 2}',
                             headers={'content-type': 'application/json'})
