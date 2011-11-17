@@ -389,23 +389,26 @@ class DatabaseSyncTests(tests.DatabaseBaseTests):
                             self.db3.get_doc(doc_id))
 
     def test_put_refuses_to_update_conflicted(self):
-        doc_id, doc1_rev = self.db1.create_doc(simple_doc)
+        doc1 = self.db1.create_doc(simple_doc)
+        doc_id = doc1.doc_id
         content1 = '{"key": "altval"}'
-        doc_id, doc2_rev = self.db2.create_doc(content1, doc_id=doc_id)
+        doc2 = self.db2.create_doc(content1, doc_id=doc_id)
         self.sync(self.db1, self.db2)
-        self.assertEqual((doc2_rev, content1, True), self.db1.get_doc(doc_id))
+        self.assertGetDoc(self.db1, doc_id, doc2.rev, content1, True)
         content2 = '{"key": "local"}'
-        self.assertRaises(errors.ConflictedDoc,
-            self.db1.put_doc, doc_id, doc2_rev, content2)
+        doc2.set_content(content2)
+        self.assertRaises(errors.ConflictedDoc, self.db1.put_doc, doc2)
 
     def test_delete_refuses_for_conflicted(self):
-        doc_id, doc1_rev = self.db1.create_doc(simple_doc)
+        doc1 = self.db1.create_doc(simple_doc)
+        doc_id = doc1.doc_id
         content1 = '{"key": "altval"}'
-        doc_id, doc2_rev = self.db2.create_doc(content1, doc_id=doc_id)
+        doc2 = self.db2.create_doc(content1, doc_id=doc_id)
         self.sync(self.db1, self.db2)
-        self.assertEqual((doc2_rev, content1, True), self.db1.get_doc(doc_id))
+        self.assertDocEqual(doc_id, doc2.rev, content1, True,
+                            self.db1.get_doc(doc_id))
         self.assertRaises(errors.ConflictedDoc,
-            self.db1.delete_doc, doc_id, doc2_rev)
+            self.db1.delete_doc, doc_id, doc2.rev)
 
     def test_get_doc_conflicts_unconflicted(self):
         doc = self.db1.create_doc(simple_doc)
@@ -424,17 +427,19 @@ class DatabaseSyncTests(tests.DatabaseBaseTests):
                          self.db1.get_doc_conflicts(doc1.doc_id))
 
     def test_resolve_doc(self):
-        doc_id, doc1_rev = self.db1.create_doc(simple_doc)
+        doc1 = self.db1.create_doc(simple_doc)
+        doc_id = doc1.doc_id
         content1 = '{"key": "altval"}'
-        doc_id, doc2_rev = self.db2.create_doc(content1, doc_id=doc_id)
+        doc2 = self.db2.create_doc(content1, doc_id=doc_id)
         self.sync(self.db1, self.db2)
-        self.assertEqual([(doc2_rev, content1),
-                          (doc1_rev, simple_doc)],
+        self.assertEqual([(doc2.rev, content1),
+                          (doc1.rev, simple_doc)],
                          self.db1.get_doc_conflicts(doc_id))
         new_rev, has_conflicts = self.db1.resolve_doc(doc_id, simple_doc,
-                                                     [doc2_rev, doc1_rev])
+                                                     [doc2.rev, doc1.rev])
         self.assertFalse(has_conflicts)
-        self.assertEqual((new_rev, simple_doc, False), self.db1.get_doc(doc_id))
+        self.assertDocEqual(doc_id, new_rev, simple_doc, False,
+                            self.db1.get_doc(doc_id))
         self.assertEqual([], self.db1.get_doc_conflicts(doc_id))
 
     def test_resolve_doc_picks_biggest_vcr(self):
@@ -461,26 +466,28 @@ class DatabaseSyncTests(tests.DatabaseBaseTests):
         self.assertTrue(vcr_new.is_newer(vcr_2))
 
     def test_resolve_doc_partial_not_winning(self):
-        doc_id, doc1_rev = self.db1.create_doc(simple_doc)
+        doc1 = self.db1.create_doc(simple_doc)
+        doc_id = doc1.doc_id
         content2 = '{"key": "valin2"}'
-        doc_id, doc2_rev = self.db2.create_doc(content2, doc_id=doc_id)
+        doc2 = self.db2.create_doc(content2, doc_id=doc_id)
         self.sync(self.db1, self.db2)
-        self.assertEqual([(doc2_rev, content2),
-                          (doc1_rev, simple_doc)],
+        self.assertEqual([(doc2.rev, content2),
+                          (doc1.rev, simple_doc)],
                          self.db1.get_doc_conflicts(doc_id))
         self.db3 = self.create_database('test3')
         content3 = '{"key": "valin3"}'
-        doc_id, doc3_rev = self.db3.create_doc(content3, doc_id=doc_id)
+        doc3 = self.db3.create_doc(content3, doc_id=doc_id)
         self.sync(self.db1, self.db3)
-        self.assertEqual([(doc3_rev, content3),
-                          (doc1_rev, simple_doc),
-                          (doc2_rev, content2)],
+        self.assertEqual([(doc3.rev, content3),
+                          (doc1.rev, simple_doc),
+                          (doc2.rev, content2)],
                          self.db1.get_doc_conflicts(doc_id))
         new_rev, has_conflicts = self.db1.resolve_doc(doc_id, simple_doc,
-                                                     [doc2_rev, doc1_rev])
+                                                     [doc2.rev, doc1.rev])
         self.assertTrue(has_conflicts)
-        self.assertEqual((doc3_rev, content3, True), self.db1.get_doc(doc_id))
-        self.assertEqual([(doc3_rev, content3), (new_rev, simple_doc)],
+        self.assertDocEqual(doc_id, doc3.rev, content3, True,
+                            self.db1.get_doc(doc_id))
+        self.assertEqual([(doc3.rev, content3), (new_rev, simple_doc)],
                          self.db1.get_doc_conflicts(doc_id))
 
     def test_resolve_doc_partial_winning(self):

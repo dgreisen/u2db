@@ -53,8 +53,8 @@ class DatabaseTests(tests.DatabaseBaseTests):
                             self.db.get_doc(doc.doc_id))
 
     def test_put_doc_refuses_no_id(self):
-        self.assertRaises(errors.InvalidDocId,
-            self.db.put_doc, None, None, simple_doc)
+        doc = Document(None, None, simple_doc)
+        self.assertRaises(errors.InvalidDocId, self.db.put_doc, doc)
 
     def test_get_docs(self):
         doc1 = self.db.create_doc(simple_doc)
@@ -83,9 +83,9 @@ class DatabaseTests(tests.DatabaseBaseTests):
         self.assertEqual([], self.db.get_docs([]))
 
     def test_put_doc_creating_initial(self):
-        new_rev = self.db.put_doc('my_doc_id', None, simple_doc)
-        self.assertEqual((new_rev, simple_doc, False),
-                         self.db.get_doc('my_doc_id'))
+        doc = Document('my_doc_id', None, simple_doc)
+        new_rev = self.db.put_doc(doc)
+        self.assertGetDoc(self.db, 'my_doc_id', new_rev, simple_doc, False)
 
     def test_simple_put_doc_if_newer(self):
         state = self.db.put_doc_if_newer('my-doc-id', 'test:1', simple_doc)
@@ -95,28 +95,28 @@ class DatabaseTests(tests.DatabaseBaseTests):
 
     def test_put_doc_if_newer_already_superseded(self):
         orig_doc = '{"new": "doc"}'
-        doc1_id, doc1_rev1 = self.db.create_doc(orig_doc)
-        doc1_rev2 = self.db.put_doc(doc1_id, doc1_rev1, simple_doc)
+        doc1 = self.db.create_doc(orig_doc)
+        doc1_rev1 = doc1.rev
+        doc1.set_content(simple_doc)
+        doc1_rev2 = self.db.put_doc(doc1)
         # Nothing is inserted, because the document is already superseded
-        state = self.db.put_doc_if_newer(doc1_id, doc1_rev1, orig_doc)
+        state = self.db.put_doc_if_newer(doc1.doc_id, doc1_rev1, orig_doc)
         self.assertEqual('superseded', state)
-        self.assertEqual((doc1_rev2, simple_doc, False),
-                         self.db.get_doc(doc1_id))
+        self.assertGetDoc(self.db, doc1.doc_id, doc1_rev2, simple_doc, False)
 
     def test_put_doc_if_newer_already_converged(self):
         orig_doc = '{"new": "doc"}'
-        doc1_id, doc1_rev1 = self.db.create_doc(orig_doc)
-        state = self.db.put_doc_if_newer(doc1_id, doc1_rev1, orig_doc)
+        doc1 = self.db.create_doc(orig_doc)
+        state = self.db.put_doc_if_newer(doc1.doc_id, doc1.rev, orig_doc)
         self.assertEqual('converged', state)
 
     def test_put_doc_if_newer_conflicted(self):
-        doc1_id, doc1_rev1 = self.db.create_doc(simple_doc)
+        doc1 = self.db.create_doc(simple_doc)
         # Nothing is inserted, the document id is returned as would-conflict
-        state = self.db.put_doc_if_newer(doc1_id, 'alternate:1', nested_doc)
+        state = self.db.put_doc_if_newer(doc1.doc_id, 'alternate:1', nested_doc)
         self.assertEqual('conflicted', state)
         # The database wasn't altered
-        self.assertEqual((doc1_rev1, simple_doc, False),
-                         self.db.get_doc(doc1_id))
+        self.assertGetDoc(self.db, doc1.doc_id, doc1.rev, simple_doc, False)
 
     def test_force_doc_with_conflict(self):
         doc1_id, doc1_rev1 = self.db.create_doc(simple_doc)
@@ -141,12 +141,12 @@ class DatabaseTests(tests.DatabaseBaseTests):
         self.assertEqual(2, self.db.get_sync_generation('other-db'))
 
     def test_put_fails_with_bad_old_rev(self):
-        doc_id, old_rev = self.db.create_doc(simple_doc, doc_id='my_doc_id')
-        new_doc = '{"something": "else"}'
-        self.assertRaises(errors.InvalidDocRev,
-            self.db.put_doc, 'my_doc_id', 'other:1', new_doc)
-        self.assertEqual((old_rev, simple_doc, False),
-                         self.db.get_doc('my_doc_id'))
+        doc = self.db.create_doc(simple_doc, doc_id='my_doc_id')
+        old_rev = doc.rev
+        doc.rev = 'other:1'
+        doc.set_content('{"something": "else"}')
+        self.assertRaises(errors.InvalidDocRev, self.db.put_doc, doc)
+        self.assertGetDoc(self.db, 'my_doc_id', old_rev, simple_doc, False)
 
     def test_delete_doc(self):
         doc_id, doc_rev = self.db.create_doc(simple_doc)
@@ -173,11 +173,13 @@ class DatabaseTests(tests.DatabaseBaseTests):
         self.assertEqual((doc_rev, simple_doc, False), self.db.get_doc(doc_id))
 
     def test_put_updates_transaction_log(self):
-        doc_id, doc_rev = self.db.create_doc(simple_doc)
-        self.assertEqual([doc_id], self.db._get_transaction_log())
-        doc_rev = self.db.put_doc(doc_id, doc_rev, '{"something": "else"}')
-        self.assertEqual([doc_id, doc_id], self.db._get_transaction_log())
-        self.assertEqual((2, set([doc_id])), self.db.whats_changed())
+        doc = self.db.create_doc(simple_doc)
+        self.assertEqual([doc.doc_id], self.db._get_transaction_log())
+        doc.set_content('{"something": "else"}')
+        self.db.put_doc(doc)
+        self.assertEqual([doc.doc_id, doc.doc_id],
+                         self.db._get_transaction_log())
+        self.assertEqual((2, set([doc.doc_id])), self.db.whats_changed())
 
     def test_delete_updates_transaction_log(self):
         doc_id, doc_rev = self.db.create_doc(simple_doc)
@@ -189,19 +191,19 @@ class DatabaseTests(tests.DatabaseBaseTests):
         self.assertEqual((0, set()), self.db.whats_changed())
 
     def test_whats_changed_returns_one_id_for_multiple_changes(self):
-        doc_id, doc_rev = self.db.create_doc(simple_doc)
-        self.db.put_doc(doc_id, doc_rev, '{"new": "contents"}')
-        self.assertEqual((2, set([doc_id])), self.db.whats_changed())
+        doc = self.db.create_doc(simple_doc)
+        doc.set_content('{"new": "contents"}')
+        self.db.put_doc(doc)
+        self.assertEqual((2, set([doc.doc_id])), self.db.whats_changed())
         self.assertEqual((2, set()), self.db.whats_changed(2))
 
     def test_handles_nested_content(self):
-        doc_id, new_rev = self.db.create_doc(nested_doc)
-        self.assertEqual((new_rev, nested_doc, False), self.db.get_doc(doc_id))
+        doc = self.db.create_doc(nested_doc)
+        self.assertGetDoc(self.db, doc.doc_id, doc.rev, nested_doc, False)
 
     def test_handles_doc_with_null(self):
-        doc_id, new_rev = self.db.create_doc('{"key": null}')
-        self.assertEqual((new_rev, '{"key": null}', False),
-                         self.db.get_doc(doc_id))
+        doc = self.db.create_doc('{"key": null}')
+        self.assertGetDoc(self.db, doc.doc_id, doc.rev, '{"key": null}', False)
 
 
 class DatabaseIndexTests(tests.DatabaseBaseTests):
