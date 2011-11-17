@@ -24,7 +24,35 @@ simple_doc = tests.simple_doc
 nested_doc = tests.nested_doc
 
 
-class DatabaseTests(tests.DatabaseBaseTests):
+from u1db.tests.test_remote_sync_target import (
+    http_server_def,
+)
+
+from u1db.remote import (
+    http_database
+    )
+
+
+def http_create_database(test, replica_uid):
+    test.startServer()
+    db = test.request_state._create_database(replica_uid)
+    return http_database.HTTPDatabase(test.getURL('test'))
+
+
+class AllDatabaseTests(tests.DatabaseBaseTests, tests.TestCaseWithServer):
+
+    scenarios = tests.LOCAL_DATABASES_SCENARIOS + [
+        ('http', {'do_create_database': http_create_database,
+                  'server_def': http_server_def}),
+        ]
+
+    def test_put_doc_creating_initial(self):
+        new_rev = self.db.put_doc('my_doc_id', None, simple_doc)
+        self.assertEqual((new_rev, simple_doc, False),
+                         self.db.get_doc('my_doc_id'))
+
+
+class LocalDatabaseTests(tests.DatabaseBaseTests):
 
     def test_close(self):
         self.db.close()

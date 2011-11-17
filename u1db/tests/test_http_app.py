@@ -338,6 +338,7 @@ class TestHTTPResponder(tests.TestCase):
         self.assertEqual({'content-type': 'application/json',
                           'cache-control': 'no-cache'}, self.headers)
         self.assertEqual(['{"value": "success"}\r\n'], self.response_body)
+        self.assertEqual([], responder.content)
 
     def test_send_response_status_fail(self):
         responder = http_app.HTTPResponder(self.start_response)
@@ -346,6 +347,17 @@ class TestHTTPResponder(tests.TestCase):
         self.assertEqual({'content-type': 'application/json',
                           'cache-control': 'no-cache'}, self.headers)
         self.assertEqual([], self.response_body)
+        self.assertEqual([], responder.content)
+
+    def test_send_response_content_w_headers(self):
+        responder = http_app.HTTPResponder(self.start_response)
+        responder.send_response_content('foo', headers={'x-a': '1'})
+        self.assertEqual('200 OK', self.status)
+        self.assertEqual({'content-type': 'application/json',
+                          'cache-control': 'no-cache',
+                          'x-a': '1'}, self.headers)
+        self.assertEqual([], self.response_body)
+        self.assertEqual(['foo'], responder.content)
 
     def test_start_finish_response_status_fail(self):
         responder = http_app.HTTPResponder(self.start_response)
@@ -355,6 +367,7 @@ class TestHTTPResponder(tests.TestCase):
         self.assertEqual({'content-type': 'application/json',
                           'cache-control': 'no-cache'}, self.headers)
         self.assertEqual(['{"error": "not found"}\r\n'], self.response_body)
+        self.assertEqual([], responder.content)
 
     def test_send_stream_entry(self):
         responder = http_app.HTTPResponder(self.start_response)
@@ -367,7 +380,7 @@ class TestHTTPResponder(tests.TestCase):
                           'cache-control': 'no-cache'}, self.headers)
         self.assertEqual(['{"one": 1}\r\n',
                           '{"entry": true}\r\n'], self.response_body)
-
+        self.assertEqual([], responder.content)
 
 class TestHTTPApp(tests.TestCase):
 
@@ -409,6 +422,15 @@ class TestHTTPApp(tests.TestCase):
         self.assertEqual('{"x": 2}', doc)
         self.assertEqual('application/json', resp.header('content-type'))
         self.assertEqual({'rev': doc_rev}, simplejson.loads(resp.body))
+
+    def test_get_doc(self):
+        doc_id, doc_rev = self.db0.create_doc('{"x": 1}', doc_id='doc1')
+        resp = self.app.get('/db0/doc/%s' % doc_id)
+        self.assertEqual(200, resp.status)
+        self.assertEqual('application/json', resp.header('content-type'))
+        self.assertEqual('{"x": 1}', resp.body)
+        self.assertEqual(doc_rev, resp.header('x-u1db-rev'))
+        self.assertEqual('false', resp.header('x-u1db-has-conflicts'))
 
     def test_get_sync_info(self):
         self.db0.set_sync_generation('other-id', 1)
