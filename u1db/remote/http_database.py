@@ -14,62 +14,18 @@
 
 """HTTPDabase to access a remote db over the HTTP API."""
 
-import httplib
 import simplejson
-import urlparse
-import urllib
+
 
 from u1db import (
     Database
     )
+from u1db.remote import (
+    http_client,
+    )
 
 
-class HTTPClientBase(object):
-    """Base class to make requests to a remote HTTP server."""
-
-    def __init__(self, url):
-        self._url = urlparse.urlsplit(url)
-        self._conn = None
-
-    def _ensure_connection(self):
-        if self._conn is not None:
-            return
-        self._conn = httplib.HTTPConnection(self._url.hostname,
-                                              self._url.port)
-
-    # xxx retry mechanism?
-
-    def _request(self, method, url_parts, params=None, body=None,
-                                                       content_type=None):
-        self._ensure_connection()
-        url_query = '/'.join([self._url.path] + url_parts)
-        if params:
-            url_query += ('?' +
-                      urllib.urlencode(dict((unicode(v).encode('utf-8'),
-                                             unicode(k).encode('utf-8'))
-                                            for v, k in params.items())))
-        if body is not None and not isinstance(body, basestring):
-            body = simplejson.dumps(body)
-            content_type = 'application/json'
-        headers = {}
-        if content_type:
-            headers['content-type'] = content_type
-        self._conn.request(method, url_query, body, headers)
-        resp = self._conn.getresponse()
-        if resp.status in (200, 201):
-            return resp.read(), dict(resp.getheaders())
-        else:
-            # xxx raise the proper exceptions depending on status
-            raise Exception(resp.status)
-
-    def _request_json(self, method, url_parts, params=None, body=None,
-                                                            content_type=None):
-        res, headers = self._request(method, url_parts, params, body,
-                                     content_type)
-        return simplejson.loads(res), headers
-
-
-class HTTPDatabase(HTTPClientBase, Database):
+class HTTPDatabase(http_client.HTTPClientBase, Database):
     """Implement the Database API to a remote HTTP server."""
 
     def put_doc(self, doc_id, old_doc_rev, doc):
