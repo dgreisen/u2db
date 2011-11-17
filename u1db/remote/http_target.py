@@ -65,8 +65,8 @@ class HTTPSyncTarget(http_client.HTTPClientBase, SyncTarget):
         for entry in entries:
             self._conn.send(entry)
         entries = None
-        resp = self._conn.getresponse() # xxx check for errors with status
-        data = resp.read().splitlines() # one at a time
+        data, _ = self._response()
+        data = data.splitlines() # one at a time
         res = simplejson.loads(data[0])
         for entry in data[1:]:
             entry = simplejson.loads(entry)

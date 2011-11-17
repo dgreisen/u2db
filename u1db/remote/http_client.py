@@ -35,6 +35,14 @@ class HTTPClientBase(object):
 
     # xxx retry mechanism?
 
+    def _response(self):
+        resp = self._conn.getresponse()
+        if resp.status in (200, 201):
+            return resp.read(), dict(resp.getheaders())
+        else:
+            # xxx raise the proper exceptions depending on status
+            raise Exception(resp.status)
+
     def _request(self, method, url_parts, params=None, body=None,
                                                        content_type=None):
         self._ensure_connection()
@@ -51,12 +59,8 @@ class HTTPClientBase(object):
         if content_type:
             headers['content-type'] = content_type
         self._conn.request(method, url_query, body, headers)
-        resp = self._conn.getresponse()
-        if resp.status in (200, 201):
-            return resp.read(), dict(resp.getheaders())
-        else:
-            # xxx raise the proper exceptions depending on status
-            raise Exception(resp.status)
+        return self._response()
+
 
     def _request_json(self, method, url_parts, params=None, body=None,
                                                             content_type=None):
