@@ -52,6 +52,10 @@ class DatabaseTests(tests.DatabaseBaseTests):
         self.assertRaises(errors.InvalidDocId,
             self.db.put_doc, None, None, simple_doc)
 
+    def test_put_doc_refuses_non_existing_old_rev(self):
+        self.assertRaises(errors.InvalidDocRev,
+            self.db.put_doc, 'doc-id', 'test:4', simple_doc)
+
     def test_get_docs(self):
         doc1_id, doc1_rev = self.db.create_doc(simple_doc)
         doc2_id, doc2_rev = self.db.create_doc(nested_doc)
