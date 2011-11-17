@@ -59,7 +59,7 @@ class HTTPClientBase(object):
         if resp.status in (200, 201):
             return resp.read(), dict(resp.getheaders())
         else:
-            # xxx
+            # xxx raise the proper exceptions depending on status
             raise Exception(resp.status)
 
     def _request_json(self, method, url_parts, params=None, body=None,
