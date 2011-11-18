@@ -53,15 +53,9 @@ class TestCase(testtools.TestCase):
 
     def assertGetDoc(self, db, doc_id, doc_rev, content, has_conflicts):
         """Assert that the document in the database looks correct."""
-        self.assertDocEqual(doc_id, doc_rev, content, has_conflicts,
-                            db.get_doc(doc_id))
-
-    def assertDocEqual(self, doc_id, doc_rev, content, has_conflicts, doc):
-        """Assert that a Document matches this spec."""
         exp_doc = Document(doc_id, doc_rev, content,
                            has_conflicts=has_conflicts)
-        self.assertEqual(exp_doc, doc)
-
+        self.assertEqual(exp_doc, db.get_doc(doc_id))
 
 
 def multiply_scenarios(a_scenarios, b_scenarios):

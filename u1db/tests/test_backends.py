@@ -62,23 +62,20 @@ class LocalDatabaseTests(tests.DatabaseBaseTests):
         doc = self.db.create_doc(simple_doc)
         self.assertNotEqual(None, doc.doc_id)
         self.assertNotEqual(None, doc.rev)
-        self.assertDocEqual(doc.doc_id, doc.rev, simple_doc, False,
-                            self.db.get_doc(doc.doc_id))
+        self.assertGetDoc(self.db, doc.doc_id, doc.rev, simple_doc, False)
 
     def test_create_doc_with_id(self):
         doc = self.db.create_doc(simple_doc, doc_id='my-id')
         self.assertEqual('my-id', doc.doc_id)
         self.assertNotEqual(None, doc.rev)
-        self.assertDocEqual(doc.doc_id, doc.rev, simple_doc, False,
-                            self.db.get_doc(doc.doc_id))
+        self.assertGetDoc(self.db, doc.doc_id, doc.rev, simple_doc, False)
 
     def test_create_doc_existing_id(self):
         doc = self.db.create_doc(simple_doc)
         new_content = '{"something": "else"}'
         self.assertRaises(errors.InvalidDocRev, self.db.create_doc,
                           new_content, doc.doc_id)
-        self.assertDocEqual(doc.doc_id, doc.rev, simple_doc, False,
-                            self.db.get_doc(doc.doc_id))
+        self.assertGetDoc(self.db, doc.doc_id, doc.rev, simple_doc, False)
 
     def test_put_doc_refuses_no_id(self):
         doc = Document(None, None, simple_doc)
@@ -122,8 +119,7 @@ class LocalDatabaseTests(tests.DatabaseBaseTests):
     def test_simple_put_doc_if_newer(self):
         state = self.db.put_doc_if_newer('my-doc-id', 'test:1', simple_doc)
         self.assertEqual('inserted', state)
-        self.assertDocEqual('my-doc-id', 'test:1', simple_doc, False,
-                            self.db.get_doc('my-doc-id'))
+        self.assertGetDoc(self.db, 'my-doc-id', 'test:1', simple_doc, False)
 
     def test_put_doc_if_newer_already_superseded(self):
         orig_doc = '{"new": "doc"}'
@@ -160,8 +156,7 @@ class LocalDatabaseTests(tests.DatabaseBaseTests):
 
     def test_get_doc_after_put(self):
         doc = self.db.create_doc(simple_doc, doc_id='my_doc_id')
-        self.assertDocEqual('my_doc_id', doc.rev, simple_doc, False,
-                            self.db.get_doc('my_doc_id'))
+        self.assertGetDoc(self.db, 'my_doc_id', doc.rev, simple_doc, False)
 
     def test_get_doc_nonexisting(self):
         self.assertIs(None, self.db.get_doc('non-existing'))
