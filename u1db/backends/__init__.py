@@ -68,6 +68,9 @@ class CommonBackend(u1db.Database):
 
         :return: (old_doc, state)
         """
+        # TODO: This is only called from put_doc_if_newer, and only the return
+        #       value is really different. This function should probably just
+        #       be removed.
         cur_doc = self._get_doc(doc_id)
         doc_vcr = VectorClockRev(doc_rev)
         if cur_doc is None:
