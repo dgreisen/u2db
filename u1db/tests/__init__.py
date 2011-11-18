@@ -61,23 +61,29 @@ simple_doc = '{"key": "value"}'
 nested_doc = '{"key": "value", "sub": {"doc": "underneath"}}'
 
 
-def create_memory_database(replica_uid):
+def create_memory_database(test, replica_uid):
     return inmemory.InMemoryDatabase(replica_uid)
 
 
-def create_sqlite_partial_expanded(replica_uid):
+def create_sqlite_partial_expanded(test, replica_uid):
     db = sqlite_backend.SQLitePartialExpandDatabase(':memory:')
     db._set_replica_uid(replica_uid)
     return db
 
 
+LOCAL_DATABASES_SCENARIOS = [
+        ('mem', {'do_create_database': create_memory_database}),
+        ('sql', {'do_create_database': create_sqlite_partial_expanded}),
+        ]
+
+
 class DatabaseBaseTests(TestCase):
 
     create_database = None
-    scenarios = [
-        ('mem', {'create_database': create_memory_database}),
-        ('sql', {'create_database': create_sqlite_partial_expanded}),
-        ]
+    scenarios = LOCAL_DATABASES_SCENARIOS
+
+    def create_database(self, replica_uid):
+        return self.do_create_database(self, replica_uid)
 
     def setUp(self):
         super(DatabaseBaseTests, self).setUp()

@@ -144,6 +144,14 @@ class DocResource(object):
             status = 200
         self.responder.send_response(status, rev=doc_rev)
 
+    @http_method()
+    def get(self):
+        doc_rev, doc, has_conflicts = self.db.get_doc(self.id)
+        self.responder.send_response_content(doc, headers={
+            'x-u1db-rev': doc_rev,
+            'x-u1db-has-conflicts': simplejson.dumps(has_conflicts)
+            })
+
 
 class SyncResource(object):
     """Sync endpoint resource."""
@@ -208,8 +216,9 @@ class HTTPResponder(object):
         self._start_response = start_response
         self._write = None
         self.content_type = 'application/json'
+        self.content = []
 
-    def start_response(self, status=OK, **kwargs):
+    def start_response(self, status=OK, headers={}, **kwargs):
         """start sending response: header and args."""
         if self._started:
             return
@@ -217,7 +226,8 @@ class HTTPResponder(object):
         status_text = httplib.responses[status]
         self._write = self._start_response('%d %s' % (status, status_text),
                                          [('content-type', self.content_type),
-                                          ('cache-control', 'no-cache')])
+                                          ('cache-control', 'no-cache')] +
+                                           headers.items())
         # xxx version in headers
         if kwargs:
             self._write(simplejson.dumps(kwargs)+"\r\n")
@@ -226,9 +236,16 @@ class HTTPResponder(object):
         """finish sending response."""
         self.sent_response = True
 
-    def send_response(self, status=OK, **kwargs):
+    def send_response(self, status=OK, headers={}, **kwargs):
         """send and finish response in one go."""
-        self.start_response(status, **kwargs)
+        self.start_response(status, headers, **kwargs)
+        self.finish_response()
+
+    def send_response_content(self, content, headers={}):
+        """send and finish response with content in one go."""
+        headers['content-length'] = str(len(content))
+        self.start_response(OK, headers=headers)
+        self.content = [content]
         self.finish_response()
 
     def stream_entry(self, entry):
@@ -315,5 +332,9 @@ class HTTPApp(object):
             resource = self._lookup_resource(environ, responder)
             HTTPInvocationByMethodWithBody(resource, environ)()
         except BadRequest:
+            # xxx introduce logging
+            #print environ['PATH_INFO']
+            #import traceback
+            #traceback.print_exc()
             responder.send_response(400)
-        return []
+        return responder.content

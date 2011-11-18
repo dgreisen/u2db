@@ -53,6 +53,28 @@ def http_server_def():
     return make_server, req_handler, "shutdown", "http"
 
 
+class TestRemoteSyncTarget(tests.TestCaseWithServer):
+
+    server_def = staticmethod(remote_server_def)
+
+    def test_connect(self):
+        self.startServer()
+        url = self.getURL()
+        remote_target = sync_target.RemoteSyncTarget(url)
+        self.assertEqual(url, remote_target._url.geturl())
+        self.assertIs(None, remote_target._client)
+
+    def test__ensure_connection(self):
+        self.startServer()
+        remote_target = sync_target.RemoteSyncTarget(self.getURL())
+        self.assertIs(None, remote_target._client)
+        remote_target._ensure_connection()
+        self.assertIsNot(None, remote_target._client)
+        cli = remote_target._client
+        remote_target._ensure_connection()
+        self.assertIs(cli, remote_target._client)
+
+
 class TestRemoteSyncTargets(tests.TestCaseWithServer):
 
     scenarios = [
@@ -67,13 +89,6 @@ class TestRemoteSyncTargets(tests.TestCaseWithServer):
             self.startServer()
         return self.sync_target_class(self.getURL(path))
 
-    def test_connect(self):
-        self.startServer()
-        url = self.getURL()
-        remote_target = self.sync_target_class.connect(url)
-        self.assertEqual(url, remote_target._url.geturl())
-        self.assertIs(None, remote_target._client)
-
     def test_parse_url(self):
         remote_target = self.sync_target_class(
                                      '%s://127.0.0.1:12345/' % self.url_scheme)
@@ -85,15 +100,6 @@ class TestRemoteSyncTargets(tests.TestCaseWithServer):
     def test_no_sync_exchange_object(self):
         remote_target = self.getSyncTarget()
         self.assertEqual(None, remote_target.get_sync_exchange())
-
-    def test__ensure_connection(self):
-        remote_target = self.getSyncTarget()
-        self.assertIs(None, remote_target._client)
-        remote_target._ensure_connection()
-        self.assertIsNot(None, remote_target._client)
-        cli = remote_target._client
-        remote_target._ensure_connection()
-        self.assertIs(cli, remote_target._client)
 
     def test_get_sync_info(self):
         self.startServer()
