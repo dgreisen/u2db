@@ -46,9 +46,9 @@ class DatabaseTests(tests.DatabaseBaseTests):
 
     def test_create_doc_existing_id(self):
         doc = self.db.create_doc(simple_doc)
-        new_doc = '{"something": "else"}'
+        new_content = '{"something": "else"}'
         self.assertRaises(errors.InvalidDocRev, self.db.create_doc,
-                          new_doc, doc.doc_id)
+                          new_content, doc.doc_id)
         self.assertDocEqual(doc.doc_id, doc.rev, simple_doc, False,
                             self.db.get_doc(doc.doc_id))
 
@@ -119,13 +119,12 @@ class DatabaseTests(tests.DatabaseBaseTests):
         self.assertGetDoc(self.db, doc1.doc_id, doc1.rev, simple_doc, False)
 
     def test_force_doc_with_conflict(self):
-        doc1_id, doc1_rev1 = self.db.create_doc(simple_doc)
-        self.db.force_doc_sync_conflict(doc1_id, 'alternate:1', nested_doc)
-        self.assertEqual(('alternate:1', nested_doc, True),
-                         self.db.get_doc(doc1_id))
+        doc1 = self.db.create_doc(simple_doc)
+        self.db.force_doc_sync_conflict(doc1.doc_id, 'alternate:1', nested_doc)
+        self.assertGetDoc(self.db, doc1.doc_id, 'alternate:1', nested_doc, True)
         self.assertEqual([('alternate:1', nested_doc),
-                          (doc1_rev1, simple_doc)],
-                         self.db.get_doc_conflicts(doc1_id))
+                          (doc1.rev, simple_doc)],
+                         self.db.get_doc_conflicts(doc1.doc_id))
 
     def test_get_doc_after_put(self):
         doc = self.db.create_doc(simple_doc, doc_id='my_doc_id')
@@ -149,28 +148,28 @@ class DatabaseTests(tests.DatabaseBaseTests):
         self.assertGetDoc(self.db, 'my_doc_id', old_rev, simple_doc, False)
 
     def test_delete_doc(self):
-        doc_id, doc_rev = self.db.create_doc(simple_doc)
-        self.assertEqual((doc_rev, simple_doc, False), self.db.get_doc(doc_id))
-        deleted_rev = self.db.delete_doc(doc_id, doc_rev)
+        doc = self.db.create_doc(simple_doc)
+        self.assertGetDoc(self.db, doc.doc_id, doc.rev, simple_doc, False)
+        deleted_rev = self.db.delete_doc(doc.doc_id, doc.rev)
         self.assertNotEqual(None, deleted_rev)
-        self.assertEqual((deleted_rev, None, False), self.db.get_doc(doc_id))
+        self.assertGetDoc(self.db, doc.doc_id, deleted_rev, None, False)
 
     def test_delete_doc_non_existant(self):
         self.assertRaises(KeyError,
             self.db.delete_doc, 'non-existing', 'other:1')
 
     def test_delete_doc_already_deleted(self):
-        doc_id, doc_rev = self.db.create_doc(simple_doc)
-        new_rev = self.db.delete_doc(doc_id, doc_rev)
-        self.assertRaises(KeyError, self.db.delete_doc, doc_id, new_rev)
-        self.assertEqual((new_rev, None, False), self.db.get_doc(doc_id))
+        doc = self.db.create_doc(simple_doc)
+        new_rev = self.db.delete_doc(doc.doc_id, doc.rev)
+        self.assertRaises(KeyError, self.db.delete_doc, doc.doc_id, new_rev)
+        self.assertGetDoc(self.db, doc.doc_id, new_rev, None, False)
 
     def test_delete_doc_bad_rev(self):
-        doc_id, doc_rev = self.db.create_doc(simple_doc)
-        self.assertEqual((doc_rev, simple_doc, False), self.db.get_doc(doc_id))
+        doc = self.db.create_doc(simple_doc)
+        self.assertGetDoc(self.db, doc.doc_id, doc.rev, simple_doc, False)
         self.assertRaises(errors.InvalidDocRev,
-            self.db.delete_doc, doc_id, 'other:1')
-        self.assertEqual((doc_rev, simple_doc, False), self.db.get_doc(doc_id))
+            self.db.delete_doc, doc.doc_id, 'other:1')
+        self.assertGetDoc(self.db, doc.doc_id, doc.rev, simple_doc, False)
 
     def test_put_updates_transaction_log(self):
         doc = self.db.create_doc(simple_doc)
@@ -182,10 +181,10 @@ class DatabaseTests(tests.DatabaseBaseTests):
         self.assertEqual((2, set([doc.doc_id])), self.db.whats_changed())
 
     def test_delete_updates_transaction_log(self):
-        doc_id, doc_rev = self.db.create_doc(simple_doc)
+        doc = self.db.create_doc(simple_doc)
         db_gen, _ = self.db.whats_changed()
-        self.db.delete_doc(doc_id, doc_rev)
-        self.assertEqual((2, set([doc_id])), self.db.whats_changed(db_gen))
+        self.db.delete_doc(doc.doc_id, doc.rev)
+        self.assertEqual((2, set([doc.doc_id])), self.db.whats_changed(db_gen))
 
     def test_whats_changed_initial_database(self):
         self.assertEqual((0, set()), self.db.whats_changed())
@@ -252,39 +251,41 @@ class DatabaseIndexTests(tests.DatabaseBaseTests):
             self.db.get_from_index('test-idx', [('value', 'value2')]))
 
     def test_nested_index(self):
-        doc_id, doc_rev = self.db.create_doc(nested_doc)
+        doc = self.db.create_doc(nested_doc)
         self.db.create_index('test-idx', ['sub.doc'])
-        self.assertEqual([(doc_id, doc_rev, nested_doc)],
+        self.assertEqual([(doc.doc_id, doc.rev, nested_doc)],
             self.db.get_from_index('test-idx', [('underneath',)]))
-        doc2_id, doc2_rev = self.db.create_doc(nested_doc)
+        doc2 = self.db.create_doc(nested_doc)
         self.assertEqual(
-            sorted([(doc_id, doc_rev, nested_doc),
-                    (doc2_id, doc2_rev, nested_doc)]),
+            sorted([(doc.doc_id, doc.rev, nested_doc),
+                    (doc2.doc_id, doc2.rev, nested_doc)]),
             sorted(self.db.get_from_index('test-idx', [('underneath',)])))
 
     def test_put_adds_to_index(self):
         self.db.create_index('test-idx', ['key'])
-        doc_id, doc_rev = self.db.create_doc(simple_doc)
-        self.assertEqual([(doc_id, doc_rev, simple_doc)],
+        doc = self.db.create_doc(simple_doc)
+        self.assertEqual([(doc.doc_id, doc.rev, simple_doc)],
             self.db.get_from_index('test-idx', [('value',)]))
 
     def test_put_updates_index(self):
-        doc_id, doc_rev = self.db.create_doc(simple_doc)
+        doc = self.db.create_doc(simple_doc)
         self.db.create_index('test-idx', ['key'])
-        new_doc = '{"key": "altval"}'
-        new_doc_rev = self.db.put_doc(doc_id, doc_rev, new_doc)
+        new_content = '{"key": "altval"}'
+        doc.set_content(new_content)
+        new_doc_rev = self.db.put_doc(doc)
         self.assertEqual([],
             self.db.get_from_index('test-idx', [('value',)]))
-        self.assertEqual([(doc_id, new_doc_rev, new_doc)],
+        self.assertEqual([(doc.doc_id, new_doc_rev, new_content)],
             self.db.get_from_index('test-idx', [('altval',)]))
 
     def test_put_updates_when_adding_key(self):
-        doc_id, doc_rev = self.db.create_doc("{}")
+        doc = self.db.create_doc("{}")
         self.db.create_index('test-idx', ['key'])
         self.assertEqual([],
             self.db.get_from_index('test-idx', [('*',)]))
-        new_doc_rev = self.db.put_doc(doc_id, doc_rev, simple_doc)
-        self.assertEqual([(doc_id, new_doc_rev, simple_doc)],
+        doc.set_content(simple_doc)
+        self.db.put_doc(doc)
+        self.assertEqual([(doc.doc_id, doc.rev, simple_doc)],
             self.db.get_from_index('test-idx', [('*',)]))
 
     def test_get_all_from_index(self):
@@ -398,14 +399,14 @@ class DatabaseIndexTests(tests.DatabaseBaseTests):
             sorted(self.db.get_from_index('test-idx', [("v1", "v*")])))
 
     def test_delete_updates_index(self):
-        doc_id, doc_rev = self.db.create_doc(simple_doc)
-        doc2_id, doc2_rev = self.db.create_doc(simple_doc)
+        doc = self.db.create_doc(simple_doc)
+        doc2 = self.db.create_doc(simple_doc)
         self.db.create_index('test-idx', ['key'])
-        self.assertEqual([(doc_id, doc_rev, simple_doc),
-                          (doc2_id, doc2_rev, simple_doc)],
+        self.assertEqual([(doc.doc_id, doc.rev, simple_doc),
+                          (doc2.doc_id, doc2.rev, simple_doc)],
             self.db.get_from_index('test-idx', [('value',)]))
-        self.db.delete_doc(doc_id, doc_rev)
-        self.assertEqual([(doc2_id, doc2_rev, simple_doc)],
+        self.db.delete_doc(doc.doc_id, doc.rev)
+        self.assertEqual([(doc2.doc_id, doc2.rev, simple_doc)],
             self.db.get_from_index('test-idx', [('value',)]))
 
     def test_delete_index(self):
@@ -415,20 +416,20 @@ class DatabaseIndexTests(tests.DatabaseBaseTests):
         self.assertEqual([], self.db.list_indexes())
 
     def test__sync_exchange_updates_indexes(self):
-        doc_id, doc_rev = self.db.create_doc(simple_doc)
+        doc = self.db.create_doc(simple_doc)
         self.db.create_index('test-idx', ['key'])
-        new_doc = '{"key": "altval"}'
+        new_content = '{"key": "altval"}'
         other_rev = 'test:1|z:2'
         st = self.db.get_sync_target()
         def ignore(doc_id, doc_rev, doc):
             pass
-        result = st.sync_exchange([(doc_id, other_rev, new_doc)],
+        result = st.sync_exchange([(doc.doc_id, other_rev, new_content)],
                                   'other-replica',
                                   from_replica_generation=10,
                                   last_known_generation=0,
                                   return_doc_cb=ignore)
-        self.assertEqual((other_rev, new_doc, False), self.db.get_doc(doc_id))
-        self.assertEqual([(doc_id, other_rev, new_doc)],
+        self.assertGetDoc(self.db, doc.doc_id, other_rev, new_content, False)
+        self.assertEqual([(doc.doc_id, other_rev, new_content)],
                          self.db.get_from_index('test-idx', [('altval',)]))
         self.assertEqual([], self.db.get_from_index('test-idx', [('value',)]))
 
