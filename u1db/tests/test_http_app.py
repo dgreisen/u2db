@@ -406,30 +406,30 @@ class TestHTTPApp(tests.TestCase):
     def test_put_doc_create(self):
         resp = self.app.put('/db0/doc/doc1', params='{"x": 1}',
                             headers={'content-type': 'application/json'})
-        doc_rev, doc, _ = self.db0.get_doc('doc1')
+        doc = self.db0.get_doc('doc1')
         self.assertEqual(201, resp.status) # created
-        self.assertEqual('{"x": 1}', doc)
+        self.assertEqual('{"x": 1}', doc.content)
         self.assertEqual('application/json', resp.header('content-type'))
-        self.assertEqual({'rev': doc_rev}, simplejson.loads(resp.body))
+        self.assertEqual({'rev': doc.rev}, simplejson.loads(resp.body))
 
     def test_put_doc(self):
-        doc_id, orig_rev = self.db0.create_doc('{"x": 1}', doc_id='doc1')
-        resp = self.app.put('/db0/doc/doc1?old_rev=%s' % orig_rev,
+        doc = self.db0.create_doc('{"x": 1}', doc_id='doc1')
+        resp = self.app.put('/db0/doc/doc1?old_rev=%s' % doc.rev,
                             params='{"x": 2}',
                             headers={'content-type': 'application/json'})
-        doc_rev, doc, _ = self.db0.get_doc('doc1')
+        doc = self.db0.get_doc('doc1')
         self.assertEqual(200, resp.status)
-        self.assertEqual('{"x": 2}', doc)
+        self.assertEqual('{"x": 2}', doc.content)
         self.assertEqual('application/json', resp.header('content-type'))
-        self.assertEqual({'rev': doc_rev}, simplejson.loads(resp.body))
+        self.assertEqual({'rev': doc.rev}, simplejson.loads(resp.body))
 
     def test_get_doc(self):
-        doc_id, doc_rev = self.db0.create_doc('{"x": 1}', doc_id='doc1')
-        resp = self.app.get('/db0/doc/%s' % doc_id)
+        doc = self.db0.create_doc('{"x": 1}', doc_id='doc1')
+        resp = self.app.get('/db0/doc/%s' % doc.doc_id)
         self.assertEqual(200, resp.status)
         self.assertEqual('application/json', resp.header('content-type'))
         self.assertEqual('{"x": 1}', resp.body)
-        self.assertEqual(doc_rev, resp.header('x-u1db-rev'))
+        self.assertEqual(doc.rev, resp.header('x-u1db-rev'))
         self.assertEqual('false', resp.header('x-u1db-has-conflicts'))
 
     def test_get_sync_info(self):
@@ -466,11 +466,11 @@ class TestHTTPApp(tests.TestCase):
         self.assertEqual('application/x-u1db-multi-json',
                          resp.header('content-type'))
         self.assertEqual({'new_generation': 1}, simplejson.loads(resp.body))
-        self.assertEqual(('replica:1', '{"value": "here"}', False),
-                         self.db0.get_doc('doc-here'))
+        self.assertGetDoc(self.db0, 'doc-here', 'replica:1',
+                          '{"value": "here"}', False)
 
     def test_sync_exchange_receive(self):
-        doc_id, doc_rev = self.db0.create_doc('{"value": "there"}')
+        doc = self.db0.create_doc('{"value": "there"}')
         args = dict(from_replica_generation=10, last_known_generation=0)
         body = "%s\r\n" % simplejson.dumps(args)
         resp = self.app.post('/db0/sync-from/replica',
@@ -484,5 +484,5 @@ class TestHTTPApp(tests.TestCase):
         self.assertEqual(2, len(parts))
         self.assertEqual({'new_generation': 1}, simplejson.loads(parts[0]))
         self.assertEqual({'doc': '{"value": "there"}',
-                          'rev': doc_rev, 'id': doc_id},
+                          'rev': doc.rev, 'id': doc.doc_id},
                          simplejson.loads(parts[1]))

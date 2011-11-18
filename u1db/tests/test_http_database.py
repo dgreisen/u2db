@@ -20,6 +20,7 @@ import simplejson
 from wsgiref import simple_server
 
 from u1db import (
+    Document,
     tests,
     )
 from u1db.remote import (
@@ -59,23 +60,24 @@ class TestHTTPDatabaseSimpleOperations(tests.TestCase):
 
     def test_put_doc(self):
         self.response_val = {'rev': 'doc-rev'}, {}
-        res = self.db.put_doc('doc-id', None, '{"v": 1}')
+        doc = Document('doc-id', None, '{"v": 1}')
+        res = self.db.put_doc(doc)
         self.assertEqual('doc-rev', res)
+        self.assertEqual('doc-rev', doc.rev)
         self.assertEqual(('PUT', ['doc', 'doc-id'], {},
                           '{"v": 1}', 'application/json'), self.got)
 
         self.response_val = {'rev': 'doc-rev-2'}, {}
-        res = self.db.put_doc('doc-id', 'doc-rev', '{"v": 2}')
+        doc.set_content('{"v": 2}')
+        res = self.db.put_doc(doc)
         self.assertEqual('doc-rev-2', res)
+        self.assertEqual('doc-rev-2', doc.rev)
         self.assertEqual(('PUT', ['doc', 'doc-id'], {'old_rev': 'doc-rev'},
                           '{"v": 2}', 'application/json'), self.got)
 
     def test_get_doc(self):
         self.response_val = '{"v": 2}', {'x-u1db-rev': 'doc-rev',
                                          'x-u1db-has-conflicts': 'false'}
-        doc_rev, doc, has_conflicts = self.db.get_doc('doc-id')
-        self.assertEqual('doc-rev', doc_rev)
-        self.assertEqual('{"v": 2}', doc)
-        self.assertEqual(False, has_conflicts)
+        self.assertGetDoc(self.db, 'doc-id', 'doc-rev', '{"v": 2}', False)
         self.assertEqual(('GET', ['doc', 'doc-id'], None, None, None),
                          self.got)

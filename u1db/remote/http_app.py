@@ -21,6 +21,8 @@ import simplejson
 import sys
 import urlparse
 
+from u1db import Document
+
 
 class _FencedReader(object):
     """Read and get lines from a file but not past a given length."""
@@ -137,7 +139,8 @@ class DocResource(object):
 
     @http_method()
     def put(self, content, old_rev=None):
-        doc_rev = self.db.put_doc(self.id, old_rev, content)
+        doc = Document(self.id, old_rev, content)
+        doc_rev = self.db.put_doc(doc)
         if old_rev is None:
             status = 201 # created
         else:
@@ -146,10 +149,10 @@ class DocResource(object):
 
     @http_method()
     def get(self):
-        doc_rev, doc, has_conflicts = self.db.get_doc(self.id)
-        self.responder.send_response_content(doc, headers={
-            'x-u1db-rev': doc_rev,
-            'x-u1db-has-conflicts': simplejson.dumps(has_conflicts)
+        doc = self.db.get_doc(self.id)
+        self.responder.send_response_content(doc.content, headers={
+            'x-u1db-rev': doc.rev,
+            'x-u1db-has-conflicts': simplejson.dumps(doc.has_conflicts)
             })
 
 

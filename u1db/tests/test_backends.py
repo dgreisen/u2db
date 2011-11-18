@@ -48,9 +48,9 @@ class AllDatabaseTests(tests.DatabaseBaseTests, tests.TestCaseWithServer):
         ]
 
     def test_put_doc_creating_initial(self):
-        new_rev = self.db.put_doc('my_doc_id', None, simple_doc)
-        self.assertEqual((new_rev, simple_doc, False),
-                         self.db.get_doc('my_doc_id'))
+        doc = Document('my_doc_id', None, simple_doc)
+        new_rev = self.db.put_doc(doc)
+        self.assertGetDoc(self.db, 'my_doc_id', new_rev, simple_doc, False)
 
 
 class LocalDatabaseTests(tests.DatabaseBaseTests):
@@ -85,8 +85,8 @@ class LocalDatabaseTests(tests.DatabaseBaseTests):
         self.assertRaises(errors.InvalidDocId, self.db.put_doc, doc)
 
     def test_put_doc_refuses_non_existing_old_rev(self):
-        self.assertRaises(errors.InvalidDocRev,
-            self.db.put_doc, 'doc-id', 'test:4', simple_doc)
+        doc = Document('doc-id', 'test:4', simple_doc)
+        self.assertRaises(errors.InvalidDocRev, self.db.put_doc, doc)
 
     def test_get_docs(self):
         doc1 = self.db.create_doc(simple_doc)
