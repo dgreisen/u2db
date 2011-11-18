@@ -125,7 +125,7 @@ class LocalDatabaseTests(tests.DatabaseBaseTests):
         orig_doc = '{"new": "doc"}'
         doc1 = self.db.create_doc(orig_doc)
         doc1_rev1 = doc1.rev
-        doc1.set_content(simple_doc)
+        doc1.content = simple_doc
         doc1_rev2 = self.db.put_doc(doc1)
         # Nothing is inserted, because the document is already superseded
         state = self.db.put_doc_if_newer(doc1.doc_id, doc1_rev1, orig_doc)
@@ -170,7 +170,7 @@ class LocalDatabaseTests(tests.DatabaseBaseTests):
         doc = self.db.create_doc(simple_doc, doc_id='my_doc_id')
         old_rev = doc.rev
         doc.rev = 'other:1'
-        doc.set_content('{"something": "else"}')
+        doc.content = '{"something": "else"}'
         self.assertRaises(errors.InvalidDocRev, self.db.put_doc, doc)
         self.assertGetDoc(self.db, 'my_doc_id', old_rev, simple_doc, False)
 
@@ -201,7 +201,7 @@ class LocalDatabaseTests(tests.DatabaseBaseTests):
     def test_put_updates_transaction_log(self):
         doc = self.db.create_doc(simple_doc)
         self.assertEqual([doc.doc_id], self.db._get_transaction_log())
-        doc.set_content('{"something": "else"}')
+        doc.content = '{"something": "else"}'
         self.db.put_doc(doc)
         self.assertEqual([doc.doc_id, doc.doc_id],
                          self.db._get_transaction_log())
@@ -218,7 +218,7 @@ class LocalDatabaseTests(tests.DatabaseBaseTests):
 
     def test_whats_changed_returns_one_id_for_multiple_changes(self):
         doc = self.db.create_doc(simple_doc)
-        doc.set_content('{"new": "contents"}')
+        doc.content = '{"new": "contents"}'
         self.db.put_doc(doc)
         self.assertEqual((2, set([doc.doc_id])), self.db.whats_changed())
         self.assertEqual((2, set()), self.db.whats_changed(2))
@@ -298,7 +298,7 @@ class DatabaseIndexTests(tests.DatabaseBaseTests):
         doc = self.db.create_doc(simple_doc)
         self.db.create_index('test-idx', ['key'])
         new_content = '{"key": "altval"}'
-        doc.set_content(new_content)
+        doc.content = new_content
         new_doc_rev = self.db.put_doc(doc)
         self.assertEqual([],
             self.db.get_from_index('test-idx', [('value',)]))
@@ -310,7 +310,7 @@ class DatabaseIndexTests(tests.DatabaseBaseTests):
         self.db.create_index('test-idx', ['key'])
         self.assertEqual([],
             self.db.get_from_index('test-idx', [('*',)]))
-        doc.set_content(simple_doc)
+        doc.content = simple_doc
         self.db.put_doc(doc)
         self.assertEqual([(doc.doc_id, doc.rev, simple_doc)],
             self.db.get_from_index('test-idx', [('*',)]))

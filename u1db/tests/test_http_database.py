@@ -68,7 +68,7 @@ class TestHTTPDatabaseSimpleOperations(tests.TestCase):
                           '{"v": 1}', 'application/json'), self.got)
 
         self.response_val = {'rev': 'doc-rev-2'}, {}
-        doc.set_content('{"v": 2}')
+        doc.content = '{"v": 2}'
         res = self.db.put_doc(doc)
         self.assertEqual('doc-rev-2', res)
         self.assertEqual('doc-rev-2', doc.rev)

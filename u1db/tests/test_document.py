@@ -25,12 +25,6 @@ class TestDocument(tests.TestCase):
         self.assertEqual('uid:1', doc.rev)
         self.assertEqual(tests.simple_doc, doc.content)
 
-    def test_dirty(self):
-        doc = Document('doc-id', 'uid:1', tests.simple_doc)
-        doc.set_content(tests.nested_doc)
-        self.assertEqual(tests.nested_doc, doc.content)
-        self.assertTrue(doc.dirty)
-
     def test__repr__(self):
         doc = Document('doc-id', 'uid:1', tests.simple_doc)
         self.assertEqual('Document(doc-id, uid:1, \'{"key": "value"}\')',

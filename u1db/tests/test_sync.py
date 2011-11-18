@@ -277,7 +277,7 @@ class DatabaseSyncTests(tests.DatabaseBaseTests):
         self.sync(self.db1, self.db3)
         self.sync(self.db2, self.db3)
         new_content = '{"key": "altval"}'
-        doc.set_content(new_content)
+        doc.content = new_content
         self.db1.put_doc(doc)
         doc_rev2 = doc.rev
         self.sync(self.db2, self.db1)
@@ -321,7 +321,7 @@ class DatabaseSyncTests(tests.DatabaseBaseTests):
         self.sync(self.db1, self.db2)
         doc2_rev = doc1.rev
         new_doc = '{"key": "altval"}'
-        doc1.set_content(new_doc)
+        doc1.content = new_doc
         self.db1.put_doc(doc1)
         doc2_rev = self.db2.delete_doc(doc_id, doc2_rev)
         self.assertEqual([doc_id, doc_id], self.db1._get_transaction_log())
@@ -347,7 +347,7 @@ class DatabaseSyncTests(tests.DatabaseBaseTests):
         self.sync(self.db1, self.db2)
         content1 = '{"key": "localval"}'
         content2 = '{"key": "altval"}'
-        doc.set_content(content2)
+        doc.content = content2
         doc2_rev2 = self.db2.put_doc(doc)
         # Monkey patch so that after the local client has determined recent
         # changes, we get another one, before sync finishes.
@@ -403,7 +403,7 @@ class DatabaseSyncTests(tests.DatabaseBaseTests):
         self.sync(self.db1, self.db2)
         self.assertGetDoc(self.db1, doc_id, doc2.rev, content1, True)
         content2 = '{"key": "local"}'
-        doc2.set_content(content2)
+        doc2.content = content2
         self.assertRaises(errors.ConflictedDoc, self.db1.put_doc, doc2)
 
     def test_delete_refuses_for_conflicted(self):

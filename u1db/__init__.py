@@ -248,8 +248,6 @@ class Document(object):
     :ivar content: The JSON string for this document.
     :ivar has_conflicts: Boolean indicating if this document has conflicts. May
         be None if it hasn't been checked.
-    :ivar dirty: True if the content has been updated, and does not match
-        self.rev.
     """
 
     def __init__(self, doc_id, rev, content, has_conflicts=False):
@@ -257,15 +255,6 @@ class Document(object):
         self.rev = rev
         self.content = content
         self.has_conflicts = has_conflicts
-
-    def set_content(self, new_content):
-        """Update the document to indicate we have new content.
-
-        This also sets the 'dirty' flag, so we are clear that the content
-        doesn't match the revision.
-        """
-        self.dirty = True
-        self.content = new_content
 
     def __repr__(self):
         if self.has_conflicts:
