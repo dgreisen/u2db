@@ -89,8 +89,7 @@ class TestRemoteSyncTarget(tests.TestCaseWithSyncServer):
                         'replica', from_replica_generation=10,
                         last_known_generation=0, return_doc_cb=receive_doc)
         self.assertEqual(1, new_gen)
-        self.assertEqual(('replica:1', {'value': 'here'}, False),
-                         db.get_doc('doc-here'))
+        self.assertGetDoc(db, 'doc-here', 'replica:1', {'value': 'here'}, False)
 
     def test_sync_exchange_receive(self):
         self.startServer()

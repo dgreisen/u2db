@@ -18,7 +18,7 @@ import simplejson
 from sqlite3 import dbapi2
 
 from u1db.backends import CommonBackend, CommonSyncTarget
-from u1db import compat, errors
+from u1db import Document, errors
 
 
 class SQLiteDatabase(CommonBackend):
@@ -184,9 +184,9 @@ class SQLiteDatabase(CommonBackend):
                   (doc_id,))
         val = c.fetchone()
         if val is None:
-            return None, None
-        doc_rev, doc = val
-        return doc_rev, doc
+            return None
+        doc_rev, content = val
+        return Document(doc_id, doc_rev, content)
 
     def _has_conflicts(self, doc_id):
         c = self._db_handle.cursor()
@@ -199,24 +199,29 @@ class SQLiteDatabase(CommonBackend):
             return True
 
     def get_doc(self, doc_id):
-        doc_rev, doc = self._get_doc(doc_id)
-        if doc == 'null':
-            doc = None
-        return doc_rev, doc, self._has_conflicts(doc_id)
+        doc = self._get_doc(doc_id)
+        if doc is None or doc.content == 'null':
+            return None
+        # TODO: A doc which appears deleted could still have conflicts...
+        doc.has_conflicts = self._has_conflicts(doc.doc_id)
+        return doc
 
-    def put_doc(self, doc_id, old_doc_rev, doc):
-        if doc_id is None:
+    def put_doc(self, doc):
+        if doc.doc_id is None:
             raise errors.InvalidDocId()
-        old_doc = None
+        old_content = None
         with self._db_handle:
-            if self._has_conflicts(doc_id):
+            if self._has_conflicts(doc.doc_id):
                 raise errors.ConflictedDoc()
-            old_rev, old_doc = self._get_doc(doc_id)
-            if old_rev is not None:
-                if old_rev != old_doc_rev:
+            old_doc = self._get_doc(doc.doc_id)
+            if old_doc is not None:
+                old_content = old_doc.content
+                if old_doc.rev != doc.rev:
                     raise errors.InvalidDocRev()
-            new_rev = self._allocate_doc_rev(old_doc_rev)
-            self._put_and_update_indexes(doc_id, old_doc, new_rev, doc)
+            new_rev = self._allocate_doc_rev(doc.rev)
+            self._put_and_update_indexes(doc.doc_id, old_content, new_rev,
+                                         doc.content)
+            doc.rev = new_rev
         return new_rev
 
     def _expand_to_fields(self, doc_id, base_field, raw_doc, save_none):
@@ -271,16 +276,16 @@ class SQLiteDatabase(CommonBackend):
 
     def delete_doc(self, doc_id, doc_rev):
         with self._db_handle:
-            old_doc_rev, old_doc = self._get_doc(doc_id)
-            if old_doc_rev is None:
-                raise KeyError
-            if old_doc_rev != doc_rev:
-                raise errors.InvalidDocRev()
+            old_doc = self._get_doc(doc_id)
             if old_doc is None:
+                raise KeyError
+            if old_doc.rev != doc_rev:
+                raise errors.InvalidDocRev()
+            if old_doc.content is None:
                 raise KeyError
             if self._has_conflicts(doc_id):
                 raise errors.ConflictedDoc()
-            new_rev = self._allocate_doc_rev(old_doc_rev)
+            new_rev = self._allocate_doc_rev(doc_rev)
             self._put_and_update_indexes(doc_id, old_doc, new_rev, None)
         return new_rev
 
@@ -295,8 +300,8 @@ class SQLiteDatabase(CommonBackend):
             conflict_docs = self._get_conflicts(doc_id)
             if not conflict_docs:
                 return conflict_docs
-            this_doc_rev, this_doc = self._get_doc(doc_id)
-        return [(this_doc_rev, this_doc)] + conflict_docs
+            this_doc = self._get_doc(doc_id)
+        return [(this_doc.rev, this_doc.content)] + conflict_docs
 
     def get_sync_generation(self, other_replica_uid):
         c = self._db_handle.cursor()
@@ -327,20 +332,21 @@ class SQLiteDatabase(CommonBackend):
 
     def force_doc_sync_conflict(self, doc_id, doc_rev, doc):
         with self._db_handle:
-            my_doc_rev, my_doc = self._get_doc(doc_id)
+            my_doc = self._get_doc(doc_id)
             c = self._db_handle.cursor()
-            self._add_conflict(c, doc_id, my_doc_rev, my_doc)
-            self._put_and_update_indexes(doc_id, my_doc, doc_rev, doc)
+            self._add_conflict(c, doc_id, my_doc.rev, my_doc.content)
+            self._put_and_update_indexes(doc_id, my_doc.content, doc_rev, doc)
 
     def resolve_doc(self, doc_id, doc, conflicted_doc_revs):
         with self._db_handle:
-            cur_rev, cur_doc = self._get_doc(doc_id)
-            new_rev = self._ensure_maximal_rev(cur_rev, conflicted_doc_revs)
+            cur_doc = self._get_doc(doc_id)
+            new_rev = self._ensure_maximal_rev(cur_doc.rev, conflicted_doc_revs)
             superseded_revs = set(conflicted_doc_revs)
             cur_conflicts = self._get_conflicts(doc_id)
             c = self._db_handle.cursor()
-            if cur_rev in superseded_revs:
-                self._put_and_update_indexes(doc_id, cur_doc, new_rev, doc)
+            if cur_doc.rev in superseded_revs:
+                self._put_and_update_indexes(doc_id, cur_doc.content,
+                                             new_rev, doc)
             else:
                 self._add_conflict(c, doc_id, new_rev, doc)
             deleting = [(doc_id, c_rev) for c_rev in superseded_revs]
