@@ -19,6 +19,7 @@ import sys
 
 from u1db import (
     __version__ as _u1db_version,
+    Document,
     sync,
     )
 from u1db.backends import sqlite_backend
@@ -49,8 +50,8 @@ class CmdCreate(command.Command):
         if infile is None:
             infile = self.stdin
         db = sqlite_backend.SQLiteDatabase.open_database(database)
-        doc_id, doc_rev = db.create_doc(infile.read(), doc_id=doc_id)
-        self.stderr.write('id: %s\nrev: %s\n' % (doc_id, doc_rev))
+        doc = db.create_doc(infile.read(), doc_id=doc_id)
+        self.stderr.write('id: %s\nrev: %s\n' % (doc.doc_id, doc.rev))
 
 client_commands.register(CmdCreate)
 
@@ -72,10 +73,12 @@ class CmdGet(command.Command):
         if outfile is None:
             outfile = self.stdout
         db = sqlite_backend.SQLiteDatabase.open_database(database)
-        doc_rev, doc, has_conflicts = db.get_doc(doc_id)
-        outfile.write(doc)
-        self.stderr.write('rev: %s\n' % (doc_rev,))
-        if has_conflicts:
+        doc = db.get_doc(doc_id)
+        outfile.write(doc.content)
+        self.stderr.write('rev: %s\n' % (doc.rev,))
+        if doc.has_conflicts:
+            # TODO: Probably want to write 'conflicts' or 'conflicted' to
+            # stderr.
             pass
 
 client_commands.register(CmdGet)
@@ -118,7 +121,8 @@ class CmdPut(command.Command):
         if infile is None:
             infile = self.stdin
         db = sqlite_backend.SQLiteDatabase.open_database(database)
-        doc_rev = db.put_doc(doc_id, doc_rev, infile.read())
+        doc = Document(doc_id, doc_rev, infile.read())
+        doc_rev = db.put_doc(doc)
         self.stderr.write('rev: %s\n' % (doc_rev,))
 
 client_commands.register(CmdPut)

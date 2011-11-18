@@ -18,7 +18,8 @@ import simplejson
 
 
 from u1db import (
-    Database
+    Database,
+    Document,
     )
 from u1db.remote import (
     http_client,
@@ -28,12 +29,13 @@ from u1db.remote import (
 class HTTPDatabase(http_client.HTTPClientBase, Database):
     """Implement the Database API to a remote HTTP server."""
 
-    def put_doc(self, doc_id, old_doc_rev, doc):
+    def put_doc(self, doc):
         params = {}
-        if old_doc_rev is not None:
-            params['old_rev'] = old_doc_rev
-        res, headers = self._request_json('PUT', ['doc', doc_id], params,
-                                          doc, 'application/json')
+        if doc.rev is not None:
+            params['old_rev'] = doc.rev
+        res, headers = self._request_json('PUT', ['doc', doc.doc_id], params,
+                                          doc.content, 'application/json')
+        doc.rev = res['rev']
         return res['rev']
 
 
@@ -41,4 +43,6 @@ class HTTPDatabase(http_client.HTTPClientBase, Database):
         res, headers = self._request('GET', ['doc', doc_id])
         doc_rev = headers['x-u1db-rev']
         has_conflicts = simplejson.loads(headers['x-u1db-has-conflicts'])
-        return doc_rev, res, has_conflicts
+        doc = Document(doc_id, doc_rev, res)
+        doc.has_conflicts = has_conflicts
+        return doc

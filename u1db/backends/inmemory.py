@@ -16,7 +16,7 @@
 
 import simplejson
 
-from u1db import errors
+from u1db import Document, errors
 from u1db.backends import CommonBackend, CommonSyncTarget
 
 
@@ -58,47 +58,50 @@ class InMemoryDatabase(CommonBackend):
     def _get_generation(self):
         return len(self._transaction_log)
 
-    def put_doc(self, doc_id, old_doc_rev, doc):
-        if doc_id is None:
+    def put_doc(self, doc):
+        if doc.doc_id is None:
             raise errors.InvalidDocId()
-        old_doc = None
-        if doc_id in self._docs:
-            if doc_id in self._conflicts:
+        old_content = None
+        if doc.doc_id in self._docs:
+            if doc.doc_id in self._conflicts:
                 raise errors.ConflictedDoc()
-            old_rev, old_doc = self._docs[doc_id]
-            if old_rev != old_doc_rev:
+            old_rev, old_content = self._docs[doc.doc_id]
+            if old_rev != doc.rev:
                 raise errors.InvalidDocRev()
         else:
-            if old_doc_rev is not None:
+            if doc.rev is not None:
                 raise errors.InvalidDocRev()
-        new_rev = self._allocate_doc_rev(old_doc_rev)
-        self._put_and_update_indexes(doc_id, old_doc, new_rev, doc)
+        new_rev = self._allocate_doc_rev(doc.rev)
+        self._put_and_update_indexes(doc.doc_id, old_content, new_rev,
+                                     doc.content)
+        doc.rev = new_rev
         return new_rev
 
-    def _put_and_update_indexes(self, doc_id, old_doc, new_rev, doc):
+    def _put_and_update_indexes(self, doc_id, old_content, new_rev, content):
         for index in self._indexes.itervalues():
-            if old_doc is not None:
-                index.remove_json(doc_id, old_doc)
-            if doc not in (None, 'null'):
-                index.add_json(doc_id, doc)
-        self._docs[doc_id] = (new_rev, doc)
+            if old_content is not None:
+                index.remove_json(doc_id, old_content)
+            if content not in (None, 'null'):
+                index.add_json(doc_id, content)
+        self._docs[doc_id] = (new_rev, content)
         self._transaction_log.append(doc_id)
 
     def _get_doc(self, doc_id):
         try:
-            doc_rev, doc = self._docs[doc_id]
+            doc_rev, content = self._docs[doc_id]
         except KeyError:
-            return None, None
-        return doc_rev, doc
+            return None
+        return Document(doc_id, doc_rev, content)
 
     def _has_conflicts(self, doc_id):
         return doc_id in self._conflicts
 
     def get_doc(self, doc_id):
-        doc_rev, doc = self._get_doc(doc_id)
-        if doc == 'null':
-            doc = None
-        return doc_rev, doc, (doc_id in self._conflicts)
+        doc = self._get_doc(doc_id)
+        if doc is None or doc.content == 'null':
+            return None
+        doc.has_conflicts = (doc.doc_id in self._conflicts)
+        return doc
 
     def get_doc_conflicts(self, doc_id):
         if doc_id not in self._conflicts:
@@ -132,8 +135,8 @@ class InMemoryDatabase(CommonBackend):
             raise KeyError
         if self._docs[doc_id][1] in ('null', None):
             raise KeyError
-        new_rev = self.put_doc(doc_id, doc_rev, None)
-        return new_rev
+        doc = Document(doc_id, doc_rev, None)
+        return self.put_doc(doc)
 
     def create_index(self, index_name, index_expression):
         index = InMemoryIndex(index_name, index_expression)
