@@ -14,6 +14,7 @@
 
 """The Synchronization class for U1DB."""
 
+from wsgiref import simple_server
 
 from u1db import (
     Document,
@@ -24,8 +25,14 @@ from u1db import (
     )
 from u1db.remote import (
     sync_target,
+    http_app,
+    http_target,
     )
 
+from u1db.tests.test_remote_sync_target import (
+    http_server_def,
+    remote_server_def,
+    )
 
 simple_doc = tests.simple_doc
 nested_doc = tests.nested_doc
@@ -44,14 +51,24 @@ def _make_local_db_and_remote_target(test):
     return db, st
 
 
+def _make_local_db_and_http_target(test):
+    test.startServer()
+    db = test.request_state._create_database('test')
+    st = http_target.HTTPSyncTarget.connect(test.getURL('test'))
+    return db, st
+
+
 target_scenarios = [
     ('local', {'create_db_and_target': _make_local_db_and_target}),
-    ('remote', {'create_db_and_target': _make_local_db_and_remote_target}),
+    ('remote', {'create_db_and_target': _make_local_db_and_remote_target,
+                'server_def': remote_server_def}),
+    ('http', {'create_db_and_target': _make_local_db_and_http_target,
+              'server_def': http_server_def}),
     ]
 
 
 class DatabaseSyncTargetTests(tests.DatabaseBaseTests,
-                              tests.TestCaseWithSyncServer):
+                              tests.TestCaseWithServer):
 
     scenarios = tests.multiply_scenarios(tests.DatabaseBaseTests.scenarios,
                                          target_scenarios)

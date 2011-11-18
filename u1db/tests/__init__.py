@@ -81,23 +81,29 @@ simple_doc = '{"key": "value"}'
 nested_doc = '{"key": "value", "sub": {"doc": "underneath"}}'
 
 
-def create_memory_database(replica_uid):
+def create_memory_database(test, replica_uid):
     return inmemory.InMemoryDatabase(replica_uid)
 
 
-def create_sqlite_partial_expanded(replica_uid):
+def create_sqlite_partial_expanded(test, replica_uid):
     db = sqlite_backend.SQLitePartialExpandDatabase(':memory:')
     db._set_replica_uid(replica_uid)
     return db
 
 
+LOCAL_DATABASES_SCENARIOS = [
+        ('mem', {'do_create_database': create_memory_database}),
+        ('sql', {'do_create_database': create_sqlite_partial_expanded}),
+        ]
+
+
 class DatabaseBaseTests(TestCase):
 
     create_database = None
-    scenarios = [
-        ('mem', {'create_database': create_memory_database}),
-        ('sql', {'create_database': create_sqlite_partial_expanded}),
-        ]
+    scenarios = LOCAL_DATABASES_SCENARIOS
+
+    def create_database(self, replica_uid):
+        return self.do_create_database(self, replica_uid)
 
     def setUp(self):
         super(DatabaseBaseTests, self).setUp()
@@ -144,28 +150,40 @@ class ResponderForTests(object):
         self.sent_response = True
 
 
-class TestCaseWithSyncServer(TestCase):
+class TestCaseWithServer(TestCase):
+
+    @staticmethod
+    def server_def():
+        # should return (ServerClass, RequestHandlerClass,
+        #                "shutdown method name", "url_scheme")
+        raise NotImplementedError(TestCaseWithServer.server_def)
 
     def setUp(self):
-        super(TestCaseWithSyncServer, self).setUp()
+        super(TestCaseWithServer, self).setUp()
         self.server = self.server_thread = None
 
-    def startServer(self, request_handler=sync_server.TCPSyncRequestHandler):
+    @property
+    def url_scheme(self):
+        return self.server_def()[-1]
+
+    def startServer(self, other_request_handler=None):
+        server_def = self.server_def()
+        server_class, request_handler, shutdown_meth, _ = server_def
+        request_handler = other_request_handler or request_handler
         self.request_state = ServerStateForTests()
-        self.server = sync_server.TCPSyncServer(
-            ('127.0.0.1', 0), request_handler,
-            self.request_state)
+        self.server = server_class(('127.0.0.1', 0), request_handler,
+                                   self.request_state)
         self.server_thread = threading.Thread(target=self.server.serve_forever,
                                               kwargs=dict(poll_interval=0.01))
         self.server_thread.start()
         self.addCleanup(self.server_thread.join)
-        self.addCleanup(self.server.force_shutdown)
+        self.addCleanup(getattr(self.server, shutdown_meth))
 
     def getURL(self, path=None):
         host, port = self.server.server_address
         if path is None:
             path = ''
-        return 'u1db://%s:%s/%s' % (host, port, path)
+        return '%s://%s:%s/%s' % (self.url_scheme, host, port, path)
 
 
 def socket_pair():

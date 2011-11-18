@@ -218,6 +218,9 @@ class SQLiteDatabase(CommonBackend):
                 old_content = old_doc.content
                 if old_doc.rev != doc.rev:
                     raise errors.InvalidDocRev()
+            else:
+                if doc.rev is not None:
+                    raise errors.InvalidDocRev()
             new_rev = self._allocate_doc_rev(doc.rev)
             self._put_and_update_indexes(doc.doc_id, old_content, new_rev,
                                          doc.content)
