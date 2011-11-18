@@ -331,6 +331,7 @@ class HTTPApp(object):
             resource = self._lookup_resource(environ, responder)
             HTTPInvocationByMethodWithBody(resource, environ)()
         except BadRequest:
+            # xxx introduce logging
             #print environ['PATH_INFO']
             #import traceback
             #traceback.print_exc()
