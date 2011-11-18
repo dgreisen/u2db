@@ -243,6 +243,7 @@ class HTTPResponder(object):
 
     def send_response_content(self, content, headers={}):
         """send and finish response with content in one go."""
+        headers['content-length'] = str(len(content))
         self.start_response(OK, headers=headers)
         self.content = [content]
         self.finish_response()

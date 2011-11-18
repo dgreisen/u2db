@@ -355,7 +355,7 @@ class TestHTTPResponder(tests.TestCase):
         self.assertEqual('200 OK', self.status)
         self.assertEqual({'content-type': 'application/json',
                           'cache-control': 'no-cache',
-                          'x-a': '1'}, self.headers)
+                          'x-a': '1', 'content-length': '3'}, self.headers)
         self.assertEqual([], self.response_body)
         self.assertEqual(['foo'], responder.content)
 
