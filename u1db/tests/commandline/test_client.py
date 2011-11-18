@@ -116,11 +116,11 @@ class TestCmdCreate(TestCaseWithDB):
         cmd = self.make_command(client.CmdCreate)
         inf = cStringIO.StringIO(tests.simple_doc)
         cmd.run(self.db_path, inf, 'test-id')
-        doc_rev, doc, has_conflicts = self.db.get_doc('test-id')
-        self.assertEqual(tests.simple_doc, doc)
-        self.assertFalse(has_conflicts)
+        doc = self.db.get_doc('test-id')
+        self.assertEqual(tests.simple_doc, doc.content)
+        self.assertFalse(doc.has_conflicts)
         self.assertEqual('', cmd.stdout.getvalue())
-        self.assertEqual('id: test-id\nrev: %s\n' % (doc_rev,),
+        self.assertEqual('id: test-id\nrev: %s\n' % (doc.rev,),
                          cmd.stderr.getvalue())
 
 
@@ -128,14 +128,13 @@ class TestCmdGet(TestCaseWithDB):
 
     def setUp(self):
         super(TestCmdGet, self).setUp()
-        _, self.doc_rev = self.db.create_doc(tests.simple_doc,
-                                             doc_id='my-test-doc')
+        self.doc = self.db.create_doc(tests.simple_doc, doc_id='my-test-doc')
 
     def test_get_simple(self):
         cmd = self.make_command(client.CmdGet)
         cmd.run(self.db_path, 'my-test-doc', None)
         self.assertEqual(tests.simple_doc, cmd.stdout.getvalue())
-        self.assertEqual('rev: %s\n' % (self.doc_rev,),
+        self.assertEqual('rev: %s\n' % (self.doc.rev,),
                          cmd.stderr.getvalue())
 
 
@@ -155,18 +154,18 @@ class TestCmdPut(TestCaseWithDB):
 
     def setUp(self):
         super(TestCmdPut, self).setUp()
-        _, self.doc_rev = self.db.create_doc(tests.simple_doc,
-                                             doc_id='my-test-doc')
+        self.doc = self.db.create_doc(tests.simple_doc, doc_id='my-test-doc')
 
     def test_put_simple(self):
         cmd = self.make_command(client.CmdPut)
         inf = cStringIO.StringIO(tests.nested_doc)
-        cmd.run(self.db_path, 'my-test-doc', self.doc_rev, inf)
-        doc_rev, doc, has_conflicts = self.db.get_doc('my-test-doc')
-        self.assertEqual(tests.nested_doc, doc)
-        self.assertFalse(has_conflicts)
+        cmd.run(self.db_path, 'my-test-doc', self.doc.rev, inf)
+        doc = self.db.get_doc('my-test-doc')
+        self.assertNotEqual(self.doc.rev, doc.rev)
+        self.assertGetDoc(self.db, 'my-test-doc', doc.rev,
+                          tests.nested_doc, False)
         self.assertEqual('', cmd.stdout.getvalue())
-        self.assertEqual('rev: %s\n' % (doc_rev,),
+        self.assertEqual('rev: %s\n' % (doc.rev,),
                          cmd.stderr.getvalue())
 
 
@@ -178,18 +177,16 @@ class TestCmdSync(TestCaseWithDB):
         self.db2 = sqlite_backend.SQLitePartialExpandDatabase(self.db2_path)
         self.addCleanup(self.db2.close)
         self.db2._set_replica_uid('test2')
-        _, self.doc_rev = self.db.create_doc(tests.simple_doc,
-                                             doc_id='test-id')
-        _, self.doc2_rev = self.db2.create_doc(tests.nested_doc,
-                                               doc_id='my-test-id')
+        self.doc  = self.db.create_doc(tests.simple_doc, doc_id='test-id')
+        self.doc2 = self.db2.create_doc(tests.nested_doc, doc_id='my-test-id')
 
     def test_sync(self):
         cmd = self.make_command(client.CmdSync)
         cmd.run(self.db_path, self.db2_path)
-        self.assertEqual((self.doc_rev, tests.simple_doc, False),
-                         self.db2.get_doc('test-id'))
-        self.assertEqual((self.doc2_rev, tests.nested_doc, False),
-                         self.db.get_doc('my-test-id'))
+        self.assertGetDoc(self.db2, 'test-id', self.doc.rev, tests.simple_doc,
+                          False)
+        self.assertGetDoc(self.db, 'my-test-id', self.doc2.rev,
+                          tests.nested_doc, False)
 
 
 class TestCmdSyncRemote(tests.TestCaseWithSyncServer, TestCaseWithDB):
@@ -200,17 +197,17 @@ class TestCmdSyncRemote(tests.TestCaseWithSyncServer, TestCaseWithDB):
         self.db2 = self.request_state._create_database('test2.db')
 
     def test_sync_remote(self):
-        doc1_id, doc1_rev = self.db.create_doc(tests.simple_doc)
-        doc2_id, doc2_rev = self.db2.create_doc(tests.nested_doc)
+        doc1 = self.db.create_doc(tests.simple_doc)
+        doc2 = self.db2.create_doc(tests.nested_doc)
         db2_url = self.getURL('test2.db')
         self.assertTrue(db2_url.startswith('u1db://'))
         self.assertTrue(db2_url.endswith('/test2.db'))
         cmd = self.make_command(client.CmdSync)
         cmd.run(self.db_path, db2_url)
-        self.assertEqual((doc1_rev, tests.simple_doc, False),
-                         self.db2.get_doc(doc1_id))
-        self.assertEqual((doc2_rev, tests.nested_doc, False),
-                         self.db.get_doc(doc2_id))
+        self.assertGetDoc(self.db2, doc1.doc_id, doc1.rev, tests.simple_doc,
+                          False)
+        self.assertGetDoc(self.db, doc2.doc_id, doc2.rev, tests.nested_doc,
+                          False)
 
 
 class TestCommandLine(TestCaseWithDB):
@@ -245,18 +242,18 @@ class TestCommandLine(TestCaseWithDB):
         stdout, stderr = p.communicate(tests.simple_doc)
         self.assertEqual(0, p.returncode)
         self.assertEqual('', stdout)
-        doc_rev, doc, has_conflicts = self.db.get_doc('test-id')
-        self.assertEqual(tests.simple_doc, doc)
-        self.assertFalse(has_conflicts)
-        self.assertEqual('id: test-id\nrev: %s\n' % (doc_rev,),
+        doc = self.db.get_doc('test-id')
+        self.assertEqual(tests.simple_doc, doc.content)
+        self.assertFalse(doc.has_conflicts)
+        self.assertEqual('id: test-id\nrev: %s\n' % (doc.rev,),
                          stderr.replace('\r\n', '\n'))
 
     def test_get(self):
-        _, doc_rev = self.db.create_doc(tests.simple_doc, doc_id='test-id')
+        doc = self.db.create_doc(tests.simple_doc, doc_id='test-id')
         ret, stdout, stderr = self.run_main(['get', self.db_path, 'test-id'])
         self.assertEqual(0, ret)
         self.assertEqual(tests.simple_doc, stdout)
-        self.assertEqual('rev: %s\n' % (doc_rev,), stderr)
+        self.assertEqual('rev: %s\n' % (doc.rev,), stderr)
 
     def test_init_db(self):
         path = self.working_dir + '/test2.db'
@@ -264,19 +261,19 @@ class TestCommandLine(TestCaseWithDB):
         db2 = sqlite_backend.SQLiteDatabase.open_database(path)
 
     def test_put(self):
-        _, doc_rev = self.db.create_doc(tests.simple_doc, doc_id='test-id')
+        doc = self.db.create_doc(tests.simple_doc, doc_id='test-id')
         ret, stdout, stderr = self.run_main(
-            ['put', self.db_path, 'test-id', doc_rev],
+            ['put', self.db_path, 'test-id', doc.rev],
             stdin=tests.nested_doc)
-        doc_rev, doc, has_conflicts = self.db.get_doc('test-id')
-        self.assertFalse(has_conflicts)
-        self.assertEqual(tests.nested_doc, doc)
+        doc = self.db.get_doc('test-id')
+        self.assertFalse(doc.has_conflicts)
+        self.assertEqual(tests.nested_doc, doc.content)
         self.assertEqual(0, ret)
         self.assertEqual('', stdout)
-        self.assertEqual('rev: %s\n' % (doc_rev,), stderr)
+        self.assertEqual('rev: %s\n' % (doc.rev,), stderr)
 
     def test_sync(self):
-        _, doc_rev = self.db.create_doc(tests.simple_doc, doc_id='test-id')
+        doc = self.db.create_doc(tests.simple_doc, doc_id='test-id')
         self.db2_path = self.working_dir + '/test2.db'
         self.db2 = sqlite_backend.SQLitePartialExpandDatabase(self.db2_path)
         self.addCleanup(self.db2.close)
@@ -285,5 +282,4 @@ class TestCommandLine(TestCaseWithDB):
         self.assertEqual(0, ret)
         self.assertEqual('', stdout)
         self.assertEqual('', stderr)
-        self.assertEqual((doc_rev, tests.simple_doc, False),
-                         self.db2.get_doc('test-id'))
+        self.assertGetDoc(self.db2, 'test-id', doc.rev, tests.simple_doc, False)
