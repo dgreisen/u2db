@@ -78,7 +78,7 @@ class CommonBackend(u1db.Database):
             cur_content = cur_doc.content
         if doc_vcr.is_newer(cur_vcr):
             self._put_and_update_indexes(doc_id, cur_content, doc_rev, content)
-            return cur_doc, 'inserted'
+            return cur_content, 'inserted'
         elif doc_rev == cur_doc.rev:
             # magical convergence
             return cur_doc.content, 'converged'
