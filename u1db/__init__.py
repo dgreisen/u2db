@@ -172,7 +172,7 @@ class Database(object):
         [('val*', '*', '*')] or [('val', 'val*', '*')], but not
         [('val*', 'val', '*')])
 
-        :return: List of [(doc_id, doc_rev, doc)]
+        :return: List of [Document]
         :param index_name: The index to query
         :param key_values: A list of tuple of values to match. eg, if you have
             an index with 3 field,s then you would have:
@@ -271,6 +271,13 @@ class Document(object):
         if not isinstance(other, Document):
             return False
         return self.__dict__ == other.__dict__
+
+    def __lt__(self, other):
+        # ??
+        # if not isinstance(other, Document):
+        #     return
+        return ((self.doc_id, self.rev, self.content)
+            < (other.doc_id, other.rev, other.content))
 
 
 class SyncTarget(object):

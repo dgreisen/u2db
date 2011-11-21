@@ -35,3 +35,11 @@ class TestDocument(tests.TestCase):
         self.assertEqual(
             'Document(doc-id, uid:1, conflicted, \'{"key": "value"}\')',
             repr(doc))
+
+    def test__lt__(self):
+        doc_a = Document('a', 'b', 'c')
+        doc_b = Document('b', 'b', 'c')
+        self.assertTrue(doc_a < doc_b)
+        self.assertTrue(doc_b > doc_a)
+        doc_aa = Document('a', 'a', 'b')
+        self.assertTrue(doc_aa < doc_a)
