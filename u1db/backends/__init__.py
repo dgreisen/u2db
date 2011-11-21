@@ -63,36 +63,6 @@ class CommonBackend(u1db.Database):
     def _put_and_update_indexes(self, doc_id, old_doc, new_rev, content):
         raise NotImplementedError(self._put_and_update_indexes)
 
-    def _compare_and_insert_doc(self, doc_id, doc_rev, content):
-        """Check if a document is newer than current and insert it.
-
-        :return: (old_doc, state)
-        """
-        # TODO: This is only called from put_doc_if_newer, and only the return
-        #       value is really different. This function should probably just
-        #       be removed.
-        cur_doc = self._get_doc(doc_id)
-        doc_vcr = VectorClockRev(doc_rev)
-        if cur_doc is None:
-            cur_vcr = VectorClockRev(None)
-            cur_content = None
-        else:
-            cur_vcr = VectorClockRev(cur_doc.rev)
-            cur_content = cur_doc.content
-        if doc_vcr.is_newer(cur_vcr):
-            self._put_and_update_indexes(doc_id, cur_content, doc_rev, content)
-            return cur_content, 'inserted'
-        elif doc_rev == cur_doc.rev:
-            # magical convergence
-            return cur_doc.content, 'converged'
-        elif cur_vcr.is_newer(doc_vcr):
-            # Don't add this to seen_ids, because we have something newer,
-            # so we should send it back, and we should not generate a
-            # conflict
-            return cur_doc.content, 'superseded'
-        else:
-            return cur_doc.content, 'conflicted'
-
     def get_docs(self, doc_ids, check_for_conflicts=True):
         result = []
         for doc_id in doc_ids:
@@ -105,8 +75,28 @@ class CommonBackend(u1db.Database):
         return result
 
     def put_doc_if_newer(self, doc_id, doc_rev, doc):
-        _, state = self._compare_and_insert_doc(doc_id, doc_rev, doc)
-        return state
+        cur_doc = self._get_doc(doc_id)
+        doc_vcr = VectorClockRev(doc_rev)
+        if cur_doc is None:
+            cur_vcr = VectorClockRev(None)
+            cur_content = None
+        else:
+            cur_vcr = VectorClockRev(cur_doc.rev)
+            cur_content = cur_doc.content
+        if doc_vcr.is_newer(cur_vcr):
+            self._put_and_update_indexes(doc_id, cur_content, doc_rev, doc)
+            return 'inserted'
+        elif doc_rev == cur_doc.rev:
+            # magical convergence
+            return 'converged'
+        elif cur_vcr.is_newer(doc_vcr):
+            # Don't add this to seen_ids, because we have something newer,
+            # so we should send it back, and we should not generate a
+            # conflict
+            return 'superseded'
+        else:
+            return 'conflicted'
+
 
     def _ensure_maximal_rev(self, cur_rev, extra_revs):
         vcr = VectorClockRev(cur_rev)
