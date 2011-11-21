@@ -27,7 +27,7 @@ from u1db.backends import (
     )
 from u1db.commandline import client
 from u1db.tests.commandline import safe_close
-from u1db.tests import test_remote_sync_server
+from u1db.tests import test_remote_sync_target
 
 
 class TestArgs(tests.TestCase):
@@ -194,7 +194,7 @@ class TestCmdSyncRemote(tests.TestCaseWithServer, TestCaseWithDB):
 
     @staticmethod
     def server_def():
-        return test_remote_sync_server.TestTCPSyncServer.server_def()
+        return test_remote_sync_target.http_server_def()
 
     def setUp(self):
         super(TestCmdSyncRemote, self).setUp()
@@ -205,7 +205,7 @@ class TestCmdSyncRemote(tests.TestCaseWithServer, TestCaseWithDB):
         doc1 = self.db.create_doc(tests.simple_doc)
         doc2 = self.db2.create_doc(tests.nested_doc)
         db2_url = self.getURL('test2.db')
-        self.assertTrue(db2_url.startswith('u1db://'))
+        self.assertTrue(db2_url.startswith('http://'))
         self.assertTrue(db2_url.endswith('/test2.db'))
         cmd = self.make_command(client.CmdSync)
         cmd.run(self.db_path, db2_url)

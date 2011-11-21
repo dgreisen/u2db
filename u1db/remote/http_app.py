@@ -21,7 +21,10 @@ import simplejson
 import sys
 import urlparse
 
-from u1db import Document
+from u1db import (
+    __version__ as _u1db_version,
+    Document,
+    )
 
 
 class _FencedReader(object):
@@ -127,6 +130,17 @@ def http_method(**control):
             return f(self, **args)
         return wrapper
     return wrap
+
+
+class GlobalResourse(object):
+    """Global (root) resource."""
+
+    def __init__(self, state, responder):
+        self.responder = responder
+
+    @http_method()
+    def get(self):
+        self.responder.send_response(version=_u1db_version)
 
 
 class DocResource(object):
@@ -321,7 +335,9 @@ class HTTPApp(object):
     def _lookup_resource(self, environ, responder):
         # xxx proper dispatch logic
         parts = environ['PATH_INFO'].split('/')
-        if len(parts) == 4 and parts[2] == 'doc':
+        if parts == ['', '']:
+            resource = GlobalResourse(self.state, responder)
+        elif len(parts) == 4 and parts[2] == 'doc':
             resource = DocResource(parts[1], parts[3], self.state, responder)
         elif len(parts) == 4 and parts[2] == 'sync-from':
             resource = SyncResource(parts[1], parts[3], self.state, responder)

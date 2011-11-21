@@ -14,11 +14,14 @@
 # with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 import sys
+
+from paste import httpserver
+
 from u1db import (
     __version__ as _u1db_version,
     )
 from u1db.remote import (
-    sync_server,
+    http_app,
     requests,
     )
 
@@ -36,8 +39,9 @@ def main(args):
 
     state = requests.ServerState()
     state.set_workingdir('.')
-    server = sync_server.TCPSyncServer(('', args.port),
-        sync_server.TCPSyncRequestHandler, state)
+    application = http_app.HTTPApp(state)
+    server = httpserver.WSGIServer(application, ('', args.port),
+                                   httpserver.WSGIHandler)
     sys.stdout.write('listening on port: %s\n' % (server.server_address[1],))
     sys.stdout.flush()
     server.serve_forever()
