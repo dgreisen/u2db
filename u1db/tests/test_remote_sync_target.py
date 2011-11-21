@@ -14,11 +14,11 @@
 
 """Tests for the remote sync targets"""
 
-import os
 from wsgiref import simple_server
 #from paste import httpserver
 
 from u1db import (
+    Document,
     tests,
     )
 from u1db.remote import (
@@ -26,9 +26,6 @@ from u1db.remote import (
     sync_target,
     http_app,
     http_target
-    )
-from u1db.backends import (
-    sqlite_backend,
     )
 
 
@@ -121,10 +118,10 @@ class TestRemoteSyncTargets(tests.TestCaseWithServer):
         db = self.request_state._create_database('test')
         remote_target = self.getSyncTarget('test')
         other_docs = []
-        def receive_doc(doc_id, doc_rev, doc):
-            other_docs.append((doc_id, doc_id, doc))
+        def receive_doc(doc):
+            other_docs.append((doc.doc_id, doc.rev, doc.content))
         new_gen = remote_target.sync_exchange(
-                        [('doc-here', 'replica:1', {'value': 'here'})],
+                        [Document('doc-here', 'replica:1', {'value': 'here'})],
                         'replica', from_replica_generation=10,
                         last_known_generation=0, return_doc_cb=receive_doc)
         self.assertEqual(1, new_gen)
@@ -136,8 +133,8 @@ class TestRemoteSyncTargets(tests.TestCaseWithServer):
         doc = db.create_doc({'value': 'there'})
         remote_target = self.getSyncTarget('test')
         other_docs = []
-        def receive_doc(doc_id, doc_rev, doc):
-            other_docs.append((doc_id, doc_rev, doc))
+        def receive_doc(doc):
+            other_docs.append((doc.doc_id, doc.rev, doc.content))
         new_gen = remote_target.sync_exchange(
                         [],
                         'replica', from_replica_generation=10,

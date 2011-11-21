@@ -246,8 +246,7 @@ class Document(object):
     :ivar doc_id: Unique identifier for this document.
     :ivar rev:
     :ivar content: The JSON string for this document.
-    :ivar has_conflicts: Boolean indicating if this document has conflicts. May
-        be None if it hasn't been checked.
+    :ivar has_conflicts: Boolean indicating if this document has conflicts
     """
 
     def __init__(self, doc_id, rev, content, has_conflicts=False):

@@ -103,8 +103,8 @@ class LocalDatabaseTests(tests.DatabaseBaseTests):
         doc2 = self.db.create_doc(nested_doc)
         self.db.force_doc_sync_conflict(doc1.doc_id, 'alternate:1', nested_doc)
         self.assertEqual(
-            sorted([Document(doc1.doc_id, 'alternate:1', nested_doc, None),
-                    Document(doc2.doc_id, doc2.rev, nested_doc, None)]),
+            sorted([Document(doc1.doc_id, 'alternate:1', nested_doc),
+                    Document(doc2.doc_id, doc2.rev, nested_doc)]),
             sorted(self.db.get_docs([doc1.doc_id, doc2.doc_id],
                                     check_for_conflicts=False)))
 

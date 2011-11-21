@@ -131,7 +131,7 @@ class DatabaseSyncTargetTests(tests.DatabaseBaseTests,
         doc = self.db.create_doc(simple_doc)
         self.assertEqual([doc.doc_id], self.db._get_transaction_log())
         docs = [Document(doc.doc_id, doc.rev, simple_doc)]
-        new_gen = self.st.sync_exchange([docs],
+        new_gen = self.st.sync_exchange(docs,
                                         'replica', from_replica_generation=10,
                                         last_known_generation=1,
                                         return_doc_cb=self.receive_doc)
