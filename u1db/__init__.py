@@ -273,9 +273,14 @@ class Document(object):
         return self.__dict__ == other.__dict__
 
     def __lt__(self, other):
-        # ??
-        # if not isinstance(other, Document):
-        #     return
+        """This is meant for testing, not part of the official api.
+
+        It is implemented so that sorted([Document, Document]) can be used.
+        It doesn't imply that users would want their documents to be sorted in
+        this order.
+        """
+        # Since this is just for testing, we don't worry about comparing
+        # against things that aren't a Document.
         return ((self.doc_id, self.rev, self.content)
             < (other.doc_id, other.rev, other.content))
 
