@@ -40,8 +40,8 @@ def main(args):
     state = requests.ServerState()
     state.set_workingdir('.')
     application = http_app.HTTPApp(state)
-    server = httpserver.WSGIServerBase(application, ('', args.port),
-                                       httpserver.WSGIHandler)
+    server = httpserver.WSGIServer(application, ('', args.port),
+                                   httpserver.WSGIHandler)
     sys.stdout.write('listening on port: %s\n' % (server.server_address[1],))
     sys.stdout.flush()
     server.serve_forever()
