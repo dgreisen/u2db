@@ -25,8 +25,7 @@ from u1db import (
 from u1db.backends import sqlite_backend
 from u1db.commandline import command
 from u1db.remote import (
-    client,
-    sync_target,
+    http_target,
     )
 
 
@@ -139,8 +138,8 @@ class CmdSync(command.Command):
         parser.add_argument('target', help='database to sync to')
 
     def _open_target(self, target):
-        if target.startswith('u1db://'):
-            st = sync_target.RemoteSyncTarget.connect(target)
+        if target.startswith('http://'):
+            st = http_target.HTTPSyncTarget.connect(target)
         else:
             db = sqlite_backend.SQLiteDatabase.open_database(target)
             st = db.get_sync_target()
