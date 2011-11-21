@@ -14,7 +14,10 @@
 
 """Define the requests that can be made."""
 
-from u1db import __version__ as _u1db_version
+from u1db import (
+    __version__ as _u1db_version,
+    Document,
+    )
 
 
 class ServerState(object):
@@ -167,12 +170,12 @@ class RPCSyncExchange(SyncTargetRPC):
         self.sync_exch = self.target.get_sync_exchange()
 
     def handle_stream_entry(self, entry):
-        self.sync_exch.insert_doc_from_source(entry['doc_id'], entry['doc_rev'],
-                                              entry['doc'])
+        doc = Document(entry['doc_id'], entry['doc_rev'], entry['doc'])
+        self.sync_exch.insert_doc_from_source(doc)
 
     def handle_end(self):
-        def send_doc(doc_id, doc_rev, doc):
-            entry = dict(doc_id=doc_id, doc_rev=doc_rev, doc=doc)
+        def send_doc(doc):
+            entry = dict(doc_id=doc.doc_id, doc_rev=doc.rev, doc=doc.content)
             self.responder.stream_entry(entry)
         new_gen = self.sync_exch.find_docs_to_return(self.last_known_generation)
         self.responder.start_response(other_new_generation=new_gen)

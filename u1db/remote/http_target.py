@@ -17,6 +17,7 @@
 import simplejson
 
 from u1db import (
+    Document,
     SyncTarget,
     )
 from u1db.remote import (
@@ -70,7 +71,8 @@ class HTTPSyncTarget(http_client.HTTPClientBase, SyncTarget):
         res = simplejson.loads(data[0])
         for entry in data[1:]:
             entry = simplejson.loads(entry)
-            return_doc_cb(entry['id'], entry['rev'], entry['doc'])
+            doc = Document(entry['id'], entry['rev'], entry['doc'])
+            return_doc_cb(doc)
         data = None
         return res['new_generation']
 

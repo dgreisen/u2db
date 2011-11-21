@@ -68,10 +68,8 @@ class CommonBackend(u1db.Database):
         for doc_id in doc_ids:
             doc = self._get_doc(doc_id)
             if check_for_conflicts:
-                is_conflicted = self._has_conflicts(doc_id)
-            else:
-                is_conflicted = None
-            result.append((doc_id, doc.rev, doc.content, is_conflicted))
+                doc.has_conflicts = self._has_conflicts(doc_id)
+            result.append(doc)
         return result
 
     def put_doc_if_newer(self, doc_id, doc_rev, doc):
@@ -96,7 +94,6 @@ class CommonBackend(u1db.Database):
             return 'superseded'
         else:
             return 'conflicted'
-
 
     def _ensure_maximal_rev(self, cur_rev, extra_revs):
         vcr = VectorClockRev(cur_rev)

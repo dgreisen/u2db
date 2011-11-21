@@ -18,17 +18,20 @@ import socket
 import urlparse
 
 from u1db import (
+    Document,
     SyncTarget,
     )
 from u1db.remote import (
     client,
     )
 
+
 class _DocSource(client.EntrySource):
 
     @staticmethod
-    def prepare((doc_id, doc_rev, doc)):
-        return dict(doc_id=doc_id, doc_rev=doc_rev, doc=doc)
+    def prepare(doc):
+        return dict(doc_id=doc.doc_id, doc_rev=doc.rev, doc=doc.content)
+
 
 class RemoteSyncTarget(SyncTarget):
     """Implement the SyncTarget api to a remote server."""
@@ -70,7 +73,8 @@ class RemoteSyncTarget(SyncTarget):
         # xxx docs_info itself should be replaced by a callback one level up
         doc_source = _DocSource(docs_info)
         def take_entry(entry):
-            return_doc_cb(entry['doc_id'], entry['doc_rev'], entry['doc'])
+            doc = Document(entry['doc_id'], entry['doc_rev'], entry['doc'])
+            return_doc_cb(doc)
         res = self._client.call_with_streaming("sync_exchange",
                                doc_source.cb,
                                take_entry,

@@ -189,11 +189,12 @@ class SyncResource(object):
 
     @http_method(content_as_args=True)
     def post_stream_entry(self, id, rev, doc):
-        self.sync_exch.insert_doc_from_source(id, rev, doc)
+        doc = Document(id, rev, doc)
+        self.sync_exch.insert_doc_from_source(doc)
 
     def post_end(self):
-        def send_doc(doc_id, doc_rev, doc):
-            entry = dict(id=doc_id, rev=doc_rev, doc=doc)
+        def send_doc(doc):
+            entry = dict(id=doc.doc_id, rev=doc.rev, doc=doc.content)
             self.responder.stream_entry(entry)
         new_gen = self.sync_exch.find_docs_to_return(self.last_known_generation)
         self.responder.content_type = 'application/x-u1db-multi-json'
