@@ -159,7 +159,7 @@ class InMemoryDatabase(CommonBackend):
         result = []
         for doc_id in doc_ids:
             doc_rev, doc = self._docs[doc_id]
-            result.append((doc_id, doc_rev, doc))
+            result.append(Document(doc_id, doc_rev, doc))
         return result
 
     def whats_changed(self, old_generation=0):

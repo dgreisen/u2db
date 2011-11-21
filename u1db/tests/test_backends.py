@@ -242,21 +242,20 @@ class DatabaseIndexTests(tests.DatabaseBaseTests):
     def test_create_index_evaluates_it(self):
         doc = self.db.create_doc(simple_doc)
         self.db.create_index('test-idx', ['key'])
-        self.assertEqual([(doc.doc_id, doc.rev, simple_doc)],
+        self.assertEqual([doc],
                          self.db.get_from_index('test-idx', [('value',)]))
 
     def test_create_index_multiple_exact_matches(self):
         doc = self.db.create_doc(simple_doc)
         doc2 = self.db.create_doc(simple_doc)
         self.db.create_index('test-idx', ['key'])
-        self.assertEqual([(doc.doc_id, doc.rev, simple_doc),
-                          (doc2.doc_id, doc2.rev, simple_doc)],
-                         self.db.get_from_index('test-idx', [('value',)]))
+        self.assertEqual(sorted([doc, doc2]),
+            sorted(self.db.get_from_index('test-idx', [('value',)])))
 
     def test_get_from_index(self):
         doc = self.db.create_doc(simple_doc)
         self.db.create_index('test-idx', ['key'])
-        self.assertEqual([(doc.doc_id, doc.rev, simple_doc)],
+        self.assertEqual([doc],
                          self.db.get_from_index('test-idx', [('value',)]))
 
     def test_get_from_index_unmatched(self):
@@ -267,31 +266,30 @@ class DatabaseIndexTests(tests.DatabaseBaseTests):
     def test_get_from_index_some_matches(self):
         doc = self.db.create_doc(simple_doc)
         self.db.create_index('test-idx', ['key'])
-        self.assertEqual([(doc.doc_id, doc.rev, simple_doc)],
+        self.assertEqual([doc],
             self.db.get_from_index('test-idx', [('value',), ('novalue',)]))
 
     def test_get_from_index_multi(self):
         content = '{"key": "value", "key2": "value2"}'
         doc = self.db.create_doc(content)
         self.db.create_index('test-idx', ['key', 'key2'])
-        self.assertEqual([(doc.doc_id, doc.rev, content)],
+        self.assertEqual([doc],
             self.db.get_from_index('test-idx', [('value', 'value2')]))
 
     def test_nested_index(self):
         doc = self.db.create_doc(nested_doc)
         self.db.create_index('test-idx', ['sub.doc'])
-        self.assertEqual([(doc.doc_id, doc.rev, nested_doc)],
+        self.assertEqual([doc],
             self.db.get_from_index('test-idx', [('underneath',)]))
         doc2 = self.db.create_doc(nested_doc)
         self.assertEqual(
-            sorted([(doc.doc_id, doc.rev, nested_doc),
-                    (doc2.doc_id, doc2.rev, nested_doc)]),
+            sorted([doc, doc2]),
             sorted(self.db.get_from_index('test-idx', [('underneath',)])))
 
-    def test_put_adds_to_index(self):
+    def test_create_adds_to_index(self):
         self.db.create_index('test-idx', ['key'])
         doc = self.db.create_doc(simple_doc)
-        self.assertEqual([(doc.doc_id, doc.rev, simple_doc)],
+        self.assertEqual([doc],
             self.db.get_from_index('test-idx', [('value',)]))
 
     def test_put_updates_index(self):
@@ -302,7 +300,7 @@ class DatabaseIndexTests(tests.DatabaseBaseTests):
         new_doc_rev = self.db.put_doc(doc)
         self.assertEqual([],
             self.db.get_from_index('test-idx', [('value',)]))
-        self.assertEqual([(doc.doc_id, new_doc_rev, new_content)],
+        self.assertEqual([doc],
             self.db.get_from_index('test-idx', [('altval',)]))
 
     def test_put_updates_when_adding_key(self):
@@ -312,7 +310,7 @@ class DatabaseIndexTests(tests.DatabaseBaseTests):
             self.db.get_from_index('test-idx', [('*',)]))
         doc.content = simple_doc
         self.db.put_doc(doc)
-        self.assertEqual([(doc.doc_id, doc.rev, simple_doc)],
+        self.assertEqual([doc],
             self.db.get_from_index('test-idx', [('*',)]))
 
     def test_get_all_from_index(self):
@@ -324,17 +322,14 @@ class DatabaseIndexTests(tests.DatabaseBaseTests):
         diff_value_doc = '{"key": "diff value"}'
         doc4 = self.db.create_doc(diff_value_doc)
         # This is essentially a 'prefix' match, but we match every entry.
-        self.assertEqual(sorted([
-            (doc1.doc_id, doc1.rev, simple_doc),
-            (doc2.doc_id, doc2.rev, nested_doc),
-            (doc4.doc_id, doc4.rev, diff_value_doc)]),
+        self.assertEqual(sorted([doc1, doc2, doc4]),
             sorted(self.db.get_from_index('test-idx', [('*',)])))
 
     def test_get_from_index_case_sensitive(self):
         self.db.create_index('test-idx', ['key'])
         doc1 = self.db.create_doc(simple_doc)
         self.assertEqual([], self.db.get_from_index('test-idx', [('V*',)]))
-        self.assertEqual([(doc1.doc_id, doc1.rev, simple_doc)],
+        self.assertEqual([doc1],
                          self.db.get_from_index('test-idx', [('v*',)]))
 
     def test_get_from_index_empty_string(self):
@@ -342,12 +337,10 @@ class DatabaseIndexTests(tests.DatabaseBaseTests):
         doc1 = self.db.create_doc(simple_doc)
         content2 = '{"key": ""}'
         doc2 = self.db.create_doc(content2)
-        self.assertEqual([(doc2.doc_id, doc2.rev, content2)],
+        self.assertEqual([doc2],
                          self.db.get_from_index('test-idx', [('',)]))
         # Empty string matches the wildcard.
-        self.assertEqual(sorted([
-            (doc1.doc_id, doc1.rev, simple_doc),
-            (doc2.doc_id, doc2.rev, content2)]),
+        self.assertEqual(sorted([doc1, doc2]),
             sorted(self.db.get_from_index('test-idx', [('*',)])))
 
     def test_get_from_index_illegal_number_of_entries(self):
@@ -376,18 +369,17 @@ class DatabaseIndexTests(tests.DatabaseBaseTests):
         doc3 = self.db.create_doc(content3)
         # The '%' in the search should be treated literally, not as a sql
         # globbing character.
-        self.assertEqual(sorted([(doc1.doc_id, doc1.rev, content1)]),
-            sorted(self.db.get_from_index('test-idx', [('va%*',)])))
+        self.assertEqual([doc1],
+            self.db.get_from_index('test-idx', [('va%*',)]))
         # Same for '_'
-        self.assertEqual(sorted([(doc3.doc_id, doc3.rev, content3)]),
-            sorted(self.db.get_from_index('test-idx', [('va_*',)])))
+        self.assertEqual([doc3],
+            self.db.get_from_index('test-idx', [('va_*',)]))
 
     def test_get_from_index_not_null(self):
         self.db.create_index('test-idx', ['key'])
         doc1 = self.db.create_doc(simple_doc)
         doc2 = self.db.create_doc('{"key": null}')
-        self.assertEqual(sorted([
-            (doc1.doc_id, doc1.rev, simple_doc)]),
+        self.assertEqual([doc1],
             self.db.get_from_index('test-idx', [('*',)]))
 
     def test_get_partial_from_index(self):
@@ -401,10 +393,7 @@ class DatabaseIndexTests(tests.DatabaseBaseTests):
         doc3 = self.db.create_doc(content3)
         doc4 = self.db.create_doc(content4)
         self.db.create_index('test-idx', ['k1', 'k2'])
-        self.assertEqual(sorted([
-            (doc1.doc_id, doc1.rev, content1),
-            (doc2.doc_id, doc2.rev, content2),
-            (doc3.doc_id, doc3.rev, content3)]),
+        self.assertEqual(sorted([doc1, doc2, doc3]),
             sorted(self.db.get_from_index('test-idx', [("v1", "*")])))
 
     def test_get_glob_match(self):
@@ -419,21 +408,17 @@ class DatabaseIndexTests(tests.DatabaseBaseTests):
         doc2 = self.db.create_doc(content2)
         doc3 = self.db.create_doc(content3)
         doc4 = self.db.create_doc(content4)
-        self.assertEqual(sorted([
-            (doc1.doc_id, doc1.rev, content1),
-            (doc2.doc_id, doc2.rev, content2),
-            (doc3.doc_id, doc3.rev, content3)]),
+        self.assertEqual(sorted([doc1, doc2, doc3]),
             sorted(self.db.get_from_index('test-idx', [("v1", "v*")])))
 
     def test_delete_updates_index(self):
         doc = self.db.create_doc(simple_doc)
         doc2 = self.db.create_doc(simple_doc)
         self.db.create_index('test-idx', ['key'])
-        self.assertEqual([(doc.doc_id, doc.rev, simple_doc),
-                          (doc2.doc_id, doc2.rev, simple_doc)],
-            self.db.get_from_index('test-idx', [('value',)]))
+        self.assertEqual(sorted([doc, doc2]),
+            sorted(self.db.get_from_index('test-idx', [('value',)])))
         self.db.delete_doc(doc.doc_id, doc.rev)
-        self.assertEqual([(doc2.doc_id, doc2.rev, simple_doc)],
+        self.assertEqual([doc2],
             self.db.get_from_index('test-idx', [('value',)]))
 
     def test_delete_index(self):
@@ -456,7 +441,7 @@ class DatabaseIndexTests(tests.DatabaseBaseTests):
                                   last_known_generation=0,
                                   return_doc_cb=ignore)
         self.assertGetDoc(self.db, doc.doc_id, other_rev, new_content, False)
-        self.assertEqual([(doc.doc_id, other_rev, new_content)],
+        self.assertEqual([Document(doc.doc_id, other_rev, new_content)],
                          self.db.get_from_index('test-idx', [('altval',)]))
         self.assertEqual([], self.db.get_from_index('test-idx', [('value',)]))
 
