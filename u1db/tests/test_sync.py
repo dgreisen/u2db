@@ -229,7 +229,7 @@ class DatabaseSyncTests(tests.DatabaseBaseTests):
                           'return': {'new_docs': [(doc.doc_id, doc.rev)],
                                      'conf_docs': [], 'last_gen': 1}},
                          self.db2._last_exchange_log)
-        self.assertEqual([(doc.doc_id, doc.rev, simple_doc)],
+        self.assertEqual([doc],
                          self.db1.get_from_index('test-idx', [('value',)]))
 
     def test_sync_pulling_doesnt_update_other_if_changed(self):
@@ -312,7 +312,7 @@ class DatabaseSyncTests(tests.DatabaseBaseTests):
         self.assertEqual([doc_id, doc_id], self.db1._get_transaction_log())
         self.assertGetDoc(self.db1, doc_id, doc2_rev, new_doc, True)
         self.assertGetDoc(self.db2, doc_id, doc2_rev, new_doc, False)
-        self.assertEqual([(doc_id, doc2_rev, new_doc)],
+        self.assertEqual([doc2],
                          self.db1.get_from_index('test-idx', [('altval',)]))
         self.assertEqual([], self.db1.get_from_index('test-idx', [('value',)]))
 
@@ -362,7 +362,7 @@ class DatabaseSyncTests(tests.DatabaseBaseTests):
         self.db1.whats_changed = after_whatschanged
         self.sync(self.db1, self.db2)
         self.assertGetDoc(self.db1, doc_id, doc2_rev2, content2, True)
-        self.assertEqual([(doc_id, doc2_rev2, content2)],
+        self.assertEqual([doc],
                          self.db1.get_from_index('test-idx', [('altval',)]))
         self.assertEqual([], self.db1.get_from_index('test-idx', [('value',)]))
         self.assertEqual([], self.db1.get_from_index('test-idx', [('localval',)]))

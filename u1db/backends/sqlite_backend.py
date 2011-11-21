@@ -455,7 +455,7 @@ class SQLiteDatabase(CommonBackend):
                 raise dbapi2.OperationalError(str(e) +
                     '\nstatement: %s\nargs: %s\n' % (statement, args))
             res = c.fetchall()
-            result.extend(res)
+            result.extend([Document(r[0], r[1], r[2]) for r in res])
         return result
 
     def delete_index(self, index_name):
