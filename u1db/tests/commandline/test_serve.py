@@ -22,7 +22,7 @@ from u1db import (
     __version__ as _u1db_version,
     tests,
     )
-from u1db.remote import client
+from u1db.remote import http_client
 from u1db.tests.commandline import safe_close
 
 
@@ -54,12 +54,11 @@ class TestU1DBServe(tests.TestCase):
         x = p.stdout.readline()
         self.assertTrue(x.startswith(starts))
         port = int(x[len(starts):])
-        s = socket.socket()
-        s.connect(('127.0.0.1', port))
-        self.addCleanup(s.close)
-        c = client.Client(s)
-        self.assertEqual({'version': _u1db_version},
-                         c.call_returning_args('version'))
+        url = "http://127.0.0.1:%s/" % port
+        c = http_client.HTTPClientBase(url)
+        self.addCleanup(c.close)
+        res, _ = c._request_json('GET', [])
+        self.assertEqual({'version': _u1db_version}, res)
 
     def test_supply_port(self):
         s = socket.socket()
@@ -69,9 +68,8 @@ class TestU1DBServe(tests.TestCase):
         p = self.startU1DBServe(['--port', str(port)])
         x = p.stdout.readline().strip()
         self.assertEqual('listening on port: %s' % (port,), x)
-        s = socket.socket()
-        s.connect(('127.0.0.1', port))
-        self.addCleanup(s.close)
-        c = client.Client(s)
-        self.assertEqual({'version': _u1db_version},
-                         c.call_returning_args('version'))
+        url = "http://127.0.0.1:%s/" % port
+        c = http_client.HTTPClientBase(url)
+        self.addCleanup(c.close)
+        res, _ = c._request_json('GET', [])
+        self.assertEqual({'version': _u1db_version}, res)

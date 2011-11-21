@@ -58,30 +58,36 @@ class TestHTTPClientBase(tests.TestCaseWithServer):
     def test_construct(self):
         self.startServer()
         url = self.getURL()
-        db = http_client.HTTPClientBase(url)
-        self.assertEqual(url, db._url.geturl())
-        self.assertIs(None, db._conn)
+        cli = http_client.HTTPClientBase(url)
+        self.assertEqual(url, cli._url.geturl())
+        self.assertIs(None, cli._conn)
 
     def test_parse_url(self):
-        db = http_client.HTTPClientBase(
+        cli = http_client.HTTPClientBase(
                                      '%s://127.0.0.1:12345/' % self.url_scheme)
-        self.assertEqual(self.url_scheme, db._url.scheme)
-        self.assertEqual('127.0.0.1', db._url.hostname)
-        self.assertEqual(12345, db._url.port)
-        self.assertEqual('/', db._url.path)
+        self.assertEqual(self.url_scheme, cli._url.scheme)
+        self.assertEqual('127.0.0.1', cli._url.hostname)
+        self.assertEqual(12345, cli._url.port)
+        self.assertEqual('/', cli._url.path)
 
     def test__ensure_connection(self):
-        db = self.getClient()
-        self.assertIs(None, db._conn)
-        db._ensure_connection()
-        self.assertIsNot(None, db._conn)
-        cli = db._conn
-        db._ensure_connection()
-        self.assertIs(cli, db._conn)
+        cli = self.getClient()
+        self.assertIs(None, cli._conn)
+        cli._ensure_connection()
+        self.assertIsNot(None, cli._conn)
+        conn = cli._conn
+        cli._ensure_connection()
+        self.assertIs(conn, cli._conn)
+
+    def test_close(self):
+        cli = self.getClient()
+        cli._ensure_connection()
+        cli.close()
+        self.assertIs(None, cli._conn)
 
     def test__request(self):
-        db = self.getClient()
-        res, headers = db._request('PUT', ['echo'], {}, {})
+        cli = self.getClient()
+        res, headers = cli._request('PUT', ['echo'], {}, {})
         self.assertEqual({'CONTENT_TYPE': 'application/json',
                           'PATH_INFO': '/dbase/echo',
                           'QUERY_STRING': '',
@@ -89,12 +95,12 @@ class TestHTTPClientBase(tests.TestCaseWithServer):
                           'REQUEST_METHOD': 'PUT'}, simplejson.loads(res))
 
 
-        res, headers = db._request('GET', ['doc', 'echo'], {'a': 1})
+        res, headers = cli._request('GET', ['doc', 'echo'], {'a': 1})
         self.assertEqual({'PATH_INFO': '/dbase/doc/echo',
                           'QUERY_STRING': 'a=1',
                           'REQUEST_METHOD': 'GET'}, simplejson.loads(res))
 
-        res, headers = db._request('POST', ['echo'], {'b': 2}, 'Body',
+        res, headers = cli._request('POST', ['echo'], {'b': 2}, 'Body',
                                    'application/x-test')
         self.assertEqual({'CONTENT_TYPE': 'application/x-test',
                           'PATH_INFO': '/dbase/echo',
@@ -103,8 +109,8 @@ class TestHTTPClientBase(tests.TestCaseWithServer):
                           'REQUEST_METHOD': 'POST'}, simplejson.loads(res))
 
     def test__request_json(self):
-        db = self.getClient()
-        res, headers = db._request_json('POST', ['echo'], {'b': 2}, {'a': 'x'})
+        cli = self.getClient()
+        res, headers = cli._request_json('POST', ['echo'], {'b': 2}, {'a': 'x'})
         self.assertEqual('application/json', headers['content-type'])
         self.assertEqual({'CONTENT_TYPE': 'application/json',
                           'PATH_INFO': '/dbase/echo',

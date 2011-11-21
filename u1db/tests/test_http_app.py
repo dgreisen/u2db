@@ -19,6 +19,7 @@ import simplejson
 import StringIO
 
 from u1db import (
+    __version__ as _u1db_version,
     tests,
     )
 
@@ -402,6 +403,13 @@ class TestHTTPApp(tests.TestCase):
                             headers={'content-type': 'application/json'},
                             expect_errors=True)
         self.assertEqual(400, resp.status)
+
+    def test_version(self):
+        resp = self.app.get('/')
+        self.assertEqual(200, resp.status)
+        self.assertEqual('application/json', resp.header('content-type'))
+        self.assertEqual({"version": _u1db_version},
+                         simplejson.loads(resp.body))
 
     def test_put_doc_create(self):
         resp = self.app.put('/db0/doc/doc1', params='{"x": 1}',

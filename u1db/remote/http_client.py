@@ -33,6 +33,11 @@ class HTTPClientBase(object):
         self._conn = httplib.HTTPConnection(self._url.hostname,
                                               self._url.port)
 
+    def close(self):
+        if self._conn:
+            self._conn.close()
+            self._conn = None
+
     # xxx retry mechanism?
 
     def _response(self):
