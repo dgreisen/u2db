@@ -50,7 +50,7 @@ class TestSQLiteDatabase(tests.TestCase):
 
             def _is_initialized(self, c):
                 res = super(SQLiteDatabaseTesting, self)._is_initialized(c)
-                if self._try == 1:
+                if self._try == 1 and self._db_handle.isolation_level is None:
                     t2.start()
                     time.sleep(0.5) # hard to do better and have a generic test
                 return res

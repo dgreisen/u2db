@@ -131,11 +131,13 @@ class SQLiteDatabase(CommonBackend):
     def _ensure_schema(self):
         """Ensure that the database schema has been created."""
         old_isolation_level = self._db_handle.isolation_level
+        c = self._db_handle.cursor()
+        if self._is_initialized(c):
+            return
         try:
             # autocommit/own mgmt of transactions
             self._db_handle.isolation_level = None
             with self._db_handle:
-                c = self._db_handle.cursor()
                 # only one execution path should initialize the db
                 c.execute("begin exclusive")
                 if self._is_initialized(c):
