@@ -22,16 +22,9 @@ from u1db import (
     tests,
     )
 from u1db.remote import (
-    sync_server,
-    sync_target,
     http_app,
     http_target
     )
-
-
-def remote_server_def():
-    return (sync_server.TCPSyncServer, sync_server.TCPSyncRequestHandler,
-            "force_shutdown", "u1db")
 
 def http_server_def():
     def make_server(host_port, handler, state):
@@ -50,35 +43,11 @@ def http_server_def():
     return make_server, req_handler, "shutdown", "http"
 
 
-class TestRemoteSyncTarget(tests.TestCaseWithServer):
-
-    server_def = staticmethod(remote_server_def)
-
-    def test_connect(self):
-        self.startServer()
-        url = self.getURL()
-        remote_target = sync_target.RemoteSyncTarget(url)
-        self.assertEqual(url, remote_target._url.geturl())
-        self.assertIs(None, remote_target._client)
-
-    def test__ensure_connection(self):
-        self.startServer()
-        remote_target = sync_target.RemoteSyncTarget(self.getURL())
-        self.assertIs(None, remote_target._client)
-        remote_target._ensure_connection()
-        self.assertIsNot(None, remote_target._client)
-        cli = remote_target._client
-        remote_target._ensure_connection()
-        self.assertIs(cli, remote_target._client)
-
-
 class TestRemoteSyncTargets(tests.TestCaseWithServer):
 
     scenarios = [
         ('http', {'server_def': http_server_def,
                   'sync_target_class': http_target.HTTPSyncTarget}),
-        ('remote', {'server_def': remote_server_def,
-                    'sync_target_class': sync_target.RemoteSyncTarget}),
         ]
 
     def getSyncTarget(self, path=None):

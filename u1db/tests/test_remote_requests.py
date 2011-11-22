@@ -21,46 +21,16 @@ from u1db import (
     tests,
     )
 from u1db.remote import (
-    requests,
+    server_state,
     )
 from u1db.backends import sqlite_backend
-
-
-class TestRPCRequest(tests.TestCase):
-
-    def test_register_request(self):
-        class MyRequest(requests.RPCRequest):
-            name = 'mytestreq'
-        reqs = requests.RPCRequest.requests
-        self.assertIs(None, reqs.get('mytestreq'))
-        MyRequest.register()
-        self.addCleanup(MyRequest.unregister)
-        self.assertEqual(MyRequest, reqs.get('mytestreq'))
-        MyRequest.unregister()
-        self.assertIs(None, reqs.get('mytestreq'))
-        # Calling it again should not be an error.
-        MyRequest.unregister()
-
-    def test_get_version_rpc(self):
-        factory = requests.RPCRequest.requests.get('version')
-        self.assertEqual(requests.RPCServerVersion, factory)
-        self.assertEqual('version', factory.name)
-        state = tests.ServerStateForTests()
-        responder = tests.ResponderForTests()
-        instance = factory(state, responder)
-        self.assertEqual('version', instance.name)
-        # 'version' doesn't require arguments, it just returns the response
-        instance.handle_end()
-        self.assertEqual('success', responder.status)
-        self.assertEqual({'version': _u1db_version}, responder.kwargs)
-        self.assertIs(state, instance.state)
 
 
 class TestServerState(tests.TestCase):
 
     def setUp(self):
         super(TestServerState, self).setUp()
-        self.state = requests.ServerState()
+        self.state = server_state.ServerState()
 
     def test_set_workingdir(self):
         tempdir = self.createTempDir()

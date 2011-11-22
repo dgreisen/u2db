@@ -30,8 +30,7 @@ from u1db.backends import (
     sqlite_backend,
     )
 from u1db.remote import (
-    requests,
-    sync_server,
+    server_state,
     )
 
 
@@ -109,7 +108,7 @@ class DatabaseBaseTests(TestCase):
         super(DatabaseBaseTests, self).tearDown()
 
 
-class ServerStateForTests(requests.ServerState):
+class ServerStateForTests(server_state.ServerState):
     """Used in the test suite, so we don't have to touch disk, etc."""
 
     def __init__(self):
