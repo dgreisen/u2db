@@ -46,13 +46,17 @@ class TestSQLiteDatabase(tests.TestCase):
 
             def __init__(self, dbname, ntry):
                 self._try = ntry
+                self._is_initialized_invocations = 0
                 super(SQLiteDatabaseTesting, self).__init__(dbname)
 
             def _is_initialized(self, c):
                 res = super(SQLiteDatabaseTesting, self)._is_initialized(c)
-                if self._try == 1 and self._db_handle.isolation_level is None:
-                    t2.start()
-                    time.sleep(0.5) # hard to do better and have a generic test
+                if self._try == 1:
+                    self._is_initialized_invocations += 1
+                    if self._is_initialized_invocations == 2:
+                        t2.start()
+                        # hard to do better and have a generic test
+                        time.sleep(0.05)
                 return res
 
         outcome2 = []
