@@ -88,53 +88,63 @@ class SQLiteDatabase(CommonBackend):
 
     def _initialize(self, c):
         """Create the schema in the database."""
-        with self._db_handle:
-            c.execute("CREATE TABLE transaction_log ("
-                      " generation INTEGER PRIMARY KEY AUTOINCREMENT,"
-                      " doc_id TEXT)")
-            c.execute("CREATE TABLE document ("
-                      " doc_id TEXT PRIMARY KEY,"
-                      " doc_rev TEXT,"
-                      " doc TEXT)"
-                      )
-            c.execute("CREATE TABLE document_fields ("
-                      " doc_id TEXT,"
-                      " field_name TEXT,"
-                      " value TEXT,"
-                      " CONSTRAINT document_fields_pkey"
-                      " PRIMARY KEY (doc_id, field_name))")
-            # TODO: Should we include doc_id or not? By including it, the
-            #       content can be returned directly from the index, and
-            #       matched with the documents table, roughly saving 1 btree
-            #       lookup per query. It costs us extra data storage.
-            c.execute("CREATE INDEX document_fields_field_value_doc_idx"
-                      " ON document_fields(field_name, value, doc_id)")
-            c.execute("CREATE TABLE sync_log ("
-                      " replica_uid TEXT PRIMARY KEY,"
-                      " known_generation INTEGER)")
-            c.execute("CREATE TABLE conflicts ("
-                      " doc_id TEXT,"
-                      " doc_rev TEXT,"
-                      " doc TEXT,"
-                  " CONSTRAINT conflicts_pkey PRIMARY KEY (doc_id, doc_rev))")
-            c.execute("CREATE TABLE index_definitions ("
-                      " name TEXT,"
-                      " offset INT,"
-                      " field TEXT,"
-                      " CONSTRAINT index_definitions_pkey"
-                      " PRIMARY KEY (name, offset))")
-            c.execute("CREATE TABLE u1db_config (name TEXT, value TEXT)")
-            c.execute("INSERT INTO u1db_config VALUES ('sql_schema', '0')")
-            c.execute("INSERT INTO u1db_config VALUES" " ('index_storage', ?)",
-                      (self._index_storage_value,))
-            self._extra_schema_init(c)
+        c.execute("CREATE TABLE transaction_log ("
+                  " generation INTEGER PRIMARY KEY AUTOINCREMENT,"
+                  " doc_id TEXT)")
+        c.execute("CREATE TABLE document ("
+                  " doc_id TEXT PRIMARY KEY,"
+                  " doc_rev TEXT,"
+                  " doc TEXT)"
+                  )
+        c.execute("CREATE TABLE document_fields ("
+                  " doc_id TEXT,"
+                  " field_name TEXT,"
+                  " value TEXT,"
+                  " CONSTRAINT document_fields_pkey"
+                  " PRIMARY KEY (doc_id, field_name))")
+        # TODO: Should we include doc_id or not? By including it, the
+        #       content can be returned directly from the index, and
+        #       matched with the documents table, roughly saving 1 btree
+        #       lookup per query. It costs us extra data storage.
+        c.execute("CREATE INDEX document_fields_field_value_doc_idx"
+                  " ON document_fields(field_name, value, doc_id)")
+        c.execute("CREATE TABLE sync_log ("
+                  " replica_uid TEXT PRIMARY KEY,"
+                  " known_generation INTEGER)")
+        c.execute("CREATE TABLE conflicts ("
+                  " doc_id TEXT,"
+                  " doc_rev TEXT,"
+                  " doc TEXT,"
+              " CONSTRAINT conflicts_pkey PRIMARY KEY (doc_id, doc_rev))")
+        c.execute("CREATE TABLE index_definitions ("
+                  " name TEXT,"
+                  " offset INT,"
+                  " field TEXT,"
+                  " CONSTRAINT index_definitions_pkey"
+                  " PRIMARY KEY (name, offset))")
+        c.execute("CREATE TABLE u1db_config (name TEXT, value TEXT)")
+        c.execute("INSERT INTO u1db_config VALUES ('sql_schema', '0')")
+        c.execute("INSERT INTO u1db_config VALUES" " ('index_storage', ?)",
+                  (self._index_storage_value,))
+        self._extra_schema_init(c)
 
     def _ensure_schema(self):
         """Ensure that the database schema has been created."""
+        old_isolation_level = self._db_handle.isolation_level
         c = self._db_handle.cursor()
         if self._is_initialized(c):
             return
-        self._initialize(c)
+        try:
+            # autocommit/own mgmt of transactions
+            self._db_handle.isolation_level = None
+            with self._db_handle:
+                # only one execution path should initialize the db
+                c.execute("begin exclusive")
+                if self._is_initialized(c):
+                    return
+                self._initialize(c)
+        finally:
+            self._db_handle.isolation_level = old_isolation_level
 
     def _extra_schema_init(self, c):
         """Add any extra fields, etc to the basic table definitions."""
