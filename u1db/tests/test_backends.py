@@ -88,23 +88,23 @@ class LocalDatabaseTests(tests.DatabaseBaseTests):
     def test_get_docs(self):
         doc1 = self.db.create_doc(simple_doc)
         doc2 = self.db.create_doc(nested_doc)
-        self.assertEqual([(doc1.doc_id, doc1.rev, simple_doc, False),
-                          (doc2.doc_id, doc2.rev, nested_doc, False)],
-                         self.db.get_docs([doc1.doc_id, doc2.doc_id]))
+        self.assertEqual(sorted([doc1, doc2]),
+                         sorted(self.db.get_docs([doc1.doc_id, doc2.doc_id])))
 
     def test_get_docs_conflicted(self):
         doc1 = self.db.create_doc(simple_doc)
         self.db.force_doc_sync_conflict(doc1.doc_id, 'alternate:1', nested_doc)
-        self.assertEqual([(doc1.doc_id, 'alternate:1', nested_doc, True)],
-                         self.db.get_docs([doc1.doc_id]))
+        self.assertEqual(
+            [Document(doc1.doc_id, 'alternate:1', nested_doc, True)],
+            self.db.get_docs([doc1.doc_id]))
 
     def test_get_docs_conflicts_ignored(self):
         doc1 = self.db.create_doc(simple_doc)
         doc2 = self.db.create_doc(nested_doc)
         self.db.force_doc_sync_conflict(doc1.doc_id, 'alternate:1', nested_doc)
         self.assertEqual(
-            sorted([(doc1.doc_id, 'alternate:1', nested_doc, None),
-                    (doc2.doc_id, doc2.rev, nested_doc, None)]),
+            sorted([Document(doc1.doc_id, 'alternate:1', nested_doc),
+                    Document(doc2.doc_id, doc2.rev, nested_doc)]),
             sorted(self.db.get_docs([doc1.doc_id, doc2.doc_id],
                                     check_for_conflicts=False)))
 
@@ -427,7 +427,7 @@ class DatabaseIndexTests(tests.DatabaseBaseTests):
         self.db.delete_index('test-idx')
         self.assertEqual([], self.db.list_indexes())
 
-    def test__sync_exchange_updates_indexes(self):
+    def test_sync_exchange_updates_indexes(self):
         doc = self.db.create_doc(simple_doc)
         self.db.create_index('test-idx', ['key'])
         new_content = '{"key": "altval"}'
@@ -435,8 +435,8 @@ class DatabaseIndexTests(tests.DatabaseBaseTests):
         st = self.db.get_sync_target()
         def ignore(doc_id, doc_rev, doc):
             pass
-        result = st.sync_exchange([(doc.doc_id, other_rev, new_content)],
-                                  'other-replica',
+        docs = [Document(doc.doc_id, other_rev, new_content)]
+        result = st.sync_exchange(docs, 'other-replica',
                                   from_replica_generation=10,
                                   last_known_generation=0,
                                   return_doc_cb=ignore)

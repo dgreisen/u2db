@@ -17,6 +17,7 @@
 import simplejson
 
 from u1db import (
+    Document,
     SyncTarget,
     )
 from u1db.remote import (
@@ -42,7 +43,7 @@ class HTTPSyncTarget(http_client.HTTPClientBase, SyncTarget):
         self._request_json('PUT', ['sync-from', other_replica_uid], {},
                                   {'generation': other_replica_generation})
 
-    def sync_exchange(self, docs_info, from_replica_uid,
+    def sync_exchange(self, docs, from_replica_uid,
                       from_replica_generation,
                       last_known_generation, return_doc_cb):
         self._ensure_connection()
@@ -58,8 +59,8 @@ class HTTPSyncTarget(http_client.HTTPClientBase, SyncTarget):
             return len(entry)
         size += prepare(last_known_generation=last_known_generation,
                         from_replica_generation=from_replica_generation)
-        for doc_id, doc_rev, doc in docs_info:
-            size += prepare(id=doc_id, rev=doc_rev, doc=doc)
+        for doc in docs:
+            size += prepare(id=doc.doc_id, rev=doc.rev, doc=doc.content)
         self._conn.putheader('content-length', str(size))
         self._conn.endheaders()
         for entry in entries:
@@ -70,7 +71,8 @@ class HTTPSyncTarget(http_client.HTTPClientBase, SyncTarget):
         res = simplejson.loads(data[0])
         for entry in data[1:]:
             entry = simplejson.loads(entry)
-            return_doc_cb(entry['id'], entry['rev'], entry['doc'])
+            doc = Document(entry['id'], entry['rev'], entry['doc'])
+            return_doc_cb(doc)
         data = None
         return res['new_generation']
 

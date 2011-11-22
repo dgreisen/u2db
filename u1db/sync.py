@@ -35,7 +35,7 @@ class Synchronizer(object):
         self.sync_target = sync_target
         self.num_inserted = 0
 
-    def _insert_doc_from_target(self, doc_id, doc_rev, doc):
+    def _insert_doc_from_target(self, doc):
         """Try to insert synced document from target.
 
         Implements TAKE OTHER semantics: any document from the target
@@ -47,7 +47,7 @@ class Synchronizer(object):
         """
         # Increases self.num_inserted depending whether the document
         # was effectively inserted.
-        state = self.source.put_doc_if_newer(doc_id, doc_rev, doc)
+        state = self.source.put_doc_if_newer(doc.doc_id, doc.rev, doc.content)
         if state == 'inserted':
             self.num_inserted += 1
         elif state == 'converged':
@@ -60,7 +60,8 @@ class Synchronizer(object):
             assert state == 'conflicted'
             # take doc as the official value, stores the current
             # alongside as conflict
-            self.source.force_doc_sync_conflict(doc_id, doc_rev, doc)
+            self.source.force_doc_sync_conflict(doc.doc_id, doc.rev,
+                                                doc.content)
             self.num_inserted += 1
 
     def _record_sync_info_with_the_target(self, start_generation):
@@ -94,7 +95,6 @@ class Synchronizer(object):
         # prepare to send all the changed docs
         docs_to_send = self.source.get_docs(changed_doc_ids,
             check_for_conflicts=False)
-        docs_to_send = [x[:3] for x in docs_to_send]
 
         # this source last-seen database generation for the target
         other_last_known_gen = self.source.get_sync_generation(other_replica_uid)
@@ -125,7 +125,7 @@ class SyncExchange(object):
         self._incoming_trace = []
         self._last_known_generation = None
 
-    def insert_doc_from_source(self, doc_id, doc_rev, doc):
+    def insert_doc_from_source(self, doc):
         """Try to insert synced document from source.
 
         Conflicting documents are not inserted but the current revision
@@ -134,27 +134,25 @@ class SyncExchange(object):
         The 1st step of a sync exchange is to call this repeatedly to
         try insert all incoming documents from the source.
 
-        :param doc_id: The unique handle for a document.
-        :param doc_rev: The document revision to try to store.
-        :param doc: The actual JSON document string.
+        :param doc: A Document object.
         :return: None
         """
-        state = self._db.put_doc_if_newer(doc_id, doc_rev, doc)
+        state = self._db.put_doc_if_newer(doc.doc_id, doc.rev, doc.content)
         if state == 'inserted':
-            self.seen_ids.add(doc_id)
+            self.seen_ids.add(doc.doc_id)
         elif state == 'converged':
             # magical convergence
-            self.seen_ids.add(doc_id)
+            self.seen_ids.add(doc.doc_id)
         elif state == 'superseded':
             # we have something newer that we will return
             pass
         else:
             # conflict, returned independently
             assert state == 'conflicted'
-            self.seen_ids.add(doc_id)
-            self.conflict_ids.add(doc_id)
+            self.seen_ids.add(doc.doc_id)
+            self.conflict_ids.add(doc.doc_id)
         # for tests
-        self._incoming_trace.append((doc_id, doc_rev))
+        self._incoming_trace.append((doc.doc_id, doc.rev))
 
     def find_docs_to_return(self, last_known_generation):
         """Find and further mark documents to return to the sync source.
@@ -191,7 +189,7 @@ class SyncExchange(object):
         :param from_replica_uid: The source replica's identifier
         :param from_replica_generation: The db generation for the
             source replica indicating the tip of data that was sent.
-        :param: return_doc_cb(doc_id, doc_rev, doc): is a callback
+        :param: return_doc_cb(doc): is a callback
                 used to return the marked documents to the target replica,
         :return: None
         """
@@ -200,11 +198,11 @@ class SyncExchange(object):
         # return docs
         new_docs = self._db.get_docs(doc_ids_to_return,
                                      check_for_conflicts=False)
-        for doc_id, doc_rev, doc, _ in new_docs:
-            return_doc_cb(doc_id, doc_rev, doc)
+        for doc in new_docs:
+            return_doc_cb(doc)
         conflicts = self._db.get_docs(conflict_ids, check_for_conflicts=False)
-        for doc_id, doc_rev, doc, _ in conflicts:
-            return_doc_cb(doc_id, doc_rev, doc)
+        for doc in conflicts:
+            return_doc_cb(doc)
         # record sync point
         self._db.set_sync_generation(from_replica_uid,
                                      from_replica_generation)
@@ -214,8 +212,8 @@ class SyncExchange(object):
                         'from_id': from_replica_uid,
                         'from_gen': from_replica_generation,
                         'last_known_gen': self._last_known_generation},
-            'return': {'new_docs': [(di, dr) for di, dr, _, _ in new_docs],
-                       'conf_docs': [(di, dr) for di, dr, _, _ in conflicts],
+            'return': {'new_docs': [(d.doc_id, d.rev) for d in new_docs],
+                       'conf_docs': [(d.doc_id, d.rev) for d in conflicts],
                        'last_gen': self.new_gen}
         }
 
@@ -229,13 +227,13 @@ class LocalSyncTarget(u1db.SyncTarget):
     def get_sync_exchange(self):
         return SyncExchange(self._db)
 
-    def sync_exchange(self, docs_info,
+    def sync_exchange(self, docs,
                       from_replica_uid, from_replica_generation,
                       last_known_generation, return_doc_cb):
         sync_exch = self.get_sync_exchange()
         # 1st step: try to insert incoming docs
-        for doc_id, doc_rev, doc in docs_info:
-            sync_exch.insert_doc_from_source(doc_id, doc_rev, doc)
+        for doc in docs:
+            sync_exch.insert_doc_from_source(doc)
         # 2nd step: find changed documents (including conflicts) to return
         new_gen = sync_exch.find_docs_to_return(last_known_generation)
         # final step: return docs and record source replica sync point
