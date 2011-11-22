@@ -14,7 +14,10 @@
 
 """Test sqlite backend internals."""
 
+import os
 import tempfile
+import time
+import threading
 import shutil
 
 from sqlite3 import dbapi2
@@ -28,6 +31,47 @@ from u1db.backends import sqlite_backend
 
 simple_doc = '{"key": "value"}'
 nested_doc = '{"key": "value", "sub": {"doc": "underneath"}}'
+
+
+class TestSQLiteDatabase(tests.TestCase):
+
+    def test_atomic_initialize(self):
+        tmpdir = self.createTempDir()
+        dbname = os.path.join(tmpdir, 'atomic.db')
+
+        t2 = None # will be a thread
+
+        class SQLiteDatabaseTesting(sqlite_backend.SQLiteDatabase):
+            _index_storage_value = "testing"
+
+            def __init__(self, dbname, ntry):
+                self._try = ntry
+                super(SQLiteDatabaseTesting, self).__init__(dbname)
+
+            def _is_initialized(self, c):
+                res = super(SQLiteDatabaseTesting, self)._is_initialized(c)
+                if self._try == 1:
+                    t2.start()
+                    time.sleep(0.5) # hard to do better and have a generic test
+                return res
+
+        outcome2 = []
+
+        def second_try():
+            try:
+                db2 = SQLiteDatabaseTesting(dbname, 2)
+            except Exception, e:
+                outcome2.append(e)
+            else:
+                outcome2.append(db2)
+
+        t2 = threading.Thread(target=second_try)
+        db1 = SQLiteDatabaseTesting(dbname, 1)
+        t2.join()
+
+        self.assertTrue(isinstance(outcome2[0], SQLiteDatabaseTesting))
+        db2 = outcome2[0]
+        self.assertTrue(db2._is_initialized(db1._get_sqlite_handle().cursor()))
 
 
 class TestSQLitePartialExpandDatabase(tests.TestCase):
