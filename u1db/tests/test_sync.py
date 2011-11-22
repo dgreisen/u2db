@@ -22,13 +22,11 @@ from u1db import (
     vectorclock,
     )
 from u1db.remote import (
-    sync_target,
     http_target,
     )
 
 from u1db.tests.test_remote_sync_target import (
     http_server_def,
-    remote_server_def,
     )
 
 simple_doc = tests.simple_doc
@@ -40,14 +38,6 @@ def _make_local_db_and_target(test):
     st = db.get_sync_target()
     return db, st
 
-
-def _make_local_db_and_remote_target(test):
-    test.startServer()
-    db = test.request_state._create_database('test')
-    st = sync_target.RemoteSyncTarget.connect(test.getURL('test'))
-    return db, st
-
-
 def _make_local_db_and_http_target(test):
     test.startServer()
     db = test.request_state._create_database('test')
@@ -57,8 +47,6 @@ def _make_local_db_and_http_target(test):
 
 target_scenarios = [
     ('local', {'create_db_and_target': _make_local_db_and_target}),
-    ('remote', {'create_db_and_target': _make_local_db_and_remote_target,
-                'server_def': remote_server_def}),
     ('http', {'create_db_and_target': _make_local_db_and_http_target,
               'server_def': http_server_def}),
     ]
