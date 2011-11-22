@@ -156,8 +156,8 @@ class DatabaseSyncTargetTests(tests.DatabaseBaseTests,
         doc = self.db.create_doc(simple_doc)
         self.assertEqual([doc.doc_id], self.db._get_transaction_log())
         new_doc = '{"key": "altval"}'
-        docs = Document(doc.doc_id, 'test:1|z:2', new_doc)
-        new_gen = self.st.sync_exchange([docs],
+        docs = [Document(doc.doc_id, 'test:1|z:2', new_doc)]
+        new_gen = self.st.sync_exchange(docs,
                                         'other-replica',
                                         from_replica_generation=10,
                                         last_known_generation=0,
@@ -175,8 +175,8 @@ class DatabaseSyncTargetTests(tests.DatabaseBaseTests,
             return val
         self.db.whats_changed = after_whatschanged
         new_doc = '{"key": "altval"}'
-        docs = Document(doc.doc_id, 'test:1|z:2', new_doc)
-        new_gen = self.st.sync_exchange([docs],
+        docs = [Document(doc.doc_id, 'test:1|z:2', new_doc)]
+        new_gen = self.st.sync_exchange(docs,
                                         'other-replica',
                                         from_replica_generation=10,
                                         last_known_generation=0,
