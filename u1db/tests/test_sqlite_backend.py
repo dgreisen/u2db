@@ -17,7 +17,6 @@
 import os
 import time
 import threading
-import shutil
 
 from sqlite3 import dbapi2
 
