@@ -14,6 +14,7 @@
 
 """A list of errors that u1db can raise."""
 
+
 class U1DBError(Exception):
     """Generic base class for U1DB errors."""
 
@@ -36,15 +37,3 @@ class InvalidValueForIndex(U1DBError):
     Can also be raised if wildcard matches are not strictly at the tail of the
     request.
     """
-
-
-class BadProtocolStream(U1DBError):
-    """Raised when part of the protocol stream is incorrectly formatted."""
-
-
-class UnknownProtocolVersion(BadProtocolStream):
-    """Raised when the protocol header is unknown to us."""
-
-
-class UnknownRequest(BadProtocolStream):
-    """Raised when an RPC comes in for a request we don't know about."""
