@@ -49,7 +49,7 @@ class SQLiteDatabase(CommonBackend):
             return c.fetchone()[0], None
 
     @classmethod
-    def open_database(cls, sqlite_file):
+    def _open_database(cls, sqlite_file):
         if not os.path.isfile(sqlite_file):
             raise errors.DatabaseDoesNotExist()
         tries = 2
@@ -68,10 +68,12 @@ class SQLiteDatabase(CommonBackend):
         return SQLiteDatabase._sqlite_registry[v](sqlite_file)
 
     @classmethod
-    def ensure_database(cls, sqlite_file, backend_cls=None):
+    def open_database(cls, sqlite_file, backend_cls=None, create=True):
         try:
-            return cls.open_database(sqlite_file)
+            return cls._open_database(sqlite_file)
         except errors.DatabaseDoesNotExist:
+            if not create:
+                raise
             if backend_cls is None:
                 backend_cls = SQLitePartialExpandDatabase # default
             return backend_cls(sqlite_file)

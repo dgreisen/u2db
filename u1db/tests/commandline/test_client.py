@@ -146,7 +146,7 @@ class TestCmdInit(TestCaseWithDB):
         cmd = self.make_command(client.CmdInitDB)
         cmd.run(path, 'test-uid')
         self.assertTrue(os.path.exists(path))
-        db = sqlite_backend.SQLiteDatabase.open_database(path)
+        db = sqlite_backend.SQLiteDatabase.open_database(path, create=False)
         self.assertEqual('test-uid', db._replica_uid)
 
 
@@ -262,7 +262,7 @@ class TestCommandLine(TestCaseWithDB):
     def test_init_db(self):
         path = self.working_dir + '/test2.db'
         ret, stdout, stderr = self.run_main(['init-db', path, 'uid'])
-        db2 = sqlite_backend.SQLiteDatabase.open_database(path)
+        db2 = sqlite_backend.SQLiteDatabase.open_database(path, create=False)
 
     def test_put(self):
         doc = self.db.create_doc(tests.simple_doc, doc_id='test-id')
