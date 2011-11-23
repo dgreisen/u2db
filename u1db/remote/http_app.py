@@ -173,7 +173,7 @@ class GlobalResourse(object):
 
 @url_to_resource.register
 class DocMaker(object):
-    """Document resource."""
+    """Document maker."""
 
     url_pattern = "/{dbname}/doc/"
 
