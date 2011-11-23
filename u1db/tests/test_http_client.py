@@ -14,8 +14,6 @@
 
 """Tests for HTTPDatabase"""
 
-import inspect
-import os
 import simplejson
 from wsgiref import simple_server
 

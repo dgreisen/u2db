@@ -21,7 +21,6 @@ import threading
 import shutil
 
 from sqlite3 import dbapi2
-import simplejson
 
 from u1db import (
     tests,

@@ -15,9 +15,6 @@
 """Tests for HTTPDatabase"""
 
 import inspect
-import os
-import simplejson
-from wsgiref import simple_server
 
 from u1db import (
     Document,
