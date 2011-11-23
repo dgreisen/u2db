@@ -37,3 +37,7 @@ class InvalidValueForIndex(U1DBError):
     Can also be raised if wildcard matches are not strictly at the tail of the
     request.
     """
+
+
+class DatabaseDoesNotExist(U1DBError):
+    """The database does not exist."""

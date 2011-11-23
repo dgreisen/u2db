@@ -22,6 +22,7 @@ import shutil
 from sqlite3 import dbapi2
 
 from u1db import (
+    errors,
     tests,
     )
 from u1db.backends import sqlite_backend
@@ -215,6 +216,45 @@ class TestSQLitePartialExpandDatabase(tests.TestCase):
         db = sqlite_backend.SQLitePartialExpandDatabase(path)
         db2 = sqlite_backend.SQLiteDatabase.open_database(path)
         self.assertIsInstance(db2, sqlite_backend.SQLitePartialExpandDatabase)
+
+    def test_open_database_non_existent(self):
+        temp_dir = self.createTempDir(prefix='u1db-test-')
+        path = temp_dir + '/non-existent.sqlite'
+        self.assertRaises(errors.DatabaseDoesNotExist,
+                         sqlite_backend.SQLiteDatabase.open_database, path)
+
+    def test_open_database_during_init(self):
+        temp_dir = self.createTempDir(prefix='u1db-test-')
+        path = temp_dir + '/initialised.db'
+        db = sqlite_backend.SQLitePartialExpandDatabase.__new__(
+                                    sqlite_backend.SQLitePartialExpandDatabase)
+        db._db_handle = dbapi2.connect(path) # db is there but not yet init-ed
+        observed = []
+        class SQLiteDatabaseTesting(sqlite_backend.SQLiteDatabase):
+            @classmethod
+            def _which_index_storage(cls, c):
+                res = super(SQLiteDatabaseTesting, cls)._which_index_storage(c)
+                db._ensure_schema() # init db
+                observed.append(res[0])
+                return res
+        db2 = SQLiteDatabaseTesting.open_database(path)
+        self.assertIsInstance(db2, sqlite_backend.SQLitePartialExpandDatabase)
+        self.assertEqual([None,
+              sqlite_backend.SQLitePartialExpandDatabase._index_storage_value],
+                         observed)
+
+    def test_open_database_invalid(self):
+        temp_dir = self.createTempDir(prefix='u1db-test-')
+        path1 = temp_dir + '/invalid1.db'
+        with open(path1, 'wb') as f:
+            f.write("")
+        self.assertRaises(dbapi2.OperationalError,
+                          sqlite_backend.SQLiteDatabase.open_database, path1)
+        path2 = temp_dir + '/invalid2.db'
+        with open(path1, 'wb') as f:
+            f.write("invalid")
+        self.assertRaises(dbapi2.DatabaseError,
+                          sqlite_backend.SQLiteDatabase.open_database, path1)
 
     def assertTransform(self, sql_value, value):
         transformed = sqlite_backend.SQLiteDatabase._transform_glob(value)

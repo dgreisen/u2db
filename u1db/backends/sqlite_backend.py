@@ -14,8 +14,10 @@
 
 """A U1DB implementation that uses SQLite as its persistence layer."""
 
+import os
 import simplejson
 from sqlite3 import dbapi2
+import time
 
 from u1db.backends import CommonBackend, CommonSyncTarget
 from u1db import Document, errors
@@ -35,18 +37,35 @@ class SQLiteDatabase(CommonBackend):
     def get_sync_target(self):
         return SQLiteSyncTarget(self)
 
-    @staticmethod
-    def open_database(sqlite_file):
-        # TODO: We really want a way to indicate that the database must already
-        # exist.
+    @classmethod
+    def _which_index_storage(cls, c):
+        try:
+            c.execute("SELECT value FROM u1db_config"
+                      " WHERE name = 'index_storage'")
+        except dbapi2.OperationalError, e:
+            # The table does not exist yet
+            return None, e
+        else:
+            return c.fetchone()[0], None
+
+    @classmethod
+    def open_database(cls, sqlite_file):
+        if not os.path.isfile(sqlite_file):
+            raise errors.DatabaseDoesNotExist()
+        tries = 2
         db_handle = dbapi2.connect(sqlite_file)
         c = db_handle.cursor()
-        c.execute("SELECT value FROM u1db_config WHERE name = 'index_storage'")
-        v = c.fetchone()
-        # if v is None:
-        #     raise ValueError('No defined index_storage for database %s'
-        #                      % (sqlite_file,))
-        return SQLiteDatabase._sqlite_registry[v[0]](sqlite_file)
+        while tries:
+            v, err = cls._which_index_storage(c)
+            if v is not None:
+                break
+            # possibly another process is initializing it, wait for it to be
+            # done
+            tries -= 1
+            time.sleep(0.5)
+        else:
+            raise err # go for the richest error?
+        return SQLiteDatabase._sqlite_registry[v](sqlite_file)
 
     @staticmethod
     def register_implementation(klass):
