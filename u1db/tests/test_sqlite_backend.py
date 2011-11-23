@@ -255,6 +255,20 @@ class TestSQLitePartialExpandDatabase(tests.TestCase):
         self.assertRaises(dbapi2.DatabaseError,
                           sqlite_backend.SQLiteDatabase.open_database, path1)
 
+    def test_ensure_database_existing(self):
+        temp_dir = self.createTempDir(prefix='u1db-test-')
+        path = temp_dir + '/existing.sqlite'
+        db = sqlite_backend.SQLitePartialExpandDatabase(path)
+        db2 = sqlite_backend.SQLiteDatabase.ensure_database(path)
+        self.assertIsInstance(db2, sqlite_backend.SQLitePartialExpandDatabase)
+
+    def test_ensure_database_create(self):
+        temp_dir = self.createTempDir(prefix='u1db-test-')
+        path = temp_dir + '/new.sqlite'
+        db = sqlite_backend.SQLiteDatabase.ensure_database(path)
+        db2 = sqlite_backend.SQLiteDatabase.open_database(path)
+        self.assertIsInstance(db2, sqlite_backend.SQLitePartialExpandDatabase)
+
     def assertTransform(self, sql_value, value):
         transformed = sqlite_backend.SQLiteDatabase._transform_glob(value)
         self.assertEqual(sql_value, transformed)

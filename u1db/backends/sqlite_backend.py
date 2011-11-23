@@ -67,6 +67,15 @@ class SQLiteDatabase(CommonBackend):
             raise err # go for the richest error?
         return SQLiteDatabase._sqlite_registry[v](sqlite_file)
 
+    @classmethod
+    def ensure_database(cls, sqlite_file, backend_cls=None):
+        try:
+            return cls.open_database(sqlite_file)
+        except errors.DatabaseDoesNotExist:
+            if backend_cls is None:
+                backend_cls = SQLitePartialExpandDatabase # default
+            return backend_cls(sqlite_file)
+
     @staticmethod
     def register_implementation(klass):
         """Register that we implement an SQLiteDatabase.
