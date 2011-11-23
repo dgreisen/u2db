@@ -166,10 +166,13 @@ class InMemoryDatabase(CommonBackend):
         return (len(self._transaction_log),
                 set(self._transaction_log[old_generation:]))
 
-    def force_doc_sync_conflict(self, doc_id, doc_rev, doc):
-        my_doc_rev, my_doc = self._docs[doc_id]
-        self._conflicts.setdefault(doc_id, []).append((my_doc_rev, my_doc))
-        self._put_and_update_indexes(doc_id, my_doc, doc_rev, doc)
+    def force_doc_sync_conflict(self, doc):
+        my_doc_rev, my_content = self._docs[doc.doc_id]
+        self._conflicts.setdefault(doc.doc_id, []).append(
+            (my_doc_rev, my_content))
+        doc.has_conflicts = True
+        self._put_and_update_indexes(doc.doc_id, my_content, doc.rev,
+                                     doc.content)
 
 
 class InMemoryIndex(object):

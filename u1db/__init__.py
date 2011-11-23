@@ -98,15 +98,15 @@ class Database(object):
         """
         raise NotImplementedError(self.put_docs)
 
-    def force_doc_sync_conflict(self, doc_id, doc_rev, doc):
+    def force_doc_sync_conflict(self, doc):
         """Update documents even though they should conflict.
 
         This is used for synchronization, and should generally not be used by
         clients.
 
-        The content will be selected as the 'current' content for doc_id, even
-        though doc_rev may not supersede the currently stored revision.  The
-        currently stored document will be added to the list of conflict
+        The content will be selected as the 'current' content for doc.doc_id,
+        even though doc.rev may not supersede the currently stored revision.
+        The currently stored document will be added to the list of conflict
         alternatives for the given doc_id.
 
         The reason this forces the new content to be 'current' is so that we
@@ -116,9 +116,7 @@ class Database(object):
         synchronize and think the data has propagated, but their local copy
         looks fine, and the remote copy is never updated again.)
 
-        :param doc_id: The indentifier for this document
-        :param doc_rev: The document revision for this document
-        :param doc: The JSON string for the document.
+        :param doc: A Document
         :return: None
         """
         raise NotImplementedError(self.force_doc_sync_conflict)
