@@ -60,8 +60,7 @@ class Synchronizer(object):
             assert state == 'conflicted'
             # take doc as the official value, stores the current
             # alongside as conflict
-            self.source.force_doc_sync_conflict(doc.doc_id, doc.rev,
-                                                doc.content)
+            self.source.force_doc_sync_conflict(doc)
             self.num_inserted += 1
 
     def _record_sync_info_with_the_target(self, start_generation):

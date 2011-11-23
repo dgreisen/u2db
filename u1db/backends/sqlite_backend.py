@@ -368,16 +368,18 @@ class SQLiteDatabase(CommonBackend):
         with self._db_handle:
             return super(SQLiteDatabase, self).put_doc_if_newer(doc)
 
-    def _add_conflict(self, c, doc_id, my_doc_rev, my_doc):
+    def _add_conflict(self, c, doc_id, my_doc_rev, my_content):
         c.execute("INSERT INTO conflicts VALUES (?, ?, ?)",
-                  (doc_id, my_doc_rev, my_doc))
+                  (doc_id, my_doc_rev, my_content))
 
-    def force_doc_sync_conflict(self, doc_id, doc_rev, doc):
+    def force_doc_sync_conflict(self, doc):
         with self._db_handle:
-            my_doc = self._get_doc(doc_id)
+            my_doc = self._get_doc(doc.doc_id)
             c = self._db_handle.cursor()
-            self._add_conflict(c, doc_id, my_doc.rev, my_doc.content)
-            self._put_and_update_indexes(doc_id, my_doc.content, doc_rev, doc)
+            self._add_conflict(c, doc.doc_id, my_doc.rev, my_doc.content)
+            doc.has_conflicts = True
+            self._put_and_update_indexes(doc.doc_id, my_doc.content, doc.rev,
+                                         doc.content)
 
     def resolve_doc(self, doc_id, doc, conflicted_doc_revs):
         with self._db_handle:
