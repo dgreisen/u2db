@@ -381,22 +381,23 @@ class SQLiteDatabase(CommonBackend):
             self._put_and_update_indexes(doc.doc_id, my_doc.content, doc.rev,
                                          doc.content)
 
-    def resolve_doc(self, doc_id, doc, conflicted_doc_revs):
+    def resolve_doc(self, doc, conflicted_doc_revs):
         with self._db_handle:
-            cur_doc = self._get_doc(doc_id)
+            cur_doc = self._get_doc(doc.doc_id)
             new_rev = self._ensure_maximal_rev(cur_doc.rev, conflicted_doc_revs)
             superseded_revs = set(conflicted_doc_revs)
-            cur_conflicts = self._get_conflicts(doc_id)
+            cur_conflicts = self._get_conflicts(doc.doc_id)
             c = self._db_handle.cursor()
             if cur_doc.rev in superseded_revs:
-                self._put_and_update_indexes(doc_id, cur_doc.content,
-                                             new_rev, doc)
+                self._put_and_update_indexes(doc.doc_id, cur_doc.content,
+                                             new_rev, doc.content)
             else:
-                self._add_conflict(c, doc_id, new_rev, doc)
-            deleting = [(doc_id, c_rev) for c_rev in superseded_revs]
+                self._add_conflict(c, doc.doc_id, new_rev, doc.content)
+            deleting = [(doc.doc_id, c_rev) for c_rev in superseded_revs]
             c.executemany("DELETE FROM conflicts"
                           " WHERE doc_id=? AND doc_rev=?", deleting)
-            return new_rev, self._has_conflicts(doc_id)
+            doc.rev = new_rev
+            doc.has_conflicts = self._has_conflicts(doc.doc_id)
 
     def create_index(self, index_name, index_expression):
         with self._db_handle:

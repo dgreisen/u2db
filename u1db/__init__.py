@@ -187,8 +187,9 @@ class Database(object):
         """
         raise NotImplementedError(self.get_doc_conflicts)
 
-    def resolve_doc(self, doc_id, doc, conflicted_doc_revs):
+    def resolve_doc(self, doc, conflicted_doc_revs):
         """Mark a document as no longer conflicted.
+
         We take the list of revisions that the client knows about that it is
         superseding. This may be a different list from the actual current
         conflicts, in which case only those are removed as conflicted.  This
@@ -196,7 +197,11 @@ class Database(object):
         supplied information. (sync could have happened in the background from
         the time you GET_DOC_CONFLICTS until the point where you RESOLVE)
 
-        :return: (new_rev, still_conflicted)
+        :param doc: A Document with the new content to be inserted.
+        :param conflicted_doc_revs: A list of revisions that the new content
+            supersedes.
+        :return: None, doc will be updated with the new revision and
+            has_conflict flags.
         """
         raise NotImplementedError(self.resolve_doc)
 

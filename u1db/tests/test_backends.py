@@ -18,6 +18,7 @@ from u1db import (
     Document,
     errors,
     tests,
+    vectorclock,
     )
 
 
@@ -107,6 +108,113 @@ class LocalDatabaseTests(tests.DatabaseBaseTests):
                     Document(doc2.doc_id, doc2.rev, nested_doc)]),
             sorted(self.db.get_docs([doc1.doc_id, doc2.doc_id],
                                     check_for_conflicts=False)))
+
+    def test_resolve_doc_picks_biggest_vcr(self):
+        doc1 = self.db.create_doc(simple_doc)
+        doc2 = Document(doc1.doc_id, 'alternate:1', nested_doc)
+        self.db.force_doc_sync_conflict(doc2)
+        self.assertEqual([(doc2.rev, nested_doc),
+                          (doc1.rev, simple_doc)],
+                         self.db.get_doc_conflicts(doc1.doc_id))
+        orig_doc1_rev = doc1.rev
+        self.db.resolve_doc(doc1, [doc2.rev, doc1.rev])
+        self.assertFalse(doc1.has_conflicts)
+        self.assertNotEqual(orig_doc1_rev, doc1.rev)
+        self.assertGetDoc(self.db, doc1.doc_id, doc1.rev, simple_doc, False)
+        self.assertEqual([], self.db.get_doc_conflicts(doc1.doc_id))
+        vcr_1 = vectorclock.VectorClockRev(orig_doc1_rev)
+        vcr_2 = vectorclock.VectorClockRev(doc2.rev)
+        vcr_new = vectorclock.VectorClockRev(doc1.rev)
+        self.assertTrue(vcr_new.is_newer(vcr_1))
+        self.assertTrue(vcr_new.is_newer(vcr_2))
+
+    def test_resolve_doc_partial_not_winning(self):
+        doc1 = self.db1.create_doc(simple_doc)
+        doc_id = doc1.doc_id
+        content2 = '{"key": "valin2"}'
+        doc2 = self.db2.create_doc(content2, doc_id=doc_id)
+        self.sync(self.db1, self.db2)
+        self.assertEqual([(doc2.rev, content2),
+                          (doc1.rev, simple_doc)],
+                         self.db1.get_doc_conflicts(doc_id))
+        self.db3 = self.create_database('test3')
+        content3 = '{"key": "valin3"}'
+        doc3 = self.db3.create_doc(content3, doc_id=doc_id)
+        self.sync(self.db1, self.db3)
+        self.assertEqual([(doc3.rev, content3),
+                          (doc1.rev, simple_doc),
+                          (doc2.rev, content2)],
+                         self.db1.get_doc_conflicts(doc_id))
+        new_rev, has_conflicts = self.db1.resolve_doc(doc_id, simple_doc,
+                                                     [doc2.rev, doc1.rev])
+        self.assertTrue(has_conflicts)
+        self.assertGetDoc(self.db1, doc_id, doc3.rev, content3, True)
+        self.assertEqual([(doc3.rev, content3), (new_rev, simple_doc)],
+                         self.db1.get_doc_conflicts(doc_id))
+
+    def test_resolve_doc_partial_winning(self):
+        doc1 = self.db1.create_doc(simple_doc)
+        doc_id = doc1.doc_id
+        content2 = '{"key": "valin2"}'
+        doc2 = self.db2.create_doc(content2, doc_id=doc_id)
+        self.sync(self.db1, self.db2)
+        self.db3 = self.create_database('test3')
+        content3 = '{"key": "valin3"}'
+        doc3 = self.db3.create_doc(content3, doc_id=doc_id)
+        self.sync(self.db1, self.db3)
+        self.assertEqual([(doc3.rev, content3),
+                          (doc1.rev, simple_doc),
+                          (doc2.rev, content2)],
+                         self.db1.get_doc_conflicts(doc_id))
+        new_rev, has_conflicts = self.db1.resolve_doc(doc_id, simple_doc,
+                                                     [doc3.rev, doc1.rev])
+        self.assertTrue(has_conflicts)
+        self.assertEqual([(new_rev, simple_doc),
+                          (doc2.rev, content2)],
+                         self.db1.get_doc_conflicts(doc_id))
+    def test_resolve_doc(self):
+        doc = self.db.create_doc(simple_doc)
+        alt_doc = Document(doc.doc_id, 'alternate:1', nested_doc)
+        self.db.force_doc_sync_conflict(alt_doc)
+        self.assertEqual([('alternate:1', nested_doc),
+                          (doc.rev, simple_doc)],
+                         self.db.get_doc_conflicts(doc.doc_id))
+        orig_rev = doc.rev
+        self.db.resolve_doc(doc, [alt_doc.rev, doc.rev])
+        self.assertNotEqual(orig_rev, doc.rev)
+        self.assertFalse(doc.has_conflicts)
+        self.assertGetDoc(self.db, doc.doc_id, doc.rev, simple_doc, False)
+        self.assertEqual([], self.db.get_doc_conflicts(doc.doc_id))
+
+    def test_resolve_doc_more_conflicts(self):
+        doc1 = self.db.create_doc(simple_doc)
+        doc2 = Document(doc1.doc_id, 'alternate:1', nested_doc)
+        self.db.force_doc_sync_conflict(doc2)
+        self.assertEqual([('alternate:1', nested_doc),
+                          (doc1.rev, simple_doc)],
+                         self.db.get_doc_conflicts(doc1.doc_id))
+        content3 = '{"third": "doc"}'
+        doc3 = Document(doc1.doc_id, 'bbb:1', content3)
+        self.db.force_doc_sync_conflict(doc3)
+        doc_conflicts = self.db.get_doc_conflicts(doc1.doc_id)
+        # The first one must be the current content, the rest are unsorted
+        self.assertEqual(('bbb:1', content3), doc_conflicts[0])
+        self.assertEqual(sorted([('alternate:1', nested_doc),
+                                 (doc1.rev, simple_doc)]),
+                         sorted(doc_conflicts[1:]))
+        content_res = '{"resolve": "content"}'
+        doc_res = Document(doc1.doc_id, None, content_res)
+        self.db.resolve_doc(doc_res, [doc2.rev, doc1.rev])
+        self.assertIsNot(None, doc_res.rev)
+        self.assertTrue(doc_res.has_conflicts)
+        # We did not resolve the document that was marked 'current', so the
+        # existing current value is preserved.
+        self.assertGetDoc(self.db, doc1.doc_id, doc3.rev, content3, True)
+        self.assertEqual([('bbb:1', content3),
+                          (doc_res.rev, content_res)],
+                         self.db.get_doc_conflicts(doc1.doc_id))
+        self.db.resolve_doc(doc_res, [doc3.rev, doc_res.rev])
+        self.assertEqual([], self.db.get_doc_conflicts(doc1.doc_id))
 
     def test_get_docs_empty_list(self):
         self.assertEqual([], self.db.get_docs([]))

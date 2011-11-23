@@ -110,25 +110,27 @@ class InMemoryDatabase(CommonBackend):
         result.extend(self._conflicts[doc_id])
         return result
 
-    def resolve_doc(self, doc_id, doc, conflicted_doc_revs):
-        cur_rev, cur_doc = self._docs[doc_id]
+    def resolve_doc(self, doc, conflicted_doc_revs):
+        cur_rev, cur_content = self._docs[doc.doc_id]
         new_rev = self._ensure_maximal_rev(cur_rev, conflicted_doc_revs)
         superseded_revs = set(conflicted_doc_revs)
         remaining_conflicts = []
-        cur_conflicts = self._conflicts[doc_id]
+        cur_conflicts = self._conflicts[doc.doc_id]
         for c_rev, c_doc in cur_conflicts:
             if c_rev in superseded_revs:
                 continue
             remaining_conflicts.append((c_rev, c_doc))
         if cur_rev in superseded_revs:
-            self._put_and_update_indexes(doc_id, cur_doc, new_rev, doc)
+            self._put_and_update_indexes(doc.doc_id, cur_content, new_rev,
+                                         doc.content)
         else:
-            remaining_conflicts.append((new_rev, doc))
+            remaining_conflicts.append((new_rev, doc.content))
         if not remaining_conflicts:
-            del self._conflicts[doc_id]
+            del self._conflicts[doc.doc_id]
         else:
-            self._conflicts[doc_id] = remaining_conflicts
-        return new_rev, bool(remaining_conflicts)
+            self._conflicts[doc.doc_id] = remaining_conflicts
+        doc.rev = new_rev
+        doc.has_conflicts = bool(remaining_conflicts)
 
     def delete_doc(self, doc_id, doc_rev):
         if doc_id not in self._docs:
