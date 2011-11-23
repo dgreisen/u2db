@@ -78,3 +78,21 @@ class TestHTTPDatabaseSimpleOperations(tests.TestCase):
         self.assertGetDoc(self.db, 'doc-id', 'doc-rev', '{"v": 2}', False)
         self.assertEqual(('GET', ['doc', 'doc-id'], None, None, None),
                          self.got)
+
+    def test_create_doc_with_id(self):
+        self.response_val = {'rev': 'doc-rev'}, {}
+        new_doc = self.db.create_doc('{"v": 1}', doc_id='doc-id')
+        self.assertEqual('doc-rev', new_doc.rev)
+        self.assertEqual('doc-id', new_doc.doc_id)
+        self.assertEqual('{"v": 1}', new_doc.content)
+        self.assertEqual(('PUT', ['doc', 'doc-id'], {},
+                          '{"v": 1}', 'application/json'), self.got)
+
+    def test_create_doc_without_id(self):
+        self.response_val = {'rev': 'doc-rev-2', 'id': 'fresh-id'}, {}
+        new_doc = self.db.create_doc('{"v": 3}')
+        self.assertEqual('doc-rev-2', new_doc.rev)
+        self.assertEqual('fresh-id', new_doc.doc_id)
+        self.assertEqual('{"v": 3}', new_doc.content)
+        self.assertEqual(('POST', ['doc', ''], {},
+                          '{"v": 3}', 'application/json'), self.got)

@@ -38,7 +38,6 @@ class HTTPDatabase(http_client.HTTPClientBase, Database):
         doc.rev = res['rev']
         return res['rev']
 
-
     def get_doc(self, doc_id):
         res, headers = self._request('GET', ['doc', doc_id])
         doc_rev = headers['x-u1db-rev']
@@ -46,3 +45,14 @@ class HTTPDatabase(http_client.HTTPClientBase, Database):
         doc = Document(doc_id, doc_rev, res)
         doc.has_conflicts = has_conflicts
         return doc
+
+    def create_doc(self, content, doc_id=None):
+        if doc_id is not None:
+            res, headers = self._request_json('PUT', ['doc', doc_id], {},
+                                              content, 'application/json')
+        else:
+            res, headers = self._request_json('POST', ['doc', ''], {},
+                                              content, 'application/json')
+            doc_id = res['id']
+        new_doc = Document(doc_id, res['rev'], content)
+        return new_doc

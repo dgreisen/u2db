@@ -47,17 +47,6 @@ class AllDatabaseTests(tests.DatabaseBaseTests, tests.TestCaseWithServer):
                   'server_def': http_server_def}),
         ]
 
-    def test_put_doc_creating_initial(self):
-        doc = Document('my_doc_id', None, simple_doc)
-        new_rev = self.db.put_doc(doc)
-        self.assertGetDoc(self.db, 'my_doc_id', new_rev, simple_doc, False)
-
-
-class LocalDatabaseTests(tests.DatabaseBaseTests):
-
-    def test_close(self):
-        self.db.close()
-
     def test_create_doc_allocating_doc_id(self):
         doc = self.db.create_doc(simple_doc)
         self.assertNotEqual(None, doc.doc_id)
@@ -69,6 +58,17 @@ class LocalDatabaseTests(tests.DatabaseBaseTests):
         self.assertEqual('my-id', doc.doc_id)
         self.assertNotEqual(None, doc.rev)
         self.assertGetDoc(self.db, doc.doc_id, doc.rev, simple_doc, False)
+
+    def test_put_doc_creating_initial(self):
+        doc = Document('my_doc_id', None, simple_doc)
+        new_rev = self.db.put_doc(doc)
+        self.assertGetDoc(self.db, 'my_doc_id', new_rev, simple_doc, False)
+
+
+class LocalDatabaseTests(tests.DatabaseBaseTests):
+
+    def test_close(self):
+        self.db.close()
 
     def test_create_doc_existing_id(self):
         doc = self.db.create_doc(simple_doc)
