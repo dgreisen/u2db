@@ -15,7 +15,6 @@
 """Test sqlite backend internals."""
 
 import os
-import tempfile
 import time
 import threading
 import shutil
@@ -72,7 +71,7 @@ class TestSQLiteDatabase(tests.TestCase):
         db1 = SQLiteDatabaseTesting(dbname, 1)
         t2.join()
 
-        self.assertTrue(isinstance(outcome2[0], SQLiteDatabaseTesting))
+        self.assertIsInstance(outcome2[0], SQLiteDatabaseTesting)
         db2 = outcome2[0]
         self.assertTrue(db2._is_initialized(db1._get_sqlite_handle().cursor()))
 
@@ -211,8 +210,7 @@ class TestSQLitePartialExpandDatabase(tests.TestCase):
                          ], c.fetchall())
 
     def test_open_database(self):
-        temp_dir = tempfile.mkdtemp(prefix='u1db-test-')
-        self.addCleanup(shutil.rmtree, temp_dir)
+        temp_dir = self.createTempDir(prefix='u1db-test-')
         path = temp_dir + '/test.sqlite'
         db = sqlite_backend.SQLitePartialExpandDatabase(path)
         db2 = sqlite_backend.SQLiteDatabase.open_database(path)
