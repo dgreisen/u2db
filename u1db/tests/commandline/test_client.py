@@ -99,7 +99,7 @@ class TestCaseWithDB(tests.TestCase):
         super(TestCaseWithDB, self).setUp()
         self.working_dir = self.createTempDir()
         self.db_path = self.working_dir + '/test.db'
-        self.db = sqlite_backend.SQLitePartialExpandDatabase(self.db_path)
+        self.db = sqlite_backend.SQLiteDatabase.open_database(self.db_path)
         self.db._set_replica_uid('test')
         self.addCleanup(self.db.close)
 
@@ -174,7 +174,7 @@ class TestCmdSync(TestCaseWithDB):
     def setUp(self):
         super(TestCmdSync, self).setUp()
         self.db2_path = self.working_dir + '/test2.db'
-        self.db2 = sqlite_backend.SQLitePartialExpandDatabase(self.db2_path)
+        self.db2 = sqlite_backend.SQLiteDatabase.open_database(self.db2_path)
         self.addCleanup(self.db2.close)
         self.db2._set_replica_uid('test2')
         self.doc  = self.db.create_doc(tests.simple_doc, doc_id='test-id')
@@ -279,7 +279,7 @@ class TestCommandLine(TestCaseWithDB):
     def test_sync(self):
         doc = self.db.create_doc(tests.simple_doc, doc_id='test-id')
         self.db2_path = self.working_dir + '/test2.db'
-        self.db2 = sqlite_backend.SQLitePartialExpandDatabase(self.db2_path)
+        self.db2 = sqlite_backend.SQLiteDatabase.open_database(self.db2_path)
         self.addCleanup(self.db2.close)
         ret, stdout, stderr = self.run_main(
             ['sync', self.db_path, self.db2_path])
