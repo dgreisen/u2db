@@ -117,7 +117,8 @@ class LocalDatabaseTests(tests.DatabaseBaseTests):
         self.assertGetDoc(self.db, 'my_doc_id', new_rev, simple_doc, False)
 
     def test_simple_put_doc_if_newer(self):
-        state = self.db.put_doc_if_newer('my-doc-id', 'test:1', simple_doc)
+        doc = Document('my-doc-id', 'test:1', simple_doc)
+        state = self.db.put_doc_if_newer(doc)
         self.assertEqual('inserted', state)
         self.assertGetDoc(self.db, 'my-doc-id', 'test:1', simple_doc, False)
 
@@ -128,20 +129,22 @@ class LocalDatabaseTests(tests.DatabaseBaseTests):
         doc1.content = simple_doc
         doc1_rev2 = self.db.put_doc(doc1)
         # Nothing is inserted, because the document is already superseded
-        state = self.db.put_doc_if_newer(doc1.doc_id, doc1_rev1, orig_doc)
+        doc = Document(doc1.doc_id, doc1_rev1, orig_doc)
+        state = self.db.put_doc_if_newer(doc)
         self.assertEqual('superseded', state)
         self.assertGetDoc(self.db, doc1.doc_id, doc1_rev2, simple_doc, False)
 
     def test_put_doc_if_newer_already_converged(self):
         orig_doc = '{"new": "doc"}'
         doc1 = self.db.create_doc(orig_doc)
-        state = self.db.put_doc_if_newer(doc1.doc_id, doc1.rev, orig_doc)
+        state = self.db.put_doc_if_newer(doc1)
         self.assertEqual('converged', state)
 
     def test_put_doc_if_newer_conflicted(self):
         doc1 = self.db.create_doc(simple_doc)
         # Nothing is inserted, the document id is returned as would-conflict
-        state = self.db.put_doc_if_newer(doc1.doc_id, 'alternate:1', nested_doc)
+        alt_doc = Document(doc1.doc_id, 'alternate:1', nested_doc)
+        state = self.db.put_doc_if_newer(alt_doc)
         self.assertEqual('conflicted', state)
         # The database wasn't altered
         self.assertGetDoc(self.db, doc1.doc_id, doc1.rev, simple_doc, False)

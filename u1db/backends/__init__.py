@@ -72,9 +72,9 @@ class CommonBackend(u1db.Database):
             result.append(doc)
         return result
 
-    def put_doc_if_newer(self, doc_id, doc_rev, doc):
-        cur_doc = self._get_doc(doc_id)
-        doc_vcr = VectorClockRev(doc_rev)
+    def put_doc_if_newer(self, doc):
+        cur_doc = self._get_doc(doc.doc_id)
+        doc_vcr = VectorClockRev(doc.rev)
         if cur_doc is None:
             cur_vcr = VectorClockRev(None)
             cur_content = None
@@ -82,9 +82,10 @@ class CommonBackend(u1db.Database):
             cur_vcr = VectorClockRev(cur_doc.rev)
             cur_content = cur_doc.content
         if doc_vcr.is_newer(cur_vcr):
-            self._put_and_update_indexes(doc_id, cur_content, doc_rev, doc)
+            self._put_and_update_indexes(doc.doc_id, cur_content, doc.rev,
+                                         doc.content)
             return 'inserted'
-        elif doc_rev == cur_doc.rev:
+        elif doc.rev == cur_doc.rev:
             # magical convergence
             return 'converged'
         elif cur_vcr.is_newer(doc_vcr):

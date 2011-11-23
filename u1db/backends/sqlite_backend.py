@@ -334,10 +334,9 @@ class SQLiteDatabase(CommonBackend):
             c.execute("INSERT OR REPLACE INTO sync_log VALUES (?, ?)",
                       (other_replica_uid, other_generation))
 
-    def put_doc_if_newer(self, doc_id, doc_rev, doc):
+    def put_doc_if_newer(self, doc):
         with self._db_handle:
-            return super(SQLiteDatabase, self).put_doc_if_newer(
-                doc_id, doc_rev, doc)
+            return super(SQLiteDatabase, self).put_doc_if_newer(doc)
 
     def _add_conflict(self, c, doc_id, my_doc_rev, my_doc):
         c.execute("INSERT INTO conflicts VALUES (?, ?, ?)",
