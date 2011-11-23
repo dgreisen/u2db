@@ -16,7 +16,6 @@ import cStringIO
 import os
 import sys
 import subprocess
-import time
 
 from u1db import (
     __version__ as _u1db_version,
