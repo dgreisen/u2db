@@ -79,14 +79,12 @@ class Database(object):
         """
         raise NotImplementedError(self.put_doc)
 
-    def put_doc_if_newer(self, doc_id, doc_rev, doc):
+    def put_doc_if_newer(self, doc):
         """Insert/update document into the database with a given revision.
 
         This api is used during synchronization operations.
 
-        :param doc_id: The unique handle for a document.
-        :param doc_rev: The document revision to try to store.
-        :param doc: The actual JSON document string.
+        :param doc: A Document object
         :return: state -  If we don't have doc_id already, or if doc_rev
             supersedes the existing document revision, then the content will
             be inserted, and state is 'inserted'.
@@ -96,7 +94,7 @@ class Database(object):
             If doc_rev is not strictly superseded or supersedes, then
             state is 'conflicted' and again the document is not inserted.
         """
-        raise NotImplementedError(self.put_docs)
+        raise NotImplementedError(self.put_doc_if_newer)
 
     def force_doc_sync_conflict(self, doc_id, doc_rev, doc):
         """Update documents even though they should conflict.
