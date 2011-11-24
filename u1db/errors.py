@@ -18,6 +18,8 @@
 class U1DBError(Exception):
     """Generic base class for U1DB errors."""
 
+    wire_description = "error"
+
     def __init__(self, message=None):
         if message is not None:
             args = (message,)
@@ -29,6 +31,8 @@ class U1DBError(Exception):
 
 class RevisionConflict(U1DBError):
     """The document revisions supplied does not match the current version."""
+
+    wire_description = "revision conflict"
 
 
 class InvalidDocId(U1DBError):
@@ -49,3 +53,9 @@ class InvalidValueForIndex(U1DBError):
 
 class DatabaseDoesNotExist(U1DBError):
     """The database does not exist."""
+
+
+wire_description_to_exc = dict((x.wire_description, x)
+                                   for x in globals().values()
+                                   if isinstance(x, type) and
+                                      issubclass(x, U1DBError))

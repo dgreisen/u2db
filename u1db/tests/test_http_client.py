@@ -18,10 +18,11 @@ import simplejson
 from wsgiref import simple_server
 
 from u1db import (
+    errors,
     tests,
     )
 from u1db.remote import (
-    http_client
+    http_client,
     )
 
 
@@ -38,6 +39,12 @@ class TestHTTPClientBase(tests.TestCaseWithServer):
                 content_length = int(environ['CONTENT_LENGTH'])
                 ret['body'] = environ['wsgi.input'].read(content_length)
             return [simplejson.dumps(ret)]
+        elif environ['PATH_INFO'].endswith('error'):
+            content_length = int(environ['CONTENT_LENGTH'])
+            error = simplejson.loads(environ['wsgi.input'].read(content_length))
+            start_response(error['status'],
+                           [('Content-Type', 'application/json')])
+            return [simplejson.dumps(error['response'])]
 
     def server_def(self):
         def make_server(host_port, handler, state):
@@ -115,3 +122,10 @@ class TestHTTPClientBase(tests.TestCaseWithServer):
                           'QUERY_STRING': 'b=2',
                           'body': '{"a": "x"}',
                           'REQUEST_METHOD': 'POST'}, res)
+
+    def test_revision_conflict(self):
+        cli = self.getClient()
+        self.assertRaises(errors.RevisionConflict,
+                          cli._request_json, 'POST', ['error'], {},
+                          {'status': "409 Conflict",
+                           'response': {"error": "revision conflict"}})

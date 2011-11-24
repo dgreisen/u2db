@@ -19,6 +19,10 @@ import simplejson
 import urlparse
 import urllib
 
+from u1db import (
+    errors,
+    )
+
 
 class HTTPClientBase(object):
     """Base class to make requests to a remote HTTP server."""
@@ -44,9 +48,14 @@ class HTTPClientBase(object):
         resp = self._conn.getresponse()
         if resp.status in (200, 201):
             return resp.read(), dict(resp.getheaders())
-        else:
-            # xxx raise the proper exceptions depending on status
-            raise Exception(resp.status)
+        elif resp.status in (409,):
+            respdic = simplejson.loads(resp.read())
+            exc_cls = errors.wire_description_to_exc.get(respdic.get("error"))
+            if exc_cls is not None:
+                message = respdic.get("message")
+                raise exc_cls(message)
+        # xxx raise the proper exceptions depending on status
+        raise Exception(resp.status)
 
     def _request(self, method, url_parts, params=None, body=None,
                                                        content_type=None):

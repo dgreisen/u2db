@@ -25,6 +25,8 @@ class TestError(tests.TestCase):
     def test_error_base(self):
         err = errors.U1DBError()
         self.assertEqual(None, err.message)
+        self.assertEqual("error", err.wire_description)
 
         err = errors.U1DBError("Message.")
         self.assertEqual("Message.", err.message)
+        self.assertEqual("error", err.wire_description)

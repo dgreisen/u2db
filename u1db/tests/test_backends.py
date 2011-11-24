@@ -59,6 +59,13 @@ class AllDatabaseTests(tests.DatabaseBaseTests, tests.TestCaseWithServer):
         self.assertNotEqual(None, doc.rev)
         self.assertGetDoc(self.db, doc.doc_id, doc.rev, simple_doc, False)
 
+    def test_create_doc_existing_id(self):
+        doc = self.db.create_doc(simple_doc)
+        new_content = '{"something": "else"}'
+        self.assertRaises(errors.RevisionConflict, self.db.create_doc,
+                          new_content, doc.doc_id)
+        self.assertGetDoc(self.db, doc.doc_id, doc.rev, simple_doc, False)
+
     def test_put_doc_creating_initial(self):
         doc = Document('my_doc_id', None, simple_doc)
         new_rev = self.db.put_doc(doc)
@@ -69,13 +76,6 @@ class LocalDatabaseTests(tests.DatabaseBaseTests):
 
     def test_close(self):
         self.db.close()
-
-    def test_create_doc_existing_id(self):
-        doc = self.db.create_doc(simple_doc)
-        new_content = '{"something": "else"}'
-        self.assertRaises(errors.RevisionConflict, self.db.create_doc,
-                          new_content, doc.doc_id)
-        self.assertGetDoc(self.db, doc.doc_id, doc.rev, simple_doc, False)
 
     def test_put_doc_refuses_no_id(self):
         doc = Document(None, None, simple_doc)
