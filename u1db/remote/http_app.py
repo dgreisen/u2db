@@ -21,6 +21,8 @@ import simplejson
 import sys
 import urlparse
 
+import routes.mapper
+
 from u1db import (
     __version__ as _u1db_version,
     Document,
@@ -132,8 +134,34 @@ def http_method(**control):
     return wrap
 
 
+class URLToResource(object):
+    """Mappings from URLs to resources."""
+
+    def __init__(self):
+        self._map = routes.mapper.Mapper(controller_scan=None)
+
+    def register(self, resource_cls):
+        # register
+        self._map.connect(None, resource_cls.url_pattern,
+                          resource_cls=resource_cls)
+        self._map.create_regs()
+        return resource_cls
+
+    def match(self, path):
+        params = self._map.match(path)
+        if params is None:
+            return None, None
+        resource_cls = params.pop('resource_cls')
+        return resource_cls, params
+
+url_to_resource = URLToResource()
+
+
+@url_to_resource.register
 class GlobalResourse(object):
     """Global (root) resource."""
+
+    url_pattern = "/"
 
     def __init__(self, state, responder):
         self.responder = responder
@@ -142,9 +170,11 @@ class GlobalResourse(object):
     def get(self):
         self.responder.send_response(version=_u1db_version)
 
-
+@url_to_resource.register
 class DocResource(object):
     """Document resource."""
+
+    url_pattern = "/{dbname}/doc/{id:.*}"
 
     def __init__(self, dbname, id, state, responder):
         self.id = id
@@ -169,9 +199,11 @@ class DocResource(object):
             'x-u1db-has-conflicts': simplejson.dumps(doc.has_conflicts)
             })
 
-
+@url_to_resource.register
 class SyncResource(object):
     """Sync endpoint resource."""
+
+    url_pattern = "/{dbname}/sync-from/{from_replica_uid}"
 
     def __init__(self, dbname, from_replica_uid, state, responder):
         self.from_replica_uid = from_replica_uid
@@ -334,16 +366,10 @@ class HTTPApp(object):
         self.state = state
 
     def _lookup_resource(self, environ, responder):
-        # xxx proper dispatch logic
-        parts = environ['PATH_INFO'].split('/')
-        if parts == ['', '']:
-            resource = GlobalResourse(self.state, responder)
-        elif len(parts) == 4 and parts[2] == 'doc':
-            resource = DocResource(parts[1], parts[3], self.state, responder)
-        elif len(parts) == 4 and parts[2] == 'sync-from':
-            resource = SyncResource(parts[1], parts[3], self.state, responder)
-        else:
-            raise BadRequest()
+        resource_cls, params = url_to_resource.match(environ['PATH_INFO'])
+        if resource_cls is None:
+            raise BadRequest # 404 instead?
+        resource = resource_cls(state=self.state, responder=responder, **params)
         return resource
 
     def __call__(self, environ, start_response):
