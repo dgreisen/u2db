@@ -18,8 +18,16 @@
 class U1DBError(Exception):
     """Generic base class for U1DB errors."""
 
+    def __init__(self, message=None):
+        if message is not None:
+            args = (message,)
+        else:
+            args = ()
+        super(Exception, self).__init__(*args)
+        self.message = message
 
-class InvalidDocRev(U1DBError):
+
+class RevisionConflict(U1DBError):
     """The document revisions supplied does not match the current version."""
 
 
