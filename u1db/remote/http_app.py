@@ -143,7 +143,7 @@ class URLToResource(object):
     def register(self, resource_cls):
         # register
         self._map.connect(None, resource_cls.url_pattern,
-                                                     resource_cls=resource_cls)
+                          resource_cls=resource_cls)
         self._map.create_regs()
         return resource_cls
 
