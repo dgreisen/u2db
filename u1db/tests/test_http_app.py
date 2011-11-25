@@ -551,6 +551,26 @@ class TestHTTPAppErrorHandling(tests.TestCase):
         application._lookup_resource = lookup_resource
         self.app = paste.fixture.TestApp(application)
 
+    def test_DocumentDoesNotExist(self):
+        self.exc = errors.DocumentDoesNotExist()
+        resp = self.app.post('/req', params='{}',
+                             headers={'content-type': 'application/json'},
+                             expect_errors=True)
+        self.assertEqual(404, resp.status)
+        self.assertEqual('application/json', resp.header('content-type'))
+        self.assertEqual({"error": "document does not exist"},
+                         simplejson.loads(resp.body))
+
+    def test_DocumentAlreadyDeleted(self):
+        self.exc = errors.DocumentAlreadyDeleted()
+        resp = self.app.post('/req', params='{}',
+                             headers={'content-type': 'application/json'},
+                             expect_errors=True)
+        self.assertEqual(404, resp.status)
+        self.assertEqual('application/json', resp.header('content-type'))
+        self.assertEqual({"error": "document already deleted"},
+                         simplejson.loads(resp.body))
+
     def test_RevisionConflict(self):
         self.exc = errors.RevisionConflict()
         resp = self.app.post('/req', params='{}',

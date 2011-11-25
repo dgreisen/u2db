@@ -55,7 +55,7 @@ class DocumentDoesNotExist(U1DBError):
 class DocumentAlreadyDeleted(U1DBError):
     """The document was already deleted."""
 
-    wire_description="document was already deleted"
+    wire_description="document already deleted"
 
 
 class DatabaseDoesNotExist(U1DBError):

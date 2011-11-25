@@ -44,13 +44,12 @@ class HTTPDatabase(http_client.HTTPClientBase, Database):
     def get_doc(self, doc_id):
         try:
             res, headers = self._request('GET', ['doc', doc_id])
+        except errors.DocumentDoesNotExist:
+            return None
         except errors.HTTPError, e:
             if e.status == 404 and 'x-u1db-rev' in e.headers:
-                if e.headers['x-u1db-rev'] == '':
-                    return None
-                else:
-                    res = None
-                    headers = e.headers
+                res = None
+                headers = e.headers
             else:
                 raise
         doc_rev = headers['x-u1db-rev']
