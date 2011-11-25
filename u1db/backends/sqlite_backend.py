@@ -240,7 +240,7 @@ class SQLiteDatabase(CommonBackend):
 
     def get_doc(self, doc_id):
         doc = self._get_doc(doc_id)
-        if doc is None or doc.content == 'null':
+        if doc is None:
             return None
         # TODO: A doc which appears deleted could still have conflicts...
         doc.has_conflicts = self._has_conflicts(doc.doc_id)
@@ -317,19 +317,22 @@ class SQLiteDatabase(CommonBackend):
             doc_ids.add(doc_id)
         return cur_gen, doc_ids
 
-    def delete_doc(self, doc_id, doc_rev):
+    def delete_doc(self, doc):
         with self._db_handle:
-            old_doc = self._get_doc(doc_id)
+            old_doc = self._get_doc(doc.doc_id)
             if old_doc is None:
                 raise KeyError
-            if old_doc.rev != doc_rev:
+            if old_doc.rev != doc.rev:
                 raise errors.InvalidDocRev()
             if old_doc.content is None:
                 raise KeyError
-            if self._has_conflicts(doc_id):
+            if self._has_conflicts(doc.doc_id):
                 raise errors.ConflictedDoc()
-            new_rev = self._allocate_doc_rev(doc_rev)
-            self._put_and_update_indexes(doc_id, old_doc, new_rev, None)
+            new_rev = self._allocate_doc_rev(doc.rev)
+            self._put_and_update_indexes(doc.doc_id,
+                old_doc.content, new_rev, None)
+            doc.rev = new_rev
+            doc.content = None
         return new_rev
 
     def _get_conflicts(self, doc_id):
