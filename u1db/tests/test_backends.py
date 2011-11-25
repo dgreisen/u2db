@@ -180,20 +180,6 @@ class LocalDatabaseTests(tests.DatabaseBaseTests):
                                    [(doc1.rev, simple_doc),
                                     (doc2.rev, nested_doc)])
 
-    def test_resolve_doc(self):
-        doc = self.db.create_doc(simple_doc)
-        alt_doc = Document(doc.doc_id, 'alternate:1', nested_doc)
-        self.db.force_doc_sync_conflict(alt_doc)
-        self.assertEqual([('alternate:1', nested_doc),
-                          (doc.rev, simple_doc)],
-                         self.db.get_doc_conflicts(doc.doc_id))
-        orig_rev = doc.rev
-        self.db.resolve_doc(doc, [alt_doc.rev, doc.rev])
-        self.assertNotEqual(orig_rev, doc.rev)
-        self.assertFalse(doc.has_conflicts)
-        self.assertGetDoc(self.db, doc.doc_id, doc.rev, simple_doc, False)
-        self.assertEqual([], self.db.get_doc_conflicts(doc.doc_id))
-
     def test_get_docs_empty_list(self):
         self.assertEqual([], self.db.get_docs([]))
 
