@@ -49,6 +49,7 @@ class HTTPClientBase(object):
         if resp.status in (200, 201):
             return resp.read(), dict(resp.getheaders())
         elif resp.status in (409,):
+            # xxx be robust against non-json response bodies
             respdic = simplejson.loads(resp.read())
             exc_cls = errors.wire_description_to_exc.get(respdic.get("error"))
             if exc_cls is not None:
