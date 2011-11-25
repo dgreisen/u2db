@@ -53,10 +53,14 @@ class SQLiteDatabase(CommonBackend):
         if not os.path.isfile(sqlite_file):
             raise errors.DatabaseDoesNotExist()
         tries = 2
-        db_handle = dbapi2.connect(sqlite_file)
-        c = db_handle.cursor()
         while tries:
+            # Note: There seems to be a bug in sqlite 3.5.9 (with python2.6)
+            #       where without re-opening the database on Windows, it
+            #       doesn't see the transaction that was just committed
+            db_handle = dbapi2.connect(sqlite_file)
+            c = db_handle.cursor()
             v, err = cls._which_index_storage(c)
+            db_handle.close()
             if v is not None:
                 break
             # possibly another process is initializing it, wait for it to be
