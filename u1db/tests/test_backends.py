@@ -47,17 +47,6 @@ class AllDatabaseTests(tests.DatabaseBaseTests, tests.TestCaseWithServer):
                   'server_def': http_server_def}),
         ]
 
-    def test_put_doc_creating_initial(self):
-        doc = Document('my_doc_id', None, simple_doc)
-        new_rev = self.db.put_doc(doc)
-        self.assertGetDoc(self.db, 'my_doc_id', new_rev, simple_doc, False)
-
-
-class LocalDatabaseTests(tests.DatabaseBaseTests):
-
-    def test_close(self):
-        self.db.close()
-
     def test_create_doc_allocating_doc_id(self):
         doc = self.db.create_doc(simple_doc)
         self.assertNotEqual(None, doc.doc_id)
@@ -73,9 +62,20 @@ class LocalDatabaseTests(tests.DatabaseBaseTests):
     def test_create_doc_existing_id(self):
         doc = self.db.create_doc(simple_doc)
         new_content = '{"something": "else"}'
-        self.assertRaises(errors.InvalidDocRev, self.db.create_doc,
+        self.assertRaises(errors.RevisionConflict, self.db.create_doc,
                           new_content, doc.doc_id)
         self.assertGetDoc(self.db, doc.doc_id, doc.rev, simple_doc, False)
+
+    def test_put_doc_creating_initial(self):
+        doc = Document('my_doc_id', None, simple_doc)
+        new_rev = self.db.put_doc(doc)
+        self.assertGetDoc(self.db, 'my_doc_id', new_rev, simple_doc, False)
+
+
+class LocalDatabaseTests(tests.DatabaseBaseTests):
+
+    def test_close(self):
+        self.db.close()
 
     def test_put_doc_refuses_no_id(self):
         doc = Document(None, None, simple_doc)
@@ -83,7 +83,7 @@ class LocalDatabaseTests(tests.DatabaseBaseTests):
 
     def test_put_doc_refuses_non_existing_old_rev(self):
         doc = Document('doc-id', 'test:4', simple_doc)
-        self.assertRaises(errors.InvalidDocRev, self.db.put_doc, doc)
+        self.assertRaises(errors.RevisionConflict, self.db.put_doc, doc)
 
     def test_get_docs(self):
         doc1 = self.db.create_doc(simple_doc)
@@ -176,7 +176,7 @@ class LocalDatabaseTests(tests.DatabaseBaseTests):
         old_rev = doc.rev
         doc.rev = 'other:1'
         doc.content = '{"something": "else"}'
-        self.assertRaises(errors.InvalidDocRev, self.db.put_doc, doc)
+        self.assertRaises(errors.RevisionConflict, self.db.put_doc, doc)
         self.assertGetDoc(self.db, 'my_doc_id', old_rev, simple_doc, False)
 
     def test_delete_doc(self):
@@ -199,7 +199,7 @@ class LocalDatabaseTests(tests.DatabaseBaseTests):
     def test_delete_doc_bad_rev(self):
         doc = self.db.create_doc(simple_doc)
         self.assertGetDoc(self.db, doc.doc_id, doc.rev, simple_doc, False)
-        self.assertRaises(errors.InvalidDocRev,
+        self.assertRaises(errors.RevisionConflict,
             self.db.delete_doc, doc.doc_id, 'other:1')
         self.assertGetDoc(self.db, doc.doc_id, doc.rev, simple_doc, False)
 

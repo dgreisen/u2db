@@ -18,9 +18,17 @@
 class U1DBError(Exception):
     """Generic base class for U1DB errors."""
 
+    # description/tag for identifying the error during transmission (http,...)
+    wire_description = "error"
 
-class InvalidDocRev(U1DBError):
+    def __init__(self, message=None):
+        self.message = message
+
+
+class RevisionConflict(U1DBError):
     """The document revisions supplied does not match the current version."""
+
+    wire_description = "revision conflict"
 
 
 class InvalidDocId(U1DBError):
@@ -41,3 +49,20 @@ class InvalidValueForIndex(U1DBError):
 
 class DatabaseDoesNotExist(U1DBError):
     """The database does not exist."""
+
+
+class HTTPError(U1DBError):
+    """Unspecific HTTP errror."""
+
+    wire_description = None
+
+    def __init__(self, status, message=None):
+        self.status = status
+        self.message = message
+
+
+# mapping wire (transimission) descriptions/tags for errors to the exceptions
+wire_description_to_exc = dict(
+    (x.wire_description, x) for x in globals().values()
+                            if getattr(x, 'wire_description', None) is not None
+)

@@ -26,6 +26,7 @@ import routes.mapper
 from u1db import (
     __version__ as _u1db_version,
     Document,
+    errors,
     )
 
 
@@ -169,6 +170,7 @@ class GlobalResourse(object):
     @http_method()
     def get(self):
         self.responder.send_response(version=_u1db_version)
+
 
 @url_to_resource.register
 class DocResource(object):
@@ -377,10 +379,12 @@ class HTTPApp(object):
         try:
             resource = self._lookup_resource(environ, responder)
             HTTPInvocationByMethodWithBody(resource, environ)()
+        except (errors.RevisionConflict,), e:
+            responder.send_response(409, error=e.wire_description)
         except BadRequest:
             # xxx introduce logging
             #print environ['PATH_INFO']
             #import traceback
             #traceback.print_exc()
-            responder.send_response(400)
+            responder.send_response(400, error="bad request")
         return responder.content

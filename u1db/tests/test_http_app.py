@@ -20,6 +20,7 @@ import StringIO
 
 from u1db import (
     __version__ as _u1db_version,
+    errors,
     tests,
     )
 
@@ -494,3 +495,32 @@ class TestHTTPApp(tests.TestCase):
         self.assertEqual({'doc': '{"value": "there"}',
                           'rev': doc.rev, 'id': doc.doc_id},
                          simplejson.loads(parts[1]))
+
+
+class TestHTTPAppErrorHandling(tests.TestCase):
+
+    def setUp(self):
+        super(TestHTTPAppErrorHandling, self).setUp()
+        self.exc = None
+        self.state = tests.ServerStateForTests()
+        class ErroringResource(object):
+
+            def post(_, args, content):
+                raise self.exc
+
+        def lookup_resource(environ, responder):
+            return ErroringResource()
+
+        application = http_app.HTTPApp(self.state)
+        application._lookup_resource = lookup_resource
+        self.app = paste.fixture.TestApp(application)
+
+    def test_RevisionConflict(self):
+        self.exc = errors.RevisionConflict()
+        resp = self.app.post('/req', params='{}',
+                             headers={'content-type': 'application/json'},
+                             expect_errors=True)
+        self.assertEqual(409, resp.status)
+        self.assertEqual('application/json', resp.header('content-type'))
+        self.assertEqual({"error": "revision conflict"},
+                         simplejson.loads(resp.body))

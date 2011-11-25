@@ -67,10 +67,10 @@ class InMemoryDatabase(CommonBackend):
                 raise errors.ConflictedDoc()
             old_rev, old_content = self._docs[doc.doc_id]
             if old_rev != doc.rev:
-                raise errors.InvalidDocRev()
+                raise errors.RevisionConflict()
         else:
             if doc.rev is not None:
-                raise errors.InvalidDocRev()
+                raise errors.RevisionConflict()
         new_rev = self._allocate_doc_rev(doc.rev)
         self._put_and_update_indexes(doc.doc_id, old_content, new_rev,
                                      doc.content)
