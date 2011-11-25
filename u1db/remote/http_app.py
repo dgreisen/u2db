@@ -196,6 +196,13 @@ class DocResource(object):
     @http_method()
     def get(self):
         doc = self.db.get_doc(self.id)
+        if doc is None:
+            self.responder.send_response(404, error="document does not exist",
+                                         headers={
+                                             'x-u1db-rev': 'null',
+                                             'x-u1db-has-conflicts': 'false'
+                                         })
+            return
         self.responder.send_response_content(doc.content, headers={
             'x-u1db-rev': doc.rev,
             'x-u1db-has-conflicts': simplejson.dumps(doc.has_conflicts)

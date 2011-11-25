@@ -56,9 +56,10 @@ class HTTPError(U1DBError):
 
     wire_description = None
 
-    def __init__(self, status, message=None):
+    def __init__(self, status, message=None, headers={}):
         self.status = status
         self.message = message
+        self.headers = headers
 
 
 # mapping wire (transimission) descriptions/tags for errors to the exceptions

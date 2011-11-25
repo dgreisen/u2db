@@ -79,6 +79,21 @@ class AllDatabaseTests(tests.DatabaseBaseTests, tests.TestCaseWithServer):
         doc = Document('doc-id', 'test:4', simple_doc)
         self.assertRaises(errors.RevisionConflict, self.db.put_doc, doc)
 
+    def test_put_fails_with_bad_old_rev(self):
+        doc = self.db.create_doc(simple_doc, doc_id='my_doc_id')
+        old_rev = doc.rev
+        doc.rev = 'other:1'
+        doc.content = '{"something": "else"}'
+        self.assertRaises(errors.RevisionConflict, self.db.put_doc, doc)
+        self.assertGetDoc(self.db, 'my_doc_id', old_rev, simple_doc, False)
+
+    def test_get_doc_after_put(self):
+        doc = self.db.create_doc(simple_doc, doc_id='my_doc_id')
+        self.assertGetDoc(self.db, 'my_doc_id', doc.rev, simple_doc, False)
+
+    def test_get_doc_nonexisting(self):
+        self.assertIs(None, self.db.get_doc('non-existing'))
+
 
 class LocalDatabaseTests(tests.DatabaseBaseTests):
 
@@ -154,25 +169,10 @@ class LocalDatabaseTests(tests.DatabaseBaseTests):
                           (doc1.rev, simple_doc)],
                          self.db.get_doc_conflicts(doc1.doc_id))
 
-    def test_get_doc_after_put(self):
-        doc = self.db.create_doc(simple_doc, doc_id='my_doc_id')
-        self.assertGetDoc(self.db, 'my_doc_id', doc.rev, simple_doc, False)
-
-    def test_get_doc_nonexisting(self):
-        self.assertIs(None, self.db.get_doc('non-existing'))
-
     def test_get_sync_generation(self):
         self.assertEqual(0, self.db.get_sync_generation('other-db'))
         self.db.set_sync_generation('other-db', 2)
         self.assertEqual(2, self.db.get_sync_generation('other-db'))
-
-    def test_put_fails_with_bad_old_rev(self):
-        doc = self.db.create_doc(simple_doc, doc_id='my_doc_id')
-        old_rev = doc.rev
-        doc.rev = 'other:1'
-        doc.content = '{"something": "else"}'
-        self.assertRaises(errors.RevisionConflict, self.db.put_doc, doc)
-        self.assertGetDoc(self.db, 'my_doc_id', old_rev, simple_doc, False)
 
     def test_delete_doc(self):
         doc = self.db.create_doc(simple_doc)

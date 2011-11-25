@@ -42,12 +42,14 @@ class TestHTTPClientBase(tests.TestCaseWithServer):
         elif environ['PATH_INFO'].endswith('error'):
             content_length = int(environ['CONTENT_LENGTH'])
             error = simplejson.loads(environ['wsgi.input'].read(content_length))
-            start_response(error['status'],
-                           [('Content-Type', 'application/json')])
             response = error['response']
             if isinstance(response, basestring):
+                start_response(error['status'],
+                               [('Content-Type', 'text/plain')])
                 return [response]
             else:
+                start_response(error['status'],
+                               [('Content-Type', 'application/json')])
                 return [simplejson.dumps(error['response'])]
 
     def server_def(self):
@@ -142,6 +144,7 @@ class TestHTTPClientBase(tests.TestCaseWithServer):
 
         self.assertEqual(500, e.status)
         self.assertEqual("Fail.", e.message)
+        self.assertTrue("content-type" in e.headers)
 
     def test_revision_conflict(self):
         cli = self.getClient()

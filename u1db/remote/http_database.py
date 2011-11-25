@@ -42,7 +42,12 @@ class HTTPDatabase(http_client.HTTPClientBase, Database):
         return res['rev']
 
     def get_doc(self, doc_id):
-        res, headers = self._request('GET', ['doc', doc_id])
+        try:
+            res, headers = self._request('GET', ['doc', doc_id])
+        except errors.HTTPError, e:
+            if e.status == 404:
+                if e.headers.get('x-u1db-rev') == 'null':
+                    return None
         doc_rev = headers['x-u1db-rev']
         has_conflicts = simplejson.loads(headers['x-u1db-has-conflicts'])
         doc = Document(doc_id, doc_rev, res)

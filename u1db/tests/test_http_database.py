@@ -17,6 +17,7 @@
 import inspect
 
 from u1db import (
+    errors,
     Document,
     tests,
     )
@@ -36,10 +37,14 @@ class TestHTTPDatabaseSimpleOperations(tests.TestCase):
         def _request(method, url_parts, params=None, body=None,
                                                      content_type=None):
             self.got = method, url_parts, params, body, content_type
+            if isinstance(self.response_val, Exception):
+                raise self.response_val
             return self.response_val
         def _request_json(method, url_parts, params=None, body=None,
                                                           content_type=None):
             self.got = method, url_parts, params, body, content_type
+            if isinstance(self.response_val, Exception):
+                raise self.response_val
             return self.response_val
         self.db._request = _request
         self.db._request_json = _request_json
@@ -78,6 +83,17 @@ class TestHTTPDatabaseSimpleOperations(tests.TestCase):
         self.assertGetDoc(self.db, 'doc-id', 'doc-rev', '{"v": 2}', False)
         self.assertEqual(('GET', ['doc', 'doc-id'], None, None, None),
                          self.got)
+
+    def test_get_doc_non_existing(self):
+        self.response_val = errors.HTTPError(404,
+                                             '{"error": '
+                                             '"document does not exist"}',
+                                             {'x-u1db-rev': 'null',
+                                              'x-u1db-has-conflicts': 'false'})
+        self.assertIs(None, self.db.get_doc('not-there'))
+        self.assertEqual(('GET', ['doc', 'not-there'], None, None, None),
+                         self.got)
+
 
     def test_create_doc_with_id(self):
         self.response_val = {'rev': 'doc-rev'}, {}
