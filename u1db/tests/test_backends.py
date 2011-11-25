@@ -203,13 +203,14 @@ class LocalDatabaseTests(tests.DatabaseBaseTests):
 
     def test_delete_doc_non_existant(self):
         doc = Document('non-existing', 'other:1', simple_doc)
-        self.assertRaises(KeyError,
+        self.assertRaises(errors.DocumentDoesNotExist,
             self.db.delete_doc, doc)
 
     def test_delete_doc_already_deleted(self):
         doc = self.db.create_doc(simple_doc)
         self.db.delete_doc(doc)
-        self.assertRaises(KeyError, self.db.delete_doc, doc)
+        self.assertRaises(errors.DocumentAlreadyDeleted,
+                          self.db.delete_doc, doc)
         self.assertGetDoc(self.db, doc.doc_id, doc.rev, None, False)
 
     def test_delete_doc_bad_rev(self):
