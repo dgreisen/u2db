@@ -205,11 +205,12 @@ class DocResource(object):
     def get(self):
         doc = self.db.get_doc(self.id)
         if doc is None:
-            self.responder.send_response(404, error="document does not exist",
-                                         headers={
-                                             'x-u1db-rev': '',
-                                             'x-u1db-has-conflicts': 'false'
-                                         })
+            self.responder.send_response(404,
+                            error=errors.DocumentDoesNotExist.wire_description,
+                            headers={
+                                        'x-u1db-rev': '',
+                                        'x-u1db-has-conflicts': 'false'
+                            })
             return
         headers={
             'x-u1db-rev': doc.rev,
