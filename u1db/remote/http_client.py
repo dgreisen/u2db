@@ -54,8 +54,7 @@ class HTTPClientBase(object):
             if exc_cls is not None:
                 message = respdic.get("message")
                 raise exc_cls(message)
-        # xxx raise the proper exceptions depending on status
-        raise Exception(resp.status)
+        raise errors.HTTPError(resp.status, resp.read())
 
     def _request(self, method, url_parts, params=None, body=None,
                                                        content_type=None):

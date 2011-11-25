@@ -44,7 +44,11 @@ class TestHTTPClientBase(tests.TestCaseWithServer):
             error = simplejson.loads(environ['wsgi.input'].read(content_length))
             start_response(error['status'],
                            [('Content-Type', 'application/json')])
-            return [simplejson.dumps(error['response'])]
+            response = error['response']
+            if isinstance(response, basestring):
+                return [response]
+            else:
+                return [simplejson.dumps(error['response'])]
 
     def server_def(self):
         def make_server(host_port, handler, state):
@@ -122,6 +126,22 @@ class TestHTTPClientBase(tests.TestCaseWithServer):
                           'QUERY_STRING': 'b=2',
                           'body': '{"a": "x"}',
                           'REQUEST_METHOD': 'POST'}, res)
+
+    def test_unspecified_http_error(self):
+        cli = self.getClient()
+        self.assertRaises(errors.HTTPError,
+                          cli._request_json, 'POST', ['error'], {},
+                          {'status': "500 Internal Error",
+                           'response': "Crash."})
+        try:
+            cli._request_json('POST', ['error'], {},
+                              {'status': "500 Internal Error",
+                               'response': "Fail."})
+        except errors.HTTPError, e:
+            pass
+
+        self.assertEqual(500, e.status)
+        self.assertEqual("Fail.", e.message)
 
     def test_revision_conflict(self):
         cli = self.getClient()

@@ -21,11 +21,6 @@ class U1DBError(Exception):
     wire_description = "error"
 
     def __init__(self, message=None):
-        if message is not None:
-            args = (message,)
-        else:
-            args = ()
-        super(Exception, self).__init__(*args)
         self.message = message
 
 
@@ -55,7 +50,18 @@ class DatabaseDoesNotExist(U1DBError):
     """The database does not exist."""
 
 
+class HTTPError(U1DBError):
+    """Unspecific HTTP errror."""
+
+    wire_description = None
+
+    def __init__(self, status, message=None):
+        self.status = status
+        self.message = message
+
+
 wire_description_to_exc = dict((x.wire_description, x)
                                    for x in globals().values()
                                    if isinstance(x, type) and
-                                      issubclass(x, U1DBError))
+                                      issubclass(x, U1DBError) and
+                                      x.wire_description)

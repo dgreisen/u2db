@@ -24,9 +24,22 @@ class TestError(tests.TestCase):
 
     def test_error_base(self):
         err = errors.U1DBError()
-        self.assertEqual(None, err.message)
         self.assertEqual("error", err.wire_description)
+        self.assertIs(None, err.message)
 
         err = errors.U1DBError("Message.")
-        self.assertEqual("Message.", err.message)
         self.assertEqual("error", err.wire_description)
+        self.assertEqual("Message.", err.message)
+
+
+    def test_HTTPError(self):
+        err = errors.HTTPError(500)
+        self.assertEqual(500, err.status)
+        self.assertIs(None, err.wire_description)
+        self.assertIs(None, err.message)
+
+        err = errors.HTTPError(500, "Crash.")
+        self.assertEqual(500, err.status)
+        self.assertIs(None, err.wire_description)
+        self.assertEqual("Crash.", err.message)
+
