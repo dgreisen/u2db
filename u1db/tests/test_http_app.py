@@ -447,7 +447,7 @@ class TestHTTPApp(tests.TestCase):
         self.assertEqual('application/json', resp.header('content-type'))
         self.assertEqual({"error": "document does not exist"},
                          simplejson.loads(resp.body))
-        self.assertEqual('null', resp.header('x-u1db-rev'))
+        self.assertEqual('', resp.header('x-u1db-rev'))
         self.assertEqual('false', resp.header('x-u1db-has-conflicts'))
 
     def test_get_sync_info(self):

@@ -199,7 +199,7 @@ class DocResource(object):
         if doc is None:
             self.responder.send_response(404, error="document does not exist",
                                          headers={
-                                             'x-u1db-rev': 'null',
+                                             'x-u1db-rev': '',
                                              'x-u1db-has-conflicts': 'false'
                                          })
             return

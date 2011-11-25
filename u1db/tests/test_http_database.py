@@ -88,7 +88,7 @@ class TestHTTPDatabaseSimpleOperations(tests.TestCase):
         self.response_val = errors.HTTPError(404,
                                              '{"error": '
                                              '"document does not exist"}',
-                                             {'x-u1db-rev': 'null',
+                                             {'x-u1db-rev': '',
                                               'x-u1db-has-conflicts': 'false'})
         self.assertIs(None, self.db.get_doc('not-there'))
         self.assertEqual(('GET', ['doc', 'not-there'], None, None, None),
