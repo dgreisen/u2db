@@ -94,6 +94,14 @@ class AllDatabaseTests(tests.DatabaseBaseTests, tests.TestCaseWithServer):
     def test_get_doc_nonexisting(self):
         self.assertIs(None, self.db.get_doc('non-existing'))
 
+    def test_handles_nested_content(self):
+        doc = self.db.create_doc(nested_doc)
+        self.assertGetDoc(self.db, doc.doc_id, doc.rev, nested_doc, False)
+
+    def test_handles_doc_with_null(self):
+        doc = self.db.create_doc('{"key": null}')
+        self.assertGetDoc(self.db, doc.doc_id, doc.rev, '{"key": null}', False)
+
 
 class LocalDatabaseTests(tests.DatabaseBaseTests):
 
@@ -225,14 +233,6 @@ class LocalDatabaseTests(tests.DatabaseBaseTests):
         self.db.put_doc(doc)
         self.assertEqual((2, set([doc.doc_id])), self.db.whats_changed())
         self.assertEqual((2, set()), self.db.whats_changed(2))
-
-    def test_handles_nested_content(self):
-        doc = self.db.create_doc(nested_doc)
-        self.assertGetDoc(self.db, doc.doc_id, doc.rev, nested_doc, False)
-
-    def test_handles_doc_with_null(self):
-        doc = self.db.create_doc('{"key": null}')
-        self.assertGetDoc(self.db, doc.doc_id, doc.rev, '{"key": null}', False)
 
 
 class DatabaseIndexTests(tests.DatabaseBaseTests):
