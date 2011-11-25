@@ -111,11 +111,6 @@ class LocalDatabaseTests(tests.DatabaseBaseTests):
     def test_get_docs_empty_list(self):
         self.assertEqual([], self.db.get_docs([]))
 
-    def test_put_doc_creating_initial(self):
-        doc = Document('my_doc_id', None, simple_doc)
-        new_rev = self.db.put_doc(doc)
-        self.assertGetDoc(self.db, 'my_doc_id', new_rev, simple_doc, False)
-
     def test_simple_put_doc_if_newer(self):
         doc = Document('my-doc-id', 'test:1', simple_doc)
         state = self.db.put_doc_if_newer(doc)
