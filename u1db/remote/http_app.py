@@ -400,6 +400,7 @@ class HTTPApp(object):
         try:
             resource = self._lookup_resource(environ, responder)
             HTTPInvocationByMethodWithBody(resource, environ)()
+        # xxx make these table based or something
         except (errors.DocumentDoesNotExist, errors.DocumentAlreadyDeleted), e:
             responder.send_response(404, error=e.wire_description)
         except (errors.RevisionConflict,), e:
