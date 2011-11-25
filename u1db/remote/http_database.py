@@ -48,6 +48,7 @@ class HTTPDatabase(http_client.HTTPClientBase, Database):
             if e.status == 404:
                 if e.headers.get('x-u1db-rev') == 'null':
                     return None
+            raise
         doc_rev = headers['x-u1db-rev']
         has_conflicts = simplejson.loads(headers['x-u1db-has-conflicts'])
         doc = Document(doc_id, doc_rev, res)

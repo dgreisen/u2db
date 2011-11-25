@@ -94,6 +94,10 @@ class TestHTTPDatabaseSimpleOperations(tests.TestCase):
         self.assertEqual(('GET', ['doc', 'not-there'], None, None, None),
                          self.got)
 
+    def test_get_doc_pass_through_errors(self):
+        self.response_val = errors.HTTPError(500, 'Crash.')
+        self.assertRaises(errors.HTTPError,
+                          self.db.get_doc, 'something-something')
 
     def test_create_doc_with_id(self):
         self.response_val = {'rev': 'doc-rev'}, {}
