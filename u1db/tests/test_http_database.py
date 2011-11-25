@@ -94,6 +94,17 @@ class TestHTTPDatabaseSimpleOperations(tests.TestCase):
         self.assertEqual(('GET', ['doc', 'not-there'], None, None, None),
                          self.got)
 
+    def test_get_doc_deleted(self):
+        self.response_val = errors.HTTPError(404,
+                                             '{"error": '
+                                             '"document deleted"}',
+                                             {'x-u1db-rev': 'doc-rev-gone',
+                                              'x-u1db-has-conflicts': 'false'})
+        doc = self.db.get_doc('deleted')
+        self.assertEqual('deleted', doc.doc_id)
+        self.assertEqual('doc-rev-gone', doc.rev)
+        self.assertIs(None, doc.content)
+
     def test_get_doc_pass_through_errors(self):
         self.response_val = errors.HTTPError(500, 'Crash.')
         self.assertRaises(errors.HTTPError,
@@ -115,3 +126,11 @@ class TestHTTPDatabaseSimpleOperations(tests.TestCase):
         self.assertEqual('{"v": 3}', new_doc.content)
         self.assertEqual(('PUT', ['doc', new_doc.doc_id], {},
                           '{"v": 3}', 'application/json'), self.got)
+
+    def test_delete_doc(self):
+        self.response_val = {'rev': 'doc-rev-gone'}, {}
+        doc = Document('doc-id', 'doc-rev', None)
+        self.db.delete_doc(doc)
+        self.assertEqual('doc-rev-gone', doc.rev)
+        self.assertEqual(('DELETE', ['doc', 'doc-id'], {'old_rev': 'doc-rev'},
+                          None, None), self.got)

@@ -195,6 +195,12 @@ class DocResource(object):
             status = 200
         self.responder.send_response(status, rev=doc_rev)
 
+    @http_method(old_rev=str)
+    def delete(self, old_rev=None):
+        doc = Document(self.id, old_rev, None)
+        self.db.delete_doc(doc)
+        self.responder.send_response(200, rev=doc.rev)
+
     @http_method()
     def get(self):
         doc = self.db.get_doc(self.id)
@@ -205,10 +211,16 @@ class DocResource(object):
                                              'x-u1db-has-conflicts': 'false'
                                          })
             return
-        self.responder.send_response_content(doc.content, headers={
+        headers={
             'x-u1db-rev': doc.rev,
             'x-u1db-has-conflicts': simplejson.dumps(doc.has_conflicts)
-            })
+            }
+        if doc.content is None:
+            self.responder.send_response(404, error="document deleted",
+                                         headers=headers)
+        else:
+            self.responder.send_response_content(doc.content, headers=headers)
+
 
 @url_to_resource.register
 class SyncResource(object):

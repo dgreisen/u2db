@@ -45,10 +45,14 @@ class HTTPDatabase(http_client.HTTPClientBase, Database):
         try:
             res, headers = self._request('GET', ['doc', doc_id])
         except errors.HTTPError, e:
-            if e.status == 404:
-                if e.headers.get('x-u1db-rev') == '':
+            if e.status == 404 and 'x-u1db-rev' in e.headers:
+                if e.headers['x-u1db-rev'] == '':
                     return None
-            raise
+                else:
+                    res = None
+                    headers = e.headers
+            else:
+                raise
         doc_rev = headers['x-u1db-rev']
         has_conflicts = simplejson.loads(headers['x-u1db-has-conflicts'])
         doc = Document(doc_id, doc_rev, res)
@@ -62,3 +66,11 @@ class HTTPDatabase(http_client.HTTPClientBase, Database):
                                           content, 'application/json')
         new_doc = Document(doc_id, res['rev'], content)
         return new_doc
+
+    def delete_doc(self, doc):
+        if doc.doc_id is None:
+            raise errors.InvalidDocId()
+        params = {'old_rev': doc.rev}
+        res, headers = self._request_json('DELETE', ['doc', doc.doc_id], params)
+        doc.content = None
+        doc.rev = res['rev']

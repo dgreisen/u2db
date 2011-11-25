@@ -115,6 +115,15 @@ class AllDatabaseTests(tests.DatabaseBaseTests, tests.TestCaseWithServer):
         doc = self.db.create_doc('{"key": null}')
         self.assertGetDoc(self.db, doc.doc_id, doc.rev, '{"key": null}', False)
 
+    def test_delete_doc(self):
+        doc = self.db.create_doc(simple_doc)
+        self.assertGetDoc(self.db, doc.doc_id, doc.rev, simple_doc, False)
+        orig_rev = doc.rev
+        self.db.delete_doc(doc)
+        self.assertNotEqual(orig_rev, doc.rev)
+        self.assertGetDoc(self.db, doc.doc_id, doc.rev, None, False)
+        self.assertIsNot(None, self.db.get_doc(doc.doc_id))
+
 
 class LocalDatabaseTests(tests.DatabaseBaseTests):
 
@@ -191,15 +200,6 @@ class LocalDatabaseTests(tests.DatabaseBaseTests):
         self.assertEqual(0, self.db.get_sync_generation('other-db'))
         self.db.set_sync_generation('other-db', 2)
         self.assertEqual(2, self.db.get_sync_generation('other-db'))
-
-    def test_delete_doc(self):
-        doc = self.db.create_doc(simple_doc)
-        self.assertGetDoc(self.db, doc.doc_id, doc.rev, simple_doc, False)
-        orig_rev = doc.rev
-        self.db.delete_doc(doc)
-        self.assertNotEqual(orig_rev, doc.rev)
-        self.assertGetDoc(self.db, doc.doc_id, doc.rev, None, False)
-        self.assertIsNot(None, self.db.get_doc(doc.doc_id))
 
     def test_delete_doc_non_existant(self):
         doc = Document('non-existing', 'other:1', simple_doc)
