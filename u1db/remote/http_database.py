@@ -20,6 +20,7 @@ import uuid
 from u1db import (
     Database,
     Document,
+    errors,
     )
 from u1db.remote import (
     http_client,
@@ -30,6 +31,8 @@ class HTTPDatabase(http_client.HTTPClientBase, Database):
     """Implement the Database API to a remote HTTP server."""
 
     def put_doc(self, doc):
+        if doc.doc_id is None:
+            raise errors.InvalidDocId()
         params = {}
         if doc.rev is not None:
             params['old_rev'] = doc.rev
