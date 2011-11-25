@@ -173,23 +173,6 @@ class GlobalResourse(object):
 
 
 @url_to_resource.register
-class DocMaker(object):
-    """Document maker."""
-
-    url_pattern = "/{dbname}/doc/"
-
-    def __init__(self, dbname, state, responder):
-        self.id = id
-        self.responder = responder
-        self.db = state.open_database(dbname)
-
-    @http_method()
-    def post(self, content):
-        doc = self.db.create_doc(content)
-        self.responder.send_response(201, rev=doc.rev, id=doc.doc_id)
-
-
-@url_to_resource.register
 class DocResource(object):
     """Document resource."""
 

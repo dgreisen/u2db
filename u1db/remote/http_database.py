@@ -15,7 +15,7 @@
 """HTTPDabase to access a remote db over the HTTP API."""
 
 import simplejson
-
+import uuid
 
 from u1db import (
     Database,
@@ -47,12 +47,9 @@ class HTTPDatabase(http_client.HTTPClientBase, Database):
         return doc
 
     def create_doc(self, content, doc_id=None):
-        if doc_id is not None:
-            res, headers = self._request_json('PUT', ['doc', doc_id], {},
-                                              content, 'application/json')
-        else:
-            res, headers = self._request_json('POST', ['doc', ''], {},
-                                              content, 'application/json')
-            doc_id = res['id']
+        if doc_id is None:
+            doc_id = str(uuid.uuid4())
+        res, headers = self._request_json('PUT', ['doc', doc_id], {},
+                                          content, 'application/json')
         new_doc = Document(doc_id, res['rev'], content)
         return new_doc

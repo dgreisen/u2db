@@ -89,10 +89,9 @@ class TestHTTPDatabaseSimpleOperations(tests.TestCase):
                           '{"v": 1}', 'application/json'), self.got)
 
     def test_create_doc_without_id(self):
-        self.response_val = {'rev': 'doc-rev-2', 'id': 'fresh-id'}, {}
+        self.response_val = {'rev': 'doc-rev-2'}, {}
         new_doc = self.db.create_doc('{"v": 3}')
         self.assertEqual('doc-rev-2', new_doc.rev)
-        self.assertEqual('fresh-id', new_doc.doc_id)
         self.assertEqual('{"v": 3}', new_doc.content)
-        self.assertEqual(('POST', ['doc', ''], {},
+        self.assertEqual(('PUT', ['doc', new_doc.doc_id], {},
                           '{"v": 3}', 'application/json'), self.got)
