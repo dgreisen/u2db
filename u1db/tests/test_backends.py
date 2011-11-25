@@ -182,26 +182,29 @@ class LocalDatabaseTests(tests.DatabaseBaseTests):
     def test_delete_doc(self):
         doc = self.db.create_doc(simple_doc)
         self.assertGetDoc(self.db, doc.doc_id, doc.rev, simple_doc, False)
-        deleted_rev = self.db.delete_doc(doc.doc_id, doc.rev)
-        self.assertNotEqual(None, deleted_rev)
-        self.assertGetDoc(self.db, doc.doc_id, deleted_rev, None, False)
+        orig_rev = doc.rev
+        self.db.delete_doc(doc)
+        self.assertNotEqual(orig_rev, doc.rev)
+        self.assertGetDoc(self.db, doc.doc_id, doc.rev, None, False)
+        self.assertIsNot(None, self.db.get_doc(doc.doc_id))
 
     def test_delete_doc_non_existant(self):
+        doc = Document('non-existing', 'other:1', simple_doc)
         self.assertRaises(KeyError,
-            self.db.delete_doc, 'non-existing', 'other:1')
+            self.db.delete_doc, doc)
 
     def test_delete_doc_already_deleted(self):
         doc = self.db.create_doc(simple_doc)
-        new_rev = self.db.delete_doc(doc.doc_id, doc.rev)
-        self.assertRaises(KeyError, self.db.delete_doc, doc.doc_id, new_rev)
-        self.assertGetDoc(self.db, doc.doc_id, new_rev, None, False)
+        self.db.delete_doc(doc)
+        self.assertRaises(KeyError, self.db.delete_doc, doc)
+        self.assertGetDoc(self.db, doc.doc_id, doc.rev, None, False)
 
     def test_delete_doc_bad_rev(self):
-        doc = self.db.create_doc(simple_doc)
-        self.assertGetDoc(self.db, doc.doc_id, doc.rev, simple_doc, False)
-        self.assertRaises(errors.RevisionConflict,
-            self.db.delete_doc, doc.doc_id, 'other:1')
-        self.assertGetDoc(self.db, doc.doc_id, doc.rev, simple_doc, False)
+        doc1 = self.db.create_doc(simple_doc)
+        self.assertGetDoc(self.db, doc1.doc_id, doc1.rev, simple_doc, False)
+        doc2 = Document(doc1.doc_id, 'other:1', simple_doc)
+        self.assertRaises(errors.RevisionConflict, self.db.delete_doc, doc2)
+        self.assertGetDoc(self.db, doc1.doc_id, doc1.rev, simple_doc, False)
 
     def test_put_updates_transaction_log(self):
         doc = self.db.create_doc(simple_doc)
@@ -215,7 +218,7 @@ class LocalDatabaseTests(tests.DatabaseBaseTests):
     def test_delete_updates_transaction_log(self):
         doc = self.db.create_doc(simple_doc)
         db_gen, _ = self.db.whats_changed()
-        self.db.delete_doc(doc.doc_id, doc.rev)
+        self.db.delete_doc(doc)
         self.assertEqual((2, set([doc.doc_id])), self.db.whats_changed(db_gen))
 
     def test_whats_changed_initial_database(self):
@@ -422,7 +425,7 @@ class DatabaseIndexTests(tests.DatabaseBaseTests):
         self.db.create_index('test-idx', ['key'])
         self.assertEqual(sorted([doc, doc2]),
             sorted(self.db.get_from_index('test-idx', [('value',)])))
-        self.db.delete_doc(doc.doc_id, doc.rev)
+        self.db.delete_doc(doc)
         self.assertEqual([doc2],
             self.db.get_from_index('test-idx', [('value',)]))
 
