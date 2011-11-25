@@ -74,6 +74,16 @@ class AllDatabaseTests(tests.DatabaseBaseTests, tests.TestCaseWithServer):
         new_rev = self.db.put_doc(doc)
         self.assertGetDoc(self.db, 'my_doc_id', new_rev, simple_doc, False)
 
+    def test_put_doc_update(self):
+        doc = self.db.create_doc(simple_doc, doc_id='my_doc_id')
+        orig_rev = doc.rev
+        doc.content = '{"updated": "stuff"}'
+        new_rev = self.db.put_doc(doc)
+        self.assertNotEqual(new_rev, orig_rev)
+        self.assertGetDoc(self.db, 'my_doc_id', new_rev,
+                          '{"updated": "stuff"}', False)
+        self.assertEqual(doc.rev, new_rev)
+
     def test_put_doc_refuses_no_id(self):
         doc = Document(None, None, simple_doc)
         self.assertRaises(errors.InvalidDocId, self.db.put_doc, doc)

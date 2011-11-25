@@ -160,6 +160,13 @@ class TestHTTPMethodDecorator(tests.TestCase):
         self.assertRaises(http_app.BadRequest, f, "self",
                                                   {"a": "x", "b": "foo"}, None)
 
+    def test_args_conversion_with_default(self):
+        @http_app.http_method(b=str)
+        def f(self, a, b=None):
+            return self, a, b
+        res = f("self", {"a": "x"}, None)
+        self.assertEqual(("self", "x", None), res)
+
     def test_args_content(self):
         @http_app.http_method()
         def f(self, a, content):

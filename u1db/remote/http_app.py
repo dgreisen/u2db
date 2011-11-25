@@ -126,6 +126,8 @@ def http_method(**control):
             if not (required_args <= set(args) <= all_args):
                 raise BadRequest()
             for name, conv in conversions:
+                if name not in args:
+                    continue
                 try:
                     args[name] = conv(args[name])
                 except ValueError:
@@ -183,7 +185,7 @@ class DocResource(object):
         self.responder = responder
         self.db = state.open_database(dbname)
 
-    @http_method()
+    @http_method(old_rev=str)
     def put(self, content, old_rev=None):
         doc = Document(self.id, old_rev, content)
         doc_rev = self.db.put_doc(doc)
