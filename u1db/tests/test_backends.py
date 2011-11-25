@@ -47,6 +47,9 @@ class AllDatabaseTests(tests.DatabaseBaseTests, tests.TestCaseWithServer):
                   'server_def': http_server_def}),
         ]
 
+    def test_close(self):
+        self.db.close()
+
     def test_create_doc_allocating_doc_id(self):
         doc = self.db.create_doc(simple_doc)
         self.assertNotEqual(None, doc.doc_id)
@@ -104,9 +107,6 @@ class AllDatabaseTests(tests.DatabaseBaseTests, tests.TestCaseWithServer):
 
 
 class LocalDatabaseTests(tests.DatabaseBaseTests):
-
-    def test_close(self):
-        self.db.close()
 
     def test_get_docs(self):
         doc1 = self.db.create_doc(simple_doc)
