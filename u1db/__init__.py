@@ -119,10 +119,9 @@ class Database(object):
         """
         raise NotImplementedError(self.force_doc_sync_conflict)
 
-    def delete_doc(self, doc_id, old_doc_rev):
+    def delete_doc(self, doc):
         """Mark a document as deleted.
-        (might be equivalent to PUT(nil)). Will abort if the document is now
-        'newer' than old_doc_rev.
+        Will abort if the current revision doesn't match doc.rev.
         """
         raise NotImplementedError(self.delete_doc)
 

@@ -309,24 +309,24 @@ class DatabaseSyncTests(tests.DatabaseBaseTests):
         doc_id = doc1.doc_id
         self.db1.create_index('test-idx', ['key'])
         self.sync(self.db1, self.db2)
-        doc2_rev = doc1.rev
+        doc2 = Document(doc1.doc_id, doc1.rev, doc1.content)
         new_doc = '{"key": "altval"}'
         doc1.content = new_doc
         self.db1.put_doc(doc1)
-        doc2_rev = self.db2.delete_doc(doc_id, doc2_rev)
+        self.db2.delete_doc(doc2)
         self.assertEqual([doc_id, doc_id], self.db1._get_transaction_log())
         self.sync(self.db1, self.db2)
         self.assertEqual({'receive': {'docs': [(doc_id, doc1.rev)],
                                       'from_id': 'test1',
                                       'from_gen': 2, 'last_known_gen': 1},
                           'return': {'new_docs': [],
-                                     'conf_docs': [(doc_id, doc2_rev)],
+                                     'conf_docs': [(doc_id, doc2.rev)],
                                      'last_gen': 2}},
                          self.db2._last_exchange_log)
         self.assertEqual([doc_id, doc_id, doc_id],
                          self.db1._get_transaction_log())
-        self.assertGetDoc(self.db1, doc_id, doc2_rev, None, True)
-        self.assertGetDoc(self.db2, doc_id, doc2_rev, None, False)
+        self.assertGetDoc(self.db1, doc_id, doc2.rev, None, True)
+        self.assertGetDoc(self.db2, doc_id, doc2.rev, None, False)
         self.assertEqual([], self.db1.get_from_index('test-idx', [('value',)]))
 
     def test_sync_local_race_conflicted(self):
@@ -364,7 +364,8 @@ class DatabaseSyncTests(tests.DatabaseBaseTests):
         self.db2.create_index('test-idx', ['key'])
         self.db3 = self.create_database('test3')
         self.sync(self.db1, self.db3)
-        deleted_rev = self.db1.delete_doc(doc_id, doc1_rev)
+        self.db1.delete_doc(doc1)
+        deleted_rev = doc1.rev
         self.sync(self.db1, self.db2)
         self.assertEqual({'receive': {'docs': [(doc_id, deleted_rev)],
                                       'from_id': 'test1',
@@ -398,13 +399,10 @@ class DatabaseSyncTests(tests.DatabaseBaseTests):
 
     def test_delete_refuses_for_conflicted(self):
         doc1 = self.db1.create_doc(simple_doc)
-        doc_id = doc1.doc_id
-        content1 = '{"key": "altval"}'
-        doc2 = self.db2.create_doc(content1, doc_id=doc_id)
+        doc2 = self.db2.create_doc(nested_doc, doc_id=doc1.doc_id)
         self.sync(self.db1, self.db2)
-        self.assertGetDoc(self.db1, doc_id, doc2.rev, content1, True)
-        self.assertRaises(errors.ConflictedDoc,
-            self.db1.delete_doc, doc_id, doc2.rev)
+        self.assertGetDoc(self.db1, doc2.doc_id, doc2.rev, nested_doc, True)
+        self.assertRaises(errors.ConflictedDoc, self.db1.delete_doc, doc2)
 
     def test_get_doc_conflicts_unconflicted(self):
         doc = self.db1.create_doc(simple_doc)

@@ -98,7 +98,7 @@ class InMemoryDatabase(CommonBackend):
 
     def get_doc(self, doc_id):
         doc = self._get_doc(doc_id)
-        if doc is None or doc.content == 'null':
+        if doc is None:
             return None
         doc.has_conflicts = (doc.doc_id in self._conflicts)
         return doc
@@ -132,13 +132,13 @@ class InMemoryDatabase(CommonBackend):
         doc.rev = new_rev
         doc.has_conflicts = bool(remaining_conflicts)
 
-    def delete_doc(self, doc_id, doc_rev):
-        if doc_id not in self._docs:
+    def delete_doc(self, doc):
+        if doc.doc_id not in self._docs:
             raise KeyError
-        if self._docs[doc_id][1] in ('null', None):
+        if self._docs[doc.doc_id][1] in ('null', None):
             raise KeyError
-        doc = Document(doc_id, doc_rev, None)
-        return self.put_doc(doc)
+        doc.content = None
+        self.put_doc(doc)
 
     def create_index(self, index_name, index_expression):
         index = InMemoryIndex(index_name, index_expression)
