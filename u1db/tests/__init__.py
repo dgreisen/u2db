@@ -23,6 +23,7 @@ import testscenarios
 import testtools
 
 from u1db import (
+    errors,
     Document,
     )
 from u1db.backends import (
@@ -130,7 +131,10 @@ class ServerStateForTests(server_state.ServerState):
         self._dbs = {}
 
     def open_database(self, path):
-        return self._dbs[path]
+        try:
+            return self._dbs[path]
+        except KeyError:
+            raise errors.DatabaseDoesNotExist
 
     def _create_database(self, path):
         db = inmemory.InMemoryDatabase(path)

@@ -25,6 +25,9 @@ from u1db import (
 from u1db.remote import (
     http_database
     )
+from u1db.tests.test_remote_sync_target import (
+    http_server_def,
+)
 
 
 class TestHTTPDatabaseSimpleOperations(tests.TestCase):
@@ -132,3 +135,13 @@ class TestHTTPDatabaseSimpleOperations(tests.TestCase):
         self.assertEqual('doc-rev-gone', doc.rev)
         self.assertEqual(('DELETE', ['doc', 'doc-id'], {'old_rev': 'doc-rev'},
                           None, None), self.got)
+
+
+class TestHTTPDatabaseIntegration(tests.TestCaseWithServer):
+
+    server_def = staticmethod(http_server_def)
+
+    def test_non_existing_db(self):
+        self.startServer()
+        db = http_database.HTTPDatabase(self.getURL('not-there'))
+        self.assertRaises(errors.DatabaseDoesNotExist, db.get_doc, 'doc1')

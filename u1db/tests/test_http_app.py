@@ -477,6 +477,13 @@ class TestHTTPApp(tests.TestCase):
         self.assertEqual(doc.rev, resp.header('x-u1db-rev'))
         self.assertEqual('false', resp.header('x-u1db-has-conflicts'))
 
+    def test_get_doc_non_existing_dabase(self):
+        resp = self.app.get('/not-there/doc/doc1', expect_errors=True)
+        self.assertEqual(404, resp.status)
+        self.assertEqual('application/json', resp.header('content-type'))
+        self.assertEqual({"error": "database does not exist"},
+                         simplejson.loads(resp.body))
+
     def test_get_sync_info(self):
         self.db0.set_sync_generation('other-id', 1)
         resp = self.app.get('/db0/sync-from/other-id')

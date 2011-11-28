@@ -398,6 +398,7 @@ class HTTPApp(object):
 
     # error wire descriptions mapping to HTTP status codes
     wire_description_to_status = dict([
+        (errors.DatabaseDoesNotExist.wire_description, 404),
         (errors.DocumentDoesNotExist.wire_description, 404),
         (errors.DocumentAlreadyDeleted.wire_description, 404),
         (errors.RevisionConflict.wire_description, 409),
