@@ -175,6 +175,23 @@ class GlobalResourse(object):
 
 
 @url_to_resource.register
+class DatabaseResource(object):
+    """Database resource."""
+
+    url_pattern = "/{dbname}"
+
+    def __init__(self, dbname, state, responder):
+        self.dbname = dbname
+        self.state = state
+        self.responder = responder
+
+    @http_method(content_as_args=True)
+    def put(self):
+        self.state.ensure_database(self.dbname)
+        self.responder.send_response(200, ok=True)
+
+
+@url_to_resource.register
 class DocResource(object):
     """Document resource."""
 

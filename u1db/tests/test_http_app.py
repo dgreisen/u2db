@@ -419,6 +419,19 @@ class TestHTTPApp(tests.TestCase):
         self.assertEqual({"version": _u1db_version},
                          simplejson.loads(resp.body))
 
+    def test_create_database(self):
+        resp = self.app.put('/db1', params='{}',
+                            headers={'content-type': 'application/json'})
+        self.assertEqual(200, resp.status)
+        self.assertEqual('application/json', resp.header('content-type'))
+        self.assertEqual({'ok': True}, simplejson.loads(resp.body))
+
+        resp = self.app.put('/db1', params='{}',
+                            headers={'content-type': 'application/json'})
+        self.assertEqual(200, resp.status)
+        self.assertEqual('application/json', resp.header('content-type'))
+        self.assertEqual({'ok': True}, simplejson.loads(resp.body))
+
     def test_put_doc_create(self):
         resp = self.app.put('/db0/doc/doc1', params='{"x": 1}',
                             headers={'content-type': 'application/json'})

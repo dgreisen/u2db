@@ -136,6 +136,12 @@ class ServerStateForTests(server_state.ServerState):
         except KeyError:
             raise errors.DatabaseDoesNotExist
 
+    def ensure_database(self, path):
+        try:
+            return self.open_database(path)
+        except errors.DatabaseDoesNotExist:
+            return self._create_database(path)
+
     def _create_database(self, path):
         db = inmemory.InMemoryDatabase(path)
         self._dbs[path] = db
