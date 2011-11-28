@@ -199,7 +199,8 @@ class LocalDatabaseTests(tests.DatabaseBaseTests):
         doc1 = self.db.create_doc(orig_doc)
         doc1_rev1 = doc1.rev
         doc1.content = simple_doc
-        doc1_rev2 = self.db.put_doc(doc1)
+        self.db.put_doc(doc1)
+        doc1_rev2 = doc1.rev
         # Nothing is inserted, because the document is already superseded
         doc = Document(doc1.doc_id, doc1_rev1, orig_doc)
         state = self.db.put_doc_if_newer(doc)
