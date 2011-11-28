@@ -228,6 +228,7 @@ class TestSQLitePartialExpandDatabase(tests.TestCase):
         db = sqlite_backend.SQLitePartialExpandDatabase.__new__(
                                     sqlite_backend.SQLitePartialExpandDatabase)
         db._db_handle = dbapi2.connect(path) # db is there but not yet init-ed
+        self.addCleanup(db.close)
         observed = []
         class SQLiteDatabaseTesting(sqlite_backend.SQLiteDatabase):
             @classmethod
@@ -237,6 +238,7 @@ class TestSQLitePartialExpandDatabase(tests.TestCase):
                 observed.append(res[0])
                 return res
         db2 = SQLiteDatabaseTesting._open_database(path)
+        self.addCleanup(db2.close)
         self.assertIsInstance(db2, sqlite_backend.SQLitePartialExpandDatabase)
         self.assertEqual([None,
               sqlite_backend.SQLitePartialExpandDatabase._index_storage_value],
