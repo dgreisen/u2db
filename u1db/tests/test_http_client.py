@@ -152,3 +152,34 @@ class TestHTTPClientBase(tests.TestCaseWithServer):
                           cli._request_json, 'POST', ['error'], {},
                           {'status': "409 Conflict",
                            'response': {"error": "revision conflict"}})
+
+    def test_generic_u1db_error(self):
+        cli = self.getClient()
+        self.assertRaises(errors.U1DBError,
+                          cli._request_json, 'POST', ['error'], {},
+                          {'status': "400 Bad Request",
+                           'response': {"error": "error"}})
+        try:
+            cli._request_json('POST', ['error'], {},
+                              {'status': "400 Bad Request",
+                               'response': {"error": "error"}})
+        except errors.U1DBError, e:
+            pass
+        self.assertIs(e.__class__, errors.U1DBError)
+
+    def test_unspecified_bad_request(self):
+        cli = self.getClient()
+        self.assertRaises(errors.HTTPError,
+                          cli._request_json, 'POST', ['error'], {},
+                          {'status': "400 Bad Request",
+                           'response': "<Bad Request>"})
+        try:
+            cli._request_json('POST', ['error'], {},
+                              {'status': "400 Bad Request",
+                               'response': "<Bad Request>"})
+        except errors.HTTPError, e:
+            pass
+
+        self.assertEqual(400, e.status)
+        self.assertEqual("<Bad Request>", e.message)
+        self.assertTrue("content-type" in e.headers)

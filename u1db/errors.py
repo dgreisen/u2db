@@ -76,5 +76,11 @@ class HTTPError(U1DBError):
 # mapping wire (transimission) descriptions/tags for errors to the exceptions
 wire_description_to_exc = dict(
     (x.wire_description, x) for x in globals().values()
-                            if getattr(x, 'wire_description', None) is not None
+            if getattr(x, 'wire_description', None) not in (None, "error")
 )
+wire_description_to_exc["error"] = U1DBError
+
+
+#
+# wire error descriptions not corresponding to an exception
+DOCUMENT_DELETED = "document deleted"

@@ -472,7 +472,7 @@ class TestHTTPApp(tests.TestCase):
         resp = self.app.get('/db0/doc/doc1', expect_errors=True)
         self.assertEqual(404, resp.status)
         self.assertEqual('application/json', resp.header('content-type'))
-        self.assertEqual({"error": "document deleted"},
+        self.assertEqual({"error": errors.DOCUMENT_DELETED},
                          simplejson.loads(resp.body))
         self.assertEqual(doc.rev, resp.header('x-u1db-rev'))
         self.assertEqual('false', resp.header('x-u1db-has-conflicts'))
@@ -551,27 +551,10 @@ class TestHTTPAppErrorHandling(tests.TestCase):
         application._lookup_resource = lookup_resource
         self.app = paste.fixture.TestApp(application)
 
-    def test_DocumentDoesNotExist(self):
-        self.exc = errors.DocumentDoesNotExist()
-        resp = self.app.post('/req', params='{}',
-                             headers={'content-type': 'application/json'},
-                             expect_errors=True)
-        self.assertEqual(404, resp.status)
-        self.assertEqual('application/json', resp.header('content-type'))
-        self.assertEqual({"error": "document does not exist"},
-                         simplejson.loads(resp.body))
+    def test_wire_description_to_status(self):
+        self.assertNotIn("error", http_app.HTTPApp.wire_description_to_status)
 
-    def test_DocumentAlreadyDeleted(self):
-        self.exc = errors.DocumentAlreadyDeleted()
-        resp = self.app.post('/req', params='{}',
-                             headers={'content-type': 'application/json'},
-                             expect_errors=True)
-        self.assertEqual(404, resp.status)
-        self.assertEqual('application/json', resp.header('content-type'))
-        self.assertEqual({"error": "document already deleted"},
-                         simplejson.loads(resp.body))
-
-    def test_RevisionConflict(self):
+    def test_RevisionConflict_etc(self):
         self.exc = errors.RevisionConflict()
         resp = self.app.post('/req', params='{}',
                              headers={'content-type': 'application/json'},
@@ -579,4 +562,14 @@ class TestHTTPAppErrorHandling(tests.TestCase):
         self.assertEqual(409, resp.status)
         self.assertEqual('application/json', resp.header('content-type'))
         self.assertEqual({"error": "revision conflict"},
+                         simplejson.loads(resp.body))
+
+    def test_generic_u1db_errors(self):
+        self.exc = errors.U1DBError()
+        resp = self.app.post('/req', params='{}',
+                             headers={'content-type': 'application/json'},
+                             expect_errors=True)
+        self.assertEqual(500, resp.status)
+        self.assertEqual('application/json', resp.header('content-type'))
+        self.assertEqual({"error": "error"},
                          simplejson.loads(resp.body))

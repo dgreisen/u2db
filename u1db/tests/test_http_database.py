@@ -15,6 +15,7 @@
 """Tests for HTTPDatabase"""
 
 import inspect
+import simplejson
 
 from u1db import (
     errors,
@@ -92,8 +93,9 @@ class TestHTTPDatabaseSimpleOperations(tests.TestCase):
 
     def test_get_doc_deleted(self):
         self.response_val = errors.HTTPError(404,
-                                             '{"error": '
-                                             '"document deleted"}',
+                                             simplejson.dumps(
+                                             {"error": errors.DOCUMENT_DELETED}
+                                             ),
                                              {'x-u1db-rev': 'doc-rev-gone',
                                               'x-u1db-has-conflicts': 'false'})
         doc = self.db.get_doc('deleted')

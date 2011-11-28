@@ -50,13 +50,17 @@ class HTTPClientBase(object):
         headers = dict(resp.getheaders())
         if resp.status in (200, 201):
             return body, headers
-        elif resp.status in (404, 409,):
-            # xxx be robust against non-json response bodies
-            respdic = simplejson.loads(body)
-            exc_cls = errors.wire_description_to_exc.get(respdic.get("error"))
-            if exc_cls is not None:
-                message = respdic.get("message")
-                raise exc_cls(message)
+        elif resp.status in (400, 404, 409,):
+            try:
+                respdic = simplejson.loads(body)
+            except ValueError:
+                pass
+            else:
+                descr = respdic.get("error")
+                exc_cls = errors.wire_description_to_exc.get(descr)
+                if exc_cls is not None:
+                    message = respdic.get("message")
+                    raise exc_cls(message)
         raise errors.HTTPError(resp.status, body, headers)
 
     def _request(self, method, url_parts, params=None, body=None,

@@ -217,7 +217,7 @@ class DocResource(object):
             'x-u1db-has-conflicts': simplejson.dumps(doc.has_conflicts)
             }
         if doc.content is None:
-            self.responder.send_response(404, error="document deleted",
+            self.responder.send_response(404, error=errors.DOCUMENT_DELETED,
                                          headers=headers)
         else:
             self.responder.send_response_content(doc.content, headers=headers)
@@ -396,16 +396,22 @@ class HTTPApp(object):
         resource = resource_cls(state=self.state, responder=responder, **params)
         return resource
 
+    # error wire descriptions mapping to HTTP status codes
+    wire_description_to_status = dict([
+        (errors.DocumentDoesNotExist.wire_description, 404),
+        (errors.DocumentAlreadyDeleted.wire_description, 404),
+        (errors.RevisionConflict.wire_description, 409),
+        ])
+
     def __call__(self, environ, start_response):
         responder = HTTPResponder(start_response)
         try:
             resource = self._lookup_resource(environ, responder)
             HTTPInvocationByMethodWithBody(resource, environ)()
-        # xxx make these table based or something
-        except (errors.DocumentDoesNotExist, errors.DocumentAlreadyDeleted), e:
-            responder.send_response(404, error=e.wire_description)
-        except (errors.RevisionConflict,), e:
-            responder.send_response(409, error=e.wire_description)
+        except errors.U1DBError, e:
+            status = self.wire_description_to_status.get(e.wire_description,
+                                                         500)
+            responder.send_response(status, error=e.wire_description)
         except BadRequest:
             # xxx introduce logging
             #print environ['PATH_INFO']
