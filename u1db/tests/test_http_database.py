@@ -64,6 +64,11 @@ class TestHTTPDatabaseSimpleOperations(tests.TestCase):
         self.assertEqual(my_request_json_sig,
                   inspect.getargspec(http_database.HTTPDatabase._request_json))
 
+    def test__ensure(self):
+        self.response_val = {'ok': True}, {}
+        self.db._ensure()
+        self.assertEqual(('PUT', [], {}, {}, None), self.got)
+
     def test_put_doc(self):
         self.response_val = {'rev': 'doc-rev'}, {}
         doc = Document('doc-id', None, '{"v": 1}')
@@ -145,3 +150,9 @@ class TestHTTPDatabaseIntegration(tests.TestCaseWithServer):
         self.startServer()
         db = http_database.HTTPDatabase(self.getURL('not-there'))
         self.assertRaises(errors.DatabaseDoesNotExist, db.get_doc, 'doc1')
+
+    def test__ensure(self):
+        self.startServer()
+        db = http_database.HTTPDatabase(self.getURL('new'))
+        db._ensure()
+        self.assertIs(None, db.get_doc('doc1'))

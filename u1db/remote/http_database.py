@@ -30,6 +30,9 @@ from u1db.remote import (
 class HTTPDatabase(http_client.HTTPClientBase, Database):
     """Implement the Database API to a remote HTTP server."""
 
+    def _ensure(self):
+        self._request_json('PUT', [], {}, {})
+
     def put_doc(self, doc):
         if doc.doc_id is None:
             raise errors.InvalidDocId()
