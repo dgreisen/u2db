@@ -356,7 +356,7 @@ class TestHTTPResponder(tests.TestCase):
         self.assertEqual('400 Bad Request', self.status)
         self.assertEqual({'content-type': 'application/json',
                           'cache-control': 'no-cache'}, self.headers)
-        self.assertEqual([], self.response_body)
+        self.assertEqual(['{}\r\n'], self.response_body)
         self.assertEqual([], responder.content)
 
     def test_send_response_content_w_headers(self):

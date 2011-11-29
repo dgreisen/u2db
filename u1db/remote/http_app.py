@@ -314,7 +314,7 @@ class HTTPResponder(object):
         self.content_type = 'application/json'
         self.content = []
 
-    def start_response(self, status=200, headers={}, **kwargs):
+    def start_response(self, status=200, headers={}, args_dic=None, **kwargs):
         """start sending response: header and args."""
         if self._started:
             return
@@ -325,7 +325,8 @@ class HTTPResponder(object):
                                           ('cache-control', 'no-cache')] +
                                            headers.items())
         # xxx version in headers
-        if kwargs:
+        if kwargs or args_dic is not None:
+            kwargs.update(args_dic or {})
             self._write(simplejson.dumps(kwargs)+"\r\n")
 
     def finish_response(self):
@@ -334,7 +335,7 @@ class HTTPResponder(object):
 
     def send_response(self, status=200, headers={}, **kwargs):
         """send and finish response in one go."""
-        self.start_response(status, headers, **kwargs)
+        self.start_response(status, headers, kwargs)
         self.finish_response()
 
     def send_response_content(self, content, headers={}):
