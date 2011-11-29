@@ -395,11 +395,7 @@ class HTTPApp(object):
         self.state = state
 
     def _lookup_resource(self, environ, responder):
-        try:
-            resource_cls, params = url_to_resource.match(environ['PATH_INFO'])
-        except:
-            import pdb; pdb.set_trace()
-            raise
+        resource_cls, params = url_to_resource.match(environ['PATH_INFO'])
         if resource_cls is None:
             raise BadRequest # 404 instead?
         resource = resource_cls(state=self.state, responder=responder, **params)
