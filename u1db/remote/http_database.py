@@ -24,7 +24,12 @@ from u1db import (
     )
 from u1db.remote import (
     http_client,
+    http_errors,
     )
+
+
+DOCUMENT_DELETED_STATUS = http_errors.wire_description_to_status[
+    errors.DOCUMENT_DELETED]
 
 
 class HTTPDatabase(http_client.HTTPClientBase, Database):
@@ -47,7 +52,8 @@ class HTTPDatabase(http_client.HTTPClientBase, Database):
         except errors.DocumentDoesNotExist:
             return None
         except errors.HTTPError, e:
-            if e.status == 404 and 'x-u1db-rev' in e.headers:
+            if (e.status == DOCUMENT_DELETED_STATUS and
+                'x-u1db-rev' in e.headers):
                 res = None
                 headers = e.headers
             else:

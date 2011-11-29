@@ -22,6 +22,9 @@ import urllib
 from u1db import (
     errors,
     )
+from u1db.remote import (
+    http_errors,
+    )
 
 
 class HTTPClientBase(object):
@@ -50,7 +53,7 @@ class HTTPClientBase(object):
         headers = dict(resp.getheaders())
         if resp.status in (200, 201):
             return body, headers
-        elif resp.status in (400, 404, 409,):
+        elif resp.status in http_errors.ERROR_STATUSES:
             try:
                 respdic = simplejson.loads(body)
             except ValueError:
