@@ -46,6 +46,17 @@ class InvalidValueForIndex(U1DBError):
     request.
     """
 
+class DocumentDoesNotExist(U1DBError):
+    """The document does not exist."""
+
+    wire_description="document does not exist"
+
+
+class DocumentAlreadyDeleted(U1DBError):
+    """The document was already deleted."""
+
+    wire_description="document already deleted"
+
 
 class DatabaseDoesNotExist(U1DBError):
     """The database does not exist."""
@@ -56,13 +67,20 @@ class HTTPError(U1DBError):
 
     wire_description = None
 
-    def __init__(self, status, message=None):
+    def __init__(self, status, message=None, headers={}):
         self.status = status
         self.message = message
+        self.headers = headers
 
 
 # mapping wire (transimission) descriptions/tags for errors to the exceptions
 wire_description_to_exc = dict(
     (x.wire_description, x) for x in globals().values()
-                            if getattr(x, 'wire_description', None) is not None
+            if getattr(x, 'wire_description', None) not in (None, "error")
 )
+wire_description_to_exc["error"] = U1DBError
+
+
+#
+# wire error descriptions not corresponding to an exception
+DOCUMENT_DELETED = "document deleted"

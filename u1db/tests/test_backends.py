@@ -48,6 +48,9 @@ class AllDatabaseTests(tests.DatabaseBaseTests, tests.TestCaseWithServer):
                   'server_def': http_server_def}),
         ]
 
+    def test_close(self):
+        self.db.close()
+
     def test_create_doc_allocating_doc_id(self):
         doc = self.db.create_doc(simple_doc)
         self.assertNotEqual(None, doc.doc_id)
@@ -72,11 +75,15 @@ class AllDatabaseTests(tests.DatabaseBaseTests, tests.TestCaseWithServer):
         new_rev = self.db.put_doc(doc)
         self.assertGetDoc(self.db, 'my_doc_id', new_rev, simple_doc, False)
 
-
-class LocalDatabaseTests(tests.DatabaseBaseTests):
-
-    def test_close(self):
-        self.db.close()
+    def test_put_doc_update(self):
+        doc = self.db.create_doc(simple_doc, doc_id='my_doc_id')
+        orig_rev = doc.rev
+        doc.content = '{"updated": "stuff"}'
+        new_rev = self.db.put_doc(doc)
+        self.assertNotEqual(new_rev, orig_rev)
+        self.assertGetDoc(self.db, 'my_doc_id', new_rev,
+                          '{"updated": "stuff"}', False)
+        self.assertEqual(doc.rev, new_rev)
 
     def test_put_doc_refuses_no_id(self):
         doc = Document(None, None, simple_doc)
@@ -85,6 +92,60 @@ class LocalDatabaseTests(tests.DatabaseBaseTests):
     def test_put_doc_refuses_non_existing_old_rev(self):
         doc = Document('doc-id', 'test:4', simple_doc)
         self.assertRaises(errors.RevisionConflict, self.db.put_doc, doc)
+
+    def test_put_fails_with_bad_old_rev(self):
+        doc = self.db.create_doc(simple_doc, doc_id='my_doc_id')
+        old_rev = doc.rev
+        doc.rev = 'other:1'
+        doc.content = '{"something": "else"}'
+        self.assertRaises(errors.RevisionConflict, self.db.put_doc, doc)
+        self.assertGetDoc(self.db, 'my_doc_id', old_rev, simple_doc, False)
+
+    def test_get_doc_after_put(self):
+        doc = self.db.create_doc(simple_doc, doc_id='my_doc_id')
+        self.assertGetDoc(self.db, 'my_doc_id', doc.rev, simple_doc, False)
+
+    def test_get_doc_nonexisting(self):
+        self.assertIs(None, self.db.get_doc('non-existing'))
+
+    def test_handles_nested_content(self):
+        doc = self.db.create_doc(nested_doc)
+        self.assertGetDoc(self.db, doc.doc_id, doc.rev, nested_doc, False)
+
+    def test_handles_doc_with_null(self):
+        doc = self.db.create_doc('{"key": null}')
+        self.assertGetDoc(self.db, doc.doc_id, doc.rev, '{"key": null}', False)
+
+    def test_delete_doc(self):
+        doc = self.db.create_doc(simple_doc)
+        self.assertGetDoc(self.db, doc.doc_id, doc.rev, simple_doc, False)
+        orig_rev = doc.rev
+        self.db.delete_doc(doc)
+        self.assertNotEqual(orig_rev, doc.rev)
+        self.assertGetDoc(self.db, doc.doc_id, doc.rev, None, False)
+        self.assertIsNot(None, self.db.get_doc(doc.doc_id))
+
+    def test_delete_doc_non_existant(self):
+        doc = Document('non-existing', 'other:1', simple_doc)
+        self.assertRaises(errors.DocumentDoesNotExist,
+            self.db.delete_doc, doc)
+
+    def test_delete_doc_already_deleted(self):
+        doc = self.db.create_doc(simple_doc)
+        self.db.delete_doc(doc)
+        self.assertRaises(errors.DocumentAlreadyDeleted,
+                          self.db.delete_doc, doc)
+        self.assertGetDoc(self.db, doc.doc_id, doc.rev, None, False)
+
+    def test_delete_doc_bad_rev(self):
+        doc1 = self.db.create_doc(simple_doc)
+        self.assertGetDoc(self.db, doc1.doc_id, doc1.rev, simple_doc, False)
+        doc2 = Document(doc1.doc_id, 'other:1', simple_doc)
+        self.assertRaises(errors.RevisionConflict, self.db.delete_doc, doc2)
+        self.assertGetDoc(self.db, doc1.doc_id, doc1.rev, simple_doc, False)
+
+
+class LocalDatabaseTests(tests.DatabaseBaseTests):
 
     def test_get_docs(self):
         doc1 = self.db.create_doc(simple_doc)
@@ -183,11 +244,6 @@ class LocalDatabaseTests(tests.DatabaseBaseTests):
     def test_get_docs_empty_list(self):
         self.assertEqual([], self.db.get_docs([]))
 
-    def test_put_doc_creating_initial(self):
-        doc = Document('my_doc_id', None, simple_doc)
-        new_rev = self.db.put_doc(doc)
-        self.assertGetDoc(self.db, 'my_doc_id', new_rev, simple_doc, False)
-
     def test_simple_put_doc_if_newer(self):
         doc = Document('my-doc-id', 'test:1', simple_doc)
         state = self.db.put_doc_if_newer(doc)
@@ -231,52 +287,10 @@ class LocalDatabaseTests(tests.DatabaseBaseTests):
                           (doc1.rev, simple_doc)],
                          self.db.get_doc_conflicts(doc1.doc_id))
 
-    def test_get_doc_after_put(self):
-        doc = self.db.create_doc(simple_doc, doc_id='my_doc_id')
-        self.assertGetDoc(self.db, 'my_doc_id', doc.rev, simple_doc, False)
-
-    def test_get_doc_nonexisting(self):
-        self.assertIs(None, self.db.get_doc('non-existing'))
-
     def test_get_sync_generation(self):
         self.assertEqual(0, self.db.get_sync_generation('other-db'))
         self.db.set_sync_generation('other-db', 2)
         self.assertEqual(2, self.db.get_sync_generation('other-db'))
-
-    def test_put_fails_with_bad_old_rev(self):
-        doc = self.db.create_doc(simple_doc, doc_id='my_doc_id')
-        old_rev = doc.rev
-        doc.rev = 'other:1'
-        doc.content = '{"something": "else"}'
-        self.assertRaises(errors.RevisionConflict, self.db.put_doc, doc)
-        self.assertGetDoc(self.db, 'my_doc_id', old_rev, simple_doc, False)
-
-    def test_delete_doc(self):
-        doc = self.db.create_doc(simple_doc)
-        self.assertGetDoc(self.db, doc.doc_id, doc.rev, simple_doc, False)
-        orig_rev = doc.rev
-        self.db.delete_doc(doc)
-        self.assertNotEqual(orig_rev, doc.rev)
-        self.assertGetDoc(self.db, doc.doc_id, doc.rev, None, False)
-        self.assertIsNot(None, self.db.get_doc(doc.doc_id))
-
-    def test_delete_doc_non_existant(self):
-        doc = Document('non-existing', 'other:1', simple_doc)
-        self.assertRaises(KeyError,
-            self.db.delete_doc, doc)
-
-    def test_delete_doc_already_deleted(self):
-        doc = self.db.create_doc(simple_doc)
-        self.db.delete_doc(doc)
-        self.assertRaises(KeyError, self.db.delete_doc, doc)
-        self.assertGetDoc(self.db, doc.doc_id, doc.rev, None, False)
-
-    def test_delete_doc_bad_rev(self):
-        doc1 = self.db.create_doc(simple_doc)
-        self.assertGetDoc(self.db, doc1.doc_id, doc1.rev, simple_doc, False)
-        doc2 = Document(doc1.doc_id, 'other:1', simple_doc)
-        self.assertRaises(errors.RevisionConflict, self.db.delete_doc, doc2)
-        self.assertGetDoc(self.db, doc1.doc_id, doc1.rev, simple_doc, False)
 
     def test_put_updates_transaction_log(self):
         doc = self.db.create_doc(simple_doc)
@@ -302,14 +316,6 @@ class LocalDatabaseTests(tests.DatabaseBaseTests):
         self.db.put_doc(doc)
         self.assertEqual((2, set([doc.doc_id])), self.db.whats_changed())
         self.assertEqual((2, set()), self.db.whats_changed(2))
-
-    def test_handles_nested_content(self):
-        doc = self.db.create_doc(nested_doc)
-        self.assertGetDoc(self.db, doc.doc_id, doc.rev, nested_doc, False)
-
-    def test_handles_doc_with_null(self):
-        doc = self.db.create_doc('{"key": null}')
-        self.assertGetDoc(self.db, doc.doc_id, doc.rev, '{"key": null}', False)
 
 
 class DatabaseIndexTests(tests.DatabaseBaseTests):

@@ -325,11 +325,11 @@ class SQLiteDatabase(CommonBackend):
         with self._db_handle:
             old_doc = self._get_doc(doc.doc_id)
             if old_doc is None:
-                raise KeyError
+                raise errors.DocumentDoesNotExist
             if old_doc.rev != doc.rev:
                 raise errors.RevisionConflict()
             if old_doc.content is None:
-                raise KeyError
+                raise errors.DocumentAlreadyDeleted
             if self._has_conflicts(doc.doc_id):
                 raise errors.ConflictedDoc()
             new_rev = self._allocate_doc_rev(doc.rev)

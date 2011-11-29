@@ -134,9 +134,9 @@ class InMemoryDatabase(CommonBackend):
 
     def delete_doc(self, doc):
         if doc.doc_id not in self._docs:
-            raise KeyError
+            raise errors.DocumentDoesNotExist
         if self._docs[doc.doc_id][1] in ('null', None):
-            raise KeyError
+            raise errors.DocumentAlreadyDeleted
         doc.content = None
         self.put_doc(doc)
 

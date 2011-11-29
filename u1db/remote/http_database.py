@@ -20,16 +20,24 @@ import uuid
 from u1db import (
     Database,
     Document,
+    errors,
     )
 from u1db.remote import (
     http_client,
+    http_errors,
     )
+
+
+DOCUMENT_DELETED_STATUS = http_errors.wire_description_to_status[
+    errors.DOCUMENT_DELETED]
 
 
 class HTTPDatabase(http_client.HTTPClientBase, Database):
     """Implement the Database API to a remote HTTP server."""
 
     def put_doc(self, doc):
+        if doc.doc_id is None:
+            raise errors.InvalidDocId()
         params = {}
         if doc.rev is not None:
             params['old_rev'] = doc.rev
@@ -39,7 +47,17 @@ class HTTPDatabase(http_client.HTTPClientBase, Database):
         return res['rev']
 
     def get_doc(self, doc_id):
-        res, headers = self._request('GET', ['doc', doc_id])
+        try:
+            res, headers = self._request('GET', ['doc', doc_id])
+        except errors.DocumentDoesNotExist:
+            return None
+        except errors.HTTPError, e:
+            if (e.status == DOCUMENT_DELETED_STATUS and
+                'x-u1db-rev' in e.headers):
+                res = None
+                headers = e.headers
+            else:
+                raise
         doc_rev = headers['x-u1db-rev']
         has_conflicts = simplejson.loads(headers['x-u1db-has-conflicts'])
         doc = Document(doc_id, doc_rev, res)
@@ -53,3 +71,11 @@ class HTTPDatabase(http_client.HTTPClientBase, Database):
                                           content, 'application/json')
         new_doc = Document(doc_id, res['rev'], content)
         return new_doc
+
+    def delete_doc(self, doc):
+        if doc.doc_id is None:
+            raise errors.InvalidDocId()
+        params = {'old_rev': doc.rev}
+        res, headers = self._request_json('DELETE', ['doc', doc.doc_id], params)
+        doc.content = None
+        doc.rev = res['rev']

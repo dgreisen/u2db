@@ -15,8 +15,10 @@
 """Tests for HTTPDatabase"""
 
 import inspect
+import simplejson
 
 from u1db import (
+    errors,
     Document,
     tests,
     )
@@ -36,10 +38,14 @@ class TestHTTPDatabaseSimpleOperations(tests.TestCase):
         def _request(method, url_parts, params=None, body=None,
                                                      content_type=None):
             self.got = method, url_parts, params, body, content_type
+            if isinstance(self.response_val, Exception):
+                raise self.response_val
             return self.response_val
         def _request_json(method, url_parts, params=None, body=None,
                                                           content_type=None):
             self.got = method, url_parts, params, body, content_type
+            if isinstance(self.response_val, Exception):
+                raise self.response_val
             return self.response_val
         self.db._request = _request
         self.db._request_json = _request_json
@@ -79,6 +85,29 @@ class TestHTTPDatabaseSimpleOperations(tests.TestCase):
         self.assertEqual(('GET', ['doc', 'doc-id'], None, None, None),
                          self.got)
 
+    def test_get_doc_non_existing(self):
+        self.response_val = errors.DocumentDoesNotExist()
+        self.assertIs(None, self.db.get_doc('not-there'))
+        self.assertEqual(('GET', ['doc', 'not-there'], None, None, None),
+                         self.got)
+
+    def test_get_doc_deleted(self):
+        self.response_val = errors.HTTPError(404,
+                                             simplejson.dumps(
+                                             {"error": errors.DOCUMENT_DELETED}
+                                             ),
+                                             {'x-u1db-rev': 'doc-rev-gone',
+                                              'x-u1db-has-conflicts': 'false'})
+        doc = self.db.get_doc('deleted')
+        self.assertEqual('deleted', doc.doc_id)
+        self.assertEqual('doc-rev-gone', doc.rev)
+        self.assertIs(None, doc.content)
+
+    def test_get_doc_pass_through_errors(self):
+        self.response_val = errors.HTTPError(500, 'Crash.')
+        self.assertRaises(errors.HTTPError,
+                          self.db.get_doc, 'something-something')
+
     def test_create_doc_with_id(self):
         self.response_val = {'rev': 'doc-rev'}, {}
         new_doc = self.db.create_doc('{"v": 1}', doc_id='doc-id')
@@ -95,3 +124,11 @@ class TestHTTPDatabaseSimpleOperations(tests.TestCase):
         self.assertEqual('{"v": 3}', new_doc.content)
         self.assertEqual(('PUT', ['doc', new_doc.doc_id], {},
                           '{"v": 3}', 'application/json'), self.got)
+
+    def test_delete_doc(self):
+        self.response_val = {'rev': 'doc-rev-gone'}, {}
+        doc = Document('doc-id', 'doc-rev', None)
+        self.db.delete_doc(doc)
+        self.assertEqual('doc-rev-gone', doc.rev)
+        self.assertEqual(('DELETE', ['doc', 'doc-id'], {'old_rev': 'doc-rev'},
+                          None, None), self.got)

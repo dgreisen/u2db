@@ -28,6 +28,9 @@ from u1db import (
     Document,
     errors,
     )
+from u1db.remote import (
+    http_errors,
+    )
 
 
 class _FencedReader(object):
@@ -126,6 +129,8 @@ def http_method(**control):
             if not (required_args <= set(args) <= all_args):
                 raise BadRequest()
             for name, conv in conversions:
+                if name not in args:
+                    continue
                 try:
                     args[name] = conv(args[name])
                 except ValueError:
@@ -183,7 +188,7 @@ class DocResource(object):
         self.responder = responder
         self.db = state.open_database(dbname)
 
-    @http_method()
+    @http_method(old_rev=str)
     def put(self, content, old_rev=None):
         doc = Document(self.id, old_rev, content)
         doc_rev = self.db.put_doc(doc)
@@ -193,13 +198,37 @@ class DocResource(object):
             status = 200
         self.responder.send_response(status, rev=doc_rev)
 
+    @http_method(old_rev=str)
+    def delete(self, old_rev=None):
+        doc = Document(self.id, old_rev, None)
+        self.db.delete_doc(doc)
+        self.responder.send_response(200, rev=doc.rev)
+
     @http_method()
     def get(self):
         doc = self.db.get_doc(self.id)
-        self.responder.send_response_content(doc.content, headers={
+        if doc is None:
+            wire_descr = errors.DocumentDoesNotExist.wire_description
+            self.responder.send_response(
+                http_errors.wire_description_to_status[wire_descr],
+                error=wire_descr,
+                headers={
+                    'x-u1db-rev': '',
+                    'x-u1db-has-conflicts': 'false'
+                    })
+            return
+        headers={
             'x-u1db-rev': doc.rev,
             'x-u1db-has-conflicts': simplejson.dumps(doc.has_conflicts)
-            })
+            }
+        if doc.content is None:
+            self.responder.send_response(
+               http_errors.wire_description_to_status[errors.DOCUMENT_DELETED],
+               error=errors.DOCUMENT_DELETED,
+               headers=headers)
+        else:
+            self.responder.send_response_content(doc.content, headers=headers)
+
 
 @url_to_resource.register
 class SyncResource(object):
@@ -254,8 +283,6 @@ class SyncResource(object):
         self.responder.finish_response()
 
 
-OK = 200
-
 class HTTPResponder(object):
     """Encode responses from the server back to the client."""
 
@@ -270,7 +297,7 @@ class HTTPResponder(object):
         self.content_type = 'application/json'
         self.content = []
 
-    def start_response(self, status=OK, headers={}, **kwargs):
+    def start_response(self, status=200, headers={}, **kwargs):
         """start sending response: header and args."""
         if self._started:
             return
@@ -288,7 +315,7 @@ class HTTPResponder(object):
         """finish sending response."""
         self.sent_response = True
 
-    def send_response(self, status=OK, headers={}, **kwargs):
+    def send_response(self, status=200, headers={}, **kwargs):
         """send and finish response in one go."""
         self.start_response(status, headers, **kwargs)
         self.finish_response()
@@ -296,7 +323,7 @@ class HTTPResponder(object):
     def send_response_content(self, content, headers={}):
         """send and finish response with content in one go."""
         headers['content-length'] = str(len(content))
-        self.start_response(OK, headers=headers)
+        self.start_response(200, headers=headers)
         self.content = [content]
         self.finish_response()
 
@@ -379,8 +406,11 @@ class HTTPApp(object):
         try:
             resource = self._lookup_resource(environ, responder)
             HTTPInvocationByMethodWithBody(resource, environ)()
-        except (errors.RevisionConflict,), e:
-            responder.send_response(409, error=e.wire_description)
+        except errors.U1DBError, e:
+            status = http_errors.wire_description_to_status.get(
+                                                            e.wire_description,
+                                                            500)
+            responder.send_response(status, error=e.wire_description)
         except BadRequest:
             # xxx introduce logging
             #print environ['PATH_INFO']
