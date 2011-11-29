@@ -180,6 +180,30 @@ class LocalDatabaseTests(tests.DatabaseBaseTests):
                                    [(doc1.rev, simple_doc),
                                     (doc2.rev, nested_doc)])
 
+    def test_resolve_doc_with_delete_conflict(self):
+        doc1 = self.db.create_doc(simple_doc)
+        self.db.delete_doc(doc1)
+        doc2 = Document(doc1.doc_id, 'alternate:1', nested_doc)
+        self.db.force_doc_sync_conflict(doc2)
+        self.assertGetDocConflicts(self.db, doc1.doc_id,
+                                   [(doc2.rev, nested_doc),
+                                    (doc1.rev, None)])
+        self.db.resolve_doc(doc2, [doc1.rev, doc2.rev])
+        self.assertGetDocConflicts(self.db, doc1.doc_id, [])
+        self.assertGetDoc(self.db, doc2.doc_id, doc2.rev, nested_doc, False)
+
+    def test_resolve_doc_with_delete_to_delete(self):
+        doc1 = self.db.create_doc(simple_doc)
+        self.db.delete_doc(doc1)
+        doc2 = Document(doc1.doc_id, 'alternate:1', nested_doc)
+        self.db.force_doc_sync_conflict(doc2)
+        self.assertGetDocConflicts(self.db, doc1.doc_id,
+                                   [(doc2.rev, nested_doc),
+                                    (doc1.rev, None)])
+        self.db.resolve_doc(doc1, [doc1.rev, doc2.rev])
+        self.assertGetDocConflicts(self.db, doc1.doc_id, [])
+        self.assertGetDoc(self.db, doc1.doc_id, doc1.rev, None, False)
+
     def test_get_docs_empty_list(self):
         self.assertEqual([], self.db.get_docs([]))
 
@@ -230,6 +254,17 @@ class LocalDatabaseTests(tests.DatabaseBaseTests):
         self.assertGetDoc(self.db, doc1.doc_id, 'alternate:1', nested_doc, True)
         self.assertEqual([('alternate:1', nested_doc),
                           (doc1.rev, simple_doc)],
+                         self.db.get_doc_conflicts(doc1.doc_id))
+
+    def test_force_doc_sync_conflict_was_deleted(self):
+        doc1 = self.db.create_doc(simple_doc)
+        self.db.delete_doc(doc1)
+        doc2 = Document(doc1.doc_id, 'alternate:1', nested_doc)
+        self.db.force_doc_sync_conflict(doc2)
+        self.assertTrue(doc2.has_conflicts)
+        self.assertGetDoc(self.db, doc1.doc_id, 'alternate:1', nested_doc, True)
+        self.assertEqual([('alternate:1', nested_doc),
+                          (doc1.rev, None)],
                          self.db.get_doc_conflicts(doc1.doc_id))
 
     def test_get_doc_after_put(self):
