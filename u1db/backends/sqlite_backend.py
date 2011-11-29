@@ -48,12 +48,14 @@ class SQLiteDatabase(CommonBackend):
         else:
             return c.fetchone()[0], None
 
+    WAIT_FOR_PARALLEL_INIT_HALF_INTERVAL = 0.5
+
     @classmethod
     def _open_database(cls, sqlite_file):
         if not os.path.isfile(sqlite_file):
             raise errors.DatabaseDoesNotExist()
         tries = 2
-        while tries:
+        while True:
             # Note: There seems to be a bug in sqlite 3.5.9 (with python2.6)
             #       where without re-opening the database on Windows, it
             #       doesn't see the transaction that was just committed
@@ -65,10 +67,10 @@ class SQLiteDatabase(CommonBackend):
                 break
             # possibly another process is initializing it, wait for it to be
             # done
+            if tries == 0:
+                raise err # go for the richest error?
             tries -= 1
-            time.sleep(0.5)
-        else:
-            raise err # go for the richest error?
+            time.sleep(cls.WAIT_FOR_PARALLEL_INIT_HALF_INTERVAL)
         return SQLiteDatabase._sqlite_registry[v](sqlite_file)
 
     @classmethod
