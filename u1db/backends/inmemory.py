@@ -61,30 +61,28 @@ class InMemoryDatabase(CommonBackend):
     def put_doc(self, doc):
         if doc.doc_id is None:
             raise errors.InvalidDocId()
-        old_content = None
-        if doc.doc_id in self._docs:
-            if doc.doc_id in self._conflicts:
-                raise errors.ConflictedDoc()
-            old_rev, old_content = self._docs[doc.doc_id]
-            if old_rev != doc.rev:
+        if self._has_conflicts(doc.doc_id):
+            raise errors.ConflictedDoc()
+        old_doc = self._get_doc(doc.doc_id)
+        if old_doc is not None:
+            if old_doc.rev != doc.rev:
                 raise errors.RevisionConflict()
         else:
             if doc.rev is not None:
                 raise errors.RevisionConflict()
         new_rev = self._allocate_doc_rev(doc.rev)
-        self._put_and_update_indexes(doc.doc_id, old_content, new_rev,
-                                     doc.content)
         doc.rev = new_rev
+        self._put_and_update_indexes(old_doc, doc)
         return new_rev
 
-    def _put_and_update_indexes(self, doc_id, old_content, new_rev, content):
+    def _put_and_update_indexes(self, old_doc, doc):
         for index in self._indexes.itervalues():
-            if old_content is not None:
-                index.remove_json(doc_id, old_content)
-            if content not in (None, 'null'):
-                index.add_json(doc_id, content)
-        self._docs[doc_id] = (new_rev, content)
-        self._transaction_log.append(doc_id)
+            if old_doc is not None and old_doc.content is not None:
+                index.remove_json(old_doc.doc_id, old_doc.content)
+            if doc.content is not None:
+                index.add_json(doc.doc_id, doc.content)
+        self._docs[doc.doc_id] = (doc.rev, doc.content)
+        self._transaction_log.append(doc.doc_id)
 
     def _get_doc(self, doc_id):
         try:
@@ -111,7 +109,11 @@ class InMemoryDatabase(CommonBackend):
         return result
 
     def resolve_doc(self, doc, conflicted_doc_revs):
-        cur_rev, cur_content = self._docs[doc.doc_id]
+        cur_doc = self._get_doc(doc.doc_id)
+        if cur_doc is None:
+            cur_rev = None
+        else:
+            cur_rev = cur_doc.rev
         new_rev = self._ensure_maximal_rev(cur_rev, conflicted_doc_revs)
         superseded_revs = set(conflicted_doc_revs)
         remaining_conflicts = []
@@ -120,16 +122,15 @@ class InMemoryDatabase(CommonBackend):
             if c_rev in superseded_revs:
                 continue
             remaining_conflicts.append((c_rev, c_doc))
+        doc.rev = new_rev
         if cur_rev in superseded_revs:
-            self._put_and_update_indexes(doc.doc_id, cur_content, new_rev,
-                                         doc.content)
+            self._put_and_update_indexes(cur_doc, doc)
         else:
             remaining_conflicts.append((new_rev, doc.content))
         if not remaining_conflicts:
             del self._conflicts[doc.doc_id]
         else:
             self._conflicts[doc.doc_id] = remaining_conflicts
-        doc.rev = new_rev
         doc.has_conflicts = bool(remaining_conflicts)
 
     def delete_doc(self, doc):
@@ -169,12 +170,11 @@ class InMemoryDatabase(CommonBackend):
                 set(self._transaction_log[old_generation:]))
 
     def force_doc_sync_conflict(self, doc):
-        my_doc_rev, my_content = self._docs[doc.doc_id]
+        my_doc = self._get_doc(doc.doc_id)
         self._conflicts.setdefault(doc.doc_id, []).append(
-            (my_doc_rev, my_content))
+            (my_doc.rev, my_doc.content))
         doc.has_conflicts = True
-        self._put_and_update_indexes(doc.doc_id, my_content, doc.rev,
-                                     doc.content)
+        self._put_and_update_indexes(my_doc, doc)
 
 
 class InMemoryIndex(object):

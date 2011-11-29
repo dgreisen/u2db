@@ -338,7 +338,8 @@ class DatabaseSyncTests(tests.DatabaseBaseTests):
         content1 = '{"key": "localval"}'
         content2 = '{"key": "altval"}'
         doc.content = content2
-        doc2_rev2 = self.db2.put_doc(doc)
+        self.db2.put_doc(doc)
+        doc2_rev2 = doc.rev
         # Monkey patch so that after the local client has determined recent
         # changes, we get another one, before sync finishes.
         orig_wc = self.db1.whats_changed

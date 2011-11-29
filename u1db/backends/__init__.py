@@ -77,13 +77,10 @@ class CommonBackend(u1db.Database):
         doc_vcr = VectorClockRev(doc.rev)
         if cur_doc is None:
             cur_vcr = VectorClockRev(None)
-            cur_content = None
         else:
             cur_vcr = VectorClockRev(cur_doc.rev)
-            cur_content = cur_doc.content
         if doc_vcr.is_newer(cur_vcr):
-            self._put_and_update_indexes(doc.doc_id, cur_content, doc.rev,
-                                         doc.content)
+            self._put_and_update_indexes(cur_doc, doc)
             return 'inserted'
         elif doc.rev == cur_doc.rev:
             # magical convergence

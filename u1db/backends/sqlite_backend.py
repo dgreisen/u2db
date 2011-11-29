@@ -253,22 +253,19 @@ class SQLiteDatabase(CommonBackend):
     def put_doc(self, doc):
         if doc.doc_id is None:
             raise errors.InvalidDocId()
-        old_content = None
         with self._db_handle:
             if self._has_conflicts(doc.doc_id):
                 raise errors.ConflictedDoc()
             old_doc = self._get_doc(doc.doc_id)
             if old_doc is not None:
-                old_content = old_doc.content
                 if old_doc.rev != doc.rev:
                     raise errors.RevisionConflict()
             else:
                 if doc.rev is not None:
                     raise errors.RevisionConflict()
             new_rev = self._allocate_doc_rev(doc.rev)
-            self._put_and_update_indexes(doc.doc_id, old_content, new_rev,
-                                         doc.content)
             doc.rev = new_rev
+            self._put_and_update_indexes(old_doc, doc)
         return new_rev
 
     def _expand_to_fields(self, doc_id, base_field, raw_doc, save_none):
@@ -300,7 +297,7 @@ class SQLiteDatabase(CommonBackend):
                     values.append((doc_id, subfield_name, val, len(values)))
         return values
 
-    def _put_and_update_indexes(self, doc_id, old_doc, new_rev, doc):
+    def _put_and_update_indexes(self, old_doc, doc):
         """Actually insert a document into the database.
 
         This both updates the existing documents content, and any indexes that
@@ -333,10 +330,9 @@ class SQLiteDatabase(CommonBackend):
             if self._has_conflicts(doc.doc_id):
                 raise errors.ConflictedDoc()
             new_rev = self._allocate_doc_rev(doc.rev)
-            self._put_and_update_indexes(doc.doc_id,
-                old_doc.content, new_rev, None)
             doc.rev = new_rev
             doc.content = None
+            self._put_and_update_indexes(old_doc, doc)
         return new_rev
 
     def _get_conflicts(self, doc_id):
@@ -385,8 +381,7 @@ class SQLiteDatabase(CommonBackend):
             c = self._db_handle.cursor()
             self._add_conflict(c, doc.doc_id, my_doc.rev, my_doc.content)
             doc.has_conflicts = True
-            self._put_and_update_indexes(doc.doc_id, my_doc.content, doc.rev,
-                                         doc.content)
+            self._put_and_update_indexes(my_doc, doc)
 
     def resolve_doc(self, doc, conflicted_doc_revs):
         with self._db_handle:
@@ -395,15 +390,14 @@ class SQLiteDatabase(CommonBackend):
             superseded_revs = set(conflicted_doc_revs)
             cur_conflicts = self._get_conflicts(doc.doc_id)
             c = self._db_handle.cursor()
+            doc.rev = new_rev
             if cur_doc.rev in superseded_revs:
-                self._put_and_update_indexes(doc.doc_id, cur_doc.content,
-                                             new_rev, doc.content)
+                self._put_and_update_indexes(cur_doc, doc)
             else:
                 self._add_conflict(c, doc.doc_id, new_rev, doc.content)
             deleting = [(doc.doc_id, c_rev) for c_rev in superseded_revs]
             c.executemany("DELETE FROM conflicts"
                           " WHERE doc_id=? AND doc_rev=?", deleting)
-            doc.rev = new_rev
             doc.has_conflicts = self._has_conflicts(doc.doc_id)
 
     def create_index(self, index_name, index_expression):
@@ -559,28 +553,28 @@ class SQLitePartialExpandDatabase(SQLiteDatabase):
             db_cursor.executemany(
                 "INSERT INTO document_fields VALUES (?, ?, ?)", values)
 
-    def _put_and_update_indexes(self, doc_id, old_doc, new_rev, doc):
+    def _put_and_update_indexes(self, old_doc, doc):
         c = self._db_handle.cursor()
-        if doc:
-            raw_doc = simplejson.loads(doc)
+        if doc and doc.content:
+            raw_doc = simplejson.loads(doc.content)
         else:
             raw_doc = {}
-        if old_doc:
+        if old_doc is not None:
             c.execute("UPDATE document SET doc_rev=?, doc=? WHERE doc_id = ?",
-                      (new_rev, doc, doc_id))
+                      (doc.rev, doc.content, doc.doc_id))
             c.execute("DELETE FROM document_fields WHERE doc_id = ?",
-                      (doc_id,))
+                      (doc.doc_id,))
         else:
             c.execute("INSERT INTO document VALUES (?, ?, ?)",
-                      (doc_id, new_rev, doc))
+                      (doc.doc_id, doc.rev, doc.content))
         indexed_fields = self._get_indexed_fields()
         if indexed_fields:
             # It is expected that len(indexed_fields) is shorter than
             # len(raw_doc)
             # TODO: Handle nested indexed fields.
-            self._update_indexes(doc_id, raw_doc, indexed_fields, c)
+            self._update_indexes(doc.doc_id, raw_doc, indexed_fields, c)
         c.execute("INSERT INTO transaction_log(doc_id) VALUES (?)",
-                  (doc_id,))
+                  (doc.doc_id,))
 
     def create_index(self, index_name, index_expression):
         with self._db_handle:
