@@ -329,6 +329,14 @@ class LocalDatabaseTests(tests.DatabaseBaseTests):
         self.db.delete_doc(doc)
         self.assertEqual((2, set([doc.doc_id])), self.db.whats_changed(db_gen))
 
+    def test_delete_then_put(self):
+        doc = self.db.create_doc(simple_doc)
+        self.db.delete_doc(doc)
+        self.assertGetDoc(self.db, doc.doc_id, doc.rev, None, False)
+        doc.content = nested_doc
+        self.db.put_doc(doc)
+        self.assertGetDoc(self.db, doc.doc_id, doc.rev, nested_doc, False)
+
     def test_whats_changed_initial_database(self):
         self.assertEqual((0, set()), self.db.whats_changed())
 
