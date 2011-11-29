@@ -22,6 +22,9 @@ import urllib
 from u1db import (
     errors,
     )
+from u1db.remote import (
+    http_errors,
+    )
 
 
 class HTTPClientBase(object):
@@ -46,16 +49,22 @@ class HTTPClientBase(object):
 
     def _response(self):
         resp = self._conn.getresponse()
+        body = resp.read()
+        headers = dict(resp.getheaders())
         if resp.status in (200, 201):
-            return resp.read(), dict(resp.getheaders())
-        elif resp.status in (409,):
-            # xxx be robust against non-json response bodies
-            respdic = simplejson.loads(resp.read())
-            exc_cls = errors.wire_description_to_exc.get(respdic.get("error"))
-            if exc_cls is not None:
-                message = respdic.get("message")
-                raise exc_cls(message)
-        raise errors.HTTPError(resp.status, resp.read())
+            return body, headers
+        elif resp.status in http_errors.ERROR_STATUSES:
+            try:
+                respdic = simplejson.loads(body)
+            except ValueError:
+                pass
+            else:
+                descr = respdic.get("error")
+                exc_cls = errors.wire_description_to_exc.get(descr)
+                if exc_cls is not None:
+                    message = respdic.get("message")
+                    raise exc_cls(message)
+        raise errors.HTTPError(resp.status, body, headers)
 
     def _request(self, method, url_parts, params=None, body=None,
                                                        content_type=None):
