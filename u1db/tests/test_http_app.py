@@ -26,6 +26,7 @@ from u1db import (
 
 from u1db.remote import (
     http_app,
+    http_errors,
     )
 
 
@@ -553,6 +554,12 @@ class TestHTTPApp(tests.TestCase):
                          simplejson.loads(parts[1]))
 
 
+class TestHTTPErrors(tests.TestCase):
+
+    def test_wire_description_to_status(self):
+        self.assertNotIn("error", http_errors.wire_description_to_status)
+
+
 class TestHTTPAppErrorHandling(tests.TestCase):
 
     def setUp(self):
@@ -570,9 +577,6 @@ class TestHTTPAppErrorHandling(tests.TestCase):
         application = http_app.HTTPApp(self.state)
         application._lookup_resource = lookup_resource
         self.app = paste.fixture.TestApp(application)
-
-    def test_wire_description_to_status(self):
-        self.assertNotIn("error", http_app.HTTPApp.wire_description_to_status)
 
     def test_RevisionConflict_etc(self):
         self.exc = errors.RevisionConflict()
