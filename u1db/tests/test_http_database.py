@@ -69,6 +69,12 @@ class TestHTTPDatabaseSimpleOperations(tests.TestCase):
         self.db._ensure()
         self.assertEqual(('PUT', [], {}, {}, None), self.got)
 
+    def test__check(self):
+        self.response_val = {}, {}
+        res = self.db._check()
+        self.assertEqual({}, res)
+        self.assertEqual(('GET', [], None, None, None), self.got)
+
     def test_put_doc(self):
         self.response_val = {'rev': 'doc-rev'}, {}
         doc = Document('doc-id', None, '{"v": 1}')
@@ -155,4 +161,24 @@ class TestHTTPDatabaseIntegration(tests.TestCaseWithServer):
         self.startServer()
         db = http_database.HTTPDatabase(self.getURL('new'))
         db._ensure()
+        self.assertIs(None, db.get_doc('doc1'))
+
+    def test_open_database_existing(self):
+        self.startServer()
+        self.request_state._create_database('db0')
+        db = http_database.HTTPDatabase.open_database(self.getURL('db0'),
+                                                      create=False)
+        self.assertIs(None, db.get_doc('doc1'))
+
+    def test_open_database_non_existing(self):
+        self.startServer()
+        self.assertRaises(errors.DatabaseDoesNotExist,
+                          http_database.HTTPDatabase.open_database,
+                          self.getURL('not-there'),
+                          create=False)
+
+    def test_open_database_create(self):
+        self.startServer()
+        db = http_database.HTTPDatabase.open_database(self.getURL('new'),
+                                                      create=True)
         self.assertIs(None, db.get_doc('doc1'))

@@ -188,6 +188,11 @@ class DatabaseResource(object):
         self.state = state
         self.responder = responder
 
+    @http_method()
+    def get(self):
+        db = self.state.open_database(self.dbname)
+        self.responder.send_response(200)
+
     @http_method(content_as_args=True)
     def put(self):
         self.state.ensure_database(self.dbname)
