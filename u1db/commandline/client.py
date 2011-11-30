@@ -20,6 +20,7 @@ import sys
 from u1db import (
     __version__ as _u1db_version,
     Document,
+    open as u1db_open,
     sync,
     )
 from u1db.backends import sqlite_backend
@@ -48,7 +49,7 @@ class CmdCreate(command.Command):
     def run(self, database, infile, doc_id):
         if infile is None:
             infile = self.stdin
-        db = sqlite_backend.SQLiteDatabase.open_database(database, create=False)
+        db = u1db_open(database, create=False)
         doc = db.create_doc(infile.read(), doc_id=doc_id)
         self.stderr.write('id: %s\nrev: %s\n' % (doc.doc_id, doc.rev))
 
@@ -92,7 +93,7 @@ class CmdGet(command.Command):
     def run(self, database, doc_id, outfile):
         if outfile is None:
             outfile = self.stdout
-        db = sqlite_backend.SQLiteDatabase.open_database(database, create=False)
+        db = u1db_open(database, create=False)
         doc = db.get_doc(doc_id)
         outfile.write(doc.content)
         self.stderr.write('rev: %s\n' % (doc.rev,))
@@ -116,7 +117,7 @@ class CmdInitDB(command.Command):
             help='The unique identifier for this database')
 
     def run(self, database, replica_uid):
-        db = sqlite_backend.SQLiteDatabase.open_database(database)
+        db = u1db_open(database, create=True)
         db._set_replica_uid(replica_uid)
 
 client_commands.register(CmdInitDB)
@@ -140,7 +141,7 @@ class CmdPut(command.Command):
     def run(self, database, doc_id, doc_rev, infile):
         if infile is None:
             infile = self.stdin
-        db = sqlite_backend.SQLiteDatabase.open_database(database, create=False)
+        db = u1db_open(database, create=False)
         doc = Document(doc_id, doc_rev, infile.read())
         doc_rev = db.put_doc(doc)
         self.stderr.write('rev: %s\n' % (doc_rev,))
@@ -162,14 +163,13 @@ class CmdSync(command.Command):
         if target.startswith('http://'):
             st = http_target.HTTPSyncTarget.connect(target)
         else:
-            db = sqlite_backend.SQLiteDatabase.open_database(target)
+            db = u1db_open(target, create=True)
             st = db.get_sync_target()
         return st
 
     def run(self, source, target):
         """Start a Sync request."""
-        source_db = sqlite_backend.SQLiteDatabase.open_database(source,
-                                                                create=False)
+        source_db = u1db_open(source, create=False)
         st = self._open_target(target)
         syncer = sync.Synchronizer(source_db, st)
         syncer.sync()
