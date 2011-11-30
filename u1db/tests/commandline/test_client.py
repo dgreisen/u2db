@@ -30,6 +30,11 @@ from u1db.tests import test_remote_sync_target
 
 
 class TestArgs(tests.TestCase):
+    """These tests are meant to test just the argument parsing.
+
+    Each Command should have at least one test, possibly more if it allows
+    optional arguments, etc.
+    """
 
     def setUp(self):
         super(TestArgs, self).setUp()
@@ -57,6 +62,13 @@ class TestArgs(tests.TestCase):
         self.assertEqual('test.db', args.database)
         self.assertEqual('xyz', args.doc_id)
         self.assertEqual(None, args.infile)
+
+    def test_delete(self):
+        args = self.parse_args(['delete', 'test.db', 'doc-id', 'doc-rev'])
+        self.assertEqual(client.CmdDelete, args.subcommand)
+        self.assertEqual('test.db', args.database)
+        self.assertEqual('doc-id', args.doc_id)
+        self.assertEqual('doc-rev', args.doc_rev)
 
     def test_get(self):
         args = self.parse_args(['get', 'test.db', 'doc-id'])
@@ -94,6 +106,12 @@ class TestArgs(tests.TestCase):
 
 
 class TestCaseWithDB(tests.TestCase):
+    """These next tests are meant to have one class per Command.
+
+    It is meant to test the inner workings of each command. The detailed
+    testing should happen in these classes. Stuff like how it handles errors,
+    etc. should be done here.
+    """
 
     def setUp(self):
         super(TestCaseWithDB, self).setUp()
@@ -122,6 +140,20 @@ class TestCmdCreate(TestCaseWithDB):
         self.assertEqual('', cmd.stdout.getvalue())
         self.assertEqual('id: test-id\nrev: %s\n' % (doc.rev,),
                          cmd.stderr.getvalue())
+
+
+class TestCmdDelete(TestCaseWithDB):
+
+    def test_delete(self):
+        doc = self.db.create_doc(tests.simple_doc)
+        cmd = self.make_command(client.CmdDelete)
+        cmd.run(self.db_path, doc.doc_id, doc.rev)
+        doc2 = self.db.get_doc(doc.doc_id)
+        self.assertEqual(doc.doc_id, doc2.doc_id)
+        self.assertNotEqual(doc.rev, doc2.rev)
+        self.assertIs(None, doc2.content)
+        self.assertEqual('', cmd.stdout.getvalue())
+        self.assertEqual('rev: %s\n' % (doc2.rev,), cmd.stderr.getvalue())
 
 
 class TestCmdGet(TestCaseWithDB):
@@ -215,6 +247,12 @@ class TestCmdSyncRemote(tests.TestCaseWithServer, TestCaseWithDB):
 
 
 class TestCommandLine(TestCaseWithDB):
+    """These are meant to test that the infrastructure is fully connected.
+
+    Each command is likely to only have one test here. Something that ensures
+    'main()' knows about and can run the command correctly. Most logic-level
+    testing of the Command should go into its own test class above.
+    """
 
     def _get_u1db_client_path(self):
         from u1db import __path__ as u1db_path
@@ -257,6 +295,14 @@ class TestCommandLine(TestCaseWithDB):
         ret, stdout, stderr = self.run_main(['get', self.db_path, 'test-id'])
         self.assertEqual(0, ret)
         self.assertEqual(tests.simple_doc, stdout)
+        self.assertEqual('rev: %s\n' % (doc.rev,), stderr)
+
+    def test_delete(self):
+        doc = self.db.create_doc(tests.simple_doc, doc_id='test-id')
+        ret, stdout, stderr = self.run_main(['delete', self.db_path, 'test-id'])
+        doc = self.db.get_doc('test-id')
+        self.assertEqual(0, ret)
+        self.assertEqual('', stdout)
         self.assertEqual('rev: %s\n' % (doc.rev,), stderr)
 
     def test_init_db(self):

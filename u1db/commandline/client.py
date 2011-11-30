@@ -55,6 +55,27 @@ class CmdCreate(command.Command):
 client_commands.register(CmdCreate)
 
 
+class CmdDelete(command.Command):
+    """Delete a document from the database"""
+
+    name = 'delete'
+
+    @classmethod
+    def _populate_subparser(cls, parser):
+        parser.add_argument('database', help='The database to update')
+        parser.add_argument('doc_id', help='The document id to retrieve')
+        parser.add_argument('doc_rev',
+            help='The revision of the document (which is being superseded.)')
+
+    def run(self, database, doc_id, doc_rev):
+        db = sqlite_backend.SQLiteDatabase.open_database(database, create=False)
+        doc = Document(doc_id, doc_rev, None)
+        db.delete_doc(doc)
+        self.stderr.write('rev: %s\n' % (doc.rev,))
+
+client_commands.register(CmdDelete)
+
+
 class CmdGet(command.Command):
     """Extract a document from the database"""
 
