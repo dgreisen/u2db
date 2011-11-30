@@ -152,33 +152,32 @@ class TestHTTPDatabaseIntegration(tests.TestCaseWithServer):
 
     server_def = staticmethod(http_server_def)
 
-    def test_non_existing_db(self):
+    def setUp(self):
+        super(TestHTTPDatabaseIntegration, self).setUp()
         self.startServer()
+
+    def test_non_existing_db(self):
         db = http_database.HTTPDatabase(self.getURL('not-there'))
         self.assertRaises(errors.DatabaseDoesNotExist, db.get_doc, 'doc1')
 
     def test__ensure(self):
-        self.startServer()
         db = http_database.HTTPDatabase(self.getURL('new'))
         db._ensure()
         self.assertIs(None, db.get_doc('doc1'))
 
     def test_open_database_existing(self):
-        self.startServer()
         self.request_state._create_database('db0')
         db = http_database.HTTPDatabase.open_database(self.getURL('db0'),
                                                       create=False)
         self.assertIs(None, db.get_doc('doc1'))
 
     def test_open_database_non_existing(self):
-        self.startServer()
         self.assertRaises(errors.DatabaseDoesNotExist,
                           http_database.HTTPDatabase.open_database,
                           self.getURL('not-there'),
                           create=False)
 
     def test_open_database_create(self):
-        self.startServer()
         db = http_database.HTTPDatabase.open_database(self.getURL('new'),
                                                       create=True)
         self.assertIs(None, db.get_doc('doc1'))
