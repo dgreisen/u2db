@@ -22,6 +22,7 @@ from sqlite3 import dbapi2
 
 from u1db import (
     errors,
+    open as u1db_open,
     tests,
     )
 from u1db.backends import sqlite_backend
@@ -29,6 +30,42 @@ from u1db.backends import sqlite_backend
 
 simple_doc = '{"key": "value"}'
 nested_doc = '{"key": "value", "sub": {"doc": "underneath"}}'
+
+
+class TestU1DBOpen(tests.TestCase):
+
+    def setUp(self):
+        super(TestU1DBOpen, self).setUp()
+        tmpdir = self.createTempDir()
+        self.db_path = tmpdir + '/test.db'
+
+    def test_open_no_create(self):
+        self.assertRaises(errors.DatabaseDoesNotExist,
+                          u1db_open, self.db_path, create=False)
+        self.assertFalse(os.path.exists(self.db_path))
+
+    def test_open_create(self):
+        db = u1db_open(self.db_path, create=True)
+        self.addCleanup(db.close)
+        self.assertTrue(os.path.exists(self.db_path))
+        self.assertIsInstance(db, sqlite_backend.SQLiteDatabase)
+
+    def test_open_existing(self):
+        db = sqlite_backend.SQLitePartialExpandDatabase(self.db_path)
+        self.addCleanup(db.close)
+        doc = db.create_doc(tests.simple_doc)
+        # Even though create=True, we shouldn't wipe the db
+        db2 = u1db_open(self.db_path, create=True)
+        self.addCleanup(db2.close)
+        doc2 = db2.get_doc(doc.doc_id)
+        self.assertEqual(doc, doc2)
+
+    def test_open_existing_no_create(self):
+        db = sqlite_backend.SQLitePartialExpandDatabase(self.db_path)
+        self.addCleanup(db.close)
+        db2 = u1db_open(self.db_path, create=False)
+        self.addCleanup(db2.close)
+        self.assertIsInstance(db2, sqlite_backend.SQLitePartialExpandDatabase)
 
 
 class TestSQLiteDatabase(tests.TestCase):
