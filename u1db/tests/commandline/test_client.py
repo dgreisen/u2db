@@ -19,6 +19,7 @@ import subprocess
 
 from u1db import (
     __version__ as _u1db_version,
+    errors,
     open as u1db_open,
     tests,
     )
@@ -28,6 +29,11 @@ from u1db.tests import test_remote_sync_target
 
 
 class TestArgs(tests.TestCase):
+    """These tests are meant to test just the argument parsing.
+
+    Each Command should have at least one test, possibly more if it allows
+    optional arguments, etc.
+    """
 
     def setUp(self):
         super(TestArgs, self).setUp()
@@ -55,6 +61,13 @@ class TestArgs(tests.TestCase):
         self.assertEqual('test.db', args.database)
         self.assertEqual('xyz', args.doc_id)
         self.assertEqual(None, args.infile)
+
+    def test_delete(self):
+        args = self.parse_args(['delete', 'test.db', 'doc-id', 'doc-rev'])
+        self.assertEqual(client.CmdDelete, args.subcommand)
+        self.assertEqual('test.db', args.database)
+        self.assertEqual('doc-id', args.doc_id)
+        self.assertEqual('doc-rev', args.doc_rev)
 
     def test_get(self):
         args = self.parse_args(['get', 'test.db', 'doc-id'])
@@ -92,6 +105,12 @@ class TestArgs(tests.TestCase):
 
 
 class TestCaseWithDB(tests.TestCase):
+    """These next tests are meant to have one class per Command.
+
+    It is meant to test the inner workings of each command. The detailed
+    testing should happen in these classes. Stuff like how it handles errors,
+    etc. should be done here.
+    """
 
     def setUp(self):
         super(TestCaseWithDB, self).setUp()
@@ -120,6 +139,48 @@ class TestCmdCreate(TestCaseWithDB):
         self.assertEqual('', cmd.stdout.getvalue())
         self.assertEqual('id: test-id\nrev: %s\n' % (doc.rev,),
                          cmd.stderr.getvalue())
+
+
+class TestCmdDelete(TestCaseWithDB):
+
+    def test_delete(self):
+        doc = self.db.create_doc(tests.simple_doc)
+        cmd = self.make_command(client.CmdDelete)
+        cmd.run(self.db_path, doc.doc_id, doc.rev)
+        doc2 = self.db.get_doc(doc.doc_id)
+        self.assertEqual(doc.doc_id, doc2.doc_id)
+        self.assertNotEqual(doc.rev, doc2.rev)
+        self.assertIs(None, doc2.content)
+        self.assertEqual('', cmd.stdout.getvalue())
+        self.assertEqual('rev: %s\n' % (doc2.rev,), cmd.stderr.getvalue())
+
+    def test_delete_fails_if_nonexistent(self):
+        doc = self.db.create_doc(tests.simple_doc)
+        db2_path = self.db_path + '.typo'
+        cmd = self.make_command(client.CmdDelete)
+        # TODO: We should really not be showing a traceback here. But we need
+        #       to teach the commandline infrastructure how to handle
+        #       exceptions.
+        #       However, we *do* want to test that the db doesn't get created
+        #       by accident.
+        self.assertRaises(errors.DatabaseDoesNotExist,
+            cmd.run, db2_path, doc.doc_id, doc.rev)
+        self.assertFalse(os.path.exists(db2_path))
+
+    def test_delete_no_such_doc(self):
+        cmd = self.make_command(client.CmdDelete)
+        # TODO: We should really not be showing a traceback here. But we need
+        #       to teach the commandline infrastructure how to handle
+        #       exceptions.
+        self.assertRaises(errors.DocumentDoesNotExist,
+            cmd.run, self.db_path, 'no-doc-id', 'no-rev')
+
+    def test_delete_bad_rev(self):
+        doc = self.db.create_doc(tests.simple_doc)
+        cmd = self.make_command(client.CmdDelete)
+        self.assertRaises(errors.RevisionConflict,
+            cmd.run, self.db_path, doc.doc_id, 'not-the-actual-doc-rev:1')
+        # TODO: Test that we get a pretty output.
 
 
 class TestCmdGet(TestCaseWithDB):
@@ -213,6 +274,12 @@ class TestCmdSyncRemote(tests.TestCaseWithServer, TestCaseWithDB):
 
 
 class TestCommandLine(TestCaseWithDB):
+    """These are meant to test that the infrastructure is fully connected.
+
+    Each command is likely to only have one test here. Something that ensures
+    'main()' knows about and can run the command correctly. Most logic-level
+    testing of the Command should go into its own test class above.
+    """
 
     def _get_u1db_client_path(self):
         from u1db import __path__ as u1db_path
@@ -234,7 +301,10 @@ class TestCommandLine(TestCaseWithDB):
         stderr = cStringIO.StringIO()
         self.patch(sys, 'stdout', stdout)
         self.patch(sys, 'stderr', stderr)
-        ret = client.main(args)
+        try:
+            ret = client.main(args)
+        except SystemExit, e:
+            self.fail("Intercepted SystemExit: %s" % (e,))
         if ret is None:
             ret = 0
         return ret, stdout.getvalue(), stderr.getvalue()
@@ -255,6 +325,15 @@ class TestCommandLine(TestCaseWithDB):
         ret, stdout, stderr = self.run_main(['get', self.db_path, 'test-id'])
         self.assertEqual(0, ret)
         self.assertEqual(tests.simple_doc, stdout)
+        self.assertEqual('rev: %s\n' % (doc.rev,), stderr)
+
+    def test_delete(self):
+        doc = self.db.create_doc(tests.simple_doc, doc_id='test-id')
+        ret, stdout, stderr = self.run_main(
+            ['delete', self.db_path, 'test-id', doc.rev])
+        doc = self.db.get_doc('test-id')
+        self.assertEqual(0, ret)
+        self.assertEqual('', stdout)
         self.assertEqual('rev: %s\n' % (doc.rev,), stderr)
 
     def test_init_db(self):
