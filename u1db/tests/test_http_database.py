@@ -25,6 +25,9 @@ from u1db import (
 from u1db.remote import (
     http_database
     )
+from u1db.tests.test_remote_sync_target import (
+    http_server_def,
+)
 
 
 class TestHTTPDatabaseSimpleOperations(tests.TestCase):
@@ -60,6 +63,17 @@ class TestHTTPDatabaseSimpleOperations(tests.TestCase):
                                my_request_json_sig[1:])
         self.assertEqual(my_request_json_sig,
                   inspect.getargspec(http_database.HTTPDatabase._request_json))
+
+    def test__ensure(self):
+        self.response_val = {'ok': True}, {}
+        self.db._ensure()
+        self.assertEqual(('PUT', [], {}, {}, None), self.got)
+
+    def test__check(self):
+        self.response_val = {}, {}
+        res = self.db._check()
+        self.assertEqual({}, res)
+        self.assertEqual(('GET', [], None, None, None), self.got)
 
     def test_put_doc(self):
         self.response_val = {'rev': 'doc-rev'}, {}
@@ -132,3 +146,38 @@ class TestHTTPDatabaseSimpleOperations(tests.TestCase):
         self.assertEqual('doc-rev-gone', doc.rev)
         self.assertEqual(('DELETE', ['doc', 'doc-id'], {'old_rev': 'doc-rev'},
                           None, None), self.got)
+
+
+class TestHTTPDatabaseIntegration(tests.TestCaseWithServer):
+
+    server_def = staticmethod(http_server_def)
+
+    def setUp(self):
+        super(TestHTTPDatabaseIntegration, self).setUp()
+        self.startServer()
+
+    def test_non_existing_db(self):
+        db = http_database.HTTPDatabase(self.getURL('not-there'))
+        self.assertRaises(errors.DatabaseDoesNotExist, db.get_doc, 'doc1')
+
+    def test__ensure(self):
+        db = http_database.HTTPDatabase(self.getURL('new'))
+        db._ensure()
+        self.assertIs(None, db.get_doc('doc1'))
+
+    def test_open_database_existing(self):
+        self.request_state._create_database('db0')
+        db = http_database.HTTPDatabase.open_database(self.getURL('db0'),
+                                                      create=False)
+        self.assertIs(None, db.get_doc('doc1'))
+
+    def test_open_database_non_existing(self):
+        self.assertRaises(errors.DatabaseDoesNotExist,
+                          http_database.HTTPDatabase.open_database,
+                          self.getURL('not-there'),
+                          create=False)
+
+    def test_open_database_create(self):
+        db = http_database.HTTPDatabase.open_database(self.getURL('new'),
+                                                      create=True)
+        self.assertIs(None, db.get_doc('doc1'))

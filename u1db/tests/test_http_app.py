@@ -341,22 +341,22 @@ class TestHTTPResponder(tests.TestCase):
             self.response_body.append(data)
         return write
 
-    def test_send_response(self):
+    def test_send_response_json(self):
         responder = http_app.HTTPResponder(self.start_response)
-        responder.send_response(value='success')
+        responder.send_response_json(value='success')
         self.assertEqual('200 OK', self.status)
         self.assertEqual({'content-type': 'application/json',
                           'cache-control': 'no-cache'}, self.headers)
         self.assertEqual(['{"value": "success"}\r\n'], self.response_body)
         self.assertEqual([], responder.content)
 
-    def test_send_response_status_fail(self):
+    def test_send_response_json_status_fail(self):
         responder = http_app.HTTPResponder(self.start_response)
-        responder.send_response(400)
+        responder.send_response_json(400)
         self.assertEqual('400 Bad Request', self.status)
         self.assertEqual({'content-type': 'application/json',
                           'cache-control': 'no-cache'}, self.headers)
-        self.assertEqual([], self.response_body)
+        self.assertEqual(['{}\r\n'], self.response_body)
         self.assertEqual([], responder.content)
 
     def test_send_response_content_w_headers(self):
@@ -371,7 +371,7 @@ class TestHTTPResponder(tests.TestCase):
 
     def test_start_finish_response_status_fail(self):
         responder = http_app.HTTPResponder(self.start_response)
-        responder.start_response(404, error='not found')
+        responder.start_response(404, {'error': 'not found'})
         responder.finish_response()
         self.assertEqual('404 Not Found', self.status)
         self.assertEqual({'content-type': 'application/json',
@@ -382,7 +382,7 @@ class TestHTTPResponder(tests.TestCase):
     def test_send_stream_entry(self):
         responder = http_app.HTTPResponder(self.start_response)
         responder.content_type = "application/x-u1db-multi-json"
-        responder.start_response(one=1)
+        responder.start_response(200, {"one": 1})
         responder.stream_entry({'entry': True})
         responder.finish_response()
         self.assertEqual('200 OK', self.status)
@@ -419,6 +419,25 @@ class TestHTTPApp(tests.TestCase):
         self.assertEqual('application/json', resp.header('content-type'))
         self.assertEqual({"version": _u1db_version},
                          simplejson.loads(resp.body))
+
+    def test_create_database(self):
+        resp = self.app.put('/db1', params='{}',
+                            headers={'content-type': 'application/json'})
+        self.assertEqual(200, resp.status)
+        self.assertEqual('application/json', resp.header('content-type'))
+        self.assertEqual({'ok': True}, simplejson.loads(resp.body))
+
+        resp = self.app.put('/db1', params='{}',
+                            headers={'content-type': 'application/json'})
+        self.assertEqual(200, resp.status)
+        self.assertEqual('application/json', resp.header('content-type'))
+        self.assertEqual({'ok': True}, simplejson.loads(resp.body))
+
+    def test_get_database(self):
+        resp = self.app.get('/db0')
+        self.assertEqual(200, resp.status)
+        self.assertEqual('application/json', resp.header('content-type'))
+        self.assertEqual({}, simplejson.loads(resp.body))
 
     def test_put_doc_create(self):
         resp = self.app.put('/db0/doc/doc1', params='{"x": 1}',
@@ -477,6 +496,13 @@ class TestHTTPApp(tests.TestCase):
                          simplejson.loads(resp.body))
         self.assertEqual(doc.rev, resp.header('x-u1db-rev'))
         self.assertEqual('false', resp.header('x-u1db-has-conflicts'))
+
+    def test_get_doc_non_existing_dabase(self):
+        resp = self.app.get('/not-there/doc/doc1', expect_errors=True)
+        self.assertEqual(404, resp.status)
+        self.assertEqual('application/json', resp.header('content-type'))
+        self.assertEqual({"error": "database does not exist"},
+                         simplejson.loads(resp.body))
 
     def test_get_sync_info(self):
         self.db0.set_sync_generation('other-id', 1)

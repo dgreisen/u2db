@@ -174,7 +174,29 @@ class GlobalResourse(object):
 
     @http_method()
     def get(self):
-        self.responder.send_response(version=_u1db_version)
+        self.responder.send_response_json(version=_u1db_version)
+
+
+@url_to_resource.register
+class DatabaseResource(object):
+    """Database resource."""
+
+    url_pattern = "/{dbname}"
+
+    def __init__(self, dbname, state, responder):
+        self.dbname = dbname
+        self.state = state
+        self.responder = responder
+
+    @http_method()
+    def get(self):
+        db = self.state.open_database(self.dbname)
+        self.responder.send_response_json(200)
+
+    @http_method(content_as_args=True)
+    def put(self):
+        self.state.ensure_database(self.dbname)
+        self.responder.send_response_json(200, ok=True)
 
 
 @url_to_resource.register
@@ -196,20 +218,20 @@ class DocResource(object):
             status = 201 # created
         else:
             status = 200
-        self.responder.send_response(status, rev=doc_rev)
+        self.responder.send_response_json(status, rev=doc_rev)
 
     @http_method(old_rev=str)
     def delete(self, old_rev=None):
         doc = Document(self.id, old_rev, None)
         self.db.delete_doc(doc)
-        self.responder.send_response(200, rev=doc.rev)
+        self.responder.send_response_json(200, rev=doc.rev)
 
     @http_method()
     def get(self):
         doc = self.db.get_doc(self.id)
         if doc is None:
             wire_descr = errors.DocumentDoesNotExist.wire_description
-            self.responder.send_response(
+            self.responder.send_response_json(
                 http_errors.wire_description_to_status[wire_descr],
                 error=wire_descr,
                 headers={
@@ -222,7 +244,7 @@ class DocResource(object):
             'x-u1db-has-conflicts': simplejson.dumps(doc.has_conflicts)
             }
         if doc.content is None:
-            self.responder.send_response(
+            self.responder.send_response_json(
                http_errors.wire_description_to_status[errors.DOCUMENT_DELETED],
                error=errors.DOCUMENT_DELETED,
                headers=headers)
@@ -244,7 +266,7 @@ class SyncResource(object):
     @http_method()
     def get(self):
         result = self.target.get_sync_info(self.from_replica_uid)
-        self.responder.send_response(this_replica_uid=result[0],
+        self.responder.send_response_json(this_replica_uid=result[0],
                                      this_replica_generation=result[1],
                                      other_replica_uid=self.from_replica_uid,
                                      other_replica_generation=result[2])
@@ -253,7 +275,7 @@ class SyncResource(object):
                  content_as_args=True, no_query=True)
     def put(self, generation):
         self.target.record_sync_info(self.from_replica_uid, generation)
-        self.responder.send_response(ok=True)
+        self.responder.send_response_json(ok=True)
 
     # Implements the same logic as LocalSyncTarget.sync_exchange
 
@@ -275,7 +297,7 @@ class SyncResource(object):
             self.responder.stream_entry(entry)
         new_gen = self.sync_exch.find_docs_to_return(self.last_known_generation)
         self.responder.content_type = 'application/x-u1db-multi-json'
-        self.responder.start_response(new_generation=new_gen)
+        self.responder.start_response(200, {"new_generation": new_gen})
         new_gen = self.sync_exch.return_docs_and_record_sync(
                                                   self.from_replica_uid,
                                                   self.from_replica_generation,
@@ -297,8 +319,8 @@ class HTTPResponder(object):
         self.content_type = 'application/json'
         self.content = []
 
-    def start_response(self, status=200, headers={}, **kwargs):
-        """start sending response: header and args."""
+    def start_response(self, status, obj_dic=None, headers={}):
+        """start sending response with optional first json object."""
         if self._started:
             return
         self._started = True
@@ -306,22 +328,22 @@ class HTTPResponder(object):
         self._write = self._start_response('%d %s' % (status, status_text),
                                          [('content-type', self.content_type),
                                           ('cache-control', 'no-cache')] +
-                                           headers.items())
+                                             headers.items())
         # xxx version in headers
-        if kwargs:
-            self._write(simplejson.dumps(kwargs)+"\r\n")
+        if obj_dic is not None:
+            self._write(simplejson.dumps(obj_dic)+"\r\n")
 
     def finish_response(self):
         """finish sending response."""
         self.sent_response = True
 
-    def send_response(self, status=200, headers={}, **kwargs):
-        """send and finish response in one go."""
-        self.start_response(status, headers, **kwargs)
+    def send_response_json(self, status=200, headers={}, **kwargs):
+        """send and finish response with json object body from keyword args."""
+        self.start_response(status, kwargs, headers)
         self.finish_response()
 
     def send_response_content(self, content, headers={}):
-        """send and finish response with content in one go."""
+        """send and finish response with content"""
         headers['content-length'] = str(len(content))
         self.start_response(200, headers=headers)
         self.content = [content]
@@ -410,11 +432,11 @@ class HTTPApp(object):
             status = http_errors.wire_description_to_status.get(
                                                             e.wire_description,
                                                             500)
-            responder.send_response(status, error=e.wire_description)
+            responder.send_response_json(status, error=e.wire_description)
         except BadRequest:
             # xxx introduce logging
             #print environ['PATH_INFO']
             #import traceback
             #traceback.print_exc()
-            responder.send_response(400, error="bad request")
+            responder.send_response_json(400, error="bad request")
         return responder.content

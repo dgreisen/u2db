@@ -35,6 +35,21 @@ DOCUMENT_DELETED_STATUS = http_errors.wire_description_to_status[
 class HTTPDatabase(http_client.HTTPClientBase, Database):
     """Implement the Database API to a remote HTTP server."""
 
+    @staticmethod
+    def open_database(url, create=False):
+        db = HTTPDatabase(url)
+        if create:
+            db._ensure()
+        else:
+            db._check()
+        return db
+
+    def _check(self):
+        return self._request_json('GET', [])[0]
+
+    def _ensure(self):
+        self._request_json('PUT', [], {}, {})
+
     def put_doc(self, doc):
         if doc.doc_id is None:
             raise errors.InvalidDocId()

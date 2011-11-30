@@ -61,6 +61,8 @@ class DocumentAlreadyDeleted(U1DBError):
 class DatabaseDoesNotExist(U1DBError):
     """The database does not exist."""
 
+    wire_description = "database does not exist"
+
 
 class HTTPError(U1DBError):
     """Unspecific HTTP errror."""
