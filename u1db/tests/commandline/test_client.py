@@ -274,7 +274,10 @@ class TestCommandLine(TestCaseWithDB):
         stderr = cStringIO.StringIO()
         self.patch(sys, 'stdout', stdout)
         self.patch(sys, 'stderr', stderr)
-        ret = client.main(args)
+        try:
+            ret = client.main(args)
+        except SystemExit, e:
+            self.fail("Intercepted SystemExit: %s" % (e,))
         if ret is None:
             ret = 0
         return ret, stdout.getvalue(), stderr.getvalue()
@@ -299,7 +302,8 @@ class TestCommandLine(TestCaseWithDB):
 
     def test_delete(self):
         doc = self.db.create_doc(tests.simple_doc, doc_id='test-id')
-        ret, stdout, stderr = self.run_main(['delete', self.db_path, 'test-id'])
+        ret, stdout, stderr = self.run_main(
+            ['delete', self.db_path, 'test-id', doc.rev])
         doc = self.db.get_doc('test-id')
         self.assertEqual(0, ret)
         self.assertEqual('', stdout)
