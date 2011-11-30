@@ -69,7 +69,7 @@ class CmdDelete(command.Command):
             help='The revision of the document (which is being superseded.)')
 
     def run(self, database, doc_id, doc_rev):
-        db = sqlite_backend.SQLiteDatabase.open_database(database, create=False)
+        db = u1db_open(database, create=False)
         doc = Document(doc_id, doc_rev, None)
         db.delete_doc(doc)
         self.stderr.write('rev: %s\n' % (doc.rev,))
