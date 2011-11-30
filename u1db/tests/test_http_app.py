@@ -341,18 +341,18 @@ class TestHTTPResponder(tests.TestCase):
             self.response_body.append(data)
         return write
 
-    def test_send_response(self):
+    def test_send_response_json(self):
         responder = http_app.HTTPResponder(self.start_response)
-        responder.send_response(value='success')
+        responder.send_response_json(value='success')
         self.assertEqual('200 OK', self.status)
         self.assertEqual({'content-type': 'application/json',
                           'cache-control': 'no-cache'}, self.headers)
         self.assertEqual(['{"value": "success"}\r\n'], self.response_body)
         self.assertEqual([], responder.content)
 
-    def test_send_response_status_fail(self):
+    def test_send_response_json_status_fail(self):
         responder = http_app.HTTPResponder(self.start_response)
-        responder.send_response(400)
+        responder.send_response_json(400)
         self.assertEqual('400 Bad Request', self.status)
         self.assertEqual({'content-type': 'application/json',
                           'cache-control': 'no-cache'}, self.headers)
@@ -371,7 +371,7 @@ class TestHTTPResponder(tests.TestCase):
 
     def test_start_finish_response_status_fail(self):
         responder = http_app.HTTPResponder(self.start_response)
-        responder.start_response(404, error='not found')
+        responder.start_response(404, {'error': 'not found'})
         responder.finish_response()
         self.assertEqual('404 Not Found', self.status)
         self.assertEqual({'content-type': 'application/json',
@@ -382,7 +382,7 @@ class TestHTTPResponder(tests.TestCase):
     def test_send_stream_entry(self):
         responder = http_app.HTTPResponder(self.start_response)
         responder.content_type = "application/x-u1db-multi-json"
-        responder.start_response(one=1)
+        responder.start_response(200, {"one": 1})
         responder.stream_entry({'entry': True})
         responder.finish_response()
         self.assertEqual('200 OK', self.status)
