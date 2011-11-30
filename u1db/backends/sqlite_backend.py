@@ -162,6 +162,11 @@ class SQLiteDatabase(CommonBackend):
                   " value TEXT)")
         c.execute("INSERT INTO u1db_config VALUES ('sql_schema', '0')")
         self._extra_schema_init(c)
+        # A unique identifier should be set for this replica. Implementations
+        # don't have to strictly use uuid here, but we do want the uid to be
+        # unique amongst all databases that will sync with each other.
+        # We might extend this to using something with hostname for easier
+        # debugging.
         self._set_replica_uid(uuid.uuid4().hex)
         c.execute("INSERT INTO u1db_config VALUES" " ('index_storage', ?)",
                   (self._index_storage_value,))
