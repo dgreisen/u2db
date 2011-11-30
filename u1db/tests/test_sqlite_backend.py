@@ -231,6 +231,7 @@ class TestSQLitePartialExpandDatabase(tests.TestCase):
         self.addCleanup(db.close)
         observed = []
         class SQLiteDatabaseTesting(sqlite_backend.SQLiteDatabase):
+            WAIT_FOR_PARALLEL_INIT_HALF_INTERVAL = 0.1
             @classmethod
             def _which_index_storage(cls, c):
                 res = super(SQLiteDatabaseTesting, cls)._which_index_storage(c)
@@ -245,17 +246,19 @@ class TestSQLitePartialExpandDatabase(tests.TestCase):
                          observed)
 
     def test__open_database_invalid(self):
+        class SQLiteDatabaseTesting(sqlite_backend.SQLiteDatabase):
+            WAIT_FOR_PARALLEL_INIT_HALF_INTERVAL = 0.1
         temp_dir = self.createTempDir(prefix='u1db-test-')
         path1 = temp_dir + '/invalid1.db'
         with open(path1, 'wb') as f:
             f.write("")
         self.assertRaises(dbapi2.OperationalError,
-                          sqlite_backend.SQLiteDatabase._open_database, path1)
+                          SQLiteDatabaseTesting._open_database, path1)
         path2 = temp_dir + '/invalid2.db'
         with open(path1, 'wb') as f:
             f.write("invalid")
         self.assertRaises(dbapi2.DatabaseError,
-                          sqlite_backend.SQLiteDatabase._open_database, path1)
+                          SQLiteDatabaseTesting._open_database, path1)
 
     def test_open_database_existing(self):
         temp_dir = self.createTempDir(prefix='u1db-test-')
