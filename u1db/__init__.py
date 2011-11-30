@@ -18,6 +18,21 @@ __version_info__ = (0, 0, 1, 'dev', 0)
 __version__ = '.'.join(map(str, __version_info__))
 
 
+def open(path, create):
+    """Open a database at the given location.
+
+    Will raise u1db.errors.DatabaseDoesNotExist if create=False and the
+    database does not already exist.
+
+    :param path: The filesystem path for the database to open.
+    :param create: True/False, should the database be created if it doesn't
+        already exist?
+    :return: An instance of Database.
+    """
+    from u1db.backends import sqlite_backend
+    return sqlite_backend.SQLiteDatabase.open_database(path, create=create)
+
+
 class Database(object):
     """A JSON Document data store.
 
