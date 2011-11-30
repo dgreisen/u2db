@@ -91,12 +91,13 @@ class CmdInitDB(command.Command):
     @classmethod
     def _populate_subparser(cls, parser):
         parser.add_argument('database', help='The database to create')
-        parser.add_argument('replica_uid',
+        parser.add_argument('--replica-uid', default=None,
             help='The unique identifier for this database')
 
     def run(self, database, replica_uid):
         db = sqlite_backend.SQLiteDatabase.open_database(database)
-        db._set_replica_uid(replica_uid)
+        if replica_uid is not None:
+            db._set_replica_uid(replica_uid)
 
 client_commands.register(CmdInitDB)
 

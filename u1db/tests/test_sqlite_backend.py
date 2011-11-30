@@ -87,6 +87,12 @@ class TestSQLitePartialExpandDatabase(tests.TestCase):
         raw_db = self.db._get_sqlite_handle()
         self.assertNotEqual(None, raw_db)
 
+    def test_default_replica_uid(self):
+        self.db = sqlite_backend.SQLitePartialExpandDatabase(':memory:')
+        self.assertIsNot(None, self.db._replica_uid)
+        self.assertEqual(32, len(self.db._replica_uid))
+        val = int(self.db._replica_uid, 16)
+
     def test__close_sqlite_handle(self):
         raw_db = self.db._get_sqlite_handle()
         self.db._close_sqlite_handle()
@@ -112,8 +118,8 @@ class TestSQLitePartialExpandDatabase(tests.TestCase):
     def test__set_replica_uid(self):
         # Start from scratch, so that replica_uid isn't set.
         self.db = sqlite_backend.SQLitePartialExpandDatabase(':memory:')
-        self.assertEqual(None, self.db._real_replica_uid)
-        self.assertEqual(None, self.db._replica_uid)
+        self.assertIsNot(None, self.db._real_replica_uid)
+        self.assertIsNot(None, self.db._replica_uid)
         self.db._set_replica_uid('foo')
         c = self.db._get_sqlite_handle().cursor()
         c.execute("SELECT value FROM u1db_config WHERE name='replica_uid'")
@@ -124,7 +130,6 @@ class TestSQLitePartialExpandDatabase(tests.TestCase):
         self.assertEqual('foo', self.db._replica_uid)
 
     def test__get_generation(self):
-        self.db._set_replica_uid('foo')
         self.assertEqual(0, self.db._get_generation())
 
     def test__allocate_doc_id(self):

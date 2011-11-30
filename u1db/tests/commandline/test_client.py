@@ -73,10 +73,17 @@ class TestArgs(tests.TestCase):
         self.assertEqual(sys.stdout, args.outfile)
 
     def test_init_db(self):
-        args = self.parse_args(['init-db', 'test.db', 'replica-uid'])
+        args = self.parse_args(
+            ['init-db', 'test.db', '--replica-uid=replica-uid'])
         self.assertEqual(client.CmdInitDB, args.subcommand)
         self.assertEqual('test.db', args.database)
         self.assertEqual('replica-uid', args.replica_uid)
+
+    def test_init_db_no_replica(self):
+        args = self.parse_args(['init-db', 'test.db'])
+        self.assertEqual(client.CmdInitDB, args.subcommand)
+        self.assertEqual('test.db', args.database)
+        self.assertIs(None, args.replica_uid)
 
     def test_put(self):
         args = self.parse_args(['put', 'test.db', 'doc-id', 'old-doc-rev'])
@@ -148,6 +155,14 @@ class TestCmdInit(TestCaseWithDB):
         self.assertTrue(os.path.exists(path))
         db = sqlite_backend.SQLiteDatabase.open_database(path, create=False)
         self.assertEqual('test-uid', db._replica_uid)
+
+    def test_init_no_uid(self):
+        path = self.working_dir + '/test2.db'
+        cmd = self.make_command(client.CmdInitDB)
+        cmd.run(path, None)
+        self.assertTrue(os.path.exists(path))
+        db = sqlite_backend.SQLiteDatabase.open_database(path, create=False)
+        self.assertIsNot(None, db._replica_uid)
 
 
 class TestCmdPut(TestCaseWithDB):
@@ -261,7 +276,7 @@ class TestCommandLine(TestCaseWithDB):
 
     def test_init_db(self):
         path = self.working_dir + '/test2.db'
-        ret, stdout, stderr = self.run_main(['init-db', path, 'uid'])
+        ret, stdout, stderr = self.run_main(['init-db', path])
         db2 = sqlite_backend.SQLiteDatabase.open_database(path, create=False)
 
     def test_put(self):
