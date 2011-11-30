@@ -19,6 +19,7 @@ import subprocess
 
 from u1db import (
     __version__ as _u1db_version,
+    errors,
     tests,
     )
 from u1db.backends import (
@@ -154,6 +155,34 @@ class TestCmdDelete(TestCaseWithDB):
         self.assertIs(None, doc2.content)
         self.assertEqual('', cmd.stdout.getvalue())
         self.assertEqual('rev: %s\n' % (doc2.rev,), cmd.stderr.getvalue())
+
+    def test_delete_fails_if_nonexistent(self):
+        doc = self.db.create_doc(tests.simple_doc)
+        db2_path = self.db_path + '.typo'
+        cmd = self.make_command(client.CmdDelete)
+        # TODO: We should really not be showing a traceback here. But we need
+        #       to teach the commandline infrastructure how to handle
+        #       exceptions.
+        #       However, we *do* want to test that the db doesn't get created
+        #       by accident.
+        self.assertRaises(errors.DatabaseDoesNotExist,
+            cmd.run, db2_path, doc.doc_id, doc.rev)
+        self.assertFalse(os.path.exists(db2_path))
+
+    def test_delete_no_such_doc(self):
+        cmd = self.make_command(client.CmdDelete)
+        # TODO: We should really not be showing a traceback here. But we need
+        #       to teach the commandline infrastructure how to handle
+        #       exceptions.
+        self.assertRaises(errors.DocumentDoesNotExist,
+            cmd.run, self.db_path, 'no-doc-id', 'no-rev')
+
+    def test_delete_bad_rev(self):
+        doc = self.db.create_doc(tests.simple_doc)
+        cmd = self.make_command(client.CmdDelete)
+        self.assertRaises(errors.RevisionConflict,
+            cmd.run, self.db_path, doc.doc_id, 'not-the-actual-doc-rev:1')
+        # TODO: Test that we get a pretty output.
 
 
 class TestCmdGet(TestCaseWithDB):
