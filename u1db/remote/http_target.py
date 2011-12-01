@@ -60,7 +60,7 @@ class HTTPSyncTarget(http_client.HTTPClientBase, SyncTarget):
         size += prepare(last_known_generation=last_known_generation,
                         from_replica_generation=from_replica_generation)
         for doc in docs:
-            size += prepare(id=doc.doc_id, rev=doc.rev, doc=doc.content)
+            size += prepare(id=doc.doc_id, rev=doc.rev, content=doc.content)
         self._conn.putheader('content-length', str(size))
         self._conn.endheaders()
         for entry in entries:
@@ -71,7 +71,7 @@ class HTTPSyncTarget(http_client.HTTPClientBase, SyncTarget):
         res = simplejson.loads(data[0])
         for entry in data[1:]:
             entry = simplejson.loads(entry)
-            doc = Document(entry['id'], entry['rev'], entry['doc'])
+            doc = Document(entry['id'], entry['rev'], entry['content'])
             return_doc_cb(doc)
         data = None
         return res['new_generation']
