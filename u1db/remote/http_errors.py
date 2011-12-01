@@ -21,6 +21,7 @@ from u1db import (
 
 # error wire descriptions mapping to HTTP status codes
 wire_description_to_status = dict([
+    (errors.InvalidDocId.wire_description, 400),
     (errors.DatabaseDoesNotExist.wire_description, 404),
     (errors.DocumentDoesNotExist.wire_description, 404),
     (errors.DocumentAlreadyDeleted.wire_description, 404),
@@ -30,6 +31,7 @@ wire_description_to_status = dict([
 ])
 
 
-# 400 included for tests/anticipated usage
-ERROR_STATUSES = set(wire_description_to_status.values())|set([400])
 
+ERROR_STATUSES = set(wire_description_to_status.values())
+# 400 included explicitly for tests
+ERROR_STATUSES.add(400)

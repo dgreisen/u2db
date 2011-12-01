@@ -27,6 +27,7 @@ from u1db import (
     __version__ as _u1db_version,
     Document,
     errors,
+    DBNAME_CONSTRAINTS,
     )
 from u1db.remote import (
     http_errors,
@@ -149,7 +150,8 @@ class URLToResource(object):
     def register(self, resource_cls):
         # register
         self._map.connect(None, resource_cls.url_pattern,
-                          resource_cls=resource_cls)
+                          resource_cls=resource_cls,
+                          requirements={"dbname": DBNAME_CONSTRAINTS})
         self._map.create_regs()
         return resource_cls
 
