@@ -49,4 +49,5 @@ class ServerState(object):
         """Ensure database at the given location."""
         from u1db.backends import sqlite_backend
         full_path = self._relpath(path)
-        return sqlite_backend.SQLiteDatabase.open_database(full_path)
+        return sqlite_backend.SQLiteDatabase.open_database(full_path,
+                                                           create=True)

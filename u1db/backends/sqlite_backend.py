@@ -75,7 +75,7 @@ class SQLiteDatabase(CommonBackend):
         return SQLiteDatabase._sqlite_registry[v](sqlite_file)
 
     @classmethod
-    def open_database(cls, sqlite_file, backend_cls=None, create=True):
+    def open_database(cls, sqlite_file, create, backend_cls=None):
         try:
             return cls._open_database(sqlite_file)
         except errors.DatabaseDoesNotExist:
