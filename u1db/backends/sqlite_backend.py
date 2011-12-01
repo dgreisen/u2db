@@ -167,7 +167,7 @@ class SQLiteDatabase(CommonBackend):
         # unique amongst all databases that will sync with each other.
         # We might extend this to using something with hostname for easier
         # debugging.
-        self._set_replica_uid(uuid.uuid4().hex)
+        self._set_replica_uid_in_transaction(uuid.uuid4().hex)
         c.execute("INSERT INTO u1db_config VALUES" " ('index_storage', ?)",
                   (self._index_storage_value,))
 
@@ -195,10 +195,14 @@ class SQLiteDatabase(CommonBackend):
     def _set_replica_uid(self, replica_uid):
         """Force the replica_uid to be set."""
         with self._db_handle:
-            c = self._db_handle.cursor()
-            c.execute("INSERT OR REPLACE INTO u1db_config"
-                      " VALUES ('replica_uid', ?)",
-                      (replica_uid,))
+            self._set_replica_uid_in_transaction(replica_uid)
+
+    def _set_replica_uid_in_transaction(self, replica_uid):
+        """Set the replica_uid. A transaction should already be held."""
+        c = self._db_handle.cursor()
+        c.execute("INSERT OR REPLACE INTO u1db_config"
+                  " VALUES ('replica_uid', ?)",
+                  (replica_uid,))
         self._real_replica_uid = replica_uid
 
     def _get_replica_uid(self):

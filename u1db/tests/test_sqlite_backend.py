@@ -214,6 +214,23 @@ class TestSQLitePartialExpandDatabase(tests.TestCase):
                           (doc1.doc_id, "sub.doc", "underneath"),
                          ], c.fetchall())
 
+    def test__ensure_schema_rollback(self):
+        temp_dir = self.createTempDir(prefix='u1db-test-')
+        path = temp_dir + '/rollback.db'
+        class SQLitePartialExpandDbTesting(
+            sqlite_backend.SQLitePartialExpandDatabase):
+            def _set_replica_uid_in_transaction(self, uid):
+                super(SQLitePartialExpandDbTesting,
+                    self)._set_replica_uid_in_transaction(uid)
+                if fail:
+                    raise Exception()
+        db = SQLitePartialExpandDbTesting.__new__(SQLitePartialExpandDbTesting)
+        db._db_handle = dbapi2.connect(path) # db is there but not yet init-ed
+        fail = True
+        self.assertRaises(Exception, db._ensure_schema)
+        fail = False
+        db._initialize(db._db_handle.cursor())
+
     def test__open_database(self):
         temp_dir = self.createTempDir(prefix='u1db-test-')
         path = temp_dir + '/test.sqlite'
