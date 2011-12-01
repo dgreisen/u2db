@@ -408,3 +408,25 @@ class TestHTTPIntegration(tests.TestCaseWithServer, RunMainHelper):
         ret, stdout, stderr = self.run_main(['init-db', url])
         db2 = u1db_open(self.getPath('new.db'), create=False)
 
+    def test_create_get_put_delete(self):
+        db = u1db_open(self.getPath('test.db'), create=True)
+        url = self.getURL('test.db')
+        doc_id = '%abcd'
+        ret, stdout, stderr = self.run_main(['create', url, '--id', doc_id],
+                                            stdin=tests.simple_doc)
+        self.assertEqual(0, ret)
+        ret, stdout, stderr = self.run_main(['get', url, doc_id])
+        self.assertEqual(0, ret)
+        self.assertTrue(stderr.startswith('rev: '))
+        doc_rev = stderr[len('rev: '):].rstrip()
+        ret, stdout, stderr = self.run_main(['put', url, doc_id, doc_rev],
+                                            stdin=tests.nested_doc)
+        self.assertEqual(0, ret)
+        self.assertTrue(stderr.startswith('rev: '))
+        doc_rev1 = stderr[len('rev: '):].rstrip()
+        self.assertGetDoc(db, doc_id, doc_rev1, tests.nested_doc, False)
+        ret, stdout, stderr = self.run_main(['delete', url, doc_id, doc_rev1])
+        self.assertEqual(0, ret)
+        self.assertTrue(stderr.startswith('rev: '))
+        doc_rev2 = stderr[len('rev: '):].rstrip()
+        self.assertGetDoc(db, doc_id, doc_rev2, None, False)
