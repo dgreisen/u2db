@@ -18,6 +18,7 @@ import os
 import simplejson
 from sqlite3 import dbapi2
 import time
+import uuid
 
 from u1db.backends import CommonBackend, CommonSyncTarget
 from u1db import Document, errors
@@ -158,11 +159,19 @@ class SQLiteDatabase(CommonBackend):
                   " field TEXT,"
                   " CONSTRAINT index_definitions_pkey"
                   " PRIMARY KEY (name, offset))")
-        c.execute("CREATE TABLE u1db_config (name TEXT, value TEXT)")
+        c.execute("CREATE TABLE u1db_config ("
+                  " name TEXT PRIMARY KEY,"
+                  " value TEXT)")
         c.execute("INSERT INTO u1db_config VALUES ('sql_schema', '0')")
+        self._extra_schema_init(c)
+        # A unique identifier should be set for this replica. Implementations
+        # don't have to strictly use uuid here, but we do want the uid to be
+        # unique amongst all databases that will sync with each other.
+        # We might extend this to using something with hostname for easier
+        # debugging.
+        self._set_replica_uid_in_transaction(uuid.uuid4().hex)
         c.execute("INSERT INTO u1db_config VALUES" " ('index_storage', ?)",
                   (self._index_storage_value,))
-        self._extra_schema_init(c)
 
     def _ensure_schema(self):
         """Ensure that the database schema has been created."""
@@ -188,9 +197,14 @@ class SQLiteDatabase(CommonBackend):
     def _set_replica_uid(self, replica_uid):
         """Force the replica_uid to be set."""
         with self._db_handle:
-            c = self._db_handle.cursor()
-            c.execute("INSERT INTO u1db_config VALUES ('replica_uid', ?)",
-                      (replica_uid,))
+            self._set_replica_uid_in_transaction(replica_uid)
+
+    def _set_replica_uid_in_transaction(self, replica_uid):
+        """Set the replica_uid. A transaction should already be held."""
+        c = self._db_handle.cursor()
+        c.execute("INSERT OR REPLACE INTO u1db_config"
+                  " VALUES ('replica_uid', ?)",
+                  (replica_uid,))
         self._real_replica_uid = replica_uid
 
     def _get_replica_uid(self):
