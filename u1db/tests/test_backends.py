@@ -89,6 +89,12 @@ class AllDatabaseTests(tests.DatabaseBaseTests, tests.TestCaseWithServer):
         doc = Document(None, None, simple_doc)
         self.assertRaises(errors.InvalidDocId, self.db.put_doc, doc)
 
+    def test_put_doc_refuses_slashes(self):
+        doc = Document('/a', None, simple_doc)
+        self.assertRaises(errors.InvalidDocId, self.db.put_doc, doc)
+        doc = Document(r'\b', None, simple_doc)
+        self.assertRaises(errors.InvalidDocId, self.db.put_doc, doc)
+
     def test_put_doc_refuses_non_existing_old_rev(self):
         doc = Document('doc-id', 'test:4', simple_doc)
         self.assertRaises(errors.RevisionConflict, self.db.put_doc, doc)

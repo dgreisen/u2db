@@ -36,6 +36,9 @@ def open(path, create):
 # constraints on database names (relevant for remote access, as regex)
 DBNAME_CONSTRAINTS = r"[a-zA-Z0-9][a-zA-Z0-9.-]*"
 
+# constraints on doc ids (as regex)
+DOC_ID_CONSTRAINTS = r"[^/\\]+"
+
 
 class Database(object):
     """A JSON Document data store.
