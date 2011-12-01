@@ -26,6 +26,7 @@ from u1db import (
 from u1db.backends import sqlite_backend
 from u1db.commandline import command
 from u1db.remote import (
+    http_database,
     http_target,
     )
 
@@ -110,14 +111,22 @@ class CmdInitDB(command.Command):
 
     name = 'init-db'
 
+    def _open(self, database, create):
+        if database.startswith('http://'):
+            return http_database.HTTPDatabase.open_database(database, create)
+        else:
+            return u1db_open(database, create)
+
     @classmethod
     def _populate_subparser(cls, parser):
-        parser.add_argument('database', help='The database to create')
+        parser.add_argument('database',
+                            help='The local or remote database to create',
+                            metavar='PATH_OR_URL')
         parser.add_argument('--replica-uid', default=None,
-            help='The unique identifier for this database')
+            help='The unique identifier for this database (not for remote)')
 
     def run(self, database, replica_uid):
-        db = u1db_open(database, create=True)
+        db = self._open(database, create=True)
         if replica_uid is not None:
             db._set_replica_uid(replica_uid)
 

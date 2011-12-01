@@ -406,5 +406,5 @@ class TestHTTPIntegration(tests.TestCaseWithServer, RunMainHelper):
     def test_init_db(self):
         url = self.getURL('new.db')
         ret, stdout, stderr = self.run_main(['init-db', url])
-        db2 = u1db.open(self.getPath('new.db'), create=False)
+        db2 = u1db_open(self.getPath('new.db'), create=False)
 
