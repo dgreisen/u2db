@@ -34,6 +34,7 @@ class RevisionConflict(U1DBError):
 class InvalidDocId(U1DBError):
     """A document was tried with an invalid document identifier."""
 
+    wire_description = "invalid document id"
 
 class ConflictedDoc(U1DBError):
     """The document is conflicted, you must call resolve before put()"""

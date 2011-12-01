@@ -14,9 +14,17 @@
 
 """"""
 
+import re
+
 import u1db
+from u1db import (
+    errors,
+)
 import u1db.sync
 from u1db.vectorclock import VectorClockRev
+
+
+check_doc_id_re = re.compile("^" + u1db.DOC_ID_CONSTRAINTS + "$")
 
 
 class CommonSyncTarget(u1db.sync.LocalSyncTarget):
@@ -33,6 +41,10 @@ class CommonBackend(u1db.Database):
         vcr = VectorClockRev(old_doc_rev)
         vcr.increment(self._replica_uid)
         return vcr.as_str()
+
+    def _check_doc_id(self, doc_id):
+        if not check_doc_id_re.match(doc_id):
+            raise errors.InvalidDocId()
 
     def _get_generation(self):
         raise NotImplementedError(self._get_generation)

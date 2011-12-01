@@ -181,3 +181,12 @@ class TestHTTPDatabaseIntegration(tests.TestCaseWithServer):
         db = http_database.HTTPDatabase.open_database(self.getURL('new'),
                                                       create=True)
         self.assertIs(None, db.get_doc('doc1'))
+
+    def test_doc_ids_needing_quoting(self):
+        db0 = self.request_state._create_database('db0')
+        db = http_database.HTTPDatabase.open_database(self.getURL('db0'),
+                                                      create=False)
+        doc = Document('%fff', None, '{}')
+        db.put_doc(doc)
+        self.assertGetDoc(db0, '%fff', doc.rev, '{}', False)
+        self.assertGetDoc(db, '%fff', doc.rev, '{}', False)

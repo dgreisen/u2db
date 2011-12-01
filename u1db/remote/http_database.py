@@ -36,7 +36,7 @@ class HTTPDatabase(http_client.HTTPClientBase, Database):
     """Implement the Database API to a remote HTTP server."""
 
     @staticmethod
-    def open_database(url, create=False):
+    def open_database(url, create):
         db = HTTPDatabase(url)
         if create:
             db._ensure()

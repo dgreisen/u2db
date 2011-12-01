@@ -439,6 +439,32 @@ class TestHTTPApp(tests.TestCase):
         self.assertEqual('application/json', resp.header('content-type'))
         self.assertEqual({}, simplejson.loads(resp.body))
 
+    def test_valid_database_names(self):
+        resp = self.app.get('/a-database', expect_errors=True)
+        self.assertEqual(404, resp.status)
+
+        resp = self.app.get('/db1', expect_errors=True)
+        self.assertEqual(404, resp.status)
+
+        resp = self.app.get('/0', expect_errors=True)
+        self.assertEqual(404, resp.status)
+
+        resp = self.app.get('/0-0', expect_errors=True)
+        self.assertEqual(404, resp.status)
+
+        resp = self.app.get('/org.future', expect_errors=True)
+        self.assertEqual(404, resp.status)
+
+    def test_invalid_database_names(self):
+        resp = self.app.get('/.a', expect_errors=True)
+        self.assertEqual(400, resp.status)
+
+        resp = self.app.get('/-a', expect_errors=True)
+        self.assertEqual(400, resp.status)
+
+        resp = self.app.get('/_a', expect_errors=True)
+        self.assertEqual(400, resp.status)
+
     def test_put_doc_create(self):
         resp = self.app.put('/db0/doc/doc1', params='{"x": 1}',
                             headers={'content-type': 'application/json'})

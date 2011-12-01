@@ -20,10 +20,8 @@ import subprocess
 from u1db import (
     __version__ as _u1db_version,
     errors,
+    open as u1db_open,
     tests,
-    )
-from u1db.backends import (
-    sqlite_backend,
     )
 from u1db.commandline import (
     client,
@@ -89,10 +87,17 @@ class TestArgs(tests.TestCase):
         self.assertEqual(sys.stdout, args.outfile)
 
     def test_init_db(self):
-        args = self.parse_args(['init-db', 'test.db', 'replica-uid'])
+        args = self.parse_args(
+            ['init-db', 'test.db', '--replica-uid=replica-uid'])
         self.assertEqual(client.CmdInitDB, args.subcommand)
         self.assertEqual('test.db', args.database)
         self.assertEqual('replica-uid', args.replica_uid)
+
+    def test_init_db_no_replica(self):
+        args = self.parse_args(['init-db', 'test.db'])
+        self.assertEqual(client.CmdInitDB, args.subcommand)
+        self.assertEqual('test.db', args.database)
+        self.assertIs(None, args.replica_uid)
 
     def test_put(self):
         args = self.parse_args(['put', 'test.db', 'doc-id', 'old-doc-rev'])
@@ -121,7 +126,7 @@ class TestCaseWithDB(tests.TestCase):
         super(TestCaseWithDB, self).setUp()
         self.working_dir = self.createTempDir()
         self.db_path = self.working_dir + '/test.db'
-        self.db = sqlite_backend.SQLiteDatabase.open_database(self.db_path)
+        self.db = u1db_open(self.db_path, create=True)
         self.db._set_replica_uid('test')
         self.addCleanup(self.db.close)
 
@@ -210,8 +215,16 @@ class TestCmdInit(TestCaseWithDB):
         cmd = self.make_command(client.CmdInitDB)
         cmd.run(path, 'test-uid')
         self.assertTrue(os.path.exists(path))
-        db = sqlite_backend.SQLiteDatabase.open_database(path, create=False)
+        db = u1db_open(path, create=False)
         self.assertEqual('test-uid', db._replica_uid)
+
+    def test_init_no_uid(self):
+        path = self.working_dir + '/test2.db'
+        cmd = self.make_command(client.CmdInitDB)
+        cmd.run(path, None)
+        self.assertTrue(os.path.exists(path))
+        db = u1db_open(path, create=False)
+        self.assertIsNot(None, db._replica_uid)
 
 
 class TestCmdPut(TestCaseWithDB):
@@ -238,7 +251,7 @@ class TestCmdSync(TestCaseWithDB):
     def setUp(self):
         super(TestCmdSync, self).setUp()
         self.db2_path = self.working_dir + '/test2.db'
-        self.db2 = sqlite_backend.SQLiteDatabase.open_database(self.db2_path)
+        self.db2 = u1db_open(self.db2_path, create=True)
         self.addCleanup(self.db2.close)
         self.db2._set_replica_uid('test2')
         self.doc  = self.db.create_doc(tests.simple_doc, doc_id='test-id')
@@ -345,8 +358,8 @@ class TestCommandLine(TestCaseWithDB, RunMainHelper):
 
     def test_init_db(self):
         path = self.working_dir + '/test2.db'
-        ret, stdout, stderr = self.run_main(['init-db', path, 'uid'])
-        db2 = sqlite_backend.SQLiteDatabase.open_database(path, create=False)
+        ret, stdout, stderr = self.run_main(['init-db', path])
+        db2 = u1db_open(path, create=False)
 
     def test_put(self):
         doc = self.db.create_doc(tests.simple_doc, doc_id='test-id')
@@ -363,7 +376,7 @@ class TestCommandLine(TestCaseWithDB, RunMainHelper):
     def test_sync(self):
         doc = self.db.create_doc(tests.simple_doc, doc_id='test-id')
         self.db2_path = self.working_dir + '/test2.db'
-        self.db2 = sqlite_backend.SQLiteDatabase.open_database(self.db2_path)
+        self.db2 = u1db_open(self.db2_path, create=True)
         self.addCleanup(self.db2.close)
         ret, stdout, stderr = self.run_main(
             ['sync', self.db_path, self.db2_path])
@@ -393,6 +406,5 @@ class TestHTTPIntegration(tests.TestCaseWithServer, RunMainHelper):
     def test_init_db(self):
         url = self.getURL('new.db')
         ret, stdout, stderr = self.run_main(['init-db', url])
-        db2 = sqlite_backend.SQLiteDatabase.open_database(
-                                          self.getPath('new.db'), create=False)
+        db2 = u1db.open(self.getPath('new.db'), create=False)
 

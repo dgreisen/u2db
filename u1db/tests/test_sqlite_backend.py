@@ -87,6 +87,12 @@ class TestSQLitePartialExpandDatabase(tests.TestCase):
         raw_db = self.db._get_sqlite_handle()
         self.assertNotEqual(None, raw_db)
 
+    def test_default_replica_uid(self):
+        self.db = sqlite_backend.SQLitePartialExpandDatabase(':memory:')
+        self.assertIsNot(None, self.db._replica_uid)
+        self.assertEqual(32, len(self.db._replica_uid))
+        val = int(self.db._replica_uid, 16)
+
     def test__close_sqlite_handle(self):
         raw_db = self.db._get_sqlite_handle()
         self.db._close_sqlite_handle()
@@ -112,8 +118,8 @@ class TestSQLitePartialExpandDatabase(tests.TestCase):
     def test__set_replica_uid(self):
         # Start from scratch, so that replica_uid isn't set.
         self.db = sqlite_backend.SQLitePartialExpandDatabase(':memory:')
-        self.assertEqual(None, self.db._real_replica_uid)
-        self.assertEqual(None, self.db._replica_uid)
+        self.assertIsNot(None, self.db._real_replica_uid)
+        self.assertIsNot(None, self.db._replica_uid)
         self.db._set_replica_uid('foo')
         c = self.db._get_sqlite_handle().cursor()
         c.execute("SELECT value FROM u1db_config WHERE name='replica_uid'")
@@ -124,7 +130,6 @@ class TestSQLitePartialExpandDatabase(tests.TestCase):
         self.assertEqual('foo', self.db._replica_uid)
 
     def test__get_generation(self):
-        self.db._set_replica_uid('foo')
         self.assertEqual(0, self.db._get_generation())
 
     def test__allocate_doc_id(self):
@@ -209,6 +214,23 @@ class TestSQLitePartialExpandDatabase(tests.TestCase):
                           (doc1.doc_id, "sub.doc", "underneath"),
                          ], c.fetchall())
 
+    def test__ensure_schema_rollback(self):
+        temp_dir = self.createTempDir(prefix='u1db-test-')
+        path = temp_dir + '/rollback.db'
+        class SQLitePartialExpandDbTesting(
+            sqlite_backend.SQLitePartialExpandDatabase):
+            def _set_replica_uid_in_transaction(self, uid):
+                super(SQLitePartialExpandDbTesting,
+                    self)._set_replica_uid_in_transaction(uid)
+                if fail:
+                    raise Exception()
+        db = SQLitePartialExpandDbTesting.__new__(SQLitePartialExpandDbTesting)
+        db._db_handle = dbapi2.connect(path) # db is there but not yet init-ed
+        fail = True
+        self.assertRaises(Exception, db._ensure_schema)
+        fail = False
+        db._initialize(db._db_handle.cursor())
+
     def test__open_database(self):
         temp_dir = self.createTempDir(prefix='u1db-test-')
         path = temp_dir + '/test.sqlite'
@@ -270,7 +292,7 @@ class TestSQLitePartialExpandDatabase(tests.TestCase):
     def test_open_database_create(self):
         temp_dir = self.createTempDir(prefix='u1db-test-')
         path = temp_dir + '/new.sqlite'
-        db = sqlite_backend.SQLiteDatabase.open_database(path)
+        db = sqlite_backend.SQLiteDatabase.open_database(path, create=True)
         db2 = sqlite_backend.SQLiteDatabase.open_database(path, create=False)
         self.assertIsInstance(db2, sqlite_backend.SQLitePartialExpandDatabase)
 
