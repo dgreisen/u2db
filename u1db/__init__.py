@@ -33,6 +33,10 @@ def open(path, create):
     return sqlite_backend.SQLiteDatabase.open_database(path, create=create)
 
 
+# constraints on database names (relevant for remote access, as regex)
+DBNAME_CONSTRAINTS = r"[a-zA-Z0-9][a-zA-Z0-9.-]*"
+
+
 class Database(object):
     """A JSON Document data store.
 
