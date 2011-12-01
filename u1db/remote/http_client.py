@@ -69,7 +69,12 @@ class HTTPClientBase(object):
     def _request(self, method, url_parts, params=None, body=None,
                                                        content_type=None):
         self._ensure_connection()
-        url_query = '/'.join([self._url.path] + url_parts)
+        url_query = self._url.path
+        if url_parts:
+            if not url_query.endswith('/'):
+                url_query += '/'
+            url_query += '/'.join(urllib.quote(part, safe='')
+                                  for part in url_parts)
         if params:
             url_query += ('?' +
                       urllib.urlencode(dict((unicode(v).encode('utf-8'),
