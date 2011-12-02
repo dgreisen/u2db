@@ -1,3 +1,19 @@
+# Copyright 2011 Canonical Ltd.
+#
+# This program is free software: you can redistribute it and/or modify it
+# under the terms of the GNU General Public License version 3, as published
+# by the Free Software Foundation.
+#
+# This program is distributed in the hope that it will be useful, but
+# WITHOUT ANY WARRANTY; without even the implied warranties of
+# MERCHANTABILITY, SATISFACTORY QUALITY, or FITNESS FOR A PARTICULAR
+# PURPOSE.  See the GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License along
+# with this program.  If not, see <http://www.gnu.org/licenses/>.
+
+"""Code for parsing Index definitions."""
+
 import string
 
 
@@ -7,14 +23,14 @@ class Getter(object):
     def get(self, raw_doc):
         """Get a value from the document.
 
-        :param raw_doc: the doc to get the value from.
+        :param raw_doc: a python dictionary to get the value from.
         :return: the value, possibly None
         """
         raise NotImplementedError(self.get)
 
 
 class StaticGetter(Getter):
-    """A getter that returns a defined value."""
+    """A getter that returns a defined value (independent of the doc)."""
 
     def __init__(self, value):
         """Create a StaticGetter.
@@ -34,11 +50,11 @@ class ExtractField(Getter):
         """Create an ExtractField object.
 
         When a document is passed to get() this will return a value
-        from the docuemnt based on the field specifier passed to
+        from the document based on the field specifier passed to
         the constructor.
 
-        If the field specifier refers to a field in the document
-        that is not present, then None will be returned.
+        None will be returned if the field is nonexistant, or refers to an
+        object, rather than a simple type or list of simple types.
 
         :param field: a specifier for the field to return.
             This is either a field name, or a dotted field name.
@@ -65,15 +81,15 @@ class ExtractField(Getter):
 class Transformation(Getter):
     """A transformation on a value from another Getter."""
 
+    name = None
+    """The name that the transform has in a query string."""
+
     def __init__(self, inner):
         """Create a transformation.
 
         :param inner: the Getter to transform the value for.
         """
         self.inner = inner
-
-    name = None
-    """The name that the transform has in a query string."""
 
     def get(self, raw_doc):
         inner_value = self.inner.get(raw_doc)
