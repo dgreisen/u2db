@@ -253,6 +253,9 @@ class TestParser(tests.TestCase):
     def test_parse_missing_field_in_transformation(self):
         self.assertParseError("lower()")
 
+    def test_parse_trailing_chars(self):
+        self.assertParseError("lower(ab$)")
+
     def test_parse_transformation(self):
         getter = self.parse("lower(a)")
         self.assertIsInstance(getter, query_parser.Lower)

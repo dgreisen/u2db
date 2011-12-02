@@ -181,13 +181,14 @@ class Parser(object):
     """Parse an index expression into a sequence of transformations."""
 
     _transformations = {}
+    _word_chars = string.lowercase + string.uppercase + "._" + string.digits
 
     def _take_word(self, partial):
         i = 0
         word = ""
         while i < len(partial):
             char = partial[i]
-            if char in string.lowercase + string.uppercase + "._" + string.digits:
+            if char in self._word_chars:
                 word += char
                 i += 1
             else:
@@ -212,8 +213,10 @@ class Parser(object):
             inner = self._inner_parse(field[1:-1])
             return op(inner)
         else:
-            assert len(field) == 0, "Unparsed chars: %s" % field
-            if len(word) <= 0:
+            if len(field) != 0:
+                raise errors.IndexDefinitionParseError(
+                    "Unhandled characters: %s" % (field,))
+            if len(word) == 0:
                 raise errors.IndexDefinitionParseError(
                     "Missing field specifier")
             if word.endswith("."):
