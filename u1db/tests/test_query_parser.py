@@ -155,37 +155,36 @@ class TestSplitWords(tests.TestCase):
                               ['foo baz', {'baa': 'xam'}, 'bar sux'])
 
 
-class IsNullTests(tests.TestCase):
+class TestIsNull(tests.TestCase):
+
+    def assertIsNull(self, value):
+        getter = query_parser.IsNull(query_parser.StaticGetter(value))
+        self.assertEqual(True, getter.get(trivial_raw_doc))
+
+    def assertIsNotNull(self, value):
+        getter = query_parser.IsNull(query_parser.StaticGetter(value))
+        self.assertEqual(False, getter.get(trivial_raw_doc))
 
     def test_inner_returns_None(self):
-        getter = query_parser.IsNull(query_parser.StaticGetter(None))
-        val = getter.get('foo')
-        self.assertEqual(True, val)
+        self.assertIsNull(None)
 
     def test_inner_returns_string(self):
-        getter = query_parser.IsNull(query_parser.StaticGetter('foo'))
-        val = getter.get('zap')
-        self.assertEqual(False, val)
+        self.assertIsNotNull('foo')
 
     def test_inner_returns_list(self):
-        getter = query_parser.IsNull(query_parser.StaticGetter(['foo', 'bar']))
-        val = getter.get('zap')
-        self.assertEqual(False, val)
+        self.assertIsNotNull(['foo', 'bar'])
 
     def test_inner_returns_int(self):
-        getter = query_parser.IsNull(query_parser.StaticGetter(9))
-        val = getter.get('zap')
-        self.assertEqual(False, val)
+        self.assertIsNotNull(9)
 
     def test_inner_returns_float(self):
-        getter = query_parser.IsNull(query_parser.StaticGetter(9.0))
-        val = getter.get('zap')
-        self.assertEqual(False, val)
+        self.assertIsNotNull(9.2)
 
     def test_inner_returns_bool(self):
-        getter = query_parser.IsNull(query_parser.StaticGetter(True))
-        val = getter.get('zap')
-        self.assertEqual(False, val)
+        self.assertIsNotNull(True)
+
+    # TODO: What about a dict? Inner is likely to return None, even though the
+    #       attribute does exist...
 
 
 class EnsureListTransformationTests(tests.TestCase):

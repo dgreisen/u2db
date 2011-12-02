@@ -218,6 +218,7 @@ class ParseError(Exception):
 
 
 class Parser(object):
+    """Parse an index expression into a sequence of transformations."""
 
     _transformations = {}
 
