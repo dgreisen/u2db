@@ -256,6 +256,12 @@ class TestParser(tests.TestCase):
     def test_parse_trailing_chars(self):
         self.assertParseError("lower(ab$)")
 
+    def test_parse_empty_op(self):
+        self.assertParseError("(ab)")
+
+    def test_parse_unknown_op(self):
+        self.assertParseError("no_such_operation(field)")
+
     def test_parse_transformation(self):
         getter = self.parse("lower(a)")
         self.assertIsInstance(getter, query_parser.Lower)
