@@ -25,6 +25,7 @@ from u1db import (
 from u1db.remote import (
     http_client,
     http_errors,
+    http_target,
     )
 
 
@@ -94,3 +95,6 @@ class HTTPDatabase(http_client.HTTPClientBase, Database):
         res, headers = self._request_json('DELETE', ['doc', doc.doc_id], params)
         doc.content = None
         doc.rev = res['rev']
+
+    def get_sync_target(self):
+        return http_target.HTTPSyncTarget(self._url.geturl())
