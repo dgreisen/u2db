@@ -18,13 +18,13 @@ import string
 
 
 class Getter(object):
-    """Get a value from a document based on a specification."""
+    """Get values from a document based on a specification."""
 
     def get(self, raw_doc):
         """Get a value from the document.
 
         :param raw_doc: a python dictionary to get the value from.
-        :return: the value, possibly None
+        :return: A list of values that match the description.
         """
         raise NotImplementedError(self.get)
 
@@ -37,7 +37,12 @@ class StaticGetter(Getter):
 
         :param value: the value to return when get is called.
         """
-        self.value = value
+        if value is None:
+            self.value = []
+        elif isinstance(value, list):
+            self.value = value
+        else:
+            self.value = [value]
 
     def get(self, raw_doc):
         return self.value
@@ -66,16 +71,18 @@ class ExtractField(Getter):
             if isinstance(raw_doc, dict):
                 raw_doc = raw_doc.get(subfield)
             else:
-                raw_doc = None
-                break
+                return []
         if isinstance(raw_doc, dict):
-            raw_doc = None
-        if isinstance(raw_doc, list):
-            for val in raw_doc:
-                if isinstance(val, dict) or isinstance(val, list):
-                    raw_doc = None
-                    break
-        return raw_doc
+            return []
+        if raw_doc is None:
+            result = []
+        elif isinstance(raw_doc, list):
+            # If anything in the list is not a simple type, the list is
+            result = [val for val in raw_doc
+                      if not isinstance(val, (dict, list))]
+        else:
+            result = [raw_doc]
+        return result
 
 
 class Transformation(Getter):
@@ -92,17 +99,18 @@ class Transformation(Getter):
         self.inner = inner
 
     def get(self, raw_doc):
-        inner_value = self.inner.get(raw_doc)
-        return self.transform(inner_value)
+        inner_values = self.inner.get(raw_doc)
+        assert isinstance(inner_values, list), 'get() should always return a list'
+        return self.transform(inner_values)
 
-    def transform(self, value):
-        """Transform the value.
+    def transform(self, values):
+        """Transform the values.
 
         This should be implemented by subclasses to transform the
         value when get() is called.
 
-        :param value: the value from the other Getter. May be None.
-        :return: the transformed value.
+        :param values: the values from the other Getter
+        :return: the transformed values.
         """
         raise NotImplementedError(self.transform)
 
@@ -118,33 +126,18 @@ class Lower(Transformation):
     name = "lower"
 
     def _can_transform(self, val):
-        if isinstance(val, int):
-            return False
-        if isinstance(val, bool):
-            return False
-        if isinstance(val, float):
-            return False
-        if isinstance(val, list):
-            return False
-        if isinstance(val, dict):
-            return False
-        return True
+        return not isinstance(val, (int, bool, float, list, dict))
 
-    def transform(self, value):
-        if value is None:
-            return value
-        if isinstance(value, list):
-            return [val.lower() for val in value if self._can_transform(val)]
-        else:
-            if self._can_transform(value):
-                return value.lower()
-            return None
+    def transform(self, values):
+        if not values:
+            return []
+        return [val.lower() for val in values if self._can_transform(val)]
 
 
 class SplitWords(Transformation):
     """Split a string on whitespace.
 
-    This Getter will return None for non-string inputs. It will however
+    This Getter will return [] for non-string inputs. It will however
     split any strings in an input list, discarding any elements that
     are not strings.
     """
@@ -152,37 +145,20 @@ class SplitWords(Transformation):
     name = "split_words"
 
     def _can_transform(self, val):
-        if isinstance(val, int):
-            return False
-        if isinstance(val, bool):
-            return False
-        if isinstance(val, float):
-            return False
-        if isinstance(val, list):
-            return False
-        if isinstance(val, dict):
-            return False
-        return True
+        return not isinstance(val, (int, bool, float, list, dict))
 
-    def transform(self, value):
-        if value is None:
-            return value
-        if isinstance(value, list):
-            joined_values = []
-            for val in value:
-                if self._can_transform(val):
-                    for word in val.split():
-                        if word not in joined_values:
-                            joined_values.append(word)
-            return joined_values
-        else:
+    def transform(self, values):
+        if not values:
+            return []
+        result = []
+        for value in values:
             if self._can_transform(value):
-                values = []
+                # TODO: This is quadratic to search the list linearly while we
+                #       are appending to it. Consider using a set() instead.
                 for word in value.split():
-                    if word not in values:
-                        values.append(word)
-                return values
-            return None
+                    if word not in result:
+                        result.append(word)
+        return result
 
 
 class IsNull(Transformation):
@@ -193,24 +169,8 @@ class IsNull(Transformation):
 
     name = "is_null"
 
-    def transform(self, value):
-        return value is None
-
-
-class EnsureListTransformation(Transformation):
-    """A Getter than ensures a list is returned.
-
-    Unless the input is None, the output will be a list. If the input
-    is a list then it is returned unchanged, otherwise the input is
-    made the only element of the returned list.
-    """
-
-    def transform(self, value):
-        if value is None:
-            return value
-        if isinstance(value, list):
-            return value
-        return [value]
+    def transform(self, values):
+        return [len(values) == 0]
 
 
 class ParseError(Exception):
@@ -236,7 +196,6 @@ class Parser(object):
 
     def parse(self, field):
         inner = self._inner_parse(field)
-        inner = EnsureListTransformation(inner)
         return inner
 
     def _inner_parse(self, field):
