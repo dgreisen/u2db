@@ -15,7 +15,6 @@
 """HTTPDabase to access a remote db over the HTTP API."""
 
 import simplejson
-import urlparse
 import uuid
 
 from u1db import (
@@ -98,4 +97,4 @@ class HTTPDatabase(http_client.HTTPClientBase, Database):
         doc.rev = res['rev']
 
     def get_sync_target(self):
-        return http_target.HTTPSyncTarget(urlparse.urlunsplit(self._url))
+        return http_target.HTTPSyncTarget(self._url.geturl())
