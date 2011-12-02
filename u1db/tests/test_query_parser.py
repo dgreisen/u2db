@@ -1,4 +1,19 @@
+# Copyright 2011 Canonical Ltd.
+#
+# This program is free software: you can redistribute it and/or modify it
+# under the terms of the GNU General Public License version 3, as published
+# by the Free Software Foundation.
+#
+# This program is distributed in the hope that it will be useful, but
+# WITHOUT ANY WARRANTY; without even the implied warranties of
+# MERCHANTABILITY, SATISFACTORY QUALITY, or FITNESS FOR A PARTICULAR
+# PURPOSE.  See the GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License along
+# with this program.  If not, see <http://www.gnu.org/licenses/>.
+
 from u1db import (
+    errors,
     query_parser,
     tests,
     )
@@ -212,8 +227,12 @@ class TestParser(tests.TestCase):
         parser = query_parser.Parser()
         return parser.parse_all(specs)
 
+    def assertParseError(self, definition):
+        self.assertRaises(errors.IndexDefinitionParseError, self.parse,
+                          definition)
+
     def test_parse_empty_string(self):
-        self.assertRaises(query_parser.ParseError, self.parse, "")
+        self.assertRaises(errors.IndexDefinitionParseError, self.parse, "")
 
     def test_parse_field(self):
         getter = self.parse("a")
@@ -226,13 +245,13 @@ class TestParser(tests.TestCase):
         self.assertEqual("a.b", getter.field)
 
     def test_parse_dotted_field_nothing_after_dot(self):
-        self.assertRaises(query_parser.ParseError, self.parse, "a.")
+        self.assertParseError("a.")
 
     def test_parse_missing_close_on_transformation(self):
-        self.assertRaises(query_parser.ParseError, self.parse, "lower(a")
+        self.assertParseError("lower(a")
 
     def test_parse_missing_field_in_transformation(self):
-        self.assertRaises(query_parser.ParseError, self.parse, "lower()")
+        self.assertParseError("lower()")
 
     def test_parse_transformation(self):
         getter = self.parse("lower(a)")

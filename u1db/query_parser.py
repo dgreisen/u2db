@@ -16,6 +16,10 @@
 
 import string
 
+from u1db import (
+    errors,
+    )
+
 
 class Getter(object):
     """Get values from a document based on a specification."""
@@ -173,10 +177,6 @@ class IsNull(Transformation):
         return [len(values) == 0]
 
 
-class ParseError(Exception):
-    pass
-
-
 class Parser(object):
     """Parse an index expression into a sequence of transformations."""
 
@@ -203,18 +203,22 @@ class Parser(object):
         if field.startswith("("):
             # We have an operation
             if not field.endswith(")"):
-                raise ParseError("Invalid transformation function: %s" % field)
+                raise errors.IndexDefinitionParseError(
+                    "Invalid transformation function: %s" % field)
             op = self._transformations.get(word, None)
             if op is None:
-                raise AssertionError("Unknown operation: %s" % word)
+                raise errors.IndexDefinitionParseError(
+                    "Unknown operation: %s" % word)
             inner = self._inner_parse(field[1:-1])
             return op(inner)
         else:
             assert len(field) == 0, "Unparsed chars: %s" % field
             if len(word) <= 0:
-                raise ParseError("Missing field specifier")
+                raise errors.IndexDefinitionParseError(
+                    "Missing field specifier")
             if word.endswith("."):
-                raise ParseError("Invalid field specifier: %s" % word)
+                raise errors.IndexDefinitionParseError(
+                    "Invalid field specifier: %s" % word)
             return ExtractField(word)
 
     def parse_all(self, fields):
