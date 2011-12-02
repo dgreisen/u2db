@@ -107,7 +107,6 @@ LOCAL_DATABASES_SCENARIOS = [
 
 class DatabaseBaseTests(TestCase):
 
-    create_database = None
     scenarios = LOCAL_DATABASES_SCENARIOS
 
     def create_database(self, replica_uid):

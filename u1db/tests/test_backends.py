@@ -512,6 +512,63 @@ class DatabaseIndexTests(tests.DatabaseBaseTests):
         self.assertEqual([doc1],
             self.db.get_from_index('test-idx', [('*',)]))
 
+    def test_get_from_index_with_lower(self):
+        self.db.create_index("index", ["lower(name)"])
+        content = '{"name": "Foo"}'
+        doc = self.db.create_doc(content)
+        rows = self.db.get_from_index("index", [("foo", )])
+        self.assertEqual([doc], rows)
+
+    def test_get_from_index_with_lower_matches_same_case(self):
+        self.db.create_index("index", ["lower(name)"])
+        content = '{"name": "foo"}'
+        doc = self.db.create_doc(content)
+        rows = self.db.get_from_index("index", [("foo", )])
+        self.assertEqual([doc], rows)
+
+    def test_index_lower_doesnt_match_different_case(self):
+        self.db.create_index("index", ["lower(name)"])
+        content = '{"name": "Foo"}'
+        doc = self.db.create_doc(content)
+        rows = self.db.get_from_index("index", [("Foo", )])
+        self.assertEqual([], rows)
+
+    def test_index_lower_doesnt_match_other_index(self):
+        self.db.create_index("index", ["lower(name)"])
+        self.db.create_index("other_index", ["name"])
+        content = '{"name": "Foo"}'
+        doc = self.db.create_doc(content)
+        rows = self.db.get_from_index("index", [("Foo", )])
+        self.assertEqual(0, len(rows))
+
+    def test_index_list(self):
+        self.db.create_index("index", ["name"])
+        content = '{"name": ["foo", "bar"]}'
+        doc = self.db.create_doc(content)
+        rows = self.db.get_from_index("index", [("bar", )])
+        self.assertEqual([doc], rows)
+
+    def test_index_split_words_match_first(self):
+        self.db.create_index("index", ["split_words(name)"])
+        content = '{"name": "foo bar"}'
+        doc = self.db.create_doc(content)
+        rows = self.db.get_from_index("index", [("foo", )])
+        self.assertEqual([doc], rows)
+
+    def test_index_split_words_match_second(self):
+        self.db.create_index("index", ["split_words(name)"])
+        content = '{"name": "foo bar"}'
+        doc = self.db.create_doc(content)
+        rows = self.db.get_from_index("index", [("bar", )])
+        self.assertEqual([doc], rows)
+
+    def test_index_split_words_match_both(self):
+        self.db.create_index("index", ["split_words(name)"])
+        content = '{"name": "foo foo"}'
+        doc = self.db.create_doc(content)
+        rows = self.db.get_from_index("index", [("foo", )])
+        self.assertEqual([doc], rows)
+
     def test_get_partial_from_index(self):
         content1 = '{"k1": "v1", "k2": "v2"}'
         content2 = '{"k1": "v1", "k2": "x2"}'

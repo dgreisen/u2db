@@ -16,7 +16,11 @@
 
 import simplejson
 
-from u1db import Document, errors
+from u1db import (
+    Document,
+    errors,
+    query_parser,
+    )
 from u1db.backends import CommonBackend, CommonSyncTarget
 
 
@@ -184,6 +188,8 @@ class InMemoryIndex(object):
         self._name = index_name
         self._definition = index_definition
         self._values = {}
+        parser = query_parser.Parser()
+        self._getters = parser.parse_all(self._definition)
 
     def evaluate_json(self, doc):
         """Determine the 'key' after applying this index to the doc."""
@@ -192,32 +198,35 @@ class InMemoryIndex(object):
 
     def evaluate(self, obj):
         """Evaluate a dict object, applying this definition."""
-        result = []
-        for field in self._definition:
-            val = obj
-            for subfield in field.split('.'):
-                val = val.get(subfield)
-            if val is None:
+        all_rows = [[]]
+        for getter in self._getters:
+            new_rows = []
+            keys = getter.get(obj)
+            if keys is None:
                 return None
-            result.append(val)
-        return '\x01'.join(result)
+            for key in keys:
+                new_rows.extend([row + [key] for row in all_rows])
+            all_rows = new_rows
+        all_rows = ['\x01'.join(row) for row in all_rows]
+        return all_rows
 
     def add_json(self, doc_id, doc):
         """Add this json doc to the index."""
-        key = self.evaluate_json(doc)
-        if key is None:
+        keys = self.evaluate_json(doc)
+        if not keys:
             return
-        self._values.setdefault(key, []).append(doc_id)
+        for key in keys:
+            self._values.setdefault(key, []).append(doc_id)
 
     def remove_json(self, doc_id, doc):
         """Remove this json doc from the index."""
-        key = self.evaluate_json(doc)
-        if key is None:
-            return
-        doc_ids = self._values[key]
-        doc_ids.remove(doc_id)
-        if not doc_ids:
-            del self._values[key]
+        keys = self.evaluate_json(doc)
+        if keys:
+            for key in keys:
+                doc_ids = self._values[key]
+                doc_ids.remove(doc_id)
+                if not doc_ids:
+                    del self._values[key]
 
     def _find_non_wildcards(self, values):
         """Check if this should be a wildcard match.
@@ -290,4 +299,3 @@ class InMemorySyncTarget(CommonSyncTarget):
     def record_sync_info(self, other_replica_uid, other_replica_generation):
         self._db.set_sync_generation(other_replica_uid,
                                      other_replica_generation)
-
