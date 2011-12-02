@@ -23,7 +23,8 @@ from u1db import (
     tests,
     )
 from u1db.remote import (
-    http_database
+    http_database,
+    http_target,
     )
 from u1db.tests.test_remote_sync_target import (
     http_server_def,
@@ -146,6 +147,11 @@ class TestHTTPDatabaseSimpleOperations(tests.TestCase):
         self.assertEqual('doc-rev-gone', doc.rev)
         self.assertEqual(('DELETE', ['doc', 'doc-id'], {'old_rev': 'doc-rev'},
                           None, None), self.got)
+
+    def test_get_sync_target(self):
+        st = self.db.get_sync_target()
+        self.assertIsInstance(st, http_target.HTTPSyncTarget)
+        self.assertEqual(st._url, self.db._url)
 
 
 class TestHTTPDatabaseIntegration(tests.TestCaseWithServer):
