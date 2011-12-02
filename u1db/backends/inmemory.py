@@ -49,9 +49,6 @@ class InMemoryDatabase(CommonBackend):
     def get_sync_target(self):
         return InMemorySyncTarget(self)
 
-    def _allocate_doc_id(self):
-        return 'doc-%d' % (len(self._transaction_log) + 1,)
-
     def _get_transaction_log(self):
         return self._transaction_log
 

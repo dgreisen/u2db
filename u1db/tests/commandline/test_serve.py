@@ -19,6 +19,7 @@ import sys
 
 from u1db import (
     __version__ as _u1db_version,
+    open as u1db_open,
     tests,
     )
 from u1db.remote import http_client
@@ -49,10 +50,10 @@ class TestU1DBServe(tests.TestCase):
 
     def test_bind_to_port(self):
         p = self.startU1DBServe([])
-        starts = 'listening on port:'
+        starts = 'listening on:'
         x = p.stdout.readline()
         self.assertTrue(x.startswith(starts))
-        port = int(x[len(starts):])
+        port = int(x[len(starts):].split(":")[1])
         url = "http://127.0.0.1:%s/" % port
         c = http_client.HTTPClientBase(url)
         self.addCleanup(c.close)
@@ -66,9 +67,31 @@ class TestU1DBServe(tests.TestCase):
         s.close()
         p = self.startU1DBServe(['--port', str(port)])
         x = p.stdout.readline().strip()
-        self.assertEqual('listening on port: %s' % (port,), x)
+        self.assertEqual('listening on: 127.0.0.1:%s' % (port,), x)
         url = "http://127.0.0.1:%s/" % port
         c = http_client.HTTPClientBase(url)
         self.addCleanup(c.close)
         res, _ = c._request_json('GET', [])
         self.assertEqual({'version': _u1db_version}, res)
+
+    def test_bind_to_host(self):
+        p = self.startU1DBServe(["--host", "localhost"])
+        starts = 'listening on: 127.0.0.1:'
+        x = p.stdout.readline()
+        self.assertTrue(x.startswith(starts))
+
+    def test_supply_working_dir(self):
+        tmp_dir = self.createTempDir('u1db-serve-test')
+        db = u1db_open(os.path.join(tmp_dir, 'landmark.db'), create=True)
+        db.close()
+        p = self.startU1DBServe(['--working-dir', tmp_dir])
+        starts = 'listening on:'
+        x = p.stdout.readline()
+        self.assertTrue(x.startswith(starts))
+        port = int(x[len(starts):].split(":")[1])
+        url = "http://127.0.0.1:%s/landmark.db" % port
+        c = http_client.HTTPClientBase(url)
+        self.addCleanup(c.close)
+        res, _ = c._request_json('GET', [])
+        self.assertEqual({}, res)
+

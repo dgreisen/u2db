@@ -15,6 +15,7 @@
 """"""
 
 import re
+import uuid
 
 import u1db
 from u1db import (
@@ -35,7 +36,7 @@ class CommonBackend(u1db.Database):
 
     def _allocate_doc_id(self):
         """Generate a unique identifier for this document."""
-        raise NotImplementedError(self._allocate_doc_id)
+        return 'D-' + uuid.uuid4().hex # 'D-' stands for document
 
     def _allocate_doc_rev(self, old_doc_rev):
         vcr = VectorClockRev(old_doc_rev)
