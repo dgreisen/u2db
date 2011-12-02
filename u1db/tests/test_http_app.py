@@ -551,7 +551,7 @@ class TestHTTPApp(tests.TestCase):
         self.assertEqual(self.db0.get_sync_generation('other-id'), 2)
 
     def test_sync_exchange_send(self):
-        entry = {'id': 'doc-here', 'rev': 'replica:1', 'doc':
+        entry = {'id': 'doc-here', 'rev': 'replica:1', 'content':
                  '{"value": "here"}'}
         args = dict(from_replica_generation=10, last_known_generation=0)
         body = ("%s\r\n" % simplejson.dumps(args) +
@@ -581,7 +581,7 @@ class TestHTTPApp(tests.TestCase):
         parts = resp.body.splitlines()
         self.assertEqual(2, len(parts))
         self.assertEqual({'new_generation': 1}, simplejson.loads(parts[0]))
-        self.assertEqual({'doc': '{"value": "there"}',
+        self.assertEqual({'content': '{"value": "there"}',
                           'rev': doc.rev, 'id': doc.doc_id},
                          simplejson.loads(parts[1]))
 
