@@ -228,10 +228,6 @@ class SQLiteDatabase(CommonBackend):
             return 0
         return val
 
-    def _allocate_doc_id(self):
-        my_gen = self._get_generation()
-        return 'doc-%d' % (my_gen,)
-
     def _get_transaction_log(self):
         c = self._db_handle.cursor()
         c.execute("SELECT doc_id FROM transaction_log ORDER BY generation")

@@ -30,9 +30,6 @@ class TestInMemoryDatabaseInternals(tests.TestCase):
         super(TestInMemoryDatabaseInternals, self).setUp()
         self.db = inmemory.InMemoryDatabase('test')
 
-    def test__allocate_doc_id(self):
-        self.assertEqual('doc-1', self.db._allocate_doc_id())
-
     def test__allocate_doc_rev_from_None(self):
         self.assertEqual('test:1', self.db._allocate_doc_rev(None))
 
