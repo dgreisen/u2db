@@ -60,11 +60,11 @@ class TestInMemoryIndex(tests.TestCase):
 
     def test_evaluate_json_field_None(self):
         idx = inmemory.InMemoryIndex('idx-name', ['missing'])
-        self.assertEqual(None, idx.evaluate_json(simple_doc))
+        self.assertEqual([], idx.evaluate_json(simple_doc))
 
     def test_evaluate_json_subfield_None(self):
         idx = inmemory.InMemoryIndex('idx-name', ['key', 'missing'])
-        self.assertEqual(None, idx.evaluate_json(simple_doc))
+        self.assertEqual([], idx.evaluate_json(simple_doc))
 
     def test_evaluate_multi_index(self):
         doc = '{"key": "value", "key2": "value2"}'
