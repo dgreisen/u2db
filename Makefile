@@ -1,5 +1,5 @@
 
-.PHONY: check
+.PHONY: check check-verbose
 
 check:
 	python -m testtools.run discover

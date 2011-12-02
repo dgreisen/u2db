@@ -23,9 +23,13 @@ def config():
         "url": "https://launchpad.net/u1db",
         "license": "GNU GPL v3",
         "download_url": "https://launchpad.net/u1db/+download",
-        "packages": ["u1db"],
-        "scripts": [],
+        "packages": ["u1db", "u1db.backends", "u1db.remote",
+                     "u1db.commandline", "u1db.compat"],
+        "scripts": ['u1db-client', 'u1db-serve'],
         "ext_modules": ext,
+        "install_requires": ["paste", "simplejson", "routes"],
+        # informational
+        "tests_require": ["testtools", "testscenarios"],
         "classifiers": [
             'Development Status :: 4 - Beta',
             'Environment :: Console',
@@ -46,7 +50,10 @@ synchronize them with other stores.
 """
     }
 
-    from distutils.core import setup, Extension
+    try:
+        from setuptools import setup
+    except ImportError:
+        from distutils.core import setup
 
     setup(**kwargs)
 
