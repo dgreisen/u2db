@@ -261,6 +261,12 @@ class Database(object):
         """Release any resources associated with this database."""
         raise NotImplementedError(self.close)
 
+    def sync(self, url):
+        """Synchronize documents with remote replica exposed at url."""
+        from u1db.sync import Synchronizer
+        from u1db.remote.http_target import HTTPSyncTarget
+        return Synchronizer(self, HTTPSyncTarget(url)).sync()
+
 
 class Document(object):
     """Container for handling a single document.

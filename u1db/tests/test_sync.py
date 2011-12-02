@@ -21,6 +21,9 @@ from u1db import (
     tests,
     vectorclock,
     )
+from u1db.backends import (
+    inmemory,
+    )
 from u1db.remote import (
     http_target,
     )
@@ -420,6 +423,28 @@ class DatabaseSyncTests(tests.DatabaseBaseTests):
         self.assertEqual([(doc2.rev, content1),
                           (doc1.rev, simple_doc)],
                          self.db1.get_doc_conflicts(doc1.doc_id))
+
+
+class TestDbSync(tests.TestCaseWithServer):
+    """Test db.sync remote sync shortcut"""
+
+    server_def = staticmethod(http_server_def)
+
+    def setUp(self):
+        super(TestDbSync, self).setUp()
+        self.startServer()
+        self.db = inmemory.InMemoryDatabase('test1')
+        self.db2 = self.request_state._create_database('test2.db')
+
+    def test_db_sync(self):
+        doc1 = self.db.create_doc(tests.simple_doc)
+        doc2 = self.db2.create_doc(tests.nested_doc)
+        db2_url = self.getURL('test2.db')
+        self.db.sync(db2_url)
+        self.assertGetDoc(self.db2, doc1.doc_id, doc1.rev, tests.simple_doc,
+                          False)
+        self.assertGetDoc(self.db, doc2.doc_id, doc2.rev, tests.nested_doc,
+                          False)
 
 
 load_tests = tests.load_with_scenarios
