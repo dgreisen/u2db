@@ -23,7 +23,10 @@ from u1db import (
     open as u1db_open,
     tests,
     )
-from u1db.commandline import client
+from u1db.commandline import (
+    client,
+    serve,
+    )
 from u1db.tests.commandline import safe_close
 from u1db.tests import test_remote_sync_target
 
@@ -287,8 +290,25 @@ class TestCmdSyncRemote(tests.TestCaseWithServer, TestCaseWithDB):
         self.assertGetDoc(self.db, doc2.doc_id, doc2.rev, tests.nested_doc,
                           False)
 
+class RunMainHelper(object):
 
-class TestCommandLine(TestCaseWithDB):
+    def run_main(self, args, stdin=None):
+        if stdin is not None:
+            self.patch(sys, 'stdin', cStringIO.StringIO(stdin))
+        stdout = cStringIO.StringIO()
+        stderr = cStringIO.StringIO()
+        self.patch(sys, 'stdout', stdout)
+        self.patch(sys, 'stderr', stderr)
+        try:
+            ret = client.main(args)
+        except SystemExit, e:
+            self.fail("Intercepted SystemExit: %s" % (e,))
+        if ret is None:
+            ret = 0
+        return ret, stdout.getvalue(), stderr.getvalue()
+
+
+class TestCommandLine(TestCaseWithDB, RunMainHelper):
     """These are meant to test that the infrastructure is fully connected.
 
     Each command is likely to only have one test here. Something that ensures
@@ -308,21 +328,6 @@ class TestCommandLine(TestCaseWithDB):
             stdout=subprocess.PIPE, stderr=subprocess.PIPE)
         self.addCleanup(safe_close, p)
         return p
-
-    def run_main(self, args, stdin=None):
-        if stdin is not None:
-            self.patch(sys, 'stdin', cStringIO.StringIO(stdin))
-        stdout = cStringIO.StringIO()
-        stderr = cStringIO.StringIO()
-        self.patch(sys, 'stdout', stdout)
-        self.patch(sys, 'stderr', stderr)
-        try:
-            ret = client.main(args)
-        except SystemExit, e:
-            self.fail("Intercepted SystemExit: %s" % (e,))
-        if ret is None:
-            ret = 0
-        return ret, stdout.getvalue(), stderr.getvalue()
 
     def test_create_subprocess(self):
         p = self.runU1DBClient(['create', '--id', 'test-id', self.db_path])
@@ -379,3 +384,49 @@ class TestCommandLine(TestCaseWithDB):
         self.assertEqual('', stdout)
         self.assertEqual('', stderr)
         self.assertGetDoc(self.db2, 'test-id', doc.rev, tests.simple_doc, False)
+
+
+class TestHTTPIntegration(tests.TestCaseWithServer, RunMainHelper):
+    """Meant to test the cases where commands operate over http."""
+
+    def server_def(self):
+        def make_server(host_port, handler, _state):
+            return serve.make_server(host_port[0], host_port[1],
+                                     self.working_dir)
+        return make_server, None, "shutdown", "http"
+
+    def setUp(self):
+        super(TestHTTPIntegration, self).setUp()
+        self.working_dir = self.createTempDir(prefix='u1db-http-server-')
+        self.startServer()
+
+    def getPath(self, dbname):
+        return os.path.join(self.working_dir, dbname)
+
+    def test_init_db(self):
+        url = self.getURL('new.db')
+        ret, stdout, stderr = self.run_main(['init-db', url])
+        db2 = u1db_open(self.getPath('new.db'), create=False)
+
+    def test_create_get_put_delete(self):
+        db = u1db_open(self.getPath('test.db'), create=True)
+        url = self.getURL('test.db')
+        doc_id = '%abcd'
+        ret, stdout, stderr = self.run_main(['create', url, '--id', doc_id],
+                                            stdin=tests.simple_doc)
+        self.assertEqual(0, ret)
+        ret, stdout, stderr = self.run_main(['get', url, doc_id])
+        self.assertEqual(0, ret)
+        self.assertTrue(stderr.startswith('rev: '))
+        doc_rev = stderr[len('rev: '):].rstrip()
+        ret, stdout, stderr = self.run_main(['put', url, doc_id, doc_rev],
+                                            stdin=tests.nested_doc)
+        self.assertEqual(0, ret)
+        self.assertTrue(stderr.startswith('rev: '))
+        doc_rev1 = stderr[len('rev: '):].rstrip()
+        self.assertGetDoc(db, doc_id, doc_rev1, tests.nested_doc, False)
+        ret, stdout, stderr = self.run_main(['delete', url, doc_id, doc_rev1])
+        self.assertEqual(0, ret)
+        self.assertTrue(stderr.startswith('rev: '))
+        doc_rev2 = stderr[len('rev: '):].rstrip()
+        self.assertGetDoc(db, doc_id, doc_rev2, None, False)

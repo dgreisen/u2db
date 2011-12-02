@@ -26,6 +26,7 @@ from u1db import (
 from u1db.backends import sqlite_backend
 from u1db.commandline import command
 from u1db.remote import (
+    http_database,
     http_target,
     )
 
@@ -33,14 +34,26 @@ from u1db.remote import (
 client_commands = command.CommandGroup()
 
 
-class CmdCreate(command.Command):
+class OneDbCmd(command.Command):
+    """Base class for commands operating on one local or remote database."""
+
+    def _open(self, database, create):
+        if database.startswith('http://'):
+            return http_database.HTTPDatabase.open_database(database, create)
+        else:
+            return u1db_open(database, create)
+
+
+class CmdCreate(OneDbCmd):
     """Create a new document from scratch"""
 
     name = 'create'
 
     @classmethod
     def _populate_subparser(cls, parser):
-        parser.add_argument('database', help='The database to update')
+        parser.add_argument('database',
+                            help='The local or remote database to update',
+                            metavar='database-path-or-url')
         parser.add_argument('infile', nargs='?', default=None,
             help='The file to read content from.')
         parser.add_argument('--id', dest='doc_id', default=None,
@@ -49,27 +62,29 @@ class CmdCreate(command.Command):
     def run(self, database, infile, doc_id):
         if infile is None:
             infile = self.stdin
-        db = u1db_open(database, create=False)
+        db = self._open(database, create=False)
         doc = db.create_doc(infile.read(), doc_id=doc_id)
         self.stderr.write('id: %s\nrev: %s\n' % (doc.doc_id, doc.rev))
 
 client_commands.register(CmdCreate)
 
 
-class CmdDelete(command.Command):
+class CmdDelete(OneDbCmd):
     """Delete a document from the database"""
 
     name = 'delete'
 
     @classmethod
     def _populate_subparser(cls, parser):
-        parser.add_argument('database', help='The database to update')
+        parser.add_argument('database',
+                            help='The local or remote database to update',
+                            metavar='database-path-or-url')
         parser.add_argument('doc_id', help='The document id to retrieve')
         parser.add_argument('doc_rev',
             help='The revision of the document (which is being superseded.)')
 
     def run(self, database, doc_id, doc_rev):
-        db = u1db_open(database, create=False)
+        db = self._open(database, create=False)
         doc = Document(doc_id, doc_rev, None)
         db.delete_doc(doc)
         self.stderr.write('rev: %s\n' % (doc.rev,))
@@ -77,14 +92,16 @@ class CmdDelete(command.Command):
 client_commands.register(CmdDelete)
 
 
-class CmdGet(command.Command):
+class CmdGet(OneDbCmd):
     """Extract a document from the database"""
 
     name = 'get'
 
     @classmethod
     def _populate_subparser(cls, parser):
-        parser.add_argument('database', help='The database to query')
+        parser.add_argument('database',
+                            help='The local or remote database to query',
+                            metavar='database-path-or-url')
         parser.add_argument('doc_id', help='The document id to retrieve.')
         parser.add_argument('outfile', nargs='?', default=None,
             help='The file to write the document to',
@@ -93,7 +110,7 @@ class CmdGet(command.Command):
     def run(self, database, doc_id, outfile):
         if outfile is None:
             outfile = self.stdout
-        db = u1db_open(database, create=False)
+        db = self._open(database, create=False)
         doc = db.get_doc(doc_id)
         outfile.write(doc.content)
         self.stderr.write('rev: %s\n' % (doc.rev,))
@@ -105,33 +122,37 @@ class CmdGet(command.Command):
 client_commands.register(CmdGet)
 
 
-class CmdInitDB(command.Command):
+class CmdInitDB(OneDbCmd):
     """Create a new database"""
 
     name = 'init-db'
 
     @classmethod
     def _populate_subparser(cls, parser):
-        parser.add_argument('database', help='The database to create')
+        parser.add_argument('database',
+                            help='The local or remote database to create',
+                            metavar='database-path-or-url')
         parser.add_argument('--replica-uid', default=None,
-            help='The unique identifier for this database')
+            help='The unique identifier for this database (not for remote)')
 
     def run(self, database, replica_uid):
-        db = u1db_open(database, create=True)
+        db = self._open(database, create=True)
         if replica_uid is not None:
             db._set_replica_uid(replica_uid)
 
 client_commands.register(CmdInitDB)
 
 
-class CmdPut(command.Command):
+class CmdPut(OneDbCmd):
     """Add a document to the database"""
 
     name = 'put'
 
     @classmethod
     def _populate_subparser(cls, parser):
-        parser.add_argument('database', help='The database to update')
+        parser.add_argument('database',
+                            help='The local or remote database to update',
+                            metavar='database-path-or-url'),
         parser.add_argument('doc_id', help='The document id to retrieve')
         parser.add_argument('doc_rev',
             help='The revision of the document (which is being superseded.)')
@@ -142,7 +163,7 @@ class CmdPut(command.Command):
     def run(self, database, doc_id, doc_rev, infile):
         if infile is None:
             infile = self.stdin
-        db = u1db_open(database, create=False)
+        db = self._open(database, create=False)
         doc = Document(doc_id, doc_rev, infile.read())
         doc_rev = db.put_doc(doc)
         self.stderr.write('rev: %s\n' % (doc_rev,))
