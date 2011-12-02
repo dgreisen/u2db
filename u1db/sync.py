@@ -84,6 +84,7 @@ class Synchronizer(object):
                                               cur_gen)
 
     def sync(self, callback=None):
+        """Synchronize documents between source and target."""
         sync_target = self.sync_target
         # get target identifier, its current generation,
         # and its last-seen database generation for this source
