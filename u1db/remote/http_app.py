@@ -65,8 +65,8 @@ class _FencedReader(object):
                 break
             nl = chunk.find("\n")
             if nl != -1:
-                line_parts.append(chunk[:nl+1])
-                rest = chunk[nl+1:]
+                line_parts.append(chunk[:nl + 1])
+                rest = chunk[nl + 1:]
                 self._kept = rest or None
                 break
             else:
@@ -113,7 +113,7 @@ def http_method(**control):
         assert argspec.args[0] == "self"
         nargs = len(argspec.args)
         ndefaults = len(argspec.defaults or ())
-        required_args = set(argspec.args[1:nargs-ndefaults])
+        required_args = set(argspec.args[1:nargs - ndefaults])
         all_args = set(argspec.args)
         @functools.wraps(f)
         def wrapper(self, args, content):
@@ -241,7 +241,7 @@ class DocResource(object):
                     'x-u1db-has-conflicts': 'false'
                     })
             return
-        headers={
+        headers = {
             'x-u1db-rev': doc.rev,
             'x-u1db-has-conflicts': simplejson.dumps(doc.has_conflicts)
             }
@@ -333,7 +333,7 @@ class HTTPResponder(object):
                                              headers.items())
         # xxx version in headers
         if obj_dic is not None:
-            self._write(simplejson.dumps(obj_dic)+"\r\n")
+            self._write(simplejson.dumps(obj_dic) + "\r\n")
 
     def finish_response(self):
         """finish sending response."""
@@ -354,7 +354,7 @@ class HTTPResponder(object):
     def stream_entry(self, entry):
         "send stream entry as part of the response."
         assert self._started
-        self._write(simplejson.dumps(entry)+"\r\n")
+        self._write(simplejson.dumps(entry) + "\r\n")
 
 
 class HTTPInvocationByMethodWithBody(object):

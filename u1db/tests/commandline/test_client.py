@@ -253,7 +253,7 @@ class TestCmdSync(TestCaseWithDB):
         self.db2 = u1db_open(self.db2_path, create=True)
         self.addCleanup(self.db2.close)
         self.db2._set_replica_uid('test2')
-        self.doc  = self.db.create_doc(tests.simple_doc, doc_id='test-id')
+        self.doc = self.db.create_doc(tests.simple_doc, doc_id='test-id')
         self.doc2 = self.db2.create_doc(tests.nested_doc, doc_id='my-test-id')
 
     def test_sync(self):

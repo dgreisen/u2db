@@ -50,13 +50,13 @@ class InvalidValueForIndex(U1DBError):
 class DocumentDoesNotExist(U1DBError):
     """The document does not exist."""
 
-    wire_description="document does not exist"
+    wire_description = "document does not exist"
 
 
 class DocumentAlreadyDeleted(U1DBError):
     """The document was already deleted."""
 
-    wire_description="document already deleted"
+    wire_description = "document already deleted"
 
 
 class DatabaseDoesNotExist(U1DBError):

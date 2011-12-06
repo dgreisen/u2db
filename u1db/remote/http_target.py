@@ -54,7 +54,7 @@ class HTTPSyncTarget(http_client.HTTPClientBase, SyncTarget):
         entries = []
         size = 0
         def prepare(**dic):
-            entry = simplejson.dumps(dic)+"\r\n"
+            entry = simplejson.dumps(dic) + "\r\n"
             entries.append(entry)
             return len(entry)
         size += prepare(last_known_generation=last_known_generation,
