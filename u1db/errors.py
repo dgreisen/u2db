@@ -65,6 +65,10 @@ class DatabaseDoesNotExist(U1DBError):
     wire_description = "database does not exist"
 
 
+class IndexDefinitionParseError(U1DBError):
+    """The index definition cannot be parsed."""
+
+
 class HTTPError(U1DBError):
     """Unspecific HTTP errror."""
 

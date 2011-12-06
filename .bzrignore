@@ -2,3 +2,4 @@
 ./dist
 ./u1db.egg-info
 doc/sqlite_schema.html
+.testrepository

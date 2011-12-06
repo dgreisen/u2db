@@ -53,20 +53,20 @@ class TestInMemoryIndex(tests.TestCase):
 
     def test_evaluate_json(self):
         idx = inmemory.InMemoryIndex('idx-name', ['key'])
-        self.assertEqual('value', idx.evaluate_json(simple_doc))
+        self.assertEqual(['value'], idx.evaluate_json(simple_doc))
 
     def test_evaluate_json_field_None(self):
         idx = inmemory.InMemoryIndex('idx-name', ['missing'])
-        self.assertEqual(None, idx.evaluate_json(simple_doc))
+        self.assertEqual([], idx.evaluate_json(simple_doc))
 
     def test_evaluate_json_subfield_None(self):
         idx = inmemory.InMemoryIndex('idx-name', ['key', 'missing'])
-        self.assertEqual(None, idx.evaluate_json(simple_doc))
+        self.assertEqual([], idx.evaluate_json(simple_doc))
 
     def test_evaluate_multi_index(self):
         doc = '{"key": "value", "key2": "value2"}'
         idx = inmemory.InMemoryIndex('idx-name', ['key', 'key2'])
-        self.assertEqual('value\x01value2',
+        self.assertEqual(['value\x01value2'],
                          idx.evaluate_json(doc))
 
     def test_update_ignores_None(self):
@@ -119,4 +119,3 @@ class TestInMemoryIndex(tests.TestCase):
             idx._find_non_wildcards, ('a', 'b', 'c', 'd'))
         self.assertRaises(errors.InvalidValueForIndex,
             idx._find_non_wildcards, ('*', 'b', 'c'))
-
