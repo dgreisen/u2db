@@ -65,7 +65,7 @@ class _FencedReader(object):
                 break
             nl = chunk.find("\n")
             if nl != -1:
-                line_parts.append(chunk[:nl+1])
+                line_parts.append(chunk[:nl + 1])
                 rest = chunk[nl+1:]
                 self._kept = rest or None
                 break
