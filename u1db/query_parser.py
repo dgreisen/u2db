@@ -81,7 +81,7 @@ class ExtractField(Getter):
         if raw_doc is None:
             result = []
         elif isinstance(raw_doc, list):
-            # If anything in the list is not a simple type, the list is
+            # Strip anything in the list that isn't a simple type
             result = [val for val in raw_doc
                       if not isinstance(val, (dict, list))]
         else:
