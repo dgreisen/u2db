@@ -16,9 +16,6 @@
 
 from paste import httpserver
 
-from u1db import (
-    __version__ as _u1db_version,
-    )
 from u1db.remote import (
     http_app,
     server_state,
