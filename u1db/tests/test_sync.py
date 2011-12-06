@@ -153,7 +153,8 @@ class DatabaseSyncTargetTests(tests.DatabaseBaseTests,
                                         from_replica_generation=10,
                                         last_known_generation=0,
                                         return_doc_cb=self.receive_doc)
-        self.assertEqual([doc.doc_id, doc.doc_id], self.db._get_transaction_log())
+        self.assertEqual([doc.doc_id, doc.doc_id],
+                         self.db._get_transaction_log())
         self.assertEqual(([], 2), (self.other_docs, new_gen))
 
     def test_sync_exchange_with_concurrent_updates(self):
@@ -356,7 +357,8 @@ class DatabaseSyncTests(tests.DatabaseBaseTests):
         self.assertEqual([doc],
                          self.db1.get_from_index('test-idx', [('altval',)]))
         self.assertEqual([], self.db1.get_from_index('test-idx', [('value',)]))
-        self.assertEqual([], self.db1.get_from_index('test-idx', [('localval',)]))
+        self.assertEqual([], self.db1.get_from_index('test-idx',
+                                                     [('localval',)]))
 
     def test_sync_propagates_deletes(self):
         doc1 = self.db1.create_doc(simple_doc)
