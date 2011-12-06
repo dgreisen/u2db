@@ -204,6 +204,16 @@ class SQLiteDatabase(CommonBackend):
         return getter
 
     def _update_indexes(self, doc_id, raw_doc, getters, db_cursor):
+        """Update document_fields for a single document.
+
+        :param doc_id: Identifier for this document
+        :param raw_doc: The python dict representation of the document.
+        :param getters: A list of [(field_name, Getter)]. Getter.get will be
+            called to evaluate the index definition for this document, and the
+            results will be inserted into the db.
+        :param db_cursor: An sqlite Cursor.
+        :return: None
+        """
         values = []
         for field_name, getter in getters:
             for idx_value in getter.get(raw_doc):
@@ -623,6 +633,10 @@ class SQLitePartialExpandDatabase(SQLiteDatabase):
                 yield row
 
     def _update_all_indexes(self, new_fields):
+        """Iterate all the documents, and add content to document_fields.
+
+        :param new_fields: The index definitions that need to be added.
+        """
         getters = [(field, self._parse_index_definition(field))
                    for field in new_fields]
         c = self._db_handle.cursor()
