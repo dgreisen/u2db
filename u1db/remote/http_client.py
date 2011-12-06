@@ -89,7 +89,6 @@ class HTTPClientBase(object):
         self._conn.request(method, url_query, body, headers)
         return self._response()
 
-
     def _request_json(self, method, url_parts, params=None, body=None,
                                                             content_type=None):
         res, headers = self._request(method, url_parts, params, body,

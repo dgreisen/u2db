@@ -281,7 +281,6 @@ class DatabaseSyncTests(tests.DatabaseBaseTests):
                          self.db1._last_exchange_log)
         self.assertGetDoc(self.db1, doc.doc_id, doc_rev2, new_content, False)
 
-
     def test_sync_sees_remote_conflicted(self):
         doc1 = self.db1.create_doc(simple_doc)
         doc_id = doc1.doc_id

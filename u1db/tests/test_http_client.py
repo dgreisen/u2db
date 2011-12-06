@@ -105,7 +105,6 @@ class TestHTTPClientBase(tests.TestCaseWithServer):
                           'body': '{}',
                           'REQUEST_METHOD': 'PUT'}, simplejson.loads(res))
 
-
         res, headers = cli._request('GET', ['doc', 'echo'], {'a': 1})
         self.assertEqual({'PATH_INFO': '/dbase/doc/echo',
                           'QUERY_STRING': 'a=1',
