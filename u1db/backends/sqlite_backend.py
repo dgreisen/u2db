@@ -22,7 +22,6 @@ import uuid
 
 from u1db.backends import CommonBackend, CommonSyncTarget
 from u1db import (
-    compat,
     Document,
     errors,
     query_parser,

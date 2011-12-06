@@ -14,10 +14,6 @@
 
 """State for servers exposing a set of U1DB databases."""
 
-from u1db import (
-    __version__ as _u1db_version,
-    )
-
 
 class ServerState(object):
     """Passed to a Request when it is instantiated.
