@@ -217,7 +217,7 @@ class DocResource(object):
         doc = Document(self.id, old_rev, content)
         doc_rev = self.db.put_doc(doc)
         if old_rev is None:
-            status = 201 # created
+            status = 201  # created
         else:
             status = 200
         self.responder.send_response_json(status, rev=doc_rev)
@@ -421,7 +421,7 @@ class HTTPApp(object):
     def _lookup_resource(self, environ, responder):
         resource_cls, params = url_to_resource.match(environ['PATH_INFO'])
         if resource_cls is None:
-            raise BadRequest # 404 instead?
+            raise BadRequest  # 404 instead?
         resource = resource_cls(state=self.state, responder=responder, **params)
         return resource
 

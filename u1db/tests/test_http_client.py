@@ -59,7 +59,7 @@ class TestHTTPClientBase(tests.TestCaseWithServer):
             return srv
         class req_handler(simple_server.WSGIRequestHandler):
             def log_request(*args):
-                pass # suppress
+                pass  # suppress
         return make_server, req_handler, "shutdown", "http"
 
     def getClient(self):

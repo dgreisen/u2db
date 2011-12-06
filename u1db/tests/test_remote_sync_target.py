@@ -38,7 +38,7 @@ def http_server_def():
         return srv
     class req_handler(simple_server.WSGIRequestHandler):
         def log_request(*args):
-            pass # suppress
+            pass  # suppress
     #rh = httpserver.WSGIHandler
     return make_server, req_handler, "shutdown", "http"
 

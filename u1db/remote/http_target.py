@@ -67,7 +67,7 @@ class HTTPSyncTarget(http_client.HTTPClientBase, SyncTarget):
             self._conn.send(entry)
         entries = None
         data, _ = self._response()
-        data = data.splitlines() # one at a time
+        data = data.splitlines()  # one at a time
         res = simplejson.loads(data[0])
         for entry in data[1:]:
             entry = simplejson.loads(entry)
@@ -77,4 +77,4 @@ class HTTPSyncTarget(http_client.HTTPClientBase, SyncTarget):
         return res['new_generation']
 
     def get_sync_exchange(self):
-        return None # not a local target
+        return None  # not a local target

@@ -67,7 +67,7 @@ class TestFencedReader(tests.TestCase):
         inp = StringIO.StringIO("abcde")
         reader = http_app._FencedReader(inp, 4)
         reader._kept = "xyz"
-        data = reader.read_chunk(2) # atmost ignored
+        data = reader.read_chunk(2)  # atmost ignored
         self.assertEqual("xyz", data)
         self.assertEqual(0, inp.tell())
         self.assertEqual(4, reader.remaining)
@@ -249,9 +249,9 @@ class TestHTTPInvocationByMethodWithBody(tests.TestCase):
     def test_put_multi_json(self):
         resource = TestResource()
         body = (
-            '{"b": 2}\r\n'       # args
-            '{"entry": "x"}\r\n' # stream entry
-            '{"entry": "y"}\r\n' # stream entry
+            '{"b": 2}\r\n'        # args
+            '{"entry": "x"}\r\n'  # stream entry
+            '{"entry": "y"}\r\n'  # stream entry
             )
         environ = {'QUERY_STRING': 'a=1', 'REQUEST_METHOD': 'PUT',
                    'wsgi.input': StringIO.StringIO(body),
@@ -469,7 +469,7 @@ class TestHTTPApp(tests.TestCase):
         resp = self.app.put('/db0/doc/doc1', params='{"x": 1}',
                             headers={'content-type': 'application/json'})
         doc = self.db0.get_doc('doc1')
-        self.assertEqual(201, resp.status) # created
+        self.assertEqual(201, resp.status)  # created
         self.assertEqual('{"x": 1}', doc.content)
         self.assertEqual('application/json', resp.header('content-type'))
         self.assertEqual({'rev': doc.rev}, simplejson.loads(resp.body))

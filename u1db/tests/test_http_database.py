@@ -36,7 +36,7 @@ class TestHTTPDatabaseSimpleOperations(tests.TestCase):
     def setUp(self):
         super(TestHTTPDatabaseSimpleOperations, self).setUp()
         self.db = http_database.HTTPDatabase('dbase')
-        self.db._conn = object() # crash if used
+        self.db._conn = object()  # crash if used
         self.got = None
         self.response_val = None
         def _request(method, url_parts, params=None, body=None,
