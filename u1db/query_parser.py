@@ -184,16 +184,11 @@ class Parser(object):
     _word_chars = string.lowercase + string.uppercase + "._" + string.digits
 
     def _take_word(self, partial):
-        i = 0
-        word = ""
-        while i < len(partial):
-            char = partial[i]
-            if char in self._word_chars:
-                word += char
-                i += 1
-            else:
-                break
-        return word, partial[i:]
+        word = ''
+        for idx, char in enumerate(partial):
+            if char not in self._word_chars:
+                return partial[:idx], partial[idx:]
+        return partial, ''
 
     def parse(self, field):
         inner = self._inner_parse(field)
