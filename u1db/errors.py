@@ -36,6 +36,7 @@ class InvalidDocId(U1DBError):
 
     wire_description = "invalid document id"
 
+
 class ConflictedDoc(U1DBError):
     """The document is conflicted, you must call resolve before put()"""
 
@@ -46,6 +47,7 @@ class InvalidValueForIndex(U1DBError):
     Can also be raised if wildcard matches are not strictly at the tail of the
     request.
     """
+
 
 class DocumentDoesNotExist(U1DBError):
     """The document does not exist."""

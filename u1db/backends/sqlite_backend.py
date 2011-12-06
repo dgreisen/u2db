@@ -73,7 +73,7 @@ class SQLiteDatabase(CommonBackend):
             # possibly another process is initializing it, wait for it to be
             # done
             if tries == 0:
-                raise err # go for the richest error?
+                raise err  # go for the richest error?
             tries -= 1
             time.sleep(cls.WAIT_FOR_PARALLEL_INIT_HALF_INTERVAL)
         return SQLiteDatabase._sqlite_registry[v](sqlite_file)
@@ -86,7 +86,8 @@ class SQLiteDatabase(CommonBackend):
             if not create:
                 raise
             if backend_cls is None:
-                backend_cls = SQLitePartialExpandDatabase # default
+                # default is SQLitePartialExpandDatabase
+                backend_cls = SQLitePartialExpandDatabase
             return backend_cls(sqlite_file)
 
     @staticmethod
@@ -396,7 +397,8 @@ class SQLiteDatabase(CommonBackend):
 
     def get_sync_generation(self, other_replica_uid):
         c = self._db_handle.cursor()
-        c.execute("SELECT known_generation FROM sync_log WHERE replica_uid = ?",
+        c.execute("SELECT known_generation FROM sync_log"
+                  " WHERE replica_uid = ?",
                   (other_replica_uid,))
         val = c.fetchone()
         if val is None:
@@ -431,7 +433,8 @@ class SQLiteDatabase(CommonBackend):
     def resolve_doc(self, doc, conflicted_doc_revs):
         with self._db_handle:
             cur_doc = self._get_doc(doc.doc_id)
-            new_rev = self._ensure_maximal_rev(cur_doc.rev, conflicted_doc_revs)
+            new_rev = self._ensure_maximal_rev(cur_doc.rev,
+                                               conflicted_doc_revs)
             superseded_revs = set(conflicted_doc_revs)
             cur_conflicts = self._get_conflicts(doc.doc_id)
             c = self._db_handle.cursor()

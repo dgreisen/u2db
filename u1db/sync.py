@@ -16,6 +16,7 @@
 
 import u1db
 
+
 class Synchronizer(object):
     """Collect the state around synchronizing 2 U1DB replicas.
 
@@ -97,7 +98,8 @@ class Synchronizer(object):
             check_for_conflicts=False)
 
         # this source last-seen database generation for the target
-        other_last_known_gen = self.source.get_sync_generation(other_replica_uid)
+        other_last_known_gen = self.source.get_sync_generation(
+            other_replica_uid)
         # exchange documents and try to insert the returned ones with
         # the target, return target synced-up-to gen
         new_gen = sync_target.sync_exchange(docs_to_send,
@@ -117,7 +119,7 @@ class SyncExchange(object):
 
     def __init__(self, db):
         self._db = db
-        self.seen_ids = set() # incoming ids not superseded (or conflicted)
+        self.seen_ids = set()  # incoming ids not superseded (or conflicted)
         self.doc_ids_to_return = None
         self.conflict_ids = set()
         self.new_gen = None
@@ -166,15 +168,15 @@ class SyncExchange(object):
             which the caller can consider themselves to be synchronized after
             processing the returned documents.
         """
-        self._last_known_generation = last_known_generation # for tests
-        new_gen, changed_doc_ids = self._db.whats_changed(last_known_generation)
-        self.new_gen = new_gen
+        self._last_known_generation = last_known_generation  # for tests
+        gen, changed_doc_ids = self._db.whats_changed(last_known_generation)
+        self.new_gen = gen
         seen_ids = self.seen_ids
         # changed docs that weren't superseded by or converged with
         # nor conflicted, conflicts are returned independently
         self.doc_ids_to_return = set(doc_id for doc_id in changed_doc_ids
                                      if doc_id not in seen_ids)
-        return new_gen
+        return gen
 
     def return_docs_and_record_sync(self,
                                     from_replica_uid, from_replica_generation,
