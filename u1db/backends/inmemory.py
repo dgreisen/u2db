@@ -202,8 +202,8 @@ class InMemoryIndex(object):
         for getter in self._getters:
             new_rows = []
             keys = getter.get(obj)
-            if keys is None:
-                return None
+            if not keys:
+                return []
             for key in keys:
                 new_rows.extend([row + [key] for row in all_rows])
             all_rows = new_rows
