@@ -383,4 +383,3 @@ class SyncTarget(object):
             None if this is not a local target
         """
         raise NotImplementedError(self.get_sync_exchange)
-
