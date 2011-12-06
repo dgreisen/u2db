@@ -104,7 +104,8 @@ class Transformation(Getter):
 
     def get(self, raw_doc):
         inner_values = self.inner.get(raw_doc)
-        assert isinstance(inner_values, list), 'get() should always return a list'
+        assert isinstance(inner_values, list),\
+            'get() should always return a list'
         return self.transform(inner_values)
 
     def transform(self, values):

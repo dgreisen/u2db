@@ -34,7 +34,7 @@ class VectorClockRev(object):
         return '%s(%s)' % (self.__class__.__name__, s)
 
     def as_str(self):
-        s = '|'.join(['%s:%d' % (m,r) for m,r
+        s = '|'.join(['%s:%d' % (m, r) for m, r
                       in sorted(self._values.items())])
         return s
 
