@@ -65,8 +65,8 @@ class _FencedReader(object):
                 break
             nl = chunk.find("\n")
             if nl != -1:
-                line_parts.append(chunk[:nl+1])
-                rest = chunk[nl+1:]
+                line_parts.append(chunk[:nl + 1])
+                rest = chunk[nl + 1:]
                 self._kept = rest or None
                 break
             else:
@@ -113,7 +113,7 @@ def http_method(**control):
         assert argspec.args[0] == "self"
         nargs = len(argspec.args)
         ndefaults = len(argspec.defaults or ())
-        required_args = set(argspec.args[1:nargs-ndefaults])
+        required_args = set(argspec.args[1:nargs - ndefaults])
         all_args = set(argspec.args)
         @functools.wraps(f)
         def wrapper(self, args, content):
@@ -217,7 +217,7 @@ class DocResource(object):
         doc = Document(self.id, old_rev, content)
         doc_rev = self.db.put_doc(doc)
         if old_rev is None:
-            status = 201 # created
+            status = 201  # created
         else:
             status = 200
         self.responder.send_response_json(status, rev=doc_rev)
@@ -241,7 +241,7 @@ class DocResource(object):
                     'x-u1db-has-conflicts': 'false'
                     })
             return
-        headers={
+        headers = {
             'x-u1db-rev': doc.rev,
             'x-u1db-has-conflicts': simplejson.dumps(doc.has_conflicts)
             }
@@ -333,7 +333,7 @@ class HTTPResponder(object):
                                              headers.items())
         # xxx version in headers
         if obj_dic is not None:
-            self._write(simplejson.dumps(obj_dic)+"\r\n")
+            self._write(simplejson.dumps(obj_dic) + "\r\n")
 
     def finish_response(self):
         """finish sending response."""
@@ -354,7 +354,7 @@ class HTTPResponder(object):
     def stream_entry(self, entry):
         "send stream entry as part of the response."
         assert self._started
-        self._write(simplejson.dumps(entry)+"\r\n")
+        self._write(simplejson.dumps(entry) + "\r\n")
 
 
 class HTTPInvocationByMethodWithBody(object):
@@ -374,7 +374,7 @@ class HTTPInvocationByMethodWithBody(object):
         args = urlparse.parse_qsl(self.environ['QUERY_STRING'],
                                   strict_parsing=False)
         try:
-            args = dict((k.decode('utf-8'), v.decode('utf-8')) for k,v in args)
+            args = dict((k.decode('utf-8'), v.decode('utf-8')) for k, v in args)
         except ValueError:
             raise BadRequest()
         method = self.environ['REQUEST_METHOD'].lower()
@@ -421,7 +421,7 @@ class HTTPApp(object):
     def _lookup_resource(self, environ, responder):
         resource_cls, params = url_to_resource.match(environ['PATH_INFO'])
         if resource_cls is None:
-            raise BadRequest # 404 instead?
+            raise BadRequest  # 404 instead?
         resource = resource_cls(state=self.state, responder=responder, **params)
         return resource
 

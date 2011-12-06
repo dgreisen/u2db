@@ -220,7 +220,6 @@ def socket_pair():
     return server_sock, client_sock
 
 
-
 def load_with_scenarios(loader, standard_tests, pattern):
     """Load the tests in a given module.
 

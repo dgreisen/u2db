@@ -31,7 +31,6 @@ wire_description_to_status = dict([
 ])
 
 
-
 ERROR_STATUSES = set(wire_description_to_status.values())
 # 400 included explicitly for tests
 ERROR_STATUSES.add(400)

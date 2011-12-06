@@ -19,7 +19,6 @@ from u1db import (
     errors,
     sync,
     tests,
-    vectorclock,
     )
 from u1db.backends import (
     inmemory,
@@ -40,6 +39,7 @@ def _make_local_db_and_target(test):
     db = test.create_database('test')
     st = db.get_sync_target()
     return db, st
+
 
 def _make_local_db_and_http_target(test):
     test.startServer()
@@ -153,7 +153,8 @@ class DatabaseSyncTargetTests(tests.DatabaseBaseTests,
                                         from_replica_generation=10,
                                         last_known_generation=0,
                                         return_doc_cb=self.receive_doc)
-        self.assertEqual([doc.doc_id, doc.doc_id], self.db._get_transaction_log())
+        self.assertEqual([doc.doc_id, doc.doc_id],
+                         self.db._get_transaction_log())
         self.assertEqual(([], 2), (self.other_docs, new_gen))
 
     def test_sync_exchange_with_concurrent_updates(self):
@@ -282,7 +283,6 @@ class DatabaseSyncTests(tests.DatabaseBaseTests):
                          self.db1._last_exchange_log)
         self.assertGetDoc(self.db1, doc.doc_id, doc_rev2, new_content, False)
 
-
     def test_sync_sees_remote_conflicted(self):
         doc1 = self.db1.create_doc(simple_doc)
         doc_id = doc1.doc_id
@@ -357,7 +357,8 @@ class DatabaseSyncTests(tests.DatabaseBaseTests):
         self.assertEqual([doc],
                          self.db1.get_from_index('test-idx', [('altval',)]))
         self.assertEqual([], self.db1.get_from_index('test-idx', [('value',)]))
-        self.assertEqual([], self.db1.get_from_index('test-idx', [('localval',)]))
+        self.assertEqual([], self.db1.get_from_index('test-idx',
+                                                     [('localval',)]))
 
     def test_sync_propagates_deletes(self):
         doc1 = self.db1.create_doc(simple_doc)

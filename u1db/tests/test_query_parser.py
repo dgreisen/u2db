@@ -21,6 +21,7 @@ from u1db import (
 
 trivial_raw_doc = {}
 
+
 class TestStaticGetter(tests.TestCase):
 
     def test_returns_string(self):

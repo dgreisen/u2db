@@ -18,7 +18,6 @@ import sys
 import subprocess
 
 from u1db import (
-    __version__ as _u1db_version,
     errors,
     open as u1db_open,
     tests,
@@ -254,7 +253,7 @@ class TestCmdSync(TestCaseWithDB):
         self.db2 = u1db_open(self.db2_path, create=True)
         self.addCleanup(self.db2.close)
         self.db2._set_replica_uid('test2')
-        self.doc  = self.db.create_doc(tests.simple_doc, doc_id='test-id')
+        self.doc = self.db.create_doc(tests.simple_doc, doc_id='test-id')
         self.doc2 = self.db2.create_doc(tests.nested_doc, doc_id='my-test-id')
 
     def test_sync(self):
@@ -289,6 +288,7 @@ class TestCmdSyncRemote(tests.TestCaseWithServer, TestCaseWithDB):
                           False)
         self.assertGetDoc(self.db, doc2.doc_id, doc2.rev, tests.nested_doc,
                           False)
+
 
 class RunMainHelper(object):
 

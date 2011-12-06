@@ -18,12 +18,10 @@ import argparse
 import sys
 
 from u1db import (
-    __version__ as _u1db_version,
     Document,
     open as u1db_open,
     sync,
     )
-from u1db.backends import sqlite_backend
 from u1db.commandline import command
 from u1db.remote import (
     http_database,

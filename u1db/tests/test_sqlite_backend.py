@@ -38,7 +38,7 @@ class TestSQLiteDatabase(tests.TestCase):
         tmpdir = self.createTempDir()
         dbname = os.path.join(tmpdir, 'atomic.db')
 
-        t2 = None # will be a thread
+        t2 = None  # will be a thread
 
         class SQLiteDatabaseTesting(sqlite_backend.SQLiteDatabase):
             _index_storage_value = "testing"
@@ -239,7 +239,7 @@ class TestSQLitePartialExpandDatabase(tests.TestCase):
                 if fail:
                     raise Exception()
         db = SQLitePartialExpandDbTesting.__new__(SQLitePartialExpandDbTesting)
-        db._db_handle = dbapi2.connect(path) # db is there but not yet init-ed
+        db._db_handle = dbapi2.connect(path)  # db is there but not yet init-ed
         fail = True
         self.assertRaises(Exception, db._ensure_schema)
         fail = False
@@ -263,7 +263,7 @@ class TestSQLitePartialExpandDatabase(tests.TestCase):
         path = temp_dir + '/initialised.db'
         db = sqlite_backend.SQLitePartialExpandDatabase.__new__(
                                     sqlite_backend.SQLitePartialExpandDatabase)
-        db._db_handle = dbapi2.connect(path) # db is there but not yet init-ed
+        db._db_handle = dbapi2.connect(path)  # db is there but not yet init-ed
         self.addCleanup(db.close)
         observed = []
         class SQLiteDatabaseTesting(sqlite_backend.SQLiteDatabase):
@@ -271,7 +271,7 @@ class TestSQLitePartialExpandDatabase(tests.TestCase):
             @classmethod
             def _which_index_storage(cls, c):
                 res = super(SQLiteDatabaseTesting, cls)._which_index_storage(c)
-                db._ensure_schema() # init db
+                db._ensure_schema()  # init db
                 observed.append(res[0])
                 return res
         db2 = SQLiteDatabaseTesting._open_database(path)

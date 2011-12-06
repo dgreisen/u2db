@@ -36,6 +36,7 @@ class InvalidDocId(U1DBError):
 
     wire_description = "invalid document id"
 
+
 class ConflictedDoc(U1DBError):
     """The document is conflicted, you must call resolve before put()"""
 
@@ -47,16 +48,17 @@ class InvalidValueForIndex(U1DBError):
     request.
     """
 
+
 class DocumentDoesNotExist(U1DBError):
     """The document does not exist."""
 
-    wire_description="document does not exist"
+    wire_description = "document does not exist"
 
 
 class DocumentAlreadyDeleted(U1DBError):
     """The document was already deleted."""
 
-    wire_description="document already deleted"
+    wire_description = "document already deleted"
 
 
 class DatabaseDoesNotExist(U1DBError):

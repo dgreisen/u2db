@@ -59,7 +59,7 @@ class TestHTTPClientBase(tests.TestCaseWithServer):
             return srv
         class req_handler(simple_server.WSGIRequestHandler):
             def log_request(*args):
-                pass # suppress
+                pass  # suppress
         return make_server, req_handler, "shutdown", "http"
 
     def getClient(self):
@@ -104,7 +104,6 @@ class TestHTTPClientBase(tests.TestCaseWithServer):
                           'QUERY_STRING': '',
                           'body': '{}',
                           'REQUEST_METHOD': 'PUT'}, simplejson.loads(res))
-
 
         res, headers = cli._request('GET', ['doc', 'echo'], {'a': 1})
         self.assertEqual({'PATH_INFO': '/dbase/doc/echo',

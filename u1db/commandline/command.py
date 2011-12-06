@@ -76,6 +76,3 @@ class Command(object):
         Subclasses should implement this, requesting their specific arguments.
         """
         raise NotImplementedError(self.run)
-
-
-

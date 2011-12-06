@@ -26,6 +26,7 @@ from u1db.remote import (
     http_target
     )
 
+
 def http_server_def():
     def make_server(host_port, handler, state):
         application = http_app.HTTPApp(state)
@@ -38,7 +39,7 @@ def http_server_def():
         return srv
     class req_handler(simple_server.WSGIRequestHandler):
         def log_request(*args):
-            pass # suppress
+            pass  # suppress
     #rh = httpserver.WSGIHandler
     return make_server, req_handler, "shutdown", "http"
 
