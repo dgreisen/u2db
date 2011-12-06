@@ -199,6 +199,11 @@ class SQLiteDatabase(CommonBackend):
 
     def _parse_index_definition(self, index_field):
         """Parse a field definition for an index, returning a Getter."""
+        # Note: We may want to keep a Parser object around, and cache the
+        #       Getter objects for a greater length of time. Specifically, if
+        #       you create a bunch of indexes, and then insert 50k docs, you'll
+        #       re-parse the indexes between puts. The time to insert the docs
+        #       is still likely to dominate put_doc time, though.
         parser = query_parser.Parser()
         getter = parser.parse(index_field)
         return getter
