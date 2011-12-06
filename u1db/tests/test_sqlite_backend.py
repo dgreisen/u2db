@@ -23,6 +23,7 @@ from sqlite3 import dbapi2
 from u1db import (
     errors,
     tests,
+    query_parser,
     )
 from u1db.backends import sqlite_backend
 
@@ -114,6 +115,22 @@ class TestSQLitePartialExpandDatabase(tests.TestCase):
         c.execute("SELECT * FROM sync_log")
         c.execute("SELECT * FROM conflicts")
         c.execute("SELECT * FROM index_definitions")
+
+    def test__parse_index(self):
+        self.db = sqlite_backend.SQLitePartialExpandDatabase(':memory:')
+        g = self.db._parse_index_definition('fieldname')
+        self.assertIsInstance(g, query_parser.ExtractField)
+        self.assertEqual('fieldname', g.field)
+
+    def test__update_indexes(self):
+        self.db = sqlite_backend.SQLitePartialExpandDatabase(':memory:')
+        g = self.db._parse_index_definition('fieldname')
+        c = self.db._get_sqlite_handle().cursor()
+        self.db._update_indexes('doc-id', {'fieldname': 'val'},
+                                [('fieldname', g)], c)
+        c.execute('SELECT doc_id, field_name, value FROM document_fields')
+        self.assertEqual([('doc-id', 'fieldname', 'val')],
+                         c.fetchall())
 
     def test__set_replica_uid(self):
         # Start from scratch, so that replica_uid isn't set.

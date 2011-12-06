@@ -197,6 +197,21 @@ class SQLiteDatabase(CommonBackend):
     def _extra_schema_init(self, c):
         """Add any extra fields, etc to the basic table definitions."""
 
+    def _parse_index_definition(self, index_field):
+        """Parse a field definition for an index, returning a Getter."""
+        parser = query_parser.Parser()
+        getter = parser.parse(index_field)
+        return getter
+
+    def _update_indexes(self, doc_id, raw_doc, getters, db_cursor):
+        values = []
+        for field_name, getter in getters:
+            for idx_value in getter.get(raw_doc):
+                values.append((doc_id, field_name, idx_value))
+        if values:
+            db_cursor.executemany(
+                "INSERT INTO document_fields VALUES (?, ?, ?)", values)
+
     def _set_replica_uid(self, replica_uid):
         """Force the replica_uid to be set."""
         with self._db_handle:
@@ -560,17 +575,6 @@ class SQLitePartialExpandDatabase(SQLiteDatabase):
         getter = parser.parse(field)
         return getter.get(raw_doc)
 
-    def _update_indexes(self, doc_id, raw_doc, fields, db_cursor):
-        values = []
-        for field_name in fields:
-            idx_values = self._evaluate_index(raw_doc, field_name)
-            if idx_values:
-                for idx_value in idx_values:
-                    values.append((doc_id, field_name, idx_value))
-        if values:
-            db_cursor.executemany(
-                "INSERT INTO document_fields VALUES (?, ?, ?)", values)
-
     def _put_and_update_indexes(self, old_doc, doc):
         c = self._db_handle.cursor()
         if doc and doc.content:
@@ -589,8 +593,9 @@ class SQLitePartialExpandDatabase(SQLiteDatabase):
         if indexed_fields:
             # It is expected that len(indexed_fields) is shorter than
             # len(raw_doc)
-            # TODO: Handle nested indexed fields.
-            self._update_indexes(doc.doc_id, raw_doc, indexed_fields, c)
+            getters = [(field, self._parse_index_definition(field))
+                       for field in indexed_fields]
+            self._update_indexes(doc.doc_id, raw_doc, getters, c)
         c.execute("INSERT INTO transaction_log(doc_id) VALUES (?)",
                   (doc.doc_id,))
 
@@ -618,9 +623,11 @@ class SQLitePartialExpandDatabase(SQLiteDatabase):
                 yield row
 
     def _update_all_indexes(self, new_fields):
+        getters = [(field, self._parse_index_definition(field))
+                   for field in new_fields]
+        c = self._db_handle.cursor()
         for doc_id, doc in self._iter_all_docs():
             raw_doc = simplejson.loads(doc)
-            c = self._db_handle.cursor()
-            self._update_indexes(doc_id, raw_doc, new_fields, c)
+            self._update_indexes(doc_id, raw_doc, getters, c)
 
 SQLiteDatabase.register_implementation(SQLitePartialExpandDatabase)
