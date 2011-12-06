@@ -374,7 +374,7 @@ class HTTPInvocationByMethodWithBody(object):
         args = urlparse.parse_qsl(self.environ['QUERY_STRING'],
                                   strict_parsing=False)
         try:
-            args = dict((k.decode('utf-8'), v.decode('utf-8')) for k,v in args)
+            args = dict((k.decode('utf-8'), v.decode('utf-8')) for k, v in args)
         except ValueError:
             raise BadRequest()
         method = self.environ['REQUEST_METHOD'].lower()
