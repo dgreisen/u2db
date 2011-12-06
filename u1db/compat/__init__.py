@@ -19,4 +19,3 @@ try:
     from collections import OrderedDict
 except ImportError:
     from u1db.compat.ordered_dict import OrderedDict
-

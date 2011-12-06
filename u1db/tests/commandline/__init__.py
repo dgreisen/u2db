@@ -43,5 +43,3 @@ def safe_close(process, timeout=0.1):
             # Process has exited
             return
     process.wait()
-
-

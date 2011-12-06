@@ -58,6 +58,3 @@ class TestU1DBOpen(tests.TestCase):
         db2 = u1db_open(self.db_path, create=False)
         self.addCleanup(db2.close)
         self.assertIsInstance(db2, sqlite_backend.SQLitePartialExpandDatabase)
-
-
-

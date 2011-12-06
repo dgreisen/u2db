@@ -94,4 +94,3 @@ class TestU1DBServe(tests.TestCase):
         self.addCleanup(c.close)
         res, _ = c._request_json('GET', [])
         self.assertEqual({}, res)
-

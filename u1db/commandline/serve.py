@@ -30,4 +30,3 @@ def make_server(host, port, working_dir):
     server = httpserver.WSGIServer(application, (host, port),
                                    httpserver.WSGIHandler)
     return server
-
