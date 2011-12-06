@@ -19,7 +19,6 @@ from u1db import (
     errors,
     sync,
     tests,
-    vectorclock,
     )
 from u1db.backends import (
     inmemory,

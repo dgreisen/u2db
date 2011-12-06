@@ -17,7 +17,6 @@
 import os
 
 from u1db import (
-    __version__ as _u1db_version,
     tests,
     )
 from u1db.remote import (

@@ -18,7 +18,6 @@ import sys
 import subprocess
 
 from u1db import (
-    __version__ as _u1db_version,
     errors,
     open as u1db_open,
     tests,
