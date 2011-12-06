@@ -289,6 +289,7 @@ class TestCmdSyncRemote(tests.TestCaseWithServer, TestCaseWithDB):
         self.assertGetDoc(self.db, doc2.doc_id, doc2.rev, tests.nested_doc,
                           False)
 
+
 class RunMainHelper(object):
 
     def run_main(self, args, stdin=None):

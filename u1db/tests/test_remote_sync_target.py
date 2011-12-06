@@ -26,6 +26,7 @@ from u1db.remote import (
     http_target
     )
 
+
 def http_server_def():
     def make_server(host_port, handler, state):
         application = http_app.HTTPApp(state)

@@ -40,6 +40,7 @@ def _make_local_db_and_target(test):
     st = db.get_sync_target()
     return db, st
 
+
 def _make_local_db_and_http_target(test):
     test.startServer()
     db = test.request_state._create_database('test')

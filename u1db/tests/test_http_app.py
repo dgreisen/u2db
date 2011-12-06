@@ -195,6 +195,7 @@ class TestHTTPMethodDecorator(tests.TestCase):
         self.assertRaises(http_app.BadRequest, f, "self", {'a': 'x'},
                           '{"b": "y"}')
 
+
 class TestResource(object):
 
     @http_app.http_method()
@@ -222,6 +223,7 @@ class TestResource(object):
     def put_end(self):
         self.order.append('e')
         return "Put/end"
+
 
 class TestHTTPInvocationByMethodWithBody(tests.TestCase):
 
@@ -391,6 +393,7 @@ class TestHTTPResponder(tests.TestCase):
         self.assertEqual(['{"one": 1}\r\n',
                           '{"entry": true}\r\n'], self.response_body)
         self.assertEqual([], responder.content)
+
 
 class TestHTTPApp(tests.TestCase):
 
