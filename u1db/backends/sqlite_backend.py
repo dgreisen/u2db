@@ -365,7 +365,7 @@ class SQLiteDatabase(CommonBackend):
                 changes.append((doc_id, generation))
                 seen.add(doc_id)
         if changes:
-            cur_gen = changes[0][1] # max generation
+            cur_gen = changes[0][1]  # max generation
             changes.reverse()
         return cur_gen, changes
 
