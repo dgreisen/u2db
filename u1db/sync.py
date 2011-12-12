@@ -120,9 +120,8 @@ class SyncExchange(object):
 
     def __init__(self, db):
         self._db = db
-        self.seen_ids = set()  # incoming ids not superseded (or conflicted)
+        self.seen_ids = set()  # incoming ids not superseded
         self.doc_ids_to_return = None
-        self.conflict_ids = set()
         self.new_gen = None
         # for tests
         self._incoming_trace = []
@@ -131,8 +130,8 @@ class SyncExchange(object):
     def insert_doc_from_source(self, doc):
         """Try to insert synced document from source.
 
-        Conflicting documents are not inserted but the current revision
-        marked to be sent over to the sync source.
+        Conflicting documents are not inserted but will be sent over
+        to the sync source.
 
         The 1st step of a sync exchange is to call this repeatedly to
         try insert all incoming documents from the source.
@@ -150,10 +149,8 @@ class SyncExchange(object):
             # we have something newer that we will return
             pass
         else:
-            # conflict, returned independently
+            # conflict, that we will returned
             assert state == 'conflicted'
-            self.seen_ids.add(doc.doc_id)
-            self.conflict_ids.add(doc.doc_id)
         # for tests
         self._incoming_trace.append((doc.doc_id, doc.rev))
 
@@ -162,8 +159,8 @@ class SyncExchange(object):
 
         This finds the document identifiers for any documents that
         have been updated since last_known_generation. It excludes
-        documents ids that have already been considered (marked conflicts,
-        or superseded by the sender, etc).
+        documents ids that have already been considered
+        (superseded by the sender, etc).
 
         :return: new_generation - the generation of this database
             which the caller can consider themselves to be synchronized after
@@ -175,7 +172,6 @@ class SyncExchange(object):
         self.new_gen = gen
         seen_ids = self.seen_ids
         # changed docs that weren't superseded by or converged with
-        # nor conflicted, conflicts are returned independently
         self.doc_ids_to_return = set(doc_id for doc_id in changed_doc_ids
                                      if doc_id not in seen_ids)
         return gen
@@ -198,14 +194,10 @@ class SyncExchange(object):
         :return: None
         """
         doc_ids_to_return = self.doc_ids_to_return
-        conflict_ids = self.conflict_ids
-        # return docs
-        new_docs = self._db.get_docs(doc_ids_to_return,
+        # return docs, including conflicts
+        docs = self._db.get_docs(doc_ids_to_return,
                                      check_for_conflicts=False)
-        for doc in new_docs:
-            return_doc_cb(doc)
-        conflicts = self._db.get_docs(conflict_ids, check_for_conflicts=False)
-        for doc in conflicts:
+        for doc in docs:
             return_doc_cb(doc)
         # record sync point
         self._db.set_sync_generation(from_replica_uid,
@@ -216,8 +208,7 @@ class SyncExchange(object):
                         'from_id': from_replica_uid,
                         'from_gen': from_replica_generation,
                         'last_known_gen': self._last_known_generation},
-            'return': {'new_docs': [(d.doc_id, d.rev) for d in new_docs],
-                       'conf_docs': [(d.doc_id, d.rev) for d in conflicts],
+            'return': {'docs': [(d.doc_id, d.rev) for d in docs],
                        'last_gen': self.new_gen}
         }
 
