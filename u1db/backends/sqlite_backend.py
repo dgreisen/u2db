@@ -354,15 +354,20 @@ class SQLiteDatabase(CommonBackend):
     def whats_changed(self, old_generation=0):
         c = self._db_handle.cursor()
         c.execute("SELECT generation, doc_id FROM transaction_log"
-                  " WHERE generation > ?", (old_generation,))
+                  " WHERE generation > ? ORDER BY generation DESC",
+                  (old_generation,))
         results = c.fetchall()
         cur_gen = old_generation
-        doc_ids = set()
-        for gen, doc_id in results:
-            if gen > cur_gen:
-                cur_gen = gen
-            doc_ids.add(doc_id)
-        return cur_gen, doc_ids
+        seen = set()
+        changes = []
+        for generation, doc_id in results:
+            if doc_id not in seen:
+                changes.append((doc_id, generation))
+                seen.add(doc_id)
+        if changes:
+            cur_gen = changes[0][1] # max generation
+            changes.reverse()
+        return cur_gen, changes
 
     def delete_doc(self, doc):
         with self._db_handle:
