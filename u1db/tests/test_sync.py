@@ -115,8 +115,7 @@ class DatabaseSyncTargetTests(tests.DatabaseBaseTests,
         self.assertEqual(([(doc.doc_id, doc.rev, simple_doc)], 1),
                          (self.other_docs, new_gen))
         self.assertEqual(self.db._last_exchange_log['return'],
-                         {'last_gen': 1, 'conf_docs': [(doc.doc_id, doc.rev)],
-                          'new_docs': []})
+                         {'last_gen': 1, 'docs': [(doc.doc_id, doc.rev)]})
 
     def test_sync_exchange_ignores_convergence(self):
         doc = self.db.create_doc(simple_doc)
@@ -140,8 +139,7 @@ class DatabaseSyncTargetTests(tests.DatabaseBaseTests,
         self.assertEqual(([(doc.doc_id, doc.rev, simple_doc)], 1),
                          (self.other_docs, new_gen))
         self.assertEqual(self.db._last_exchange_log['return'],
-                         {'last_gen': 1, 'new_docs': [(doc.doc_id, doc.rev)],
-                          'conf_docs': []})
+                         {'last_gen': 1, 'docs': [(doc.doc_id, doc.rev)]})
 
     def test_sync_exchange_getting_newer_docs(self):
         doc = self.db.create_doc(simple_doc)
@@ -192,8 +190,7 @@ class DatabaseSyncTests(tests.DatabaseBaseTests):
         self.assertEqual(0, self.db2.get_sync_generation('test1'))
         self.assertEqual({'receive': {'docs': [], 'from_id': 'test1',
                                       'from_gen': 0, 'last_known_gen': 0},
-                          'return': {'new_docs': [], 'conf_docs': [],
-                                     'last_gen': 0}},
+                          'return': {'docs': [], 'last_gen': 0}},
                          self.db2._last_exchange_log)
 
     def test_sync_puts_changes(self):
@@ -205,8 +202,7 @@ class DatabaseSyncTests(tests.DatabaseBaseTests):
         self.assertEqual({'receive': {'docs': [(doc.doc_id, doc.rev)],
                                       'from_id': 'test1',
                                       'from_gen': 1, 'last_known_gen': 0},
-                          'return': {'new_docs': [], 'conf_docs': [],
-                                     'last_gen': 1}},
+                          'return': {'docs': [], 'last_gen': 1}},
                          self.db2._last_exchange_log)
 
     def test_sync_pulls_changes(self):
@@ -218,8 +214,8 @@ class DatabaseSyncTests(tests.DatabaseBaseTests):
         self.assertEqual(1, self.db2.get_sync_generation('test1'))
         self.assertEqual({'receive': {'docs': [], 'from_id': 'test1',
                                       'from_gen': 0, 'last_known_gen': 0},
-                          'return': {'new_docs': [(doc.doc_id, doc.rev)],
-                                     'conf_docs': [], 'last_gen': 1}},
+                          'return': {'docs': [(doc.doc_id, doc.rev)],
+                                     'last_gen': 1}},
                          self.db2._last_exchange_log)
         self.assertEqual([doc],
                          self.db1.get_from_index('test-idx', [('value',)]))
@@ -242,8 +238,8 @@ class DatabaseSyncTests(tests.DatabaseBaseTests):
         self.assertEqual(0, self.sync(self.db1, self.db2))
         self.assertEqual({'receive': {'docs': [], 'from_id': 'test1',
                                       'from_gen': 0, 'last_known_gen': 0},
-                          'return': {'new_docs': [(doc.doc_id, doc.rev)],
-                                     'conf_docs': [], 'last_gen': 1}},
+                          'return': {'docs': [(doc.doc_id, doc.rev)],
+                                     'last_gen': 1}},
                          self.db2._last_exchange_log)
         self.assertEqual(1, self.db1.get_sync_generation('test2'))
         # c2 should not have gotten a '_record_sync_info' call, because the
@@ -260,8 +256,7 @@ class DatabaseSyncTests(tests.DatabaseBaseTests):
         self.assertEqual({'receive': {'docs': [(doc.doc_id, doc.rev)],
                                       'from_id': 'test1',
                                       'from_gen': 1, 'last_known_gen': 0},
-                          'return': {'new_docs': [],
-                                     'conf_docs': [], 'last_gen': 1}},
+                          'return': {'docs': [], 'last_gen': 1}},
                          self.db2._last_exchange_log)
 
     def test_sync_ignores_superseded(self):
@@ -278,8 +273,8 @@ class DatabaseSyncTests(tests.DatabaseBaseTests):
         self.assertEqual({'receive': {'docs': [(doc.doc_id, doc_rev1)],
                                       'from_id': 'test2',
                                       'from_gen': 1, 'last_known_gen': 0},
-                          'return': {'new_docs': [(doc.doc_id, doc_rev2)],
-                                     'conf_docs': [], 'last_gen': 2}},
+                          'return': {'docs': [(doc.doc_id, doc_rev2)],
+                                     'last_gen': 2}},
                          self.db1._last_exchange_log)
         self.assertGetDoc(self.db1, doc.doc_id, doc_rev2, new_content, False)
 
@@ -296,8 +291,7 @@ class DatabaseSyncTests(tests.DatabaseBaseTests):
         self.assertEqual({'receive': {'docs': [(doc_id, doc1_rev)],
                                       'from_id': 'test1',
                                       'from_gen': 1, 'last_known_gen': 0},
-                          'return': {'new_docs': [],
-                                     'conf_docs': [(doc_id, doc2_rev)],
+                          'return': {'docs': [(doc_id, doc2_rev)],
                                      'last_gen': 1}},
                          self.db2._last_exchange_log)
         self.assertEqual([doc_id, doc_id], self.db1._get_transaction_log())
@@ -322,8 +316,7 @@ class DatabaseSyncTests(tests.DatabaseBaseTests):
         self.assertEqual({'receive': {'docs': [(doc_id, doc1.rev)],
                                       'from_id': 'test1',
                                       'from_gen': 2, 'last_known_gen': 1},
-                          'return': {'new_docs': [],
-                                     'conf_docs': [(doc_id, doc2.rev)],
+                          'return': {'docs': [(doc_id, doc2.rev)],
                                      'last_gen': 2}},
                          self.db2._last_exchange_log)
         self.assertEqual([doc_id, doc_id, doc_id],
@@ -375,8 +368,7 @@ class DatabaseSyncTests(tests.DatabaseBaseTests):
         self.assertEqual({'receive': {'docs': [(doc_id, deleted_rev)],
                                       'from_id': 'test1',
                                       'from_gen': 2, 'last_known_gen': 1},
-                          'return': {'new_docs': [], 'conf_docs': [],
-                                     'last_gen': 2}},
+                          'return': {'docs': [], 'last_gen': 2}},
                          self.db2._last_exchange_log)
         self.assertGetDoc(self.db1, doc_id, deleted_rev, None, False)
         self.assertGetDoc(self.db2, doc_id, deleted_rev, None, False)
@@ -386,8 +378,7 @@ class DatabaseSyncTests(tests.DatabaseBaseTests):
         self.assertEqual({'receive': {'docs': [(doc_id, deleted_rev)],
                                       'from_id': 'test2',
                                       'from_gen': 2, 'last_known_gen': 0},
-                          'return': {'new_docs': [], 'conf_docs': [],
-                                     'last_gen': 2}},
+                          'return': {'docs': [], 'last_gen': 2}},
                          self.db3._last_exchange_log)
         self.assertGetDoc(self.db3, doc_id, deleted_rev, None, False)
 
