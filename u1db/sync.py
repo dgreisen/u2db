@@ -125,7 +125,10 @@ class SyncExchange(object):
         self.new_gen = None
         # for tests
         self._incoming_trace = []
-        self._db._last_exchange_log = {}
+        self._db._last_exchange_log = {
+            'receive': {'docs': self._incoming_trace},
+            'return': None
+            }
 
     def insert_doc_from_source(self, doc):
         """Try to insert synced document from source.
@@ -149,7 +152,7 @@ class SyncExchange(object):
             # we have something newer that we will return
             pass
         else:
-            # conflict, that we will returned
+            # conflict that we will returne
             assert state == 'conflicted'
         # for tests
         self._incoming_trace.append((doc.doc_id, doc.rev))
@@ -168,11 +171,10 @@ class SyncExchange(object):
         self._db.set_sync_generation(from_replica_uid,
                                      from_replica_generation)
         # for tests
-        self._db._last_exchange_log['receive'] = {
-            'docs': self._incoming_trace,
+        self._db._last_exchange_log['receive'].update({
             'from_id': from_replica_uid,
             'from_gen': from_replica_generation
-            }
+            })
 
     def find_docs_to_return(self, last_known_generation):
         """Find and further mark documents to return to the sync source.
@@ -186,8 +188,9 @@ class SyncExchange(object):
             which the caller can consider themselves to be synchronized after
             processing the returned documents.
         """
-        self._db._last_exchange_log['receive']['last_known_gen'] = \
-                                             last_known_generation  # for tests
+        self._db._last_exchange_log['receive'].update({  # for tests
+            'last_known_gen': last_known_generation
+            })
         gen, changes = self._db.whats_changed(last_known_generation)
         changed_doc_ids = set(doc_id for doc_id, _ in changes)
         self.new_gen = gen
