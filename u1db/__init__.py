@@ -47,17 +47,18 @@ class Database(object):
     """
 
     def whats_changed(self, old_generation):
-        """Return a list of entries that have changed since old_generation.
+        """Return a list of documents that have changed since old_generation.
         This allows APPS to only store a db generation before going
         'offline', and then when coming back online they can use this
         data to update whatever extra data they are storing.
 
         :param old_generation: The generation of the database in the old
             state.
-        :return: (cur_generation, set([doc_id]))
-            The current generation of the database, and the set of
-            document ids that were changed in between old_generation and
-            cur_generation
+        :return: (cur_generation, [(doc_id, generation),...])
+            The current generation of the database, and a list of of
+            changed documents since old_generation, represented by tuples
+            with for each document its doc_id and the generation corresponding
+            to the last intervening change and sorted by generation
         """
         raise NotImplementedError(self.whats_changed)
 

@@ -92,7 +92,8 @@ class Synchronizer(object):
         (other_replica_uid, other_gen,
          others_my_gen) = sync_target.get_sync_info(self.source._replica_uid)
         # what's changed since that generation and this current gen
-        my_gen, changed_doc_ids = self.source.whats_changed(others_my_gen)
+        my_gen, changes = self.source.whats_changed(others_my_gen)
+        changed_doc_ids = set(doc_id for doc_id, _ in changes)
         # prepare to send all the changed docs
         docs_to_send = self.source.get_docs(changed_doc_ids,
             check_for_conflicts=False)
@@ -169,7 +170,8 @@ class SyncExchange(object):
             processing the returned documents.
         """
         self._last_known_generation = last_known_generation  # for tests
-        gen, changed_doc_ids = self._db.whats_changed(last_known_generation)
+        gen, changes = self._db.whats_changed(last_known_generation)
+        changed_doc_ids = set(doc_id for doc_id, _ in changes)
         self.new_gen = gen
         seen_ids = self.seen_ids
         # changed docs that weren't superseded by or converged with
