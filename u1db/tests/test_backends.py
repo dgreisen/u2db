@@ -638,8 +638,8 @@ class DatabaseIndexTests(tests.DatabaseBaseTests):
         def ignore(doc_id, doc_rev, doc):
             pass
         docs = [Document(doc.doc_id, other_rev, new_content)]
-        result = st.sync_exchange(docs, 'other-replica',
-                                  from_replica_generation=10,
+        generations = [10]
+        result = st.sync_exchange(docs, generations, 'other-replica',
                                   last_known_generation=0,
                                   return_doc_cb=ignore)
         self.assertGetDoc(self.db, doc.doc_id, other_rev, new_content, False)

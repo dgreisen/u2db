@@ -349,8 +349,8 @@ class SyncTarget(object):
         """
         raise NotImplementedError(self.record_sync_info)
 
-    def sync_exchange(self, docs,
-                      from_replica_uid, from_replica_generation,
+    def sync_exchange(self, docs, from_replica_generations,
+                      from_replica_uid,
                       last_known_generation, return_doc_cb):
         """Incorporate the documents sent from the other replica.
 
@@ -360,11 +360,17 @@ class SyncTarget(object):
         This adds docs to the local store, and determines documents that need
         to be returned to the other replica.
 
+        docs must be supplied in order from the oldest change to the
+        newest, that means from the oldest generation to the newest,
+        matching generations for corresponding edits must be supplied as
+        well in from_replica_generations.
+
         :param docs: A list of [Document] objects indicating
             documents which should be updated on this replica.
+        :param from_replica_generations: The db generations
+             for the other replica corresponding to the last edit for
+             each document in docs.
         :param from_replica_uid: The other replica's identifier
-        :param from_replica_generation: The db generation for the other replica
-            indicating the tip of data being sent by docs_info.
         :param last_known_generation: The last generation that other replica
             knows about this
         :param: return_doc_cb(doc): is a callback

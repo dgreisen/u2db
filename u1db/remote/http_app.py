@@ -283,19 +283,17 @@ class SyncResource(object):
 
     @http_method(from_replica_generation=int, last_known_generation=int,
                  content_as_args=True)
-    def post_args(self, last_known_generation, from_replica_generation):
-        self.from_replica_generation = from_replica_generation
+    def post_args(self, last_known_generation):
         self.last_known_generation = last_known_generation
         self.sync_exch = self.target.get_sync_exchange()
 
     @http_method(content_as_args=True)
-    def post_stream_entry(self, id, rev, content):
+    def post_stream_entry(self, id, rev, content, gen):
         doc = Document(id, rev, content)
         self.sync_exch.insert_doc_from_source(doc)
+        self.sync_exch.record_sync_progress(self.from_replica_uid, gen)
 
     def post_end(self):
-        self.sync_exch.record_sync_progress(self.from_replica_uid,
-                                            self.from_replica_generation)
         def send_doc(doc):
             entry = dict(id=doc.doc_id, rev=doc.rev, content=doc.content)
             self.responder.stream_entry(entry)
