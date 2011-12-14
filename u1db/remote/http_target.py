@@ -71,7 +71,7 @@ class HTTPSyncTarget(http_client.HTTPClientBase, SyncTarget):
         for entry in data[1:]:
             entry = simplejson.loads(entry)
             doc = Document(entry['id'], entry['rev'], entry['content'])
-            return_doc_cb(doc)
+            return_doc_cb(doc, entry['gen'])
         data = None
         return res['new_generation']
 
