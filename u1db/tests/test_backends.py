@@ -156,8 +156,16 @@ class LocalDatabaseTests(tests.DatabaseBaseTests):
     def test_get_docs(self):
         doc1 = self.db.create_doc(simple_doc)
         doc2 = self.db.create_doc(nested_doc)
-        self.assertEqual(sorted([doc1, doc2]),
-                         sorted(self.db.get_docs([doc1.doc_id, doc2.doc_id])))
+        self.assertEqual([doc1, doc2],
+                         self.db.get_docs([doc1.doc_id, doc2.doc_id]))
+
+    def test_get_docs_request_ordered(self):
+        doc1 = self.db.create_doc(simple_doc)
+        doc2 = self.db.create_doc(nested_doc)
+        self.assertEqual([doc1, doc2],
+                         self.db.get_docs([doc1.doc_id, doc2.doc_id]))
+        self.assertEqual([doc2, doc1],
+                         self.db.get_docs([doc2.doc_id, doc1.doc_id]))
 
     def test_get_docs_conflicted(self):
         doc1 = self.db.create_doc(simple_doc)
@@ -170,11 +178,10 @@ class LocalDatabaseTests(tests.DatabaseBaseTests):
         doc2 = self.db.create_doc(nested_doc)
         alt_doc = Document(doc1.doc_id, 'alternate:1', nested_doc)
         self.db.force_doc_sync_conflict(alt_doc)
-        self.assertEqual(
-            sorted([Document(doc1.doc_id, 'alternate:1', nested_doc),
-                    Document(doc2.doc_id, doc2.rev, nested_doc)]),
-            sorted(self.db.get_docs([doc1.doc_id, doc2.doc_id],
-                                    check_for_conflicts=False)))
+        self.assertEqual([Document(doc1.doc_id, 'alternate:1', nested_doc),
+                          Document(doc2.doc_id, doc2.rev, nested_doc)],
+                         self.db.get_docs([doc1.doc_id, doc2.doc_id],
+                                          check_for_conflicts=False))
 
     def test_resolve_doc(self):
         doc = self.db.create_doc(simple_doc)
