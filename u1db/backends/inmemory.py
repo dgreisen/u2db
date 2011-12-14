@@ -54,7 +54,8 @@ class InMemoryDatabase(CommonBackend):
         return InMemorySyncTarget(self)
 
     def _get_transaction_log(self):
-        return self._transaction_log
+        # snapshot!
+        return self._transaction_log[:]
 
     def _get_generation(self):
         return len(self._transaction_log)

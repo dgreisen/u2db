@@ -64,7 +64,7 @@ class DatabaseSyncTargetTests(tests.DatabaseBaseTests,
     def setUp(self):
         super(DatabaseSyncTargetTests, self).setUp()
         self.db, self.st = self.create_db_and_target(self)
-        self.other_docs = []
+        self.other_changes = []
 
     def tearDown(self):
         # We delete them explicitly, so that connections are cleanly closed
@@ -72,8 +72,8 @@ class DatabaseSyncTargetTests(tests.DatabaseBaseTests,
         del self.st
         super(DatabaseSyncTargetTests, self).tearDown()
 
-    def receive_doc(self, doc):
-        self.other_docs.append((doc.doc_id, doc.rev, doc.content))
+    def receive_doc(self, doc, gen):
+        self.other_changes.append((doc.doc_id, doc.rev, doc.content, gen))
 
     def test_get_sync_target(self):
         self.assertIsNot(None, self.st)
@@ -98,7 +98,7 @@ class DatabaseSyncTargetTests(tests.DatabaseBaseTests,
                                         return_doc_cb=self.receive_doc)
         self.assertGetDoc(self.db, 'doc-id', 'replica:1', simple_doc, False)
         self.assertEqual(['doc-id'], self.db._get_transaction_log())
-        self.assertEqual(([], 1), (self.other_docs, new_gen))
+        self.assertEqual(([], 1), (self.other_changes, new_gen))
         self.assertEqual(10, self.st.get_sync_info('replica')[-1])
 
     def test_sync_exchange_push_many(self):
@@ -110,7 +110,7 @@ class DatabaseSyncTargetTests(tests.DatabaseBaseTests,
         self.assertGetDoc(self.db, 'doc-id', 'replica:1', simple_doc, False)
         self.assertGetDoc(self.db, 'doc-id2', 'replica:1', nested_doc, False)
         self.assertEqual(['doc-id', 'doc-id2'], self.db._get_transaction_log())
-        self.assertEqual(([], 2), (self.other_docs, new_gen))
+        self.assertEqual(([], 2), (self.other_changes, new_gen))
         self.assertEqual(11, self.st.get_sync_info('replica')[-1])
 
     def test_sync_exchange_refuses_conflicts(self):
@@ -122,8 +122,8 @@ class DatabaseSyncTargetTests(tests.DatabaseBaseTests,
                                         last_known_generation=0,
                                         return_doc_cb=self.receive_doc)
         self.assertEqual([doc.doc_id], self.db._get_transaction_log())
-        self.assertEqual(([(doc.doc_id, doc.rev, simple_doc)], 1),
-                         (self.other_docs, new_gen))
+        self.assertEqual(([(doc.doc_id, doc.rev, simple_doc, 1)], 1),
+                         (self.other_changes, new_gen))
         self.assertEqual(self.db._last_exchange_log['return'],
                          {'last_gen': 1, 'docs': [(doc.doc_id, doc.rev)]})
 
@@ -135,7 +135,7 @@ class DatabaseSyncTargetTests(tests.DatabaseBaseTests,
                                         last_known_generation=1,
                                         return_doc_cb=self.receive_doc)
         self.assertEqual([doc.doc_id], self.db._get_transaction_log())
-        self.assertEqual(([], 1), (self.other_docs, new_gen))
+        self.assertEqual(([], 1), (self.other_changes, new_gen))
 
     def test_sync_exchange_returns_new_docs(self):
         doc = self.db.create_doc(simple_doc)
@@ -144,10 +144,27 @@ class DatabaseSyncTargetTests(tests.DatabaseBaseTests,
                                         last_known_generation=0,
                                         return_doc_cb=self.receive_doc)
         self.assertEqual([doc.doc_id], self.db._get_transaction_log())
-        self.assertEqual(([(doc.doc_id, doc.rev, simple_doc)], 1),
-                         (self.other_docs, new_gen))
+        self.assertEqual(([(doc.doc_id, doc.rev, simple_doc, 1)], 1),
+                         (self.other_changes, new_gen))
         self.assertEqual(self.db._last_exchange_log['return'],
                          {'last_gen': 1, 'docs': [(doc.doc_id, doc.rev)]})
+
+    def test_sync_exchange_returns_many_new_docs(self):
+        doc = self.db.create_doc(simple_doc)
+        doc2 = self.db.create_doc(nested_doc)
+        self.assertEqual([doc.doc_id, doc2.doc_id],
+                         self.db._get_transaction_log())
+        new_gen = self.st.sync_exchange([], 'other-replica',
+                                        last_known_generation=0,
+                                        return_doc_cb=self.receive_doc)
+        self.assertEqual([doc.doc_id, doc2.doc_id],
+                         self.db._get_transaction_log())
+        self.assertEqual(([(doc.doc_id, doc.rev, simple_doc, 1),
+                           (doc2.doc_id, doc2.rev, nested_doc, 2)], 2),
+                         (self.other_changes, new_gen))
+        self.assertEqual(self.db._last_exchange_log['return'],
+                         {'last_gen': 2, 'docs': [(doc.doc_id, doc.rev),
+                                                  (doc2.doc_id, doc2.rev)]})
 
     def test_sync_exchange_getting_newer_docs(self):
         doc = self.db.create_doc(simple_doc)
@@ -159,7 +176,7 @@ class DatabaseSyncTargetTests(tests.DatabaseBaseTests,
                                         return_doc_cb=self.receive_doc)
         self.assertEqual([doc.doc_id, doc.doc_id],
                          self.db._get_transaction_log())
-        self.assertEqual(([], 2), (self.other_docs, new_gen))
+        self.assertEqual(([], 2), (self.other_changes, new_gen))
 
     def test_sync_exchange_with_concurrent_updates(self):
         doc = self.db.create_doc(simple_doc)
@@ -175,7 +192,7 @@ class DatabaseSyncTargetTests(tests.DatabaseBaseTests,
         new_gen = self.st.sync_exchange(docs_by_gen, 'other-replica',
                                         last_known_generation=0,
                                         return_doc_cb=self.receive_doc)
-        self.assertEqual(([], 2), (self.other_docs, new_gen))
+        self.assertEqual(([], 2), (self.other_changes, new_gen))
 
 
 class DatabaseSyncTests(tests.DatabaseBaseTests):
@@ -438,6 +455,56 @@ class TestDbSync(tests.TestCaseWithServer):
                           False)
         self.assertGetDoc(self.db, doc2.doc_id, doc2.rev, tests.nested_doc,
                           False)
+
+
+class TestRemoteSyncIntegration(tests.TestCaseWithServer):
+    """Integration tests for the most common sync scenario local -> remote"""
+
+    server_def = staticmethod(http_server_def)
+
+    def setUp(self):
+        super(TestRemoteSyncIntegration, self).setUp()
+        self.startServer()
+        self.db1 = inmemory.InMemoryDatabase('test1')
+        self.db2 = self.request_state._create_database('test2')
+
+    def test_sync_tracks_generations_incrementally(self):
+        doc11 = self.db1.create_doc('{"a": 1}')
+        doc12 = self.db1.create_doc('{"a": 2}')
+        doc21 = self.db2.create_doc('{"b": 1}')
+        doc22 = self.db2.create_doc('{"b": 2}')
+        #sanity
+        self.assertEqual(2, len(self.db1._get_transaction_log()))
+        self.assertEqual(2, len(self.db2._get_transaction_log()))
+        progress1 = []
+        progress2 = []
+        _set_sync_generation1 = self.db1.set_sync_generation
+        def set_sync_generation_witness1(other_uid, other_gen):
+            progress1.append((other_uid, other_gen,
+                              self.db1._get_transaction_log()[2:]))
+            _set_sync_generation1(other_uid, other_gen)
+        self.patch(self.db1, 'set_sync_generation',
+                   set_sync_generation_witness1)
+
+        _set_sync_generation2 = self.db2.set_sync_generation
+        def set_sync_generation_witness2(other_uid, other_gen):
+            progress2.append((other_uid, other_gen,
+                              self.db2._get_transaction_log()[2:]))
+            _set_sync_generation2(other_uid, other_gen)
+        self.patch(self.db2, 'set_sync_generation',
+                   set_sync_generation_witness2)
+
+        db2_url = self.getURL('test2')
+        self.db1.sync(db2_url)
+
+        self.assertEqual([('test2', 1, [doc21.doc_id]),
+                          ('test2', 2, [doc21.doc_id, doc22.doc_id]),
+                          ('test2', 4, [doc21.doc_id, doc22.doc_id])],
+                         progress1)
+        self.assertEqual([('test1', 1, [doc11.doc_id]),
+                          ('test1', 2, [doc11.doc_id, doc12.doc_id]),
+                          ('test1', 4, [doc11.doc_id, doc12.doc_id])],
+                         progress2)
 
 
 load_tests = tests.load_with_scenarios
