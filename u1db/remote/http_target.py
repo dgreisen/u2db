@@ -43,8 +43,7 @@ class HTTPSyncTarget(http_client.HTTPClientBase, SyncTarget):
         self._request_json('PUT', ['sync-from', other_replica_uid], {},
                                   {'generation': other_replica_generation})
 
-    def sync_exchange(self, docs, from_replica_uid,
-                      from_replica_generation,
+    def sync_exchange(self, docs_by_generations, from_replica_uid,
                       last_known_generation, return_doc_cb):
         self._ensure_connection()
         self._conn.putrequest('POST',
@@ -57,10 +56,10 @@ class HTTPSyncTarget(http_client.HTTPClientBase, SyncTarget):
             entry = simplejson.dumps(dic) + "\r\n"
             entries.append(entry)
             return len(entry)
-        size += prepare(last_known_generation=last_known_generation,
-                        from_replica_generation=from_replica_generation)
-        for doc in docs:
-            size += prepare(id=doc.doc_id, rev=doc.rev, content=doc.content)
+        size += prepare(last_known_generation=last_known_generation)
+        for doc, gen in docs_by_generations:
+            size += prepare(id=doc.doc_id, rev=doc.rev, content=doc.content,
+                            gen=gen)
         self._conn.putheader('content-length', str(size))
         self._conn.endheaders()
         for entry in entries:
