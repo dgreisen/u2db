@@ -76,7 +76,7 @@ class Database(object):
         :param doc_ids: A list of document identifiers.
         :param check_for_conflicts: If set to False, then the conflict check
             will be skipped, and 'None' will be returned instead of True/False.
-        :return: [Document] for each document id.
+        :return: [Document] for each document id and matching doc_ids order.
         """
         raise NotImplementedError(self.get_docs)
 
