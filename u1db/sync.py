@@ -97,14 +97,14 @@ class Synchronizer(object):
         # prepare to send all the changed docs
         docs_to_send = self.source.get_docs(changed_doc_ids,
             check_for_conflicts=False)
-        generations = [gen for _, gen in changes]
+        docs_by_generation = zip(docs_to_send, (gen for _, gen in changes))
 
         # this source last-seen database generation for the target
         other_last_known_gen = self.source.get_sync_generation(
             other_replica_uid)
         # exchange documents and try to insert the returned ones with
         # the target, return target synced-up-to gen
-        new_gen = sync_target.sync_exchange(docs_to_send, generations,
+        new_gen = sync_target.sync_exchange(docs_by_generation,
                         self.source._replica_uid, other_last_known_gen,
                         return_doc_cb=self._insert_doc_from_target)
         # record target synced-up-to generation
@@ -233,16 +233,16 @@ class LocalSyncTarget(u1db.SyncTarget):
     def get_sync_exchange(self):
         return SyncExchange(self._db)
 
-    def sync_exchange(self, docs, from_replica_generations, from_replica_uid,
+    def sync_exchange(self, docs_by_generations, from_replica_uid,
                       last_known_generation, return_doc_cb):
         sync_exch = self.get_sync_exchange()
         # 1st step: try to insert incoming docs
-        for doc in docs:
+        for doc, _ in docs_by_generations:
             sync_exch.insert_doc_from_source(doc)
         # record progress
-        if from_replica_generations:
-            sync_exch.record_sync_progress(from_replica_uid,
-                                           from_replica_generations[-1])
+        if docs_by_generations:
+            latest_gen = docs_by_generations[-1][1]
+            sync_exch.record_sync_progress(from_replica_uid, latest_gen)
         # 2nd step: find changed documents (including conflicts) to return
         new_gen = sync_exch.find_docs_to_return(last_known_generation)
         # final step: return docs and record source replica sync point
