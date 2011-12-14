@@ -156,8 +156,16 @@ class LocalDatabaseTests(tests.DatabaseBaseTests):
     def test_get_docs(self):
         doc1 = self.db.create_doc(simple_doc)
         doc2 = self.db.create_doc(nested_doc)
-        self.assertEqual(sorted([doc1, doc2]),
-                         sorted(self.db.get_docs([doc1.doc_id, doc2.doc_id])))
+        self.assertEqual([doc1, doc2],
+                         self.db.get_docs([doc1.doc_id, doc2.doc_id]))
+
+    def test_get_docs_request_ordered(self):
+        doc1 = self.db.create_doc(simple_doc)
+        doc2 = self.db.create_doc(nested_doc)
+        self.assertEqual([doc1, doc2],
+                         self.db.get_docs([doc1.doc_id, doc2.doc_id]))
+        self.assertEqual([doc2, doc1],
+                         self.db.get_docs([doc2.doc_id, doc1.doc_id]))
 
     def test_get_docs_conflicted(self):
         doc1 = self.db.create_doc(simple_doc)
@@ -170,11 +178,10 @@ class LocalDatabaseTests(tests.DatabaseBaseTests):
         doc2 = self.db.create_doc(nested_doc)
         alt_doc = Document(doc1.doc_id, 'alternate:1', nested_doc)
         self.db.force_doc_sync_conflict(alt_doc)
-        self.assertEqual(
-            sorted([Document(doc1.doc_id, 'alternate:1', nested_doc),
-                    Document(doc2.doc_id, doc2.rev, nested_doc)]),
-            sorted(self.db.get_docs([doc1.doc_id, doc2.doc_id],
-                                    check_for_conflicts=False)))
+        self.assertEqual([Document(doc1.doc_id, 'alternate:1', nested_doc),
+                          Document(doc2.doc_id, doc2.rev, nested_doc)],
+                         self.db.get_docs([doc1.doc_id, doc2.doc_id],
+                                          check_for_conflicts=False))
 
     def test_resolve_doc(self):
         doc = self.db.create_doc(simple_doc)
@@ -341,13 +348,13 @@ class LocalDatabaseTests(tests.DatabaseBaseTests):
         self.db.put_doc(doc)
         self.assertEqual([doc.doc_id, doc.doc_id],
                          self.db._get_transaction_log())
-        self.assertEqual((2, set([doc.doc_id])), self.db.whats_changed())
+        self.assertEqual((2, [(doc.doc_id, 2)]), self.db.whats_changed())
 
     def test_delete_updates_transaction_log(self):
         doc = self.db.create_doc(simple_doc)
         db_gen, _ = self.db.whats_changed()
         self.db.delete_doc(doc)
-        self.assertEqual((2, set([doc.doc_id])), self.db.whats_changed(db_gen))
+        self.assertEqual((2, [(doc.doc_id, 2)]), self.db.whats_changed(db_gen))
 
     def test_delete_then_put(self):
         doc = self.db.create_doc(simple_doc)
@@ -358,14 +365,23 @@ class LocalDatabaseTests(tests.DatabaseBaseTests):
         self.assertGetDoc(self.db, doc.doc_id, doc.rev, nested_doc, False)
 
     def test_whats_changed_initial_database(self):
-        self.assertEqual((0, set()), self.db.whats_changed())
+        self.assertEqual((0, []), self.db.whats_changed())
 
     def test_whats_changed_returns_one_id_for_multiple_changes(self):
         doc = self.db.create_doc(simple_doc)
         doc.content = '{"new": "contents"}'
         self.db.put_doc(doc)
-        self.assertEqual((2, set([doc.doc_id])), self.db.whats_changed())
-        self.assertEqual((2, set()), self.db.whats_changed(2))
+        self.assertEqual((2, [(doc.doc_id, 2)]), self.db.whats_changed())
+        self.assertEqual((2, []), self.db.whats_changed(2))
+
+    def test_whats_changed_returns_last_edits_ascending(self):
+        doc = self.db.create_doc(simple_doc)
+        doc1 = self.db.create_doc(simple_doc)
+        doc.content = '{"new": "contents"}'
+        self.db.delete_doc(doc1)
+        self.db.put_doc(doc)
+        self.assertEqual((4, [(doc1.doc_id, 3), (doc.doc_id, 4)]),
+                         self.db.whats_changed())
 
 
 class DatabaseIndexTests(tests.DatabaseBaseTests):
@@ -628,9 +644,8 @@ class DatabaseIndexTests(tests.DatabaseBaseTests):
         st = self.db.get_sync_target()
         def ignore(doc_id, doc_rev, doc):
             pass
-        docs = [Document(doc.doc_id, other_rev, new_content)]
-        result = st.sync_exchange(docs, 'other-replica',
-                                  from_replica_generation=10,
+        docs_by_gen = [(Document(doc.doc_id, other_rev, new_content), 10)]
+        result = st.sync_exchange(docs_by_gen, 'other-replica',
                                   last_known_generation=0,
                                   return_doc_cb=ignore)
         self.assertGetDoc(self.db, doc.doc_id, other_rev, new_content, False)

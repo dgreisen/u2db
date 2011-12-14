@@ -92,20 +92,27 @@ class Synchronizer(object):
         (other_replica_uid, other_gen,
          others_my_gen) = sync_target.get_sync_info(self.source._replica_uid)
         # what's changed since that generation and this current gen
-        my_gen, changed_doc_ids = self.source.whats_changed(others_my_gen)
+        my_gen, changes = self.source.whats_changed(others_my_gen)
+        changed_doc_ids = [doc_id for doc_id, _ in changes]
         # prepare to send all the changed docs
         docs_to_send = self.source.get_docs(changed_doc_ids,
             check_for_conflicts=False)
+        docs_by_generation = zip(docs_to_send, (gen for _, gen in changes))
 
         # this source last-seen database generation for the target
         other_last_known_gen = self.source.get_sync_generation(
             other_replica_uid)
         # exchange documents and try to insert the returned ones with
         # the target, return target synced-up-to gen
-        new_gen = sync_target.sync_exchange(docs_to_send,
-                        self.source._replica_uid, my_gen, other_last_known_gen,
-                        return_doc_cb=self._insert_doc_from_target)
-        # record target synced-up-to generation
+        def take_doc(doc, gen):
+            self._insert_doc_from_target(doc)
+            # record target synced-up-to generation
+            self.source.set_sync_generation(other_replica_uid, gen)
+
+        new_gen = sync_target.sync_exchange(docs_by_generation,
+                        self.source._replica_uid, other_last_known_gen,
+                        return_doc_cb=take_doc)
+        # record target synced-up-to generation including applying what we sent
         self.source.set_sync_generation(other_replica_uid, new_gen)
 
         # if gapless record current reached generation with target
@@ -119,19 +126,21 @@ class SyncExchange(object):
 
     def __init__(self, db):
         self._db = db
-        self.seen_ids = set()  # incoming ids not superseded (or conflicted)
-        self.doc_ids_to_return = None
-        self.conflict_ids = set()
+        self.seen_ids = set()  # incoming ids not superseded
+        self.changes_to_return = None
         self.new_gen = None
         # for tests
         self._incoming_trace = []
-        self._last_known_generation = None
+        self._db._last_exchange_log = {
+            'receive': {'docs': self._incoming_trace},
+            'return': None
+            }
 
     def insert_doc_from_source(self, doc):
         """Try to insert synced document from source.
 
-        Conflicting documents are not inserted but the current revision
-        marked to be sent over to the sync source.
+        Conflicting documents are not inserted but will be sent over
+        to the sync source.
 
         The 1st step of a sync exchange is to call this repeatedly to
         try insert all incoming documents from the source.
@@ -149,75 +158,76 @@ class SyncExchange(object):
             # we have something newer that we will return
             pass
         else:
-            # conflict, returned independently
+            # conflict that we will returne
             assert state == 'conflicted'
-            self.seen_ids.add(doc.doc_id)
-            self.conflict_ids.add(doc.doc_id)
         # for tests
         self._incoming_trace.append((doc.doc_id, doc.rev))
 
-    def find_docs_to_return(self, last_known_generation):
-        """Find and further mark documents to return to the sync source.
+    def record_sync_progress(self, from_replica_uid, from_replica_generation):
+        """Record the sync information of from_replica_uid
+        the sync source identifier and the generation until which it
+        sent its documents from_replica_generation.
 
-        This finds the document identifiers for any documents that
-        have been updated since last_known_generation. It excludes
-        documents ids that have already been considered (marked conflicts,
-        or superseded by the sender, etc).
+        :param from_replica_uid: The source replica's identifier
+        :param from_replica_generation: The db generation for the
+            source replica indicating the tip of data that was sent.
+        :return: None
+        """
+        # record sync point
+        self._db.set_sync_generation(from_replica_uid,
+                                     from_replica_generation)
+        # for tests
+        self._db._last_exchange_log['receive'].update({
+            'from_id': from_replica_uid,
+            'from_gen': from_replica_generation
+            })
+
+    def find_changes_to_return(self, last_known_generation):
+        """Find changes to return.
+
+        Find changes since last_known_generation in db generation
+        order using whats_changed. It excludes documents ids that have
+        already been considered (superseded by the sender, etc).
 
         :return: new_generation - the generation of this database
             which the caller can consider themselves to be synchronized after
             processing the returned documents.
         """
-        self._last_known_generation = last_known_generation  # for tests
-        gen, changed_doc_ids = self._db.whats_changed(last_known_generation)
+        self._db._last_exchange_log['receive'].update({  # for tests
+            'last_known_gen': last_known_generation
+            })
+        gen, changes = self._db.whats_changed(last_known_generation)
         self.new_gen = gen
         seen_ids = self.seen_ids
         # changed docs that weren't superseded by or converged with
-        # nor conflicted, conflicts are returned independently
-        self.doc_ids_to_return = set(doc_id for doc_id in changed_doc_ids
-                                     if doc_id not in seen_ids)
+        self.changes_to_return = [(doc_id, gen) for (doc_id, gen)  in changes
+                                         if doc_id not in seen_ids]
         return gen
 
-    def return_docs_and_record_sync(self,
-                                    from_replica_uid, from_replica_generation,
-                                    return_doc_cb):
-        """Return the marked documents repeatedly invoking the callback
-        return_doc_cb, record the sync information of from_replica_uid
-        the sync source identifier and the generation until which it
-        sent its documents from_replica_generation.
+    def return_docs(self, return_doc_cb):
+        """Return the changed documents and their last change generation
+        repeatedly invoking the callback return_doc_cb.
 
         The final step of a sync exchange.
 
-        :param from_replica_uid: The source replica's identifier
-        :param from_replica_generation: The db generation for the
-            source replica indicating the tip of data that was sent.
-        :param: return_doc_cb(doc): is a callback
-                used to return the marked documents to the target replica,
+        :param: return_doc_cb(doc, gen): is a callback
+                used to return the documents with their last change generation
+                to the target replica.
         :return: None
         """
-        doc_ids_to_return = self.doc_ids_to_return
-        conflict_ids = self.conflict_ids
-        # return docs
-        new_docs = self._db.get_docs(doc_ids_to_return,
-                                     check_for_conflicts=False)
-        for doc in new_docs:
-            return_doc_cb(doc)
-        conflicts = self._db.get_docs(conflict_ids, check_for_conflicts=False)
-        for doc in conflicts:
-            return_doc_cb(doc)
-        # record sync point
-        self._db.set_sync_generation(from_replica_uid,
-                                     from_replica_generation)
+        changes_to_return = self.changes_to_return
+        # return docs, including conflicts
+        changed_doc_ids = [doc_id for doc_id, _ in changes_to_return]
+        docs = self._db.get_docs(changed_doc_ids, check_for_conflicts=False)
+
+        docs_by_gen = zip(docs, (gen for _, gen in changes_to_return))
+        for doc, gen in docs_by_gen:
+            return_doc_cb(doc, gen)
         # for tests
-        self._db._last_exchange_log = {
-            'receive': {'docs': self._incoming_trace,
-                        'from_id': from_replica_uid,
-                        'from_gen': from_replica_generation,
-                        'last_known_gen': self._last_known_generation},
-            'return': {'new_docs': [(d.doc_id, d.rev) for d in new_docs],
-                       'conf_docs': [(d.doc_id, d.rev) for d in conflicts],
-                       'last_gen': self.new_gen}
-        }
+        self._db._last_exchange_log['return'] = {
+            'docs': [(d.doc_id, d.rev) for d in docs],
+            'last_gen': self.new_gen
+            }
 
 
 class LocalSyncTarget(u1db.SyncTarget):
@@ -229,17 +239,18 @@ class LocalSyncTarget(u1db.SyncTarget):
     def get_sync_exchange(self):
         return SyncExchange(self._db)
 
-    def sync_exchange(self, docs,
-                      from_replica_uid, from_replica_generation,
+    def sync_exchange(self, docs_by_generations, from_replica_uid,
                       last_known_generation, return_doc_cb):
         sync_exch = self.get_sync_exchange()
         # 1st step: try to insert incoming docs
-        for doc in docs:
+        for doc, _ in docs_by_generations:
             sync_exch.insert_doc_from_source(doc)
+        # record progress
+        if docs_by_generations:
+            latest_gen = docs_by_generations[-1][1]
+            sync_exch.record_sync_progress(from_replica_uid, latest_gen)
         # 2nd step: find changed documents (including conflicts) to return
-        new_gen = sync_exch.find_docs_to_return(last_known_generation)
+        new_gen = sync_exch.find_changes_to_return(last_known_generation)
         # final step: return docs and record source replica sync point
-        sync_exch.return_docs_and_record_sync(from_replica_uid,
-                                              from_replica_generation,
-                                              return_doc_cb)
+        sync_exch.return_docs(return_doc_cb)
         return new_gen

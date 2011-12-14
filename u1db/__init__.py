@@ -47,17 +47,18 @@ class Database(object):
     """
 
     def whats_changed(self, old_generation):
-        """Return a list of entries that have changed since old_generation.
+        """Return a list of documents that have changed since old_generation.
         This allows APPS to only store a db generation before going
         'offline', and then when coming back online they can use this
         data to update whatever extra data they are storing.
 
         :param old_generation: The generation of the database in the old
             state.
-        :return: (cur_generation, set([doc_id]))
-            The current generation of the database, and the set of
-            document ids that were changed in between old_generation and
-            cur_generation
+        :return: (cur_generation, [(doc_id, generation),...])
+            The current generation of the database, and a list of of
+            changed documents since old_generation, represented by tuples
+            with for each document its doc_id and the generation corresponding
+            to the last intervening change and sorted by generation
         """
         raise NotImplementedError(self.whats_changed)
 
@@ -75,7 +76,7 @@ class Database(object):
         :param doc_ids: A list of document identifiers.
         :param check_for_conflicts: If set to False, then the conflict check
             will be skipped, and 'None' will be returned instead of True/False.
-        :return: [Document] for each document id.
+        :return: [Document] for each document id and matching doc_ids order.
         """
         raise NotImplementedError(self.get_docs)
 
@@ -348,8 +349,8 @@ class SyncTarget(object):
         """
         raise NotImplementedError(self.record_sync_info)
 
-    def sync_exchange(self, docs,
-                      from_replica_uid, from_replica_generation,
+    def sync_exchange(self, docs_by_generation,
+                      from_replica_uid,
                       last_known_generation, return_doc_cb):
         """Incorporate the documents sent from the other replica.
 
@@ -359,18 +360,28 @@ class SyncTarget(object):
         This adds docs to the local store, and determines documents that need
         to be returned to the other replica.
 
-        :param docs: A list of [Document] objects indicating
-            documents which should be updated on this replica.
+        Documents must be supplied in docs_by_generation paired with
+        the generation of their latest change in order from the oldest
+        change to the newest, that means from the oldest generation to
+        the newest.
+
+        Documents are also returned paired with the generation of
+        their latest change in order from the oldest change to the
+        newest.
+
+        :param docs_by_generation: A list of [(Document, generation)]
+              pairs indicating documents which should be updated on
+              this replica paired with the generation of their
+              latest change.
         :param from_replica_uid: The other replica's identifier
-        :param from_replica_generation: The db generation for the other replica
-            indicating the tip of data being sent by docs_info.
         :param last_known_generation: The last generation that other replica
             knows about this
-        :param: return_doc_cb(doc): is a callback
+        :param: return_doc_cb(doc, gen): is a callback
                 used to return documents to the other replica, it will
                 be invoked in turn with Documents that have changed since
-                last_known_generation.
-        :return: new_generation - After applying docs_info, this is
+                last_known_generation together with the generation of
+                their last change.
+        :return: new_generation - After applying docs_by_generation, this is
             the current generation for this replica
         """
         raise NotImplementedError(self.sync_exchange)

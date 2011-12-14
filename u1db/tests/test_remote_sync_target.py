@@ -15,10 +15,12 @@
 """Tests for the remote sync targets"""
 
 from wsgiref import simple_server
+import cStringIO
 #from paste import httpserver
 
 from u1db import (
     Document,
+    errors,
     tests,
     )
 from u1db.remote import (
@@ -91,27 +93,68 @@ class TestRemoteSyncTargets(tests.TestCaseWithServer):
         def receive_doc(doc):
             other_docs.append((doc.doc_id, doc.rev, doc.content))
         new_gen = remote_target.sync_exchange(
-                        [Document('doc-here', 'replica:1', {'value': 'here'})],
-                        'replica', from_replica_generation=10,
-                        last_known_generation=0, return_doc_cb=receive_doc)
+                [(Document('doc-here', 'replica:1', '{"value": "here"}'), 10)],
+                'replica', last_known_generation=0,
+                return_doc_cb=receive_doc)
         self.assertEqual(1, new_gen)
-        self.assertGetDoc(db, 'doc-here', 'replica:1', {'value': 'here'}, False)
+        self.assertGetDoc(db, 'doc-here', 'replica:1', '{"value": "here"}',
+                          False)
+
+    def test_sync_exchange_send_failure_and_retry_scenario(self):
+        self.startServer()
+        def blackhole_getstderr(inst):
+            return cStringIO.StringIO()
+        self.patch(self.server.RequestHandlerClass, 'get_stderr',
+                   blackhole_getstderr)
+        db = self.request_state._create_database('test')
+        _put_doc_if_newer = db.put_doc_if_newer
+        trigger_ids = ['doc-here2']
+        def bomb_put_doc_if_newer(doc):
+            if doc.doc_id in trigger_ids:
+                raise Exception
+            return _put_doc_if_newer(doc)
+        self.patch(db, 'put_doc_if_newer', bomb_put_doc_if_newer)
+        remote_target = self.getSyncTarget('test')
+        other_changes = []
+        def receive_doc(doc, gen):
+            other_changes.append((doc.doc_id, doc.rev, doc.content, gen))
+        self.assertRaises(errors.HTTPError, remote_target.sync_exchange,
+                [(Document('doc-here', 'replica:1', '{"value": "here"}'), 10),
+                 (Document('doc-here2', 'replica:1', '{"value": "here2"}'), 11)
+                 ], 'replica', last_known_generation=0,
+                return_doc_cb=receive_doc)
+        self.assertGetDoc(db, 'doc-here', 'replica:1', '{"value": "here"}',
+                          False)
+        self.assertEqual(10, db.get_sync_generation('replica'))
+        self.assertEqual([], other_changes)
+        # retry
+        trigger_ids = []
+        new_gen = remote_target.sync_exchange(
+                [(Document('doc-here2', 'replica:1', '{"value": "here2"}'), 11)
+                 ], 'replica', last_known_generation=0,
+                return_doc_cb=receive_doc)
+        self.assertGetDoc(db, 'doc-here2', 'replica:1', '{"value": "here2"}',
+                          False)
+        self.assertEqual(11, db.get_sync_generation('replica'))
+        self.assertEqual(2, new_gen)
+        # bounced back to us
+        self.assertEqual([('doc-here', 'replica:1', '{"value": "here"}', 1)],
+                         other_changes)
 
     def test_sync_exchange_receive(self):
         self.startServer()
         db = self.request_state._create_database('test')
-        doc = db.create_doc({'value': 'there'})
+        doc = db.create_doc('{"value": "there"}')
         remote_target = self.getSyncTarget('test')
-        other_docs = []
-        def receive_doc(doc):
-            other_docs.append((doc.doc_id, doc.rev, doc.content))
+        other_changes = []
+        def receive_doc(doc, gen):
+            other_changes.append((doc.doc_id, doc.rev, doc.content, gen))
         new_gen = remote_target.sync_exchange(
-                        [],
-                        'replica', from_replica_generation=10,
-                        last_known_generation=0, return_doc_cb=receive_doc)
+                        [], 'replica', last_known_generation=0,
+                        return_doc_cb=receive_doc)
         self.assertEqual(1, new_gen)
-        self.assertEqual([(doc.doc_id, doc.rev, {'value': 'there'})],
-                         other_docs)
+        self.assertEqual([(doc.doc_id, doc.rev, '{"value": "there"}', 1)],
+                         other_changes)
 
 
 load_tests = tests.load_with_scenarios

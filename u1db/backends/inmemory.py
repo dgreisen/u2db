@@ -54,7 +54,8 @@ class InMemoryDatabase(CommonBackend):
         return InMemorySyncTarget(self)
 
     def _get_transaction_log(self):
-        return self._transaction_log
+        # snapshot!
+        return self._transaction_log[:]
 
     def _get_generation(self):
         return len(self._transaction_log)
@@ -168,8 +169,18 @@ class InMemoryDatabase(CommonBackend):
         return result
 
     def whats_changed(self, old_generation=0):
-        return (len(self._transaction_log),
-                set(self._transaction_log[old_generation:]))
+        changes = []
+        relevant_tail = self._transaction_log[old_generation:]
+        cur_generation = old_generation + len(relevant_tail)
+        seen = set()
+        generation = cur_generation
+        for doc_id in reversed(relevant_tail):
+            if doc_id not in seen:
+                changes.append((doc_id, generation))
+                seen.add(doc_id)
+            generation -= 1
+        changes.reverse()
+        return (cur_generation, changes)
 
     def force_doc_sync_conflict(self, doc):
         my_doc = self._get_doc(doc.doc_id)
