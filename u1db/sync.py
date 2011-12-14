@@ -131,7 +131,7 @@ class SyncExchange(object):
             'return': None
             }
 
-    def insert_doc_from_source(self, doc):
+    def insert_doc_from_source(self, doc, other_uid, other_gen):
         """Try to insert synced document from source.
 
         Conflicting documents are not inserted but will be sent over
@@ -143,7 +143,8 @@ class SyncExchange(object):
         :param doc: A Document object.
         :return: None
         """
-        state = self._db.put_doc_if_newer(doc)
+        state = self._db.put_doc_if_newer(doc, replica_uid=other_uid,
+                                          replica_gen=other_gen)
         if state == 'inserted':
             self.seen_ids.add(doc.doc_id)
         elif state == 'converged':
@@ -237,8 +238,8 @@ class LocalSyncTarget(u1db.SyncTarget):
                       last_known_generation, return_doc_cb):
         sync_exch = self.get_sync_exchange()
         # 1st step: try to insert incoming docs
-        for doc, _ in docs_by_generations:
-            sync_exch.insert_doc_from_source(doc)
+        for doc, doc_gen in docs_by_generations:
+            sync_exch.insert_doc_from_source(doc, from_replica_uid, doc_gen)
         # record progress
         if docs_by_generations:
             latest_gen = docs_by_generations[-1][1]
