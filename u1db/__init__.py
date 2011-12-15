@@ -369,6 +369,10 @@ class SyncTarget(object):
         change to the newest, that means from the oldest generation to
         the newest.
 
+        Documents are also returned paired with the generation of
+        their latest change in order from the oldest change to the
+        newest.
+
         :param docs_by_generation: A list of [(Document, generation)]
               pairs indicating documents which should be updated on
               this replica paired with the generation of their
@@ -376,11 +380,12 @@ class SyncTarget(object):
         :param from_replica_uid: The other replica's identifier
         :param last_known_generation: The last generation that other replica
             knows about this
-        :param: return_doc_cb(doc): is a callback
+        :param: return_doc_cb(doc, gen): is a callback
                 used to return documents to the other replica, it will
                 be invoked in turn with Documents that have changed since
-                last_known_generation.
-        :return: new_generation - After applying docs_info, this is
+                last_known_generation together with the generation of
+                their last change.
+        :return: new_generation - After applying docs_by_generation, this is
             the current generation for this replica
         """
         raise NotImplementedError(self.sync_exchange)

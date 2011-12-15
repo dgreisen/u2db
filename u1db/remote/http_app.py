@@ -293,10 +293,12 @@ class SyncResource(object):
         self.sync_exch.insert_doc_from_source(doc, self.from_replica_uid, gen)
 
     def post_end(self):
-        def send_doc(doc):
-            entry = dict(id=doc.doc_id, rev=doc.rev, content=doc.content)
+        def send_doc(doc, gen):
+            entry = dict(id=doc.doc_id, rev=doc.rev, content=doc.content,
+                         gen=gen)
             self.responder.stream_entry(entry)
-        new_gen = self.sync_exch.find_docs_to_return(self.last_known_generation)
+        new_gen = self.sync_exch.find_changes_to_return(
+                                                    self.last_known_generation)
         self.responder.content_type = 'application/x-u1db-multi-json'
         self.responder.start_response(200, {"new_generation": new_gen})
         new_gen = self.sync_exch.return_docs(send_doc)
