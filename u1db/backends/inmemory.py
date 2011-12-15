@@ -20,6 +20,7 @@ from u1db import (
     Document,
     errors,
     query_parser,
+    vectorclock,
     )
 from u1db.backends import CommonBackend, CommonSyncTarget
 
@@ -111,6 +112,23 @@ class InMemoryDatabase(CommonBackend):
         result.extend(self._conflicts[doc_id])
         return result
 
+    def _replace_conflicts(self, doc, conflicts):
+        if not conflicts:
+            del self._conflicts[doc.doc_id]
+        else:
+            self._conflicts[doc.doc_id] = conflicts
+        doc.has_conflicts = bool(conflicts)
+
+    def _prune_conflicts(self, doc, doc_vcr):
+        if self._has_conflicts(doc.doc_id):
+            remaining_conflicts = []
+            cur_conflicts = self._conflicts[doc.doc_id]
+            for c_rev, c_doc in cur_conflicts:
+                if doc_vcr.is_newer(vectorclock.VectorClockRev(c_rev)):
+                    continue
+                remaining_conflicts.append((c_rev, c_doc))
+            self._replace_conflicts(doc, remaining_conflicts)
+
     def resolve_doc(self, doc, conflicted_doc_revs):
         cur_doc = self._get_doc(doc.doc_id)
         if cur_doc is None:
@@ -130,11 +148,7 @@ class InMemoryDatabase(CommonBackend):
             self._put_and_update_indexes(cur_doc, doc)
         else:
             remaining_conflicts.append((new_rev, doc.content))
-        if not remaining_conflicts:
-            del self._conflicts[doc.doc_id]
-        else:
-            self._conflicts[doc.doc_id] = remaining_conflicts
-        doc.has_conflicts = bool(remaining_conflicts)
+        self._replace_conflicts(doc, remaining_conflicts)
 
     def delete_doc(self, doc):
         if doc.doc_id not in self._docs:
