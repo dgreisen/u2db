@@ -383,7 +383,6 @@ class LocalDatabaseTests(tests.DatabaseBaseTests):
         self.assertTrue(doc_resolved.has_conflicts)
         doc4 = self.db.get_doc(doc1.doc_id)
         self.assertTrue(doc4.has_conflicts)
-        self.assertEqual(2, len(self.db.get_doc_conflicts(doc1.doc_id)))
         self.assertEqual([('alternate:2|test:1', '{"good": 1}'),
                           ('altalt:1', '{}')],
                          self.db.get_doc_conflicts(doc1.doc_id))
