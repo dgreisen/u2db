@@ -198,6 +198,7 @@ class InMemoryDatabase(CommonBackend):
 
     def force_doc_sync_conflict(self, doc):
         my_doc = self._get_doc(doc.doc_id)
+        self._prune_conflicts(doc, vectorclock.VectorClockRev(doc.rev))
         self._conflicts.setdefault(doc.doc_id, []).append(
             (my_doc.rev, my_doc.content))
         doc.has_conflicts = True

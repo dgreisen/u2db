@@ -431,6 +431,20 @@ class DatabaseSyncTests(tests.DatabaseBaseTests):
         self.assertEqual(doc4.content, doc3.content)
         self.assertFalse(doc3.has_conflicts)
 
+    def test_sync_supersedes_conflicts(self):
+        db3 = self.create_database('test3')
+        doc1 = self.db1.create_doc('{"a": 1}', doc_id='the-doc')
+        doc2 = self.db2.create_doc('{"b": 1}', doc_id='the-doc')
+        doc3 = db3.create_doc('{"c": 1}', doc_id='the-doc')
+        self.sync(db3, self.db1)
+        self.sync(db3, self.db2)
+        self.assertEqual(3, len(db3.get_doc_conflicts('the-doc')))
+        doc1.content = '{"a": 2}'
+        self.db1.put_doc(doc1)
+        self.sync(db3, self.db1)
+        # original doc1 should have been removed from conflicts
+        self.assertEqual(3, len(db3.get_doc_conflicts('the-doc')))
+
     def test_put_refuses_to_update_conflicted(self):
         doc1 = self.db1.create_doc(simple_doc)
         doc_id = doc1.doc_id

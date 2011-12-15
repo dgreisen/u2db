@@ -439,14 +439,6 @@ class SQLiteDatabase(CommonBackend):
                       " WHERE doc_id=? AND doc_rev=?", deleting)
         doc.has_conflicts = self._has_conflicts(doc.doc_id)
 
-    def force_doc_sync_conflict(self, doc):
-        with self._db_handle:
-            my_doc = self._get_doc(doc.doc_id)
-            c = self._db_handle.cursor()
-            self._add_conflict(c, doc.doc_id, my_doc.rev, my_doc.content)
-            doc.has_conflicts = True
-            self._put_and_update_indexes(my_doc, doc)
-
     def _prune_conflicts(self, doc, doc_vcr):
         if self._has_conflicts(doc.doc_id):
             c_revs_to_prune = []
@@ -455,6 +447,15 @@ class SQLiteDatabase(CommonBackend):
                     c_revs_to_prune.append(c_rev)
             c = self._db_handle.cursor()
             self._delete_conflicts(c, doc, c_revs_to_prune)
+
+    def force_doc_sync_conflict(self, doc):
+        with self._db_handle:
+            my_doc = self._get_doc(doc.doc_id)
+            c = self._db_handle.cursor()
+            self._prune_conflicts(doc, vectorclock.VectorClockRev(doc.rev))
+            self._add_conflict(c, doc.doc_id, my_doc.rev, my_doc.content)
+            doc.has_conflicts = True
+            self._put_and_update_indexes(my_doc, doc)
 
     def resolve_doc(self, doc, conflicted_doc_revs):
         with self._db_handle:
