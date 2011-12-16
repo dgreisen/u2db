@@ -43,12 +43,12 @@ class HTTPSyncTarget(http_client.HTTPClientBase, SyncTarget):
         self._request_json('PUT', ['sync-from', source_replica_uid], {},
                                   {'generation': source_replica_generation})
 
-    def sync_exchange(self, docs_by_generations, from_replica_uid,
+    def sync_exchange(self, docs_by_generations, source_replica_uid,
                       last_known_generation, return_doc_cb):
         self._ensure_connection()
         self._conn.putrequest('POST',
                                 '%s/sync-from/%s' % (self._url.path,
-                                                     from_replica_uid))
+                                                     source_replica_uid))
         self._conn.putheader('content-type', 'application/x-u1db-multi-json')
         entries = []
         size = 0
@@ -75,5 +75,5 @@ class HTTPSyncTarget(http_client.HTTPClientBase, SyncTarget):
         data = None
         return res['new_generation']
 
-    def get_sync_exchange(self, from_replica_uid):
+    def get_sync_exchange(self, source_replica_uid):
         return None  # not a local target

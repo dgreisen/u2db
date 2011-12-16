@@ -258,34 +258,34 @@ class DocResource(object):
 class SyncResource(object):
     """Sync endpoint resource."""
 
-    url_pattern = "/{dbname}/sync-from/{from_replica_uid}"
+    url_pattern = "/{dbname}/sync-from/{source_replica_uid}"
 
-    def __init__(self, dbname, from_replica_uid, state, responder):
-        self.from_replica_uid = from_replica_uid
+    def __init__(self, dbname, source_replica_uid, state, responder):
+        self.source_replica_uid = source_replica_uid
         self.responder = responder
         self.target = state.open_database(dbname).get_sync_target()
 
     @http_method()
     def get(self):
-        result = self.target.get_sync_info(self.from_replica_uid)
+        result = self.target.get_sync_info(self.source_replica_uid)
         self.responder.send_response_json(target_replica_uid=result[0],
                                      target_replica_generation=result[1],
-                                     source_replica_uid=self.from_replica_uid,
+                                     source_replica_uid=self.source_replica_uid,
                                      source_replica_generation=result[2])
 
     @http_method(generation=int,
                  content_as_args=True, no_query=True)
     def put(self, generation):
-        self.target.record_sync_info(self.from_replica_uid, generation)
+        self.target.record_sync_info(self.source_replica_uid, generation)
         self.responder.send_response_json(ok=True)
 
     # Implements the same logic as LocalSyncTarget.sync_exchange
 
-    @http_method(from_replica_generation=int, last_known_generation=int,
+    @http_method(last_known_generation=int,
                  content_as_args=True)
     def post_args(self, last_known_generation):
         self.last_known_generation = last_known_generation
-        self.sync_exch = self.target.get_sync_exchange(self.from_replica_uid)
+        self.sync_exch = self.target.get_sync_exchange(self.source_replica_uid)
 
     @http_method(content_as_args=True)
     def post_stream_entry(self, id, rev, content, gen):

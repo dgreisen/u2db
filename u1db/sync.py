@@ -119,9 +119,9 @@ class Synchronizer(object):
 class SyncExchange(object):
     """Steps and state for carrying through a sync exchange on a target."""
 
-    def __init__(self, db, from_replica_uid):
+    def __init__(self, db, source_replica_uid):
         self._db = db
-        self.from_replica_uid = from_replica_uid
+        self.source_replica_uid = source_replica_uid
         self.seen_ids = set()  # incoming ids not superseded
         self.changes_to_return = None
         self.new_gen = None
@@ -132,7 +132,7 @@ class SyncExchange(object):
             'return': None
             }
 
-    def insert_doc_from_source(self, doc, from_gen):
+    def insert_doc_from_source(self, doc, source_gen):
         """Try to insert synced document from source.
 
         Conflicting documents are not inserted but will be sent over
@@ -145,11 +145,11 @@ class SyncExchange(object):
         try insert all incoming documents from the source.
 
         :param doc: A Document object.
-        :param from_gen: The source generation of doc.
+        :param source_gen: The source generation of doc.
         :return: None
         """
         state = self._db.put_doc_if_newer(doc, save_conflict=False,
-            replica_uid=self.from_replica_uid, replica_gen=from_gen)
+            replica_uid=self.source_replica_uid, replica_gen=source_gen)
         if state == 'inserted':
             self.seen_ids.add(doc.doc_id)
         elif state == 'converged':
@@ -164,8 +164,8 @@ class SyncExchange(object):
         # for tests
         self._incoming_trace.append((doc.doc_id, doc.rev))
         self._db._last_exchange_log['receive'].update({
-            'from_id': self.from_replica_uid,
-            'from_gen': from_gen
+            'source_uid': self.source_replica_uid,
+            'source_gen': source_gen
             })
 
     def find_changes_to_return(self, last_known_generation):
@@ -222,12 +222,12 @@ class LocalSyncTarget(u1db.SyncTarget):
     def __init__(self, db):
         self._db = db
 
-    def get_sync_exchange(self, from_replica_uid):
-        return SyncExchange(self._db, from_replica_uid)
+    def get_sync_exchange(self, source_replica_uid):
+        return SyncExchange(self._db, source_replica_uid)
 
-    def sync_exchange(self, docs_by_generations, from_replica_uid,
+    def sync_exchange(self, docs_by_generations, source_replica_uid,
                       last_known_generation, return_doc_cb):
-        sync_exch = self.get_sync_exchange(from_replica_uid)
+        sync_exch = self.get_sync_exchange(source_replica_uid)
         # 1st step: try to insert incoming docs and record progress
         for doc, doc_gen in docs_by_generations:
             sync_exch.insert_doc_from_source(doc, doc_gen)

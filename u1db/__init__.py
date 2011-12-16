@@ -340,23 +340,22 @@ class SyncTarget(object):
         wrong time, there can be database records that will never be
         synchronized.
 
-        :param source_replica_uid: The identifier for the other replica.
+        :param source_replica_uid: The identifier for the source replica.
         :param source_replica_generation:
-             The database generation for other replica.
+             The database generation for the source replica.
         :return: None
         """
         raise NotImplementedError(self.record_sync_info)
 
-    def sync_exchange(self, docs_by_generation,
-                      from_replica_uid,
+    def sync_exchange(self, docs_by_generation, source_replica_uid,
                       last_known_generation, return_doc_cb):
-        """Incorporate the documents sent from the other replica.
+        """Incorporate the documents sent from the source replica.
 
         This is not meant to be called by client code directly, but is used as
         part of sync().
 
         This adds docs to the local store, and determines documents that need
-        to be returned to the other replica.
+        to be returned to the source replica.
 
         Documents must be supplied in docs_by_generation paired with
         the generation of their latest change in order from the oldest
@@ -371,11 +370,11 @@ class SyncTarget(object):
               pairs indicating documents which should be updated on
               this replica paired with the generation of their
               latest change.
-        :param from_replica_uid: The other replica's identifier
-        :param last_known_generation: The last generation that other replica
-            knows about this
+        :param source_replica_uid: The source replica's identifier
+        :param last_known_generation: The last generation that the source
+            replica knows about this
         :param: return_doc_cb(doc, gen): is a callback
-                used to return documents to the other replica, it will
+                used to return documents to the source replica, it will
                 be invoked in turn with Documents that have changed since
                 last_known_generation together with the generation of
                 their last change.
@@ -384,11 +383,11 @@ class SyncTarget(object):
         """
         raise NotImplementedError(self.sync_exchange)
 
-    def get_sync_exchange(self, from_replica_uid):
+    def get_sync_exchange(self, source_replica_uid):
         """Return a sync.SyncExchange object to carry through directly
         the steps for a sync exchange.
 
-        :param from_replica_uid: The other replica's identifier
+        :param source_replica_uid: The source replica's identifier
         :return: An instance of sync.SyncExchange or
             None if this is not a local target
         """
