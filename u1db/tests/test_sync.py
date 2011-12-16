@@ -400,6 +400,51 @@ class DatabaseSyncTests(tests.DatabaseBaseTests):
                          self.db3._last_exchange_log)
         self.assertGetDoc(self.db3, doc_id, deleted_rev, None, False)
 
+    def test_sync_propagates_resolution(self):
+        doc1 = self.db1.create_doc('{"a": 1}', doc_id='the-doc')
+        db3 = self.create_database('test3')
+        self.sync(self.db2, self.db1)
+        self.sync(db3, self.db1)
+        # update on 2
+        doc2 = Document('the-doc', doc1.rev, '{"a": 2}')
+        self.db2.put_doc(doc2)
+        self.sync(self.db2, db3)
+        self.assertEqual(db3.get_doc('the-doc').rev, doc2.rev)
+        # update on 1
+        doc1.content = '{"a": 3}'
+        self.db1.put_doc(doc1)
+        # conflicts
+        self.sync(self.db2, self.db1)
+        self.sync(db3, self.db1)
+        self.assertTrue(self.db2.get_doc('the-doc').has_conflicts)
+        self.assertTrue(db3.get_doc('the-doc').has_conflicts)
+        # resolve
+        conflicts = self.db2.get_doc_conflicts('the-doc')
+        doc4 = Document('the-doc', None, '{"a": 4}')
+        revs = [confl[0] for confl in conflicts]
+        self.db2.resolve_doc(doc4, revs)
+        doc2 = self.db2.get_doc('the-doc')
+        self.assertEqual(doc4.content, doc2.content)
+        self.assertFalse(doc2.has_conflicts)
+        self.sync(self.db2, db3)
+        doc3 = db3.get_doc('the-doc')
+        self.assertEqual(doc4.content, doc3.content)
+        self.assertFalse(doc3.has_conflicts)
+
+    def test_sync_supersedes_conflicts(self):
+        db3 = self.create_database('test3')
+        doc1 = self.db1.create_doc('{"a": 1}', doc_id='the-doc')
+        doc2 = self.db2.create_doc('{"b": 1}', doc_id='the-doc')
+        doc3 = db3.create_doc('{"c": 1}', doc_id='the-doc')
+        self.sync(db3, self.db1)
+        self.sync(db3, self.db2)
+        self.assertEqual(3, len(db3.get_doc_conflicts('the-doc')))
+        doc1.content = '{"a": 2}'
+        self.db1.put_doc(doc1)
+        self.sync(db3, self.db1)
+        # original doc1 should have been removed from conflicts
+        self.assertEqual(3, len(db3.get_doc_conflicts('the-doc')))
+
     def test_put_refuses_to_update_conflicted(self):
         doc1 = self.db1.create_doc(simple_doc)
         doc_id = doc1.doc_id
