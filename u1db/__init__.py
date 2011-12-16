@@ -102,12 +102,15 @@ class Database(object):
         """
         raise NotImplementedError(self.put_doc)
 
-    def put_doc_if_newer(self, doc, replica_uid=None, replica_gen=None):
+    def put_doc_if_newer(self, doc, save_conflict=False, replica_uid=None,
+                         replica_gen=None):
         """Insert/update document into the database with a given revision.
 
         This api is used during synchronization operations.
 
         :param doc: A Document object
+        :param save_conflict: If this document is a conflict, do you want to
+            save it as a conflict, or just ignore it.
         :param replica_uid: A unique replica identifier.
         :param replica_gen: The generation of the replica corresponding to the
             this document. The replica arguments are optional, but are used
@@ -122,29 +125,6 @@ class Database(object):
             state is 'conflicted' and again the document is not inserted.
         """
         raise NotImplementedError(self.put_doc_if_newer)
-
-    def force_doc_sync_conflict(self, doc):
-        """Update documents even though they should conflict.
-
-        This is used for synchronization, and should generally not be used by
-        clients.
-
-        The content will be selected as the 'current' content for doc.doc_id,
-        even though doc.rev may not supersede the currently stored revision.
-        The currently stored document will be added to the list of conflict
-        alternatives for the given doc_id.
-
-        The reason this forces the new content to be 'current' is so that we
-        get convergence after synchronizing, even if people don't resolve
-        conflicts. Users can then notice that their content is out of date,
-        update it, and synchronize again. (The alternative is that users could
-        synchronize and think the data has propagated, but their local copy
-        looks fine, and the remote copy is never updated again.)
-
-        :param doc: A Document
-        :return: None
-        """
-        raise NotImplementedError(self.force_doc_sync_conflict)
 
     def delete_doc(self, doc):
         """Mark a document as deleted.
