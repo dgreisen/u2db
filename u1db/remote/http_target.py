@@ -75,5 +75,5 @@ class HTTPSyncTarget(http_client.HTTPClientBase, SyncTarget):
         data = None
         return res['new_generation']
 
-    def get_sync_exchange(self):
+    def get_sync_exchange(self, from_replica_uid):
         return None  # not a local target

@@ -68,7 +68,7 @@ class TestRemoteSyncTargets(tests.TestCaseWithServer):
 
     def test_no_sync_exchange_object(self):
         remote_target = self.getSyncTarget()
-        self.assertEqual(None, remote_target.get_sync_exchange())
+        self.assertEqual(None, remote_target.get_sync_exchange(None))
 
     def test_get_sync_info(self):
         self.startServer()
