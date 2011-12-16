@@ -36,7 +36,7 @@ class Synchronizer(object):
         self.sync_target = sync_target
         self.num_inserted = 0
 
-    def _insert_doc_from_target(self, doc):
+    def _insert_doc_from_target(self, doc, replica_uid, replica_gen):
         """Try to insert synced document from target.
 
         Implements TAKE OTHER semantics: any document from the target
@@ -48,7 +48,8 @@ class Synchronizer(object):
         """
         # Increases self.num_inserted depending whether the document
         # was effectively inserted.
-        state = self.source.put_doc_if_newer(doc, save_conflict=True)
+        state = self.source.put_doc_if_newer(doc, save_conflict=True,
+            replica_uid=replica_uid, replica_gen=replica_gen)
         if state == 'inserted':
             self.num_inserted += 1
         elif state == 'converged':
@@ -103,9 +104,7 @@ class Synchronizer(object):
         # exchange documents and try to insert the returned ones with
         # the target, return target synced-up-to gen
         def take_doc(doc, gen):
-            self._insert_doc_from_target(doc)
-            # record target synced-up-to generation
-            self.source.set_sync_generation(other_replica_uid, gen)
+            return self._insert_doc_from_target(doc, other_replica_uid, gen)
 
         new_gen = sync_target.sync_exchange(docs_by_generation,
                         self.source._replica_uid, other_last_known_gen,
