@@ -59,8 +59,7 @@ class Synchronizer(object):
             pass
         else:
             assert state == 'conflicted'
-            # take doc as the official value, stores the current
-            # alongside as conflict
+            # The doc was saved as a conflict, so the database was updated
             self.num_inserted += 1
 
     def _record_sync_info_with_the_target(self, start_generation):

@@ -317,11 +317,11 @@ class LocalDatabaseTests(tests.DatabaseBaseTests):
 
     def test_put_doc_if_newer_save_conflicted(self):
         doc1 = self.db.create_doc(simple_doc)
-        # Nothing is inserted, the document id is returned as would-conflict
+        # Document is inserted as a conflict
         doc2 = Document(doc1.doc_id, 'alternate:1', nested_doc)
         state = self.db.put_doc_if_newer(doc2, save_conflict=True)
         self.assertEqual('conflicted', state)
-        # The database wasn't altered
+        # The database was updated
         self.assertGetDoc(self.db, doc1.doc_id, doc2.rev, nested_doc, True)
 
     def test_force_doc_conflict_supersedes_properly(self):
