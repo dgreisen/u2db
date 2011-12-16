@@ -48,7 +48,7 @@ class Synchronizer(object):
         """
         # Increases self.num_inserted depending whether the document
         # was effectively inserted.
-        state = self.source.put_doc_if_newer(doc)
+        state = self.source.put_doc_if_newer(doc, save_conflict=True)
         if state == 'inserted':
             self.num_inserted += 1
         elif state == 'converged':
@@ -59,9 +59,7 @@ class Synchronizer(object):
             pass
         else:
             assert state == 'conflicted'
-            # take doc as the official value, stores the current
-            # alongside as conflict
-            self.source.force_doc_sync_conflict(doc)
+            # The doc was saved as a conflict, so the database was updated
             self.num_inserted += 1
 
     def _record_sync_info_with_the_target(self, start_generation):
@@ -148,7 +146,7 @@ class SyncExchange(object):
         :param doc: A Document object.
         :return: None
         """
-        state = self._db.put_doc_if_newer(doc)
+        state = self._db.put_doc_if_newer(doc, save_conflict=False)
         if state == 'inserted':
             self.seen_ids.add(doc.doc_id)
         elif state == 'converged':

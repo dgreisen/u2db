@@ -425,9 +425,10 @@ class SQLiteDatabase(CommonBackend):
             c.execute("INSERT OR REPLACE INTO sync_log VALUES (?, ?)",
                       (other_replica_uid, other_generation))
 
-    def put_doc_if_newer(self, doc):
+    def put_doc_if_newer(self, doc, save_conflict):
         with self._db_handle:
-            return super(SQLiteDatabase, self).put_doc_if_newer(doc)
+            return super(SQLiteDatabase, self).put_doc_if_newer(doc,
+                save_conflict=save_conflict)
 
     def _add_conflict(self, c, doc_id, my_doc_rev, my_content):
         c.execute("INSERT INTO conflicts VALUES (?, ?, ?)",
@@ -448,14 +449,13 @@ class SQLiteDatabase(CommonBackend):
             c = self._db_handle.cursor()
             self._delete_conflicts(c, doc, c_revs_to_prune)
 
-    def force_doc_sync_conflict(self, doc):
-        with self._db_handle:
-            my_doc = self._get_doc(doc.doc_id)
-            c = self._db_handle.cursor()
-            self._prune_conflicts(doc, vectorclock.VectorClockRev(doc.rev))
-            self._add_conflict(c, doc.doc_id, my_doc.rev, my_doc.content)
-            doc.has_conflicts = True
-            self._put_and_update_indexes(my_doc, doc)
+    def _force_doc_sync_conflict(self, doc):
+        my_doc = self._get_doc(doc.doc_id)
+        c = self._db_handle.cursor()
+        self._prune_conflicts(doc, vectorclock.VectorClockRev(doc.rev))
+        self._add_conflict(c, doc.doc_id, my_doc.rev, my_doc.content)
+        doc.has_conflicts = True
+        self._put_and_update_indexes(my_doc, doc)
 
     def resolve_doc(self, doc, conflicted_doc_revs):
         with self._db_handle:
