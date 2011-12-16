@@ -556,7 +556,7 @@ class TestHTTPApp(tests.TestCase):
     def test_sync_exchange_send(self):
         entries = {
             10: {'id': 'doc-here', 'rev': 'replica:1', 'content':
-                 '{"value": "here"}', 'gen':10},
+                 '{"value": "here"}', 'gen': 10},
             11: {'id': 'doc-here2', 'rev': 'replica:1', 'content':
                  '{"value": "here2"}', 'gen': 11}
             }

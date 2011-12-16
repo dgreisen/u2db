@@ -94,6 +94,7 @@ class CommonBackend(u1db.Database):
             cur_vcr = VectorClockRev(cur_doc.rev)
         if doc_vcr.is_newer(cur_vcr):
             self._put_and_update_indexes(cur_doc, doc)
+            self._prune_conflicts(doc, doc_vcr)
             state = 'inserted'
         elif doc.rev == cur_doc.rev:
             # magical convergence
