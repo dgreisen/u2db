@@ -102,7 +102,7 @@ class Database(object):
         """
         raise NotImplementedError(self.put_doc)
 
-    def put_doc_if_newer(self, doc, save_conflict=False):
+    def put_doc_if_newer(self, doc, save_conflict):
         """Insert/update document into the database with a given revision.
 
         This api is used during synchronization operations.
@@ -130,7 +130,8 @@ class Database(object):
             then the put is ignored and state is respecitvely 'superseded'
             or 'converged'.
             If doc_rev is not strictly superseded or supersedes, then
-            state is 'conflicted' and again the document is not inserted.
+            state is 'conflicted'. The document will not be inserted if
+            save_conflict is False.
         """
         raise NotImplementedError(self.put_doc_if_newer)
 

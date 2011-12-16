@@ -109,10 +109,10 @@ class TestRemoteSyncTargets(tests.TestCaseWithServer):
         db = self.request_state._create_database('test')
         _put_doc_if_newer = db.put_doc_if_newer
         trigger_ids = ['doc-here2']
-        def bomb_put_doc_if_newer(doc):
+        def bomb_put_doc_if_newer(doc, save_conflict):
             if doc.doc_id in trigger_ids:
                 raise Exception
-            return _put_doc_if_newer(doc)
+            return _put_doc_if_newer(doc, save_conflict)
         self.patch(db, 'put_doc_if_newer', bomb_put_doc_if_newer)
         remote_target = self.getSyncTarget('test')
         other_changes = []

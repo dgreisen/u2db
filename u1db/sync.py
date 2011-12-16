@@ -146,7 +146,7 @@ class SyncExchange(object):
         :param doc: A Document object.
         :return: None
         """
-        state = self._db.put_doc_if_newer(doc)
+        state = self._db.put_doc_if_newer(doc, save_conflict=False)
         if state == 'inserted':
             self.seen_ids.add(doc.doc_id)
         elif state == 'converged':
