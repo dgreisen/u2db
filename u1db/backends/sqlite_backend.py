@@ -427,7 +427,7 @@ class SQLiteDatabase(CommonBackend):
             c.execute("INSERT OR REPLACE INTO sync_log VALUES (?, ?)",
                       (other_replica_uid, other_generation))
 
-    def put_doc_if_newer(self, doc, save_conflict=False, replica_uid=None,
+    def put_doc_if_newer(self, doc, save_conflict, replica_uid=None,
                          replica_gen=None):
         with self._db_handle:
             return super(SQLiteDatabase, self).put_doc_if_newer(doc,

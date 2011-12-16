@@ -85,7 +85,7 @@ class CommonBackend(u1db.Database):
             result.append(doc)
         return result
 
-    def put_doc_if_newer(self, doc, save_conflict=False, replica_uid=None,
+    def put_doc_if_newer(self, doc, save_conflict, replica_uid=None,
                          replica_gen=None):
         cur_doc = self._get_doc(doc.doc_id)
         doc_vcr = VectorClockRev(doc.rev)

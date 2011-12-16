@@ -102,11 +102,24 @@ class Database(object):
         """
         raise NotImplementedError(self.put_doc)
 
-    def put_doc_if_newer(self, doc, save_conflict=False, replica_uid=None,
+    def put_doc_if_newer(self, doc, save_conflict, replica_uid=None,
                          replica_gen=None):
         """Insert/update document into the database with a given revision.
 
         This api is used during synchronization operations.
+
+        If a document would conflict and save_conflict is set to True, the
+        content will be selected as the 'current' content for doc.doc_id,
+        even though doc.rev doesn't supersede the currently stored revision.
+        The currently stored document will be added to the list of conflict
+        alternatives for the given doc_id.
+
+        This forces the new content to be 'current' so that we get convergence
+        after synchronizing, even if people don't resolve conflicts. Users can
+        then notice that their content is out of date, update it, and
+        synchronize again. (The alternative is that users could synchronize and
+        think the data has propagated, but their local copy looks fine, and the
+        remote copy is never updated again.)
 
         :param doc: A Document object
         :param save_conflict: If this document is a conflict, do you want to
@@ -122,7 +135,8 @@ class Database(object):
             then the put is ignored and state is respecitvely 'superseded'
             or 'converged'.
             If doc_rev is not strictly superseded or supersedes, then
-            state is 'conflicted' and again the document is not inserted.
+            state is 'conflicted'. The document will not be inserted if
+            save_conflict is False.
         """
         raise NotImplementedError(self.put_doc_if_newer)
 
