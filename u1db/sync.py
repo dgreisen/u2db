@@ -34,9 +34,10 @@ class Synchronizer(object):
         """
         self.source = source
         self.sync_target = sync_target
+        self.other_replica_uid = None
         self.num_inserted = 0
 
-    def _insert_doc_from_target(self, doc, replica_uid, replica_gen):
+    def _insert_doc_from_target(self, doc, replica_gen):
         """Try to insert synced document from target.
 
         Implements TAKE OTHER semantics: any document from the target
@@ -49,7 +50,7 @@ class Synchronizer(object):
         # Increases self.num_inserted depending whether the document
         # was effectively inserted.
         state = self.source.put_doc_if_newer(doc, save_conflict=True,
-            replica_uid=replica_uid, replica_gen=replica_gen)
+            replica_uid=self.other_replica_uid, replica_gen=replica_gen)
         if state == 'inserted':
             self.num_inserted += 1
         elif state == 'converged':
@@ -88,7 +89,7 @@ class Synchronizer(object):
         sync_target = self.sync_target
         # get target identifier, its current generation,
         # and its last-seen database generation for this source
-        (other_replica_uid, other_gen,
+        (self.other_replica_uid, other_gen,
          others_my_gen) = sync_target.get_sync_info(self.source._replica_uid)
         # what's changed since that generation and this current gen
         my_gen, changes = self.source.whats_changed(others_my_gen)
@@ -100,17 +101,14 @@ class Synchronizer(object):
 
         # this source last-seen database generation for the target
         other_last_known_gen = self.source.get_sync_generation(
-            other_replica_uid)
+            self.other_replica_uid)
         # exchange documents and try to insert the returned ones with
         # the target, return target synced-up-to gen
-        def take_doc(doc, gen):
-            return self._insert_doc_from_target(doc, other_replica_uid, gen)
-
         new_gen = sync_target.sync_exchange(docs_by_generation,
                         self.source._replica_uid, other_last_known_gen,
-                        return_doc_cb=take_doc)
+                        return_doc_cb=self._insert_doc_from_target)
         # record target synced-up-to generation including applying what we sent
-        self.source.set_sync_generation(other_replica_uid, new_gen)
+        self.source.set_sync_generation(self.other_replica_uid, new_gen)
 
         # if gapless record current reached generation with target
         self._record_sync_info_with_the_target(my_gen)
