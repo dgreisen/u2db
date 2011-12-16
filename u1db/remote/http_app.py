@@ -268,10 +268,10 @@ class SyncResource(object):
     @http_method()
     def get(self):
         result = self.target.get_sync_info(self.from_replica_uid)
-        self.responder.send_response_json(this_replica_uid=result[0],
-                                     this_replica_generation=result[1],
-                                     other_replica_uid=self.from_replica_uid,
-                                     other_replica_generation=result[2])
+        self.responder.send_response_json(target_replica_uid=result[0],
+                                     target_replica_generation=result[1],
+                                     source_replica_uid=self.from_replica_uid,
+                                     source_replica_generation=result[2])
 
     @http_method(generation=int,
                  content_as_args=True, no_query=True)

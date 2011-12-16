@@ -314,34 +314,34 @@ class Document(object):
 class SyncTarget(object):
     """Functionality for using a Database as a synchronization target."""
 
-    def get_sync_info(self, other_replica_uid):
+    def get_sync_info(self, source_replica_uid):
         """Return information about known state.
 
         Return the replica_uid and the current database generation of this
-        database, and the last-seen database generation for other_replica_uid
+        database, and the last-seen database generation for source_replica_uid
 
-        :param other_replica_uid: Another replica which we might have
+        :param source_replica_uid: Another replica which we might have
             synchronized with in the past.
-        :return: (this_replica_uid, this_replica_generation,
-                  other_replica_last_known_generation)
+        :return: (target_replica_uid, target_replica_generation,
+                  source_replica_last_known_generation)
         """
         raise NotImplementedError(self.get_sync_info)
 
-    def record_sync_info(self, other_replica_uid, other_replica_generation):
+    def record_sync_info(self, source_replica_uid, source_replica_generation):
         """Record tip information for another replica.
 
-        After sync_exchange has been processed, the caller will have received
-        new content from this replica. This call allows the replica instigating
-        the sync to inform us what their generation became after
-        applying the documents we returned.
+        After sync_exchange has been processed, the caller will have
+        received new content from this replica. This call allows the
+        source replica instigating the sync to inform us what their
+        generation became after applying the documents we returned.
 
         This is used to allow future sync operations to not need to repeat data
         that we just talked about. It also means that if this is called at the
         wrong time, there can be database records that will never be
         synchronized.
 
-        :param other_replica_uid: The identifier for the other replica.
-        :param other_replica_generation:
+        :param source_replica_uid: The identifier for the other replica.
+        :param source_replica_generation:
              The database generation for other replica.
         :return: None
         """

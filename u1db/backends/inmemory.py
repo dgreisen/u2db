@@ -319,10 +319,10 @@ class InMemoryIndex(object):
 
 class InMemorySyncTarget(CommonSyncTarget):
 
-    def get_sync_info(self, other_replica_uid):
-        other_gen = self._db.get_sync_generation(other_replica_uid)
-        return self._db._replica_uid, len(self._db._transaction_log), other_gen
+    def get_sync_info(self, source_replica_uid):
+        source_gen = self._db.get_sync_generation(source_replica_uid)
+        return self._db._replica_uid, len(self._db._transaction_log), source_gen
 
-    def record_sync_info(self, other_replica_uid, other_replica_generation):
-        self._db.set_sync_generation(other_replica_uid,
-                                     other_replica_generation)
+    def record_sync_info(self, source_replica_uid, source_replica_generation):
+        self._db.set_sync_generation(source_replica_uid,
+                                     source_replica_generation)

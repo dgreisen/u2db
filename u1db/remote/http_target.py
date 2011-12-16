@@ -32,16 +32,16 @@ class HTTPSyncTarget(http_client.HTTPClientBase, SyncTarget):
     def connect(url):
         return HTTPSyncTarget(url)
 
-    def get_sync_info(self, other_replica_uid):
+    def get_sync_info(self, source_replica_uid):
         self._ensure_connection()
-        res, _ = self._request_json('GET', ['sync-from', other_replica_uid])
-        return (res['this_replica_uid'], res['this_replica_generation'],
-                res['other_replica_generation'])
+        res, _ = self._request_json('GET', ['sync-from', source_replica_uid])
+        return (res['target_replica_uid'], res['target_replica_generation'],
+                res['source_replica_generation'])
 
-    def record_sync_info(self, other_replica_uid, other_replica_generation):
+    def record_sync_info(self, source_replica_uid, source_replica_generation):
         self._ensure_connection()
-        self._request_json('PUT', ['sync-from', other_replica_uid], {},
-                                  {'generation': other_replica_generation})
+        self._request_json('PUT', ['sync-from', source_replica_uid], {},
+                                  {'generation': source_replica_generation})
 
     def sync_exchange(self, docs_by_generations, from_replica_uid,
                       last_known_generation, return_doc_cb):
