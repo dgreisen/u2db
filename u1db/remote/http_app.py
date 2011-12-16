@@ -290,8 +290,7 @@ class SyncResource(object):
     @http_method(content_as_args=True)
     def post_stream_entry(self, id, rev, content, gen):
         doc = Document(id, rev, content)
-        self.sync_exch.insert_doc_from_source(doc)
-        self.sync_exch.record_sync_progress(self.from_replica_uid, gen)
+        self.sync_exch.insert_doc_from_source(doc, self.from_replica_uid, gen)
 
     def post_end(self):
         def send_doc(doc, gen):

@@ -85,7 +85,8 @@ class CommonBackend(u1db.Database):
             result.append(doc)
         return result
 
-    def put_doc_if_newer(self, doc, save_conflict):
+    def put_doc_if_newer(self, doc, save_conflict, replica_uid=None,
+                         replica_gen=None):
         cur_doc = self._get_doc(doc.doc_id)
         doc_vcr = VectorClockRev(doc.rev)
         if cur_doc is None:
@@ -95,20 +96,22 @@ class CommonBackend(u1db.Database):
         if doc_vcr.is_newer(cur_vcr):
             self._put_and_update_indexes(cur_doc, doc)
             self._prune_conflicts(doc, doc_vcr)
-            return 'inserted'
+            state = 'inserted'
         elif doc.rev == cur_doc.rev:
             # magical convergence
-            return 'converged'
+            state = 'converged'
         elif cur_vcr.is_newer(doc_vcr):
             # Don't add this to seen_ids, because we have something newer,
             # so we should send it back, and we should not generate a
             # conflict
-            return 'superseded'
+            state = 'superseded'
         else:
             state = 'conflicted'
             if save_conflict:
                 self._force_doc_sync_conflict(doc)
-            return 'conflicted'
+        if replica_uid is not None and replica_gen is not None:
+            self._set_sync_generation(replica_uid, replica_gen)
+        return state
 
     def _ensure_maximal_rev(self, cur_rev, extra_revs):
         vcr = VectorClockRev(cur_rev)

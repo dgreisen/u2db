@@ -420,15 +420,19 @@ class SQLiteDatabase(CommonBackend):
 
     def set_sync_generation(self, other_replica_uid, other_generation):
         with self._db_handle:
+            self._set_sync_generation(other_replica_uid, other_generation)
+
+    def _set_sync_generation(self, other_replica_uid, other_generation):
             c = self._db_handle.cursor()
-            my_gen = self._get_generation()
             c.execute("INSERT OR REPLACE INTO sync_log VALUES (?, ?)",
                       (other_replica_uid, other_generation))
 
-    def put_doc_if_newer(self, doc, save_conflict):
+    def put_doc_if_newer(self, doc, save_conflict, replica_uid=None,
+                         replica_gen=None):
         with self._db_handle:
             return super(SQLiteDatabase, self).put_doc_if_newer(doc,
-                save_conflict=save_conflict)
+                save_conflict=save_conflict,
+                replica_uid=replica_uid, replica_gen=replica_gen)
 
     def _add_conflict(self, c, doc_id, my_doc_rev, my_content):
         c.execute("INSERT INTO conflicts VALUES (?, ?, ?)",

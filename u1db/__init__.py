@@ -102,7 +102,8 @@ class Database(object):
         """
         raise NotImplementedError(self.put_doc)
 
-    def put_doc_if_newer(self, doc, save_conflict):
+    def put_doc_if_newer(self, doc, save_conflict, replica_uid=None,
+                         replica_gen=None):
         """Insert/update document into the database with a given revision.
 
         This api is used during synchronization operations.
@@ -123,6 +124,10 @@ class Database(object):
         :param doc: A Document object
         :param save_conflict: If this document is a conflict, do you want to
             save it as a conflict, or just ignore it.
+        :param replica_uid: A unique replica identifier.
+        :param replica_gen: The generation of the replica corresponding to the
+            this document. The replica arguments are optional, but are used
+            during synchronization.
         :return: state -  If we don't have doc_id already, or if doc_rev
             supersedes the existing document revision, then the content will
             be inserted, and state is 'inserted'.
