@@ -384,10 +384,11 @@ class SyncTarget(object):
         """
         raise NotImplementedError(self.sync_exchange)
 
-    def get_sync_exchange(self):
+    def get_sync_exchange(self, from_replica_uid):
         """Return a sync.SyncExchange object to carry through directly
         the steps for a sync exchange.
 
+        :param from_replica_uid: The other replica's identifier
         :return: An instance of sync.SyncExchange or
             None if this is not a local target
         """
