@@ -156,8 +156,16 @@ class LocalDatabaseTests(tests.DatabaseBaseTests):
     def test_get_docs(self):
         doc1 = self.db.create_doc(simple_doc)
         doc2 = self.db.create_doc(nested_doc)
-        self.assertEqual(sorted([doc1, doc2]),
-                         sorted(self.db.get_docs([doc1.doc_id, doc2.doc_id])))
+        self.assertEqual([doc1, doc2],
+                         self.db.get_docs([doc1.doc_id, doc2.doc_id]))
+
+    def test_get_docs_request_ordered(self):
+        doc1 = self.db.create_doc(simple_doc)
+        doc2 = self.db.create_doc(nested_doc)
+        self.assertEqual([doc1, doc2],
+                         self.db.get_docs([doc1.doc_id, doc2.doc_id]))
+        self.assertEqual([doc2, doc1],
+                         self.db.get_docs([doc2.doc_id, doc1.doc_id]))
 
     def test_get_docs_conflicted(self):
         doc1 = self.db.create_doc(simple_doc)
@@ -170,11 +178,10 @@ class LocalDatabaseTests(tests.DatabaseBaseTests):
         doc2 = self.db.create_doc(nested_doc)
         alt_doc = Document(doc1.doc_id, 'alternate:1', nested_doc)
         self.db.force_doc_sync_conflict(alt_doc)
-        self.assertEqual(
-            sorted([Document(doc1.doc_id, 'alternate:1', nested_doc),
-                    Document(doc2.doc_id, doc2.rev, nested_doc)]),
-            sorted(self.db.get_docs([doc1.doc_id, doc2.doc_id],
-                                    check_for_conflicts=False)))
+        self.assertEqual([Document(doc1.doc_id, 'alternate:1', nested_doc),
+                          Document(doc2.doc_id, doc2.rev, nested_doc)],
+                         self.db.get_docs([doc1.doc_id, doc2.doc_id],
+                                          check_for_conflicts=False))
 
     def test_resolve_doc(self):
         doc = self.db.create_doc(simple_doc)
@@ -318,6 +325,19 @@ class LocalDatabaseTests(tests.DatabaseBaseTests):
                           (doc1.rev, simple_doc)],
                          self.db.get_doc_conflicts(doc1.doc_id))
 
+    def test_force_doc_conflict_supersedes_properly(self):
+        doc1 = self.db.create_doc(simple_doc)
+        doc2 = Document(doc1.doc_id, 'alternate:1', '{"b": 1}')
+        self.db.force_doc_sync_conflict(doc2)
+        doc3 = Document(doc1.doc_id, 'altalt:1', '{"c": 1}')
+        self.db.force_doc_sync_conflict(doc3)
+        doc22 = Document(doc1.doc_id, 'alternate:2', '{"b": 2}')
+        self.db.force_doc_sync_conflict(doc22)
+        self.assertEqual(3, len(self.db.get_doc_conflicts(doc1.doc_id)))
+        self.assertEqual(sorted([('test:1', '{"key": "value"}'),
+                                 ('altalt:1', '{"c": 1}')]),
+                         sorted(self.db.get_doc_conflicts(doc1.doc_id)[1:]))
+
     def test_force_doc_sync_conflict_was_deleted(self):
         doc1 = self.db.create_doc(simple_doc)
         self.db.delete_doc(doc1)
@@ -327,6 +347,44 @@ class LocalDatabaseTests(tests.DatabaseBaseTests):
         self.assertGetDoc(self.db, doc1.doc_id, 'alternate:1', nested_doc, True)
         self.assertEqual([('alternate:1', nested_doc),
                           (doc1.rev, None)],
+                         self.db.get_doc_conflicts(doc1.doc_id))
+
+    def test_put_doc_if_newer_propagates_full_resolution(self):
+        doc1 = self.db.create_doc(simple_doc)
+        doc2 = Document(doc1.doc_id, 'alternate:1', nested_doc)
+        self.db.force_doc_sync_conflict(doc2)
+        resolved_vcr = vectorclock.VectorClockRev(doc1.rev)
+        vcr_2 = vectorclock.VectorClockRev(doc2.rev)
+        resolved_vcr.maximize(vcr_2)
+        resolved_vcr.increment('alternate')
+        doc_resolved = Document(doc1.doc_id, resolved_vcr.as_str(),
+                                '{"good": 1}')
+        state = self.db.put_doc_if_newer(doc_resolved)
+        self.assertEqual('inserted', state)
+        self.assertFalse(doc_resolved.has_conflicts)
+        self.assertEqual([], self.db.get_doc_conflicts(doc1.doc_id))
+        doc3 = self.db.get_doc(doc1.doc_id)
+        self.assertFalse(doc3.has_conflicts)
+
+    def test_put_doc_if_newer_propagates_partial_resolution(self):
+        doc1 = self.db.create_doc(simple_doc)
+        doc2 = Document(doc1.doc_id, 'altalt:1', '{}')
+        self.db.force_doc_sync_conflict(doc2)
+        doc3 = Document(doc1.doc_id, 'alternate:1', nested_doc)
+        self.db.force_doc_sync_conflict(doc3)
+        resolved_vcr = vectorclock.VectorClockRev(doc1.rev)
+        vcr_3 = vectorclock.VectorClockRev(doc3.rev)
+        resolved_vcr.maximize(vcr_3)
+        resolved_vcr.increment('alternate')
+        doc_resolved = Document(doc1.doc_id, resolved_vcr.as_str(),
+                                '{"good": 1}')
+        state = self.db.put_doc_if_newer(doc_resolved)
+        self.assertEqual('inserted', state)
+        self.assertTrue(doc_resolved.has_conflicts)
+        doc4 = self.db.get_doc(doc1.doc_id)
+        self.assertTrue(doc4.has_conflicts)
+        self.assertEqual([('alternate:2|test:1', '{"good": 1}'),
+                          ('altalt:1', '{}')],
                          self.db.get_doc_conflicts(doc1.doc_id))
 
     def test_get_sync_generation(self):
@@ -637,9 +695,8 @@ class DatabaseIndexTests(tests.DatabaseBaseTests):
         st = self.db.get_sync_target()
         def ignore(doc_id, doc_rev, doc):
             pass
-        docs = [Document(doc.doc_id, other_rev, new_content)]
-        result = st.sync_exchange(docs, 'other-replica',
-                                  from_replica_generation=10,
+        docs_by_gen = [(Document(doc.doc_id, other_rev, new_content), 10)]
+        result = st.sync_exchange(docs_by_gen, 'other-replica',
                                   last_known_generation=0,
                                   return_doc_cb=ignore)
         self.assertGetDoc(self.db, doc.doc_id, other_rev, new_content, False)

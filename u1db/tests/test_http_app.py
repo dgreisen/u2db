@@ -554,11 +554,29 @@ class TestHTTPApp(tests.TestCase):
         self.assertEqual(self.db0.get_sync_generation('other-id'), 2)
 
     def test_sync_exchange_send(self):
-        entry = {'id': 'doc-here', 'rev': 'replica:1', 'content':
-                 '{"value": "here"}'}
-        args = dict(from_replica_generation=10, last_known_generation=0)
+        entries = {
+            10: {'id': 'doc-here', 'rev': 'replica:1', 'content':
+                 '{"value": "here"}', 'gen': 10},
+            11: {'id': 'doc-here2', 'rev': 'replica:1', 'content':
+                 '{"value": "here2"}', 'gen': 11}
+            }
+
+        gens = []
+        _set_sync_generation = self.db0.set_sync_generation
+        def set_sync_generation_witness(other_uid, other_gen):
+            gens.append((other_uid, other_gen))
+            _set_sync_generation(other_uid, other_gen)
+            self.assertGetDoc(self.db0, entries[other_gen]['id'],
+                              entries[other_gen]['rev'],
+                              entries[other_gen]['content'], False)
+
+        self.patch(self.db0, 'set_sync_generation',
+                   set_sync_generation_witness)
+
+        args = dict(last_known_generation=0)
         body = ("%s\r\n" % simplejson.dumps(args) +
-                "%s\r\n" % simplejson.dumps(entry))
+                "%s\r\n" % simplejson.dumps(entries[10]) +
+                "%s\r\n" % simplejson.dumps(entries[11]))
         resp = self.app.post('/db0/sync-from/replica',
                             params=body,
                             headers={'content-type':
@@ -566,13 +584,13 @@ class TestHTTPApp(tests.TestCase):
         self.assertEqual(200, resp.status)
         self.assertEqual('application/x-u1db-multi-json',
                          resp.header('content-type'))
-        self.assertEqual({'new_generation': 1}, simplejson.loads(resp.body))
-        self.assertGetDoc(self.db0, 'doc-here', 'replica:1',
-                          '{"value": "here"}', False)
+        self.assertEqual({'new_generation': 2}, simplejson.loads(resp.body))
+        self.assertEqual([('replica', 10), ('replica', 11)], gens)
 
     def test_sync_exchange_receive(self):
         doc = self.db0.create_doc('{"value": "there"}')
-        args = dict(from_replica_generation=10, last_known_generation=0)
+        doc2 = self.db0.create_doc('{"value": "there2"}')
+        args = dict(last_known_generation=0)
         body = "%s\r\n" % simplejson.dumps(args)
         resp = self.app.post('/db0/sync-from/replica',
                             params=body,
@@ -582,11 +600,14 @@ class TestHTTPApp(tests.TestCase):
         self.assertEqual('application/x-u1db-multi-json',
                          resp.header('content-type'))
         parts = resp.body.splitlines()
-        self.assertEqual(2, len(parts))
-        self.assertEqual({'new_generation': 1}, simplejson.loads(parts[0]))
+        self.assertEqual(3, len(parts))
+        self.assertEqual({'new_generation': 2}, simplejson.loads(parts[0]))
         self.assertEqual({'content': '{"value": "there"}',
-                          'rev': doc.rev, 'id': doc.doc_id},
+                          'rev': doc.rev, 'id': doc.doc_id, 'gen': 1},
                          simplejson.loads(parts[1]))
+        self.assertEqual({'content': '{"value": "there2"}',
+                          'rev': doc2.rev, 'id': doc2.doc_id, 'gen': 2},
+                         simplejson.loads(parts[2]))
 
 
 class TestHTTPErrors(tests.TestCase):

@@ -283,27 +283,26 @@ class SyncResource(object):
 
     @http_method(from_replica_generation=int, last_known_generation=int,
                  content_as_args=True)
-    def post_args(self, last_known_generation, from_replica_generation):
-        self.from_replica_generation = from_replica_generation
+    def post_args(self, last_known_generation):
         self.last_known_generation = last_known_generation
         self.sync_exch = self.target.get_sync_exchange()
 
     @http_method(content_as_args=True)
-    def post_stream_entry(self, id, rev, content):
+    def post_stream_entry(self, id, rev, content, gen):
         doc = Document(id, rev, content)
         self.sync_exch.insert_doc_from_source(doc)
+        self.sync_exch.record_sync_progress(self.from_replica_uid, gen)
 
     def post_end(self):
-        def send_doc(doc):
-            entry = dict(id=doc.doc_id, rev=doc.rev, content=doc.content)
+        def send_doc(doc, gen):
+            entry = dict(id=doc.doc_id, rev=doc.rev, content=doc.content,
+                         gen=gen)
             self.responder.stream_entry(entry)
-        new_gen = self.sync_exch.find_docs_to_return(self.last_known_generation)
+        new_gen = self.sync_exch.find_changes_to_return(
+                                                    self.last_known_generation)
         self.responder.content_type = 'application/x-u1db-multi-json'
         self.responder.start_response(200, {"new_generation": new_gen})
-        new_gen = self.sync_exch.return_docs_and_record_sync(
-                                                  self.from_replica_uid,
-                                                  self.from_replica_generation,
-                                                  send_doc)
+        new_gen = self.sync_exch.return_docs(send_doc)
         self.responder.finish_response()
 
 

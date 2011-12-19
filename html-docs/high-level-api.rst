@@ -18,18 +18,59 @@ is implementation-defined.
 Creating and editing documents
 ==============================
 
-To create a document, use ``create_doc()``.
+To create a document, use ``create_doc()``. Code examples below are from the
+Python reference implementation.
 
 .. testcode ::
 
-    import u1db, json
-    db = u1db.Database()
-    doc = db.create_doc(json.dumps({"key": "value"}))
-    print doc
+    import json, u1db
+    db = u1db.open(":memory:", create=True)
+    doc = db.create_doc(json.dumps({"key": "value"}), doc_id="testdoc")
+    print doc.content
+    print doc.doc_id
 
 .. testoutput ::
 
-    fail
+    {"key": "value"}
+    testdoc
+
+Editing an *existing* document is done with ``put_doc()``. This is separate from
+``create_doc()`` so as to avoid accidental overwrites. ``put_doc()`` takes a
+``Document`` object, because the object encapsulates revision information for
+a particular document.
+
+.. testcode ::
+
+    import json, u1db
+    db = u1db.open(":memory:", create=True)
+    doc1 = db.create_doc(json.dumps({"key1": "value1"}), doc_id="doc1")
+    # the next line should fail because it's creating a doc that already exists
+    try:
+        doc1fail = db.create_doc(json.dumps({"key1fail": "value1fail"}), doc_id="doc1")
+    except u1db.errors.RevisionConflict:
+        print "There was a conflict when creating the doc!"
+    print "Now editing the doc with the doc object we got back..."
+    data = json.loads(doc1.content)
+    data["key1"] = "edited"
+    doc1.content = json.dumps(data)
+    db.put_doc(doc1)
+
+.. testoutput ::
+
+    There was a conflict when creating the doc!
+    Now editing the doc with the doc object we got back...
+
+Finally, deleting a document is done with ``delete_doc()``.
+
+.. testcode ::
+
+    import json, u1db
+    db = u1db.open(":memory:", create=True)
+    doc = db.create_doc(json.dumps({"key": "value"}), doc_id="testdoc")
+    db.delete_doc(doc)
+
+.. testoutput ::
+
 
 Retrieving documents
 ====================
