@@ -34,9 +34,10 @@ class Synchronizer(object):
         """
         self.source = source
         self.sync_target = sync_target
+        self.other_replica_uid = None
         self.num_inserted = 0
 
-    def _insert_doc_from_target(self, doc):
+    def _insert_doc_from_target(self, doc, replica_gen):
         """Try to insert synced document from target.
 
         Implements TAKE OTHER semantics: any document from the target
@@ -48,7 +49,8 @@ class Synchronizer(object):
         """
         # Increases self.num_inserted depending whether the document
         # was effectively inserted.
-        state = self.source.put_doc_if_newer(doc)
+        state = self.source.put_doc_if_newer(doc, save_conflict=True,
+            replica_uid=self.other_replica_uid, replica_gen=replica_gen)
         if state == 'inserted':
             self.num_inserted += 1
         elif state == 'converged':
@@ -59,9 +61,7 @@ class Synchronizer(object):
             pass
         else:
             assert state == 'conflicted'
-            # take doc as the official value, stores the current
-            # alongside as conflict
-            self.source.force_doc_sync_conflict(doc)
+            # The doc was saved as a conflict, so the database was updated
             self.num_inserted += 1
 
     def _record_sync_info_with_the_target(self, start_generation):
@@ -89,7 +89,7 @@ class Synchronizer(object):
         sync_target = self.sync_target
         # get target identifier, its current generation,
         # and its last-seen database generation for this source
-        (other_replica_uid, other_gen,
+        (self.other_replica_uid, other_gen,
          others_my_gen) = sync_target.get_sync_info(self.source._replica_uid)
         # what's changed since that generation and this current gen
         my_gen, changes = self.source.whats_changed(others_my_gen)
@@ -101,19 +101,14 @@ class Synchronizer(object):
 
         # this source last-seen database generation for the target
         other_last_known_gen = self.source.get_sync_generation(
-            other_replica_uid)
+            self.other_replica_uid)
         # exchange documents and try to insert the returned ones with
         # the target, return target synced-up-to gen
-        def take_doc(doc, gen):
-            self._insert_doc_from_target(doc)
-            # record target synced-up-to generation
-            self.source.set_sync_generation(other_replica_uid, gen)
-
         new_gen = sync_target.sync_exchange(docs_by_generation,
                         self.source._replica_uid, other_last_known_gen,
-                        return_doc_cb=take_doc)
+                        return_doc_cb=self._insert_doc_from_target)
         # record target synced-up-to generation including applying what we sent
-        self.source.set_sync_generation(other_replica_uid, new_gen)
+        self.source.set_sync_generation(self.other_replica_uid, new_gen)
 
         # if gapless record current reached generation with target
         self._record_sync_info_with_the_target(my_gen)
@@ -124,8 +119,9 @@ class Synchronizer(object):
 class SyncExchange(object):
     """Steps and state for carrying through a sync exchange on a target."""
 
-    def __init__(self, db):
+    def __init__(self, db, from_replica_uid):
         self._db = db
+        self.from_replica_uid = from_replica_uid
         self.seen_ids = set()  # incoming ids not superseded
         self.changes_to_return = None
         self.new_gen = None
@@ -136,19 +132,24 @@ class SyncExchange(object):
             'return': None
             }
 
-    def insert_doc_from_source(self, doc):
+    def insert_doc_from_source(self, doc, from_gen):
         """Try to insert synced document from source.
 
         Conflicting documents are not inserted but will be sent over
         to the sync source.
 
+        It keeps track of progress by storing the document source
+        generation as well.
+
         The 1st step of a sync exchange is to call this repeatedly to
         try insert all incoming documents from the source.
 
         :param doc: A Document object.
+        :param from_gen: The source generation of doc.
         :return: None
         """
-        state = self._db.put_doc_if_newer(doc)
+        state = self._db.put_doc_if_newer(doc, save_conflict=False,
+            replica_uid=self.from_replica_uid, replica_gen=from_gen)
         if state == 'inserted':
             self.seen_ids.add(doc.doc_id)
         elif state == 'converged':
@@ -162,24 +163,9 @@ class SyncExchange(object):
             assert state == 'conflicted'
         # for tests
         self._incoming_trace.append((doc.doc_id, doc.rev))
-
-    def record_sync_progress(self, from_replica_uid, from_replica_generation):
-        """Record the sync information of from_replica_uid
-        the sync source identifier and the generation until which it
-        sent its documents from_replica_generation.
-
-        :param from_replica_uid: The source replica's identifier
-        :param from_replica_generation: The db generation for the
-            source replica indicating the tip of data that was sent.
-        :return: None
-        """
-        # record sync point
-        self._db.set_sync_generation(from_replica_uid,
-                                     from_replica_generation)
-        # for tests
         self._db._last_exchange_log['receive'].update({
-            'from_id': from_replica_uid,
-            'from_gen': from_replica_generation
+            'from_id': self.from_replica_uid,
+            'from_gen': from_gen
             })
 
     def find_changes_to_return(self, last_known_generation):
@@ -236,19 +222,15 @@ class LocalSyncTarget(u1db.SyncTarget):
     def __init__(self, db):
         self._db = db
 
-    def get_sync_exchange(self):
-        return SyncExchange(self._db)
+    def get_sync_exchange(self, from_replica_uid):
+        return SyncExchange(self._db, from_replica_uid)
 
     def sync_exchange(self, docs_by_generations, from_replica_uid,
                       last_known_generation, return_doc_cb):
-        sync_exch = self.get_sync_exchange()
-        # 1st step: try to insert incoming docs
-        for doc, _ in docs_by_generations:
-            sync_exch.insert_doc_from_source(doc)
-        # record progress
-        if docs_by_generations:
-            latest_gen = docs_by_generations[-1][1]
-            sync_exch.record_sync_progress(from_replica_uid, latest_gen)
+        sync_exch = self.get_sync_exchange(from_replica_uid)
+        # 1st step: try to insert incoming docs and record progress
+        for doc, doc_gen in docs_by_generations:
+            sync_exch.insert_doc_from_source(doc, doc_gen)
         # 2nd step: find changed documents (including conflicts) to return
         new_gen = sync_exch.find_changes_to_return(last_known_generation)
         # final step: return docs and record source replica sync point

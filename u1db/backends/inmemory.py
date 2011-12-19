@@ -47,6 +47,9 @@ class InMemoryDatabase(CommonBackend):
         return self._other_generations.get(other_replica_uid, 0)
 
     def set_sync_generation(self, other_replica_uid, other_generation):
+        self._set_sync_generation(other_replica_uid, other_generation)
+
+    def _set_sync_generation(self, other_replica_uid, other_generation):
         # TODO: to handle race conditions, we may want to check if the current
         #       value is greater than this new value.
         self._other_generations[other_replica_uid] = other_generation
@@ -196,7 +199,7 @@ class InMemoryDatabase(CommonBackend):
         changes.reverse()
         return (cur_generation, changes)
 
-    def force_doc_sync_conflict(self, doc):
+    def _force_doc_sync_conflict(self, doc):
         my_doc = self._get_doc(doc.doc_id)
         self._prune_conflicts(doc, vectorclock.VectorClockRev(doc.rev))
         self._conflicts.setdefault(doc.doc_id, []).append(

@@ -68,7 +68,7 @@ class TestRemoteSyncTargets(tests.TestCaseWithServer):
 
     def test_no_sync_exchange_object(self):
         remote_target = self.getSyncTarget()
-        self.assertEqual(None, remote_target.get_sync_exchange())
+        self.assertEqual(None, remote_target.get_sync_exchange(None))
 
     def test_get_sync_info(self):
         self.startServer()
@@ -109,10 +109,12 @@ class TestRemoteSyncTargets(tests.TestCaseWithServer):
         db = self.request_state._create_database('test')
         _put_doc_if_newer = db.put_doc_if_newer
         trigger_ids = ['doc-here2']
-        def bomb_put_doc_if_newer(doc):
+        def bomb_put_doc_if_newer(doc, save_conflict,
+                                  replica_uid=None, replica_gen=None):
             if doc.doc_id in trigger_ids:
                 raise Exception
-            return _put_doc_if_newer(doc)
+            return _put_doc_if_newer(doc, save_conflict=save_conflict,
+                replica_uid=replica_uid, replica_gen=replica_gen)
         self.patch(db, 'put_doc_if_newer', bomb_put_doc_if_newer)
         remote_target = self.getSyncTarget('test')
         other_changes = []

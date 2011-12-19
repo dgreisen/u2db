@@ -523,20 +523,20 @@ class TestRemoteSyncIntegration(tests.TestCaseWithServer):
         self.assertEqual(2, len(self.db2._get_transaction_log()))
         progress1 = []
         progress2 = []
-        _set_sync_generation1 = self.db1.set_sync_generation
+        _set_sync_generation1 = self.db1._set_sync_generation
         def set_sync_generation_witness1(other_uid, other_gen):
             progress1.append((other_uid, other_gen,
                               self.db1._get_transaction_log()[2:]))
             _set_sync_generation1(other_uid, other_gen)
-        self.patch(self.db1, 'set_sync_generation',
+        self.patch(self.db1, '_set_sync_generation',
                    set_sync_generation_witness1)
 
-        _set_sync_generation2 = self.db2.set_sync_generation
+        _set_sync_generation2 = self.db2._set_sync_generation
         def set_sync_generation_witness2(other_uid, other_gen):
             progress2.append((other_uid, other_gen,
                               self.db2._get_transaction_log()[2:]))
             _set_sync_generation2(other_uid, other_gen)
-        self.patch(self.db2, 'set_sync_generation',
+        self.patch(self.db2, '_set_sync_generation',
                    set_sync_generation_witness2)
 
         db2_url = self.getURL('test2')
