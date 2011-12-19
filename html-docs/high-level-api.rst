@@ -75,7 +75,39 @@ Finally, deleting a document is done with ``delete_doc()``.
 Retrieving documents
 ====================
 
-get_docs returns in order specified.
+The simplest way to retrieve documents from a u1db is by ``doc_id``.
+
+.. testcode ::
+
+    import json, u1db
+    db = u1db.open(":memory:", create=True)
+    doc = db.create_doc(json.dumps({"key": "value"}), doc_id="testdoc")
+    doc1 = db.get_doc("testdoc")
+    print doc1.content
+    print doc1.doc_id
+
+.. testoutput ::
+
+    {"key": "value"}
+    testdoc
+
+And it's also possible to retrieve many documents by ``doc_id``.
+
+.. testcode ::
+
+    import json, u1db
+    db = u1db.open(":memory:", create=True)
+    doc1 = db.create_doc(json.dumps({"key": "value"}), doc_id="testdoc1")
+    doc2 = db.create_doc(json.dumps({"key": "value"}), doc_id="testdoc2")
+    for doc in db.get_docs(["testdoc2","testdoc1"]):
+        print doc.doc_id
+
+.. testoutput ::
+
+    testdoc2
+    testdoc1
+
+Note that ``get_docs()`` returns the documents in the order specified.
 
  * create_doc(JSON string, optional_doc_id)
  * put_doc(Document)
@@ -87,6 +119,7 @@ get_docs returns in order specified.
 Querying
 --------
 
+To retrieve documents other than by ``doc_id``, you query the database.
 Querying a U1DB is done by means of an index. To retrieve only some documents
 from the database based on certain criteria, you must first create an index,
 and then query that index.
