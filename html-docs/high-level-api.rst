@@ -293,12 +293,12 @@ Dealing with conflicts
 Syncing a database can result in conflicts; if your user changes the same 
 document in two different places and then syncs again, that document will be
 ''in conflict'', meaning that it has incompatible changes. If this is the case,
-doc.has_conflicts will be true, and put_doc to a conflicted doc will give a
-ConflictedDoc error. To get a list of conflicted versions of the
-document, do get_doc_conflicts(doc_id). Deciding what the final unconflicted
+``doc.has_conflicts`` will be true, and put_doc to a conflicted doc will give a
+``ConflictedDoc`` error. To get a list of conflicted versions of the
+document, do ``get_doc_conflicts(doc_id)``. Deciding what the final unconflicted
 document should look like is obviously specific to the user's application; once
-decided, call resolve_doc(doc, list_of_conflicted_revisions) to resolve, and
-then put_doc as normal to set the final resolved content.
+decided, call ``resolve_doc(doc, list_of_conflicted_revisions)`` to resolve, and
+then ``put_doc`` as normal to set the final resolved content.
 
  * get_doc_conflicts(doc_id)
  * resolve_doc(doc, list_of_conflicted_revisions)
