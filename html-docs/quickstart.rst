@@ -1,6 +1,6 @@
 .. _quickstart:
 
-Quickstart
+Downloads and Quickstart guide
 ========================================
 
 How to start working with the u1db Python implementation.
@@ -13,7 +13,7 @@ Download
 
 This is the recommended version of u1db to use for your Python application.
 
-**Current release**: (link to tarball)
+Download the latest release from `the U1DB download page <http://launchpad.net/u1db/+download>`_.
 
 Use from source control
 ^^^^^^^^^^^^^^^^^^^^^^^

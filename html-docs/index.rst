@@ -21,7 +21,7 @@ in your choice of language, and on your choice of backend database.
 If you're interested in using U1DB in an application, look at 
 :ref:`high-level-api` first, and then choose one of the :ref:`implementations` 
 and read about exactly how the U1DB API is made available in that 
-implementation. Get going quickly with the :ref:`quickstart` guide.
+implementation. Get going quickly with the :ref:`quickstart`.
 
 If you're interested in hacking on U1DB itself, read about the 
 :ref:`rules for U1DB <philosophy>` and :ref:`reference-implementation`.
