@@ -60,7 +60,48 @@ implementation's use. You can therefore ignore the rest of this section.
 If you are writing a new u1db implementation, understanding revisions is 
 important, and this is where you find out about them.
 
-(not yet written)
+To keep track of document revisions u1db uses vector versions. Each
+synchronized instance of the same database is called a replica and has
+a unique identifier (``replica uid``) assigned to it (currently the
+reference implementation by default uses UUID4s for that); a
+revision is a mapping between ``replica uid``s and edit numbers: ``rev =
+<replica_id:edit_num...>``, or using a functional notation
+``rev(replica_id) = edit_num``. The current concrete format is a string
+built out of each ``replica_uid`` concatenated with ``':'`` and with its edit
+number in decimal, sorted lexicographically by ``replica_uid`` and then
+all joined with ``'|'``, for example: ``'replicaA:1|replicaB:3'`` . Absent
+``replica uid``s in a revision mapping are implicitly mapped to edit
+number 0.
+
+The new revision of a document modified locally in a replica, is the
+modification of the old revision where the edit number mapped for the
+editing ``replica uid`` is increased by 1.
+
+When syncing one needs to establish whether an incoming revision is
+newer than the current one or in conflict. A revision 
+
+``rev1 = <replica_1i:edit_num1i|i=1..n>``
+
+is newer than a different 
+
+``rev2 = <replica2j:edit_num2j|j=1..m>``
+
+if for all ``i=1..n``, ``rev2(replica_1i) <= edit_num1i`` 
+
+and for all ``j=1..m``, ``rev1(replica_2j) >= edit_num2j``. 
+
+Two revisions which are not equal nor one newer than the
+other are in conflict.
+
+When resolving a conflict locally in a replica ``replica_resol``, starting from 
+``rev1...revN`` in conflict, the resulting revision ``rev_resol`` is obtained by:
+
+     ``R`` is the set the of all replicas explicitly mentioned in ``rev1..revN``
+
+     ``rev_resol(r) = max(rev1(r)...revN(r))`` for all ``r`` in ``R``, with ``r != rev_resol``
+
+     ``rev_resol(replica_resover) = max(rev1(replica_resol)...revN(resol))+1``
+
 
 Syncing
 -------
