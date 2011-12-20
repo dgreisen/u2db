@@ -81,4 +81,11 @@ Syncing to other databases
     >>> db = u1db.open(":memory:", create=True)
     >>> generation = db.sync("http://127.0.0.1:43632/example.u1db")
     
+or from the command line
 
+.. code-block:: bash
+
+    ~/u1db/trunk$ ./u1db-client init-db someother.u1db
+    ~/u1db/trunk$ ./u1db-client sync someother.u1db http://127.0.0.1:43632/example.u1db
+
+    
