@@ -30,6 +30,7 @@ and the reference implementation.
    
    high-level-api
    reference-implementation
+   conflicts
 
 
 Implementations
@@ -37,13 +38,15 @@ Implementations
 
 Choose the implementation you need and get hacking!
 
-| Platform(s) | Language | Back end database ||
-| Ubuntu, Windows, OS X | Python | SQLite | implementation |
-| Ubuntu | Vala | SQLite | implementation |
-| Web | JavaScript | localStorage | implementation |
-| Android | Java | SQLite | implementation |
-| iOS | Objective C | SQLite | implementation |
-
+===================== =========== ================= ==============
+Platform(s)           Language    Back end database link
+===================== =========== ================= ==============
+Ubuntu, Windows, OS X Python      SQLite            :ref:`reference-implementation`
+Ubuntu                Vala        SQLite            `implementation <http://launchpad.net/shardbridge/>`_
+Web                   JavaScript  localStorage      planned
+Android               Java        SQLite            planned
+iOS                   Objective C SQLite            planned
+===================== =========== ================= ==============
 
 
 Indices and tables
