@@ -23,8 +23,8 @@ If you're interested in using U1DB in an application, look at
 and read about exactly how the U1DB API is made available in that 
 implementation. Get going quickly with the :ref:`quickstart` guide.
 
-If you're interested in hacking on U1DB itself, read about the rules for U1DB
-and :ref:`reference-implementation`.
+If you're interested in hacking on U1DB itself, read about the 
+:ref:`rules for U1DB <philosophy>` and :ref:`reference-implementation`.
 
 .. toctree::
    :maxdepth: 1
@@ -33,6 +33,7 @@ and :ref:`reference-implementation`.
    high-level-api
    reference-implementation
    conflicts
+   philosophy
 
 
 .. _implementations:
