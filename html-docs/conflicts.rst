@@ -44,6 +44,12 @@ as having conflicts, and must be resolved there:
     >>> doc_is_now.has_conflicts # and is no longer in conflict
     False
 
+Note that ``put_doc`` will fail because we got conflicts from a sync, but it
+may also fail for another reason. If you acquire a document before a sync and 
+then sync, and the sync updates that document, then re-putting that document 
+with modified content will also fail, because the revision is not the current 
+one. This will raise a ``RevisionConflict`` error.
+
 Revisions
 ----------
 
