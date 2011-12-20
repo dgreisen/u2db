@@ -538,10 +538,10 @@ class TestHTTPApp(tests.TestCase):
         resp = self.app.get('/db0/sync-from/other-id')
         self.assertEqual(200, resp.status)
         self.assertEqual('application/json', resp.header('content-type'))
-        self.assertEqual(dict(this_replica_uid='db0',
-                              this_replica_generation=0,
-                              other_replica_uid='other-id',
-                              other_replica_generation=1),
+        self.assertEqual(dict(target_replica_uid='db0',
+                              target_replica_generation=0,
+                              source_replica_uid='other-id',
+                              source_replica_generation=1),
                               simplejson.loads(resp.body))
 
     def test_record_sync_info(self):
