@@ -1,3 +1,5 @@
+.. _high-level-api:
+
 The high-level API
 ==================
 
