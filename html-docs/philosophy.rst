@@ -1,7 +1,7 @@
 .. _philosophy:
 
 Philosophy
-========================================
+###########
 
 Some notes on what u1db is for, how it works, and how it should be used.
 

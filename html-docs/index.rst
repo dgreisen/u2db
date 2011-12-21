@@ -1,10 +1,5 @@
-.. u1db documentation master file, created by
-   sphinx-quickstart on Tue Dec 13 13:22:21 2011.
-   You can adapt this file completely to your liking, but it should at least
-   contain the root `toctree` directive.
-
 U1DB
-====
+####
 
 U1DB is a database API for synchronised databases of JSON documents. It's 
 simple to use in applications, and allows apps to store documents and 
@@ -39,23 +34,24 @@ If you're interested in hacking on U1DB itself, read about the
 .. _implementations:
 
 Implementations
-===============
+###############
 
 Choose the implementation you need and get hacking!
 
-===================== =========== ================= ==============
-Platform(s)           Language    Back end database link
-===================== =========== ================= ==============
-Ubuntu, Windows, OS X Python      SQLite            :ref:`reference-implementation`
-Ubuntu                Vala        SQLite            `lp:shardbridge <http://launchpad.net/shardbridge/>`_
-Web                   JavaScript  localStorage      planned
-Android               Java        SQLite            planned
-iOS                   Objective C SQLite            planned
-===================== =========== ================= ==============
+ ===================== =========== ================= ==============
+ Platform(s)           Language    Back end database link
+ ===================== =========== ================= ==============
+ Ubuntu, Windows, OS X Python      SQLite            :ref:`reference-implementation`
+ Ubuntu                Vala        SQLite            `lp:shardbridge <http://launchpad.net/shardbridge/>`_
+ Ubuntu, Windows, OS X C           SQLite            planned
+ Web                   JavaScript  localStorage      planned
+ Android               Java        SQLite            planned
+ iOS                   Objective C SQLite            planned
+ ===================== =========== ================= ==============
 
 
 Indices and tables
-==================
+##################
 
 * :ref:`genindex`
 * :ref:`modindex`

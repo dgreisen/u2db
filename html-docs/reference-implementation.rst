@@ -1,7 +1,7 @@
 .. _reference-implementation:
 
 The reference implementation
-============================
+#############################
 
 The u1db reference implementation is written in Python, with a SQLite back end.
 It can be used as a real working implementation by Python code. It is also used 

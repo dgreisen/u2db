@@ -1,7 +1,7 @@
 .. _high-level-api:
 
 The high-level API
-==================
+##################
 
 The U1DB API has three separate sections: document storage and retrieval,
 querying, and sync. Here we describe the high-level API. Remember that you
@@ -10,7 +10,7 @@ is implementation-specific, in order that it fits with the language's
 conventions.
 
 Document storage and retrieval
-==============================
+##############################
 
 U1DB stores documents. A document is a set of nested key-values; basically,
 anything you can express with JSON. Implementations are likely to provide a 
@@ -143,14 +143,14 @@ Given a database with the following documents::
 an index expression of ``["firstname"]`` will create an index that looks 
 (conceptually) like this
 
-====================== ===========
-index expression value document id
-====================== ===========
-Alan                   ah
-Jan                    jm
-John                   jb
-John                   jw
-====================== ===========
+ ====================== ===========
+ index expression value document id
+ ====================== ===========
+ Alan                   ah
+ Jan                    jm
+ John                   jb
+ John                   jw
+ ====================== ===========
 
 and that index is created with ``create_index("by-firstname", ["firstname"])`` - that is,
 create an index with a name and a list of index expressions. (Exactly how to
@@ -179,11 +179,11 @@ with ID ``doc1`` and content::
 
 gives the index key "hello", and therefore an entry in the index of
 
-========= ======
-Index key doc_id
-========= ======
-hello     doc1
-========= ======
+ ========= ======
+ Index key doc_id
+ ========= ======
+ hello     doc1
+ ========= ======
 
 **Name a list.** If an index expression names a field whose contents is a list
 of strings, the doc will have multiple entries in the index, one per entry in
@@ -198,13 +198,13 @@ ID "doc2" and content::
 
 gives index entries
 
-========= ======
-Index key doc_id
-========= ======
-tag1      doc2
-tag2      doc2
-tag3      doc2
-========= ======
+ ========= ======
+ Index key doc_id
+ ========= ======
+ tag1      doc2
+ tag2      doc2
+ tag3      doc2
+ ========= ======
 
 **Transformation functions.** An index expression may be wrapped in any number of
 transformation functions. A function transforms the result of the contained
@@ -231,13 +231,13 @@ ID "doc3" and content::
 
 gives index entries
 
-========== ======
-Index key  doc_id
-========== ======
-bruce      doc3
-david      doc3
-grobbelaar doc3
-========== ======
+ ========== ======
+ Index key  doc_id
+ ========== ======
+ bruce      doc3
+ david      doc3
+ grobbelaar doc3
+ ========== ======
 
 
 Querying an index
@@ -274,7 +274,7 @@ Index functions
  * list_indexes()
 
 Syncing
-=======
+#######
 
 U1DB is a syncable database. Any U1DB can be synced with any U1DB server; most
 U1DB implementations are capable of being run as a server. Syncing brings

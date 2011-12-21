@@ -1,7 +1,7 @@
 .. _conflicts:
 
 Conflicts, syncing, and revisions
-========================================
+#################################
 
 
 Conflicts

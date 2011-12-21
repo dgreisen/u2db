@@ -1,7 +1,7 @@
 .. _quickstart:
 
 Downloads and Quickstart guide
-========================================
+###############################
 
 How to start working with the u1db Python implementation.
 
