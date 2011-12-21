@@ -1,0 +1,8 @@
+Building the docs
+=================
+
+cd html-docs
+make doctest # check that the code examples all still work
+make html # build HTML documentation at _build/html/index.html
+
+

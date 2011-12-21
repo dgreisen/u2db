@@ -4,3 +4,7 @@
 doc/sqlite_schema.html
 .testrepository
 ./tags
+html-docs/_build
+html-docs/_build/doctest
+html-docs/_build/doctrees
+html-docs/_build/html
