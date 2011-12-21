@@ -1,5 +1,5 @@
 include README
-include COPYING
+include COPYING.LESSER
 include Makefile
 recursive-include doc *.txt
 # tests
