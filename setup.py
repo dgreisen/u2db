@@ -23,7 +23,7 @@ def config():
         "description": "Simple syncable document storage",
         "url": "https://launchpad.net/u1db",
         "license": "GNU GPL v3",
-        "author": "Ubuntu One hackers",
+        "author": "Ubuntu One team",
         "author_email": "u1db-discuss@lists.launchpad.net",
         "download_url": "https://launchpad.net/u1db/+download",
         "packages": ["u1db", "u1db.backends", "u1db.remote",
