@@ -24,7 +24,7 @@ def config():
         "version": u1db.__version__,
         "description": "Simple syncable document storage",
         "url": "https://launchpad.net/u1db",
-        "license": "GNU GPL v3",
+        "license": "GNU LGPL v3",
         "author": "Ubuntu One team",
         "author_email": "u1db-discuss@lists.launchpad.net",
         "download_url": "https://launchpad.net/u1db/+download",
@@ -39,7 +39,8 @@ def config():
             'Development Status :: 4 - Beta',
             'Environment :: Console',
             'Intended Audience :: Developers',
-            'License :: OSI Approved :: GNU General Public License (GPL)',
+            'License :: OSI Approved :: '
+                'GNU Lesser General Public License (GPL)',
             'Operating System :: OS Independent',
             'Operating System :: Microsoft :: Windows',
             'Operating System :: POSIX',
