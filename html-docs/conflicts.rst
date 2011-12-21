@@ -64,13 +64,13 @@ To keep track of document revisions u1db uses vector versions. Each
 synchronized instance of the same database is called a replica and has
 a unique identifier (``replica uid``) assigned to it (currently the
 reference implementation by default uses UUID4s for that); a
-revision is a mapping between ``replica uid``s and edit numbers: ``rev =
-<replica_id:edit_num...>``, or using a functional notation
-``rev(replica_id) = edit_num``. The current concrete format is a string
+revision is a mapping between ``replica uids`` and ``edit numbers``: ``rev =
+<replica_uid:edit_num...>``, or using a functional notation
+``rev(replica_uid) = edit_num``. The current concrete format is a string
 built out of each ``replica_uid`` concatenated with ``':'`` and with its edit
 number in decimal, sorted lexicographically by ``replica_uid`` and then
 all joined with ``'|'``, for example: ``'replicaA:1|replicaB:3'`` . Absent
-``replica uid``s in a revision mapping are implicitly mapped to edit
+``replica uids`` in a revision mapping are implicitly mapped to edit
 number 0.
 
 The new revision of a document modified locally in a replica, is the
