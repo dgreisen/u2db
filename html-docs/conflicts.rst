@@ -84,7 +84,7 @@ newer than the current one or in conflict. A revision
 
 is newer than a different 
 
-``rev2 = <replica2j:edit_num2j|j=1..m>``
+``rev2 = <replica_2j:edit_num2j|j=1..m>``
 
 if for all ``i=1..n``, ``rev2(replica_1i) <= edit_num1i`` 
 
@@ -100,7 +100,7 @@ When resolving a conflict locally in a replica ``replica_resol``, starting from
 
      ``rev_resol(r) = max(rev1(r)...revN(r))`` for all ``r`` in ``R``, with ``r != rev_resol``
 
-     ``rev_resol(replica_resol) = max(rev1(replica_resol)...revN(resol))+1``
+     ``rev_resol(replica_resol) = max(rev1(replica_resol)...revN(replica_resol))+1``
 
 
 Syncing

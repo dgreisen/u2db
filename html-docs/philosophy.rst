@@ -5,7 +5,7 @@ Philosophy
 
 Some notes on what u1db is for, how it works, and how it should be used.
 
-U1DB is a cross-platform, cross-device, syncable database. In order to be this
+U1DB is a cross-platform, cross-device, syncable database API. In order to be this
 way, there's a philosophy behind it. Key to this philosophy is that u1db can
 be implemented in many languages and on top of many back ends: this means that
 the API needs to be, as much as possible, portable between very different
