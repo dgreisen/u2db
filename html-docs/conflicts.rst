@@ -100,7 +100,7 @@ When resolving a conflict locally in a replica ``replica_resol``, starting from
 
      ``rev_resol(r) = max(rev1(r)...revN(r))`` for all ``r`` in ``R``, with ``r != rev_resol``
 
-     ``rev_resol(replica_resover) = max(rev1(replica_resol)...revN(resol))+1``
+     ``rev_resol(replica_resol) = max(rev1(replica_resol)...revN(resol))+1``
 
 
 Syncing
