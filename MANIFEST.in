@@ -1,5 +1,7 @@
+include README
 include COPYING
 include Makefile
 recursive-include doc *.txt
 # tests
 recursive-include u1db/tests *.py
+recursive-include html-docs Makefile *.rst *.py
