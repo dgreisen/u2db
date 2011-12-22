@@ -40,7 +40,7 @@ def config():
             'Environment :: Console',
             'Intended Audience :: Developers',
             'License :: OSI Approved :: '
-                'GNU Lesser General Public License (GPL)',
+                'GNU Library or Lesser General Public License (LGPL)',
             'Operating System :: OS Independent',
             'Operating System :: Microsoft :: Windows',
             'Operating System :: POSIX',
