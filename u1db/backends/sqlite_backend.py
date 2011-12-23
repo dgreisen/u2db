@@ -133,42 +133,10 @@ class SQLiteDatabase(CommonBackend):
 
     def _initialize(self, c):
         """Create the schema in the database."""
-        c.execute("CREATE TABLE transaction_log ("
-                  " generation INTEGER PRIMARY KEY AUTOINCREMENT,"
-                  " doc_id TEXT)")
-        c.execute("CREATE TABLE document ("
-                  " doc_id TEXT PRIMARY KEY,"
-                  " doc_rev TEXT,"
-                  " doc TEXT)"
-                  )
-        c.execute("CREATE TABLE document_fields ("
-                  " doc_id TEXT,"
-                  " field_name TEXT,"
-                  " value TEXT)")
-        # TODO: Should we include doc_id or not? By including it, the
-        #       content can be returned directly from the index, and
-        #       matched with the documents table, roughly saving 1 btree
-        #       lookup per query. It costs us extra data storage.
-        c.execute("CREATE INDEX document_fields_field_value_doc_idx"
-                  " ON document_fields(field_name, value, doc_id)")
-        c.execute("CREATE TABLE sync_log ("
-                  " replica_uid TEXT PRIMARY KEY,"
-                  " known_generation INTEGER)")
-        c.execute("CREATE TABLE conflicts ("
-                  " doc_id TEXT,"
-                  " doc_rev TEXT,"
-                  " doc TEXT,"
-              " CONSTRAINT conflicts_pkey PRIMARY KEY (doc_id, doc_rev))")
-        c.execute("CREATE TABLE index_definitions ("
-                  " name TEXT,"
-                  " offset INT,"
-                  " field TEXT,"
-                  " CONSTRAINT index_definitions_pkey"
-                  " PRIMARY KEY (name, offset))")
-        c.execute("CREATE TABLE u1db_config ("
-                  " name TEXT PRIMARY KEY,"
-                  " value TEXT)")
-        c.execute("INSERT INTO u1db_config VALUES ('sql_schema', '0')")
+        #read the script with sql commands
+        with open(os.path.join(os.path.dirname(__file__), 'dbschema.sql')) as schema:
+            c.executescript("".join(schema.readlines()))
+        #add extra fields
         self._extra_schema_init(c)
         # A unique identifier should be set for this replica. Implementations
         # don't have to strictly use uuid here, but we do want the uid to be
