@@ -101,9 +101,16 @@ def create_sqlite_partial_expanded(test, replica_uid):
     return db
 
 
+def create_doc(doc_id, rev, content, has_conflicts=False):
+    return Document(doc_id, rev, content, has_conflicts=has_conflicts)
+
+
+
 LOCAL_DATABASES_SCENARIOS = [
-        ('mem', {'do_create_database': create_memory_database}),
-        ('sql', {'do_create_database': create_sqlite_partial_expanded}),
+        ('mem', {'do_create_database': create_memory_database,
+                 'make_document': create_doc}),
+        ('sql', {'do_create_database': create_sqlite_partial_expanded,
+                 'make_document': create_doc}),
         ]
 
 
