@@ -24,12 +24,16 @@ except ImportError:
     c_backend_wrapper = None
 
 
+c_vectorclock_scenarios = []
+if c_backend_wrapper is not None:
+    c_vectorclock_scenarios.append(
+        ('c', {'create_vcr': c_backend_wrapper.VectorClockRev}))
+
+
 class TestVectorClockRev(tests.TestCase):
 
-    scenarios = [('py', {'create_vcr': vectorclock.VectorClockRev})]
-    if c_backend_wrapper is not None:
-        scenarios.append(
-                ('c', {'create_vcr': c_backend_wrapper.VectorClockRev}))
+    scenarios = [('py', {'create_vcr': vectorclock.VectorClockRev})
+            ] + c_vectorclock_scenarios
 
     def assertIsNewer(self, newer_rev, older_rev):
         new_vcr = self.create_vcr(newer_rev)
