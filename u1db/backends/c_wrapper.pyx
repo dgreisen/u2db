@@ -17,7 +17,7 @@
 cdef extern from "Python.h":
     object PyString_FromStringAndSize(char *s, Py_ssize_t n)
 
-cdef extern from "u1db.h":
+cdef extern from "u1db/u1db.h":
     ctypedef struct u1database:
         pass
 

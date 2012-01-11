@@ -16,7 +16,7 @@
  * along with u1db.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#include "compat.h"
+#include "u1db/compat.h"
 
 #include <string.h>
 #include <stdio.h>
