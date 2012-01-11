@@ -106,3 +106,13 @@ class TestVectorClock(BackendTests):
                          repr(self.create_vcr('test:1|z:2')))
         self.assertEqual('VectorClockRev(ab:1|bc:2|cd:3|de:4|ef:5)',
                      repr(self.create_vcr('ab:1|bc:2|cd:3|de:4|ef:5')))
+
+
+class TestCDocument(BackendTests):
+
+    def make_document(self, *args, **kwargs):
+        return c_backend_wrapper.CDocument(*args, **kwargs)
+
+    def test_create(self):
+        doc = self.make_document('doc-id', 'uid:1', tests.simple_doc)
+

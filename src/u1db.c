@@ -30,6 +30,17 @@ struct _u1database
     char *machine_id;
 };
 
+// "u1do"
+#define U1DB_DOCUMENT_MAGIC 0x7531646f
+typedef struct _u1db_document_internal
+{
+    u1db_document doc;
+    int magic; // Used to ensure people are passing a real internal document
+    struct _u1db_document_internal *next; // Used when we need a linked list
+    int generation; // Part of the sync api
+} u1db_document_internal;
+
+
 static const char *table_definitions[] = {
     "CREATE TABLE transaction_log ("
     " db_rev INTEGER PRIMARY KEY AUTOINCREMENT,"
@@ -1225,4 +1236,36 @@ u1db__vectorclock_is_newer(u1db_vectorclock *maybe_newer,
         return 0;
     }
     return is_newer;
+}
+
+u1db_document *
+u1db_make_doc(const char *doc_id, int doc_id_len,
+              const char *revision, int revision_len,
+              const char *content, int content_len, int has_conflicts)
+{
+    u1db_document *doc = (u1db_document *)(calloc(1, sizeof(u1db_document)));
+    doc->doc_id = (char *)malloc(doc_id_len);
+    memcpy(doc->doc_id, doc_id, doc_id_len);
+    doc->doc_id_len = doc_id_len;
+    doc->doc_rev = (char *)malloc(revision_len);
+    memcpy(doc->doc_rev, revision, revision_len);
+    doc->doc_rev_len = revision_len;
+    doc->content = (char *)malloc(content_len);
+    memcpy(doc->content, content, content_len);
+    doc->content_len = content_len;
+    doc->has_conflicts = has_conflicts;
+    return doc;
+}
+
+void
+u1db_free_doc(u1db_document **doc)
+{
+    if (doc == NULL || *doc == NULL) {
+        return;
+    }
+    free((*doc)->doc_id);
+    free((*doc)->doc_rev);
+    free((*doc)->content);
+    free(*doc);
+    *doc = NULL;
 }

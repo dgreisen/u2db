@@ -20,6 +20,14 @@ cdef extern from "Python.h":
 cdef extern from "u1db/u1db.h":
     ctypedef struct u1database:
         pass
+    ctypedef struct u1db_document:
+        char *doc_id
+        size_t doc_id_len
+        char *doc_rev
+        size_t doc_rev_len
+        char *content
+        size_t content_len
+        int has_conflicts
 
     ctypedef struct u1db_row:
         u1db_row *next
@@ -91,6 +99,11 @@ cdef extern from "u1db/u1db.h":
     int U1DB_INVALID_DOC_REV
     int U1DB_INVALID_DOC_ID
 
+    u1db_document *u1db_make_doc(char *doc_id, int doc_id_len,
+                                 char *revision, int revision_len,
+                                 char *content, int content_len,
+                                 int has_conflicts)
+    void u1db_free_doc(u1db_document **doc)
 
 import u1db
 
@@ -104,6 +117,70 @@ cdef int _append_to_list(void *context, char *doc_id):
     a_list = <object>context
     doc = doc_id
     a_list.append(doc)
+
+
+cdef class CDocument(object):
+    """A thin wrapper around the C Document struct."""
+
+    cdef u1db_document *_doc
+
+    def __init__(self, doc_id, rev, content, has_conflicts=False):
+        cdef int conflict
+
+        if has_conflicts:
+            conflict = 1
+        else:
+            conflict = 0
+        self._doc = u1db_make_doc(doc_id, len(doc_id),
+                                  rev, len(rev), content, len(content),
+                                  conflict)
+
+    def __dealloc__(self):
+        u1db_free_doc(&self._doc)
+
+    property doc_id:
+        def __get__(self):
+            return PyString_FromStringAndSize(
+                    self._doc.doc_id, self._doc.doc_id_len)
+
+    property rev:
+        def __get__(self):
+            return PyString_FromStringAndSize(
+                    self._doc.doc_rev, self._doc.doc_rev_len)
+
+    property content:
+        def __get__(self):
+            return PyString_FromStringAndSize(
+                    self._doc.content, self._doc.content_len)
+
+    property has_conflicts:
+        def __get__(self):
+            if self._doc.has_conflicts:
+                return True
+            return False
+
+    def __repr__(self):
+        if self._doc.has_conflicts:
+            extra = ', conflicted'
+        else:
+            extra = ''
+        return '%s(%s, %s%s, %r)' % (self.__class__.__name__, self.doc_id,
+                                     self.rev, extra, self.content)
+
+    def __hash__(self):
+        raise NotImplementedError(self.__hash__)
+
+    def __richcmp__(self, other, int t):
+        if t == 0: # Py_LT <
+            return ((self.doc_id, self.rev, self.content)
+                < (other.doc_id, other.rev, other.content))
+        elif t == 2: # Py_EQ ==
+            return (self.doc_id == other.doc_id
+                    and self.rev == other.rev
+                    and self.content == other.content
+                    and self.has_conflicts == other.has_conflicts)
+
+        return NotImplemented
 
 
 cdef class CDatabase(object):

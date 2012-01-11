@@ -20,6 +20,20 @@
 #define _U1DB_H_
 
 typedef struct _u1database u1database;
+// The document structure. Note that you must use u1db_make_doc to create
+// these, as there are private attributes that are required. This is just the
+// public interface
+typedef struct _u1db_document
+{
+    char *doc_id;
+    size_t doc_id_len;
+    char *doc_rev;
+    size_t doc_rev_len;
+    char *content;
+    size_t content_len;
+    int has_conflicts;
+} u1db_document;
+
 
 #define U1DB_OK 0
 #define U1DB_INVALID_PARAMETER -1
@@ -229,4 +243,14 @@ int u1db__vectorclock_maximize(u1db_vectorclock *clock,
 int u1db__vectorclock_as_str(u1db_vectorclock *clock, char **result);
 int u1db__vectorclock_is_newer(u1db_vectorclock *maybe_newer,
                                u1db_vectorclock *older);
+
+
+/**
+ * Create a new u1db_document object. This should be freed 
+ */
+u1db_document *u1db_make_doc(const char *doc_id, int doc_id_len,
+                             const char *revision, int revision_len,
+                             const char *content, int content_len,
+                             int has_conflicts);
+void u1db_free_doc(u1db_document **doc);
 #endif // _U1DB_H_
