@@ -18,51 +18,71 @@
 
 from u1db import tests, vectorclock
 
+try:
+    from u1db.tests import c_backend_wrapper
+except ImportError:
+    c_backend_wrapper = None
+
 
 class TestVectorClockRev(tests.TestCase):
 
+    scenarios = [('py', {'create_vcr': vectorclock.VectorClockRev})]
+    if c_backend_wrapper is not None:
+        scenarios.append(
+                ('c', {'create_vcr': c_backend_wrapper.VectorClockRev}))
+
     def assertIsNewer(self, newer_rev, older_rev):
-        new_vcr = vectorclock.VectorClockRev(newer_rev)
-        old_vcr = vectorclock.VectorClockRev(older_rev)
+        new_vcr = self.create_vcr(newer_rev)
+        old_vcr = self.create_vcr(older_rev)
         self.assertTrue(new_vcr.is_newer(old_vcr))
         self.assertFalse(old_vcr.is_newer(new_vcr))
 
     def assertIsConflicted(self, rev_a, rev_b):
-        vcr_a = vectorclock.VectorClockRev(rev_a)
-        vcr_b = vectorclock.VectorClockRev(rev_b)
+        vcr_a = self.create_vcr(rev_a)
+        vcr_b = self.create_vcr(rev_b)
         self.assertFalse(vcr_a.is_newer(vcr_b))
         self.assertFalse(vcr_b.is_newer(vcr_a))
 
     def test__is_newer_doc_rev(self):
         self.assertIsNewer('test:1', None)
         self.assertIsNewer('test:2', 'test:1')
-        self.assertIsNewer('test:1|other:2', 'test:1|other:1')
-        self.assertIsNewer('test:1|other:1', 'other:1')
-        self.assertIsConflicted('test:1|other:2', 'test:2|other:1')
-        self.assertIsConflicted('test:1|other:1', 'other:2')
+        self.assertIsNewer('other:2|test:1', 'other:1|test:1')
+        self.assertIsNewer('other:1|test:1', 'other:1')
+        self.assertIsConflicted('other:2|test:1', 'other:1|test:2')
+        self.assertIsConflicted('other:1|test:1', 'other:2')
         self.assertIsConflicted('test:1', 'test:1')
 
     def test_None(self):
-        vcr = vectorclock.VectorClockRev(None)
+        vcr = self.create_vcr(None)
         self.assertEqual('', vcr.as_str())
 
     def assertIncrement(self, original, replica_uid, after_increment):
-        vcr = vectorclock.VectorClockRev(original)
+        vcr = self.create_vcr(original)
         vcr.increment(replica_uid)
         self.assertEqual(after_increment, vcr.as_str())
 
     def test_increment(self):
         self.assertIncrement(None, 'test', 'test:1')
         self.assertIncrement('test:1', 'test', 'test:2')
+
+    def test_increment_adds_uid(self):
         self.assertIncrement('other:1', 'test', 'other:1|test:1')
+        self.assertIncrement('a:1|ab:2', 'aa', 'a:1|aa:1|ab:2')
+
+    def test_increment_update_partial(self):
+        self.assertIncrement('a:1|ab:2', 'a', 'a:2|ab:2')
+        self.assertIncrement('a:2|ab:2', 'ab', 'a:2|ab:3')
+
+    def test_increment_appends_uid(self):
+        self.assertIncrement('b:2', 'c', 'b:2|c:1')
 
     def assertMaximize(self, rev1, rev2, maximized):
-        vcr1 = vectorclock.VectorClockRev(rev1)
-        vcr2 = vectorclock.VectorClockRev(rev2)
+        vcr1 = self.create_vcr(rev1)
+        vcr2 = self.create_vcr(rev2)
         vcr1.maximize(vcr2)
         self.assertEqual(maximized, vcr1.as_str())
         # reset vcr1 to maximize the other way
-        vcr1 = vectorclock.VectorClockRev(rev1)
+        vcr1 = self.create_vcr(rev1)
         vcr2.maximize(vcr1)
         self.assertEqual(maximized, vcr2.as_str())
 
@@ -72,3 +92,7 @@ class TestVectorClockRev(tests.TestCase):
         self.assertMaximize('x:1', 'y:1', 'x:1|y:1')
         self.assertMaximize('x:2', 'x:1', 'x:2')
         self.assertMaximize('x:2', 'x:1|y:2', 'x:2|y:2')
+        self.assertMaximize('a:1|c:2|e:3', 'b:3|d:4|f:5',
+                            'a:1|b:3|c:2|d:4|e:3|f:5')
+
+load_tests = tests.load_with_scenarios
