@@ -253,4 +253,13 @@ u1db_document *u1db_make_doc(const char *doc_id, int doc_id_len,
                              const char *content, int content_len,
                              int has_conflicts);
 void u1db_free_doc(u1db_document **doc);
+
+/**
+ * Set the content for the document.
+ *
+ * This will copy the string, since the memory is managed by the doc object
+ * itself.
+ */
+int u1db_doc_set_content(u1db_document *doc, const char *content,
+                         int content_len);
 #endif // _U1DB_H_

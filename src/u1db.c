@@ -1269,3 +1269,27 @@ u1db_free_doc(u1db_document **doc)
     free(*doc);
     *doc = NULL;
 }
+
+
+int
+u1db_doc_set_content(u1db_document *doc, const char *content, int content_len)
+{
+    char *tmp;
+    if (doc == NULL || content == NULL) {
+        // TODO: return an error code
+        return 0;
+    }
+    // What to do about 0 length content? Is it even valid? Not all platforms
+    // support malloc(0)
+    tmp = (char*)malloc(content_len);
+    if (tmp == NULL) {
+        // TODO: return ENOMEM
+        return 0;
+    }
+    memcpy(content, tmp, content_len);
+    free(doc->content);
+    doc->content = tmp;
+    doc->content_len = content_len;
+    // TODO: Return success
+    return 1;
+}

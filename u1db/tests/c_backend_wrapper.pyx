@@ -16,6 +16,8 @@
 
 cdef extern from "Python.h":
     object PyString_FromStringAndSize(char *s, Py_ssize_t n)
+    int PyString_AsStringAndSize(object o, char **buf, Py_ssize_t *length
+                                 ) except -1
 
 cdef extern from "u1db/u1db.h":
     ctypedef struct u1database:
@@ -104,6 +106,7 @@ cdef extern from "u1db/u1db.h":
                                  char *content, int content_len,
                                  int has_conflicts)
     void u1db_free_doc(u1db_document **doc)
+    int u1db_doc_set_content(u1db_document *doc, char *content, int len)
 
 import u1db
 
@@ -152,6 +155,15 @@ cdef class CDocument(object):
         def __get__(self):
             return PyString_FromStringAndSize(
                     self._doc.content, self._doc.content_len)
+
+        def __set__(self, val):
+            cdef char *s_val
+            cdef Py_ssize_t s_len
+            # This returns a direct pointer to the content, so we have to copy
+            # it over.
+            PyString_AsStringAndSize(val, &s_val, &s_len)
+            u1db_doc_set_content(self._doc, s_val, s_len)
+
 
     property has_conflicts:
         def __get__(self):

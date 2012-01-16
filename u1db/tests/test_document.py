@@ -71,5 +71,10 @@ class TestDocument(tests.TestCase):
         doc_b = self.make_document('a', 'b', 'c', has_conflicts=True)
         self.assertFalse(doc_a == doc_b)
 
+    def test_set_content(self):
+        doc = self.make_document('id', 'rev', '{"content":""}')
+        self.assertEqual('{"content":""}', doc.content)
+        doc.content = '{"content": "new"}'
+        self.assertEqual('{"content": "new"}', doc.content)
 
 load_tests = tests.load_with_scenarios
