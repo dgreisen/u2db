@@ -71,7 +71,7 @@ cdef extern from "u1db/u1db.h":
                         char *content, int n, char *doc_id)
     int u1db_put_doc(u1database *db, char *doc_id, char **doc_rev,
                      char *doc, int n)
-    u1db_document *u1db_get_doc(u1database *db, char *doc_id)
+    int u1db_get_doc(u1database *db, u1db_document **doc, char *doc_id)
     int u1db_delete_doc(u1database *db, char *doc_id, char **doc_rev)
     int u1db_whats_changed(u1database *db, int *db_rev,
                            int (*cb)(void *, char *doc_id), void *context)
@@ -97,6 +97,7 @@ cdef extern from "u1db/u1db.h":
                                    u1db_vectorclock *older)
 
     int U1DB_OK
+    int U1DB_INVALID_PARAMETER
     int U1DB_REVISION_CONFLICT
     int U1DB_INVALID_DOC_ID
 
@@ -199,6 +200,18 @@ cdef class CDocument(object):
                     and self.has_conflicts == other.has_conflicts)
 
         return NotImplemented
+
+
+cdef handle_status(int status, context):
+    if status == U1DB_OK:
+        return
+    if status == U1DB_REVISION_CONFLICT:
+        raise errors.RevisionConflict()
+    if status == U1DB_INVALID_DOC_ID:
+        raise errors.InvalidDocId()
+    if status == U1DB_INVALID_PARAMETER:
+        raise RuntimeError('Bad parameters supplied')
+    raise RuntimeError('%s (status: %s)' % (context, status))
 
 
 cdef class CDatabase(object):
@@ -309,10 +322,7 @@ cdef class CDatabase(object):
         c_doc_rev = NULL
         status = u1db_create_doc(self._db, &doc, content, len(content),
                                  c_doc_id)
-        if status != U1DB_OK:
-            if status == U1DB_REVISION_CONFLICT:
-                raise errors.RevisionConflict()
-            raise RuntimeError('Failed to create_doc (status: %s)' % (status,))
+        handle_status(status, 'Failed to create_doc')
         pydoc = CDocument()
         pydoc._doc = doc
         return pydoc
@@ -343,10 +353,11 @@ cdef class CDatabase(object):
         return doc_rev
 
     def get_doc(self, doc_id):
-        cdef int n, c_has_conflicts
-        cdef u1db_document *doc
+        cdef int status
+        cdef u1db_document *doc = NULL
 
-        doc = u1db_get_doc(self._db, doc_id)
+        status = u1db_get_doc(self._db, &doc, doc_id)
+        handle_status(status, "get_doc failed")
         if doc == NULL:
             return None
         pydoc = CDocument()

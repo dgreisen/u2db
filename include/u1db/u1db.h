@@ -99,10 +99,12 @@ int u1db_put_doc(u1database *db, const char *doc_id, char **doc_rev,
 /**
  * Get the document defined by the given document id.
  *
- * @param doc_id The document we are looking for
- * @return a document (or NULL) matching the request
+ * @param doc_id: The document we are looking for
+ * @param doc: (OUT) a document (or NULL) matching the request
+ * @return status, will be U1DB_OK if there is no error, even if there is no
+ *      document matching that doc_id.
  */
-u1db_document *u1db_get_doc(u1database *db, const char *doc_id);
+int u1db_get_doc(u1database *db, u1db_document **doc, const char *doc_id);
 
 /**
  * Mark a document as deleted.

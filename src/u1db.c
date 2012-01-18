@@ -506,20 +506,19 @@ finish:
     return status;
 }
 
-u1db_document *
-u1db_get_doc(u1database *db, const char *doc_id)
+int
+u1db_get_doc(u1database *db, u1db_document **doc, const char *doc_id)
 {
-    u1db_document *doc = NULL;
     int status = 0, n = 0;
     sqlite3_stmt *statement;
     const unsigned char *doc_rev, *content;
-    if (db == NULL || doc_id == NULL) {
+    if (db == NULL || doc_id == NULL || doc == NULL) {
         // Bad Parameters
         // TODO: we could handle has_conflicts == NULL meaning that the caller
         //       is ignoring conflicts, but we don't want to make it *too* easy
         //       to do so.
         // TODO: Figure out how to do return codes
-        return NULL;
+        return U1DB_INVALID_PARAMETER;
     }
 
     status = lookup_doc(db, doc_id, &doc_rev, &content, &n,
@@ -527,19 +526,19 @@ u1db_get_doc(u1database *db, const char *doc_id)
     if (status == SQLITE_OK) {
         if (doc_rev == NULL) {
             // No such document exists
-            doc = NULL;
+            *doc = NULL;
             goto finish;
         }
-        doc = u1db_make_doc(doc_id, strlen(doc_id), doc_rev, strlen(doc_rev), 
-                            content, n, 0);
+        *doc = u1db_make_doc(doc_id, strlen(doc_id), doc_rev, strlen(doc_rev), 
+                             content, n, 0);
 
     } else {
         // TODO: Figure out how to return the SQL error code
-        doc = NULL;
+        *doc = NULL;
     }
 finish:
     sqlite3_finalize(statement);
-    return doc;
+    return status;
 }
 
 int
