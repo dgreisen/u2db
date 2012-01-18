@@ -285,27 +285,36 @@ handle_row(sqlite3_stmt *statement, u1db_row **row)
     return SQLITE_OK;
 }
 
-u1db_document *
-u1db_create_doc(u1database *db, const char *content, int n, const char *doc_id)
+int
+u1db_create_doc(u1database *db, u1db_document **doc,
+                const char *content, int n, const char *doc_id)
 {
-    u1db_document *doc = NULL;
     char *doc_rev = NULL;
     int status;
+    int allocated_doc_id = 0;
 
-    if (db == NULL || content == NULL) {
+    if (db == NULL || content == NULL || doc == NULL || *doc != NULL) {
         // Bad parameter
-        return NULL;
+        return U1DB_INVALID_PARAMETER;
     }
     if (doc_id == NULL) {
         // TODO: Don't leak this doc_id
         doc_id = u1db__allocate_doc_id(db);
+        allocated_doc_id = 1;
     }
     status = u1db_put_doc(db, doc_id, &doc_rev, content, n);
     if (status == 0) {
-        doc = u1db_make_doc(doc_id, strlen(doc_id), doc_rev, strlen(doc_rev),
-                            content, n, 0);
+        *doc = u1db_make_doc(doc_id, strlen(doc_id), doc_rev, strlen(doc_rev),
+                             content, n, 0);
+        if (*doc == NULL) {
+            status = SQLITE_NOMEM;
+        }
     }
-    return doc;
+    if (allocated_doc_id) {
+        // u1db_make_doc will copy the string anyway, so just free it here.
+        free(doc_id);
+    }
+    return status;
 }
 
 
@@ -451,12 +460,12 @@ u1db_put_doc(u1database *db, const char *doc_id, char **doc_rev,
             status = 0;
         } else {
             // We were supplied a NULL doc rev, but the doc already exists
-            status = U1DB_INVALID_DOC_REV;
+            status = U1DB_REVISION_CONFLICT;
         }
     } else {
         if (old_doc_rev == NULL) {
             // TODO: Handle this case, it is probably just
-            //       U1DB_INVALID_DOC_REV, but we want a test case first.
+            //       U1DB_REVISION_CONFLICT, but we want a test case first.
             // User supplied an old_doc_rev, but there is no entry in the db.
             status = -12345;
         } else {
@@ -465,7 +474,7 @@ u1db_put_doc(u1database *db, const char *doc_id, char **doc_rev,
                 status = 0;
             } else {
                 // Invalid old rev, mark it as such
-                status = U1DB_INVALID_DOC_REV;
+                status = U1DB_REVISION_CONFLICT;
             }
         }
     }
@@ -563,7 +572,7 @@ u1db_delete_doc(u1database *db, const char *doc_id, char **doc_rev)
         // The saved document revision doesn't match
         sqlite3_exec(db->sql_handle, "ROLLBACK", NULL, NULL, NULL);
         sqlite3_finalize(statement);
-        return U1DB_INVALID_DOC_REV;
+        return U1DB_REVISION_CONFLICT;
     }
     // TODO: Handle conflicts
     sqlite3_finalize(statement);
@@ -1233,17 +1242,36 @@ u1db_make_doc(const char *doc_id, int doc_id_len,
               const char *content, int content_len, int has_conflicts)
 {
     u1db_document *doc = (u1db_document *)(calloc(1, sizeof(u1db_document)));
+    if (doc == NULL) { goto cleanup; }
     doc->doc_id = (char *)calloc(1, doc_id_len+1);
+    if (doc->doc_id == NULL) { goto cleanup; }
     memcpy(doc->doc_id, doc_id, doc_id_len);
     doc->doc_id_len = doc_id_len;
     doc->doc_rev = (char *)calloc(1, revision_len+1);
+    if (doc->doc_rev == NULL) { goto cleanup; }
     memcpy(doc->doc_rev, revision, revision_len);
     doc->doc_rev_len = revision_len;
     doc->content = (char *)calloc(1, content_len+1);
+    if (doc->content == NULL) { goto cleanup; }
     memcpy(doc->content, content, content_len);
     doc->content_len = content_len;
     doc->has_conflicts = has_conflicts;
     return doc;
+cleanup:
+    if (doc == NULL) {
+        return NULL;
+    }
+    if (doc->doc_id != NULL) {
+        free(doc->doc_id);
+    }
+    if (doc->doc_rev != NULL) {
+        free(doc->doc_id);
+    }
+    if (doc->content != NULL) { 
+        free(doc->content);
+    }
+    free(doc);
+    return NULL;
 }
 
 void

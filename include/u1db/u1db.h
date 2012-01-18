@@ -39,7 +39,7 @@ typedef struct _u1db_document
 #define U1DB_INVALID_PARAMETER -1
 // put_doc() was called but the doc_rev stored in the database doesn't match
 // the one supplied.
-#define U1DB_INVALID_DOC_REV -2
+#define U1DB_REVISION_CONFLICT -2
 #define U1DB_INVALID_DOC_ID -3
 
 /**
@@ -73,10 +73,12 @@ int u1db_get_machine_id(u1database *db, char **machine_id);
  *      NULL, then a new doc_id will be generated.
  * @param doc_rev: The document revision. Callers are responsible for freeing
  *      the information.
- * @return: a u1db_document that needs to be freed with u1db_free_doc
+ * @param doc: a u1db_document that will be allocated and needs to be freed
+ *      with u1db_free_doc
+ * @return a status code indicating success or failure.
  */
-u1db_document *u1db_create_doc(u1database *db, const char *content, int n,
-                               const char *doc_id);
+int u1db_create_doc(u1database *db, u1db_document **doc,
+                    const char *content, int n, const char *doc_id);
 
 /**
  * Put new document content for the given document identifier.
