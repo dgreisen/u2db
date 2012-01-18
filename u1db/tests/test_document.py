@@ -18,21 +18,10 @@
 from u1db import Document
 from u1db import tests
 
-try:
-    from u1db.tests import c_backend_wrapper
-except ImportError:
-    c_backend_wrapper = None
-
-
-if c_backend_wrapper is None:
-    c_scenarios = []
-else:
-    c_scenarios = [('c', {'make_document': c_backend_wrapper.CDocument})]
-
 
 class TestDocument(tests.TestCase):
 
-    scenarios = [('py', {'make_document': Document})] + c_scenarios
+    scenarios = [('py', {'make_document': Document})] + tests.C_DATABASE_SCENARIOS
 
     def test_create_doc(self):
         doc = self.make_document('doc-id', 'uid:1', tests.simple_doc)

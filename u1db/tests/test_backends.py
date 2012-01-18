@@ -35,6 +35,11 @@ from u1db.remote import (
     http_database
     )
 
+try:
+    from u1db.tests import c_backend_wrapper
+except ImportError:
+    c_backend_wrapper = None
+
 
 def http_create_database(test, replica_uid):
     test.startServer()
@@ -47,8 +52,8 @@ class AllDatabaseTests(tests.DatabaseBaseTests, tests.TestCaseWithServer):
     scenarios = tests.LOCAL_DATABASES_SCENARIOS + [
         ('http', {'do_create_database': http_create_database,
                   'make_document': tests.create_doc,
-                  'server_def': http_server_def}),
-        ]
+                  'server_def': http_server_def})
+        ] # + tests.C_DATABASE_SCENARIOS
 
     def test_close(self):
         self.db.close()

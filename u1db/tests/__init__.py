@@ -36,6 +36,10 @@ from u1db.remote import (
     server_state,
     )
 
+try:
+    from u1db.tests import c_backend_wrapper
+except ImportError:
+    c_backend_wrapper = None
 
 # Setting this means that failing assertions will not include this module in
 # their traceback. However testtools doesn't seem to set it, and we don't want
@@ -105,6 +109,18 @@ def create_doc(doc_id, rev, content, has_conflicts=False):
     return Document(doc_id, rev, content, has_conflicts=has_conflicts)
 
 
+def create_c_database(test, replica_uid):
+    if c_backend_wrapper is None:
+        test.skipTest('c_backend_wrapper is not available')
+    db = c_backend_wrapper.CDatabase(':memory:')
+    db._set_machine_id(replica_uid)
+    return db
+
+
+def create_c_document(doc_id, rev, content, has_conflicts=False):
+    return c_backend_wrapper.CDocument(doc_id, rev, content,
+                                       has_conflicts=has_conflicts)
+
 
 LOCAL_DATABASES_SCENARIOS = [
         ('mem', {'do_create_database': create_memory_database,
@@ -112,6 +128,11 @@ LOCAL_DATABASES_SCENARIOS = [
         ('sql', {'do_create_database': create_sqlite_partial_expanded,
                  'make_document': create_doc}),
         ]
+
+
+C_DATABASE_SCENARIOS = [
+        ('c', {'do_create_database': create_c_database,
+               'make_document': create_c_document})]
 
 
 class DatabaseBaseTests(TestCase):
