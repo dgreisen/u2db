@@ -41,6 +41,8 @@ typedef struct _u1db_document
 // the one supplied.
 #define U1DB_REVISION_CONFLICT -2
 #define U1DB_INVALID_DOC_ID -3
+#define U1DB_DOCUMENT_ALREADY_DELETED -4
+#define U1DB_DOCUMENT_DOES_NOT_EXIST -5
 
 /**
  * The basic constructor for a new connection.
@@ -109,13 +111,12 @@ int u1db_get_doc(u1database *db, u1db_document **doc, const char *doc_id);
 /**
  * Mark a document as deleted.
  *
- * @param doc_id (IN) The document we want to delete.
- * @param doc_rev (IN/OUT) The rev of the document we are deleting, must match
- *                the stored value, or the delete will fail. Will be updated
- *                to point at the new document revision (for the delete),
- *                callers must free the memory.
+ * @param doc (IN/OUT) The document we want to delete, the document must match
+ *                the stored value, or the delete will fail. After being
+ *                deleted, the doc_rev parameter will be updated to match the
+ *                new value in the database.
  */
-int u1db_delete_doc(u1database *db, const char *doc_id, char **doc_rev);
+int u1db_delete_doc(u1database *db, u1db_document *doc);
 
 /**
  * Get the document defined by the given document id.

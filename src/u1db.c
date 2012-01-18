@@ -289,9 +289,8 @@ int
 u1db_create_doc(u1database *db, u1db_document **doc,
                 const char *content, int n, const char *doc_id)
 {
-    char *doc_rev = NULL;
+    char *doc_rev = NULL, *local_doc_id = NULL;
     int status;
-    int allocated_doc_id = 0;
 
     if (db == NULL || content == NULL || doc == NULL || *doc != NULL) {
         // Bad parameter
@@ -299,8 +298,8 @@ u1db_create_doc(u1database *db, u1db_document **doc,
     }
     if (doc_id == NULL) {
         // TODO: Don't leak this doc_id
-        doc_id = u1db__allocate_doc_id(db);
-        allocated_doc_id = 1;
+        local_doc_id = u1db__allocate_doc_id(db);
+        doc_id = local_doc_id;
     }
     status = u1db_put_doc(db, doc_id, &doc_rev, content, n);
     if (status == 0) {
@@ -310,9 +309,9 @@ u1db_create_doc(u1database *db, u1db_document **doc,
             status = SQLITE_NOMEM;
         }
     }
-    if (allocated_doc_id) {
+    if (local_doc_id != NULL) {
         // u1db_make_doc will copy the string anyway, so just free it here.
-        free(doc_id);
+        free(local_doc_id);
     }
     return status;
 }
@@ -542,32 +541,38 @@ finish:
 }
 
 int
-u1db_delete_doc(u1database *db, const char *doc_id, char **doc_rev)
+u1db_delete_doc(u1database *db, u1db_document *doc)
 {
     int status, n;
     sqlite3_stmt *statement;
-    const unsigned char *cur_doc_rev, *doc;
+    const unsigned char *cur_doc_rev, *content;
+    char *doc_rev;
 
-    if (db == NULL || doc_id == NULL || doc_rev == NULL || *doc_rev == NULL) {
+    if (db == NULL || doc == NULL) {
         return U1DB_INVALID_PARAMETER;
     }
     status = sqlite3_exec(db->sql_handle, "BEGIN", NULL, NULL, NULL);
     if (status != SQLITE_OK) {
         return status;
     }
-    status = lookup_doc(db, doc_id, &cur_doc_rev, &doc, &n, &statement);
+    status = lookup_doc(db, doc->doc_id, &cur_doc_rev, &content, &n,
+                        &statement);
     if (status != SQLITE_OK) {
         sqlite3_finalize(statement);
         sqlite3_exec(db->sql_handle, "ROLLBACK", NULL, NULL, NULL);
         return status;
     }
-    if (cur_doc_rev == NULL || doc == NULL) {
+    if (cur_doc_rev == NULL || content == NULL) {
         // Can't delete a doc that doesn't exist
         sqlite3_exec(db->sql_handle, "ROLLBACK", NULL, NULL, NULL);
         sqlite3_finalize(statement);
-        return U1DB_INVALID_DOC_ID;
+        if (cur_doc_rev == NULL) {
+            return U1DB_DOCUMENT_DOES_NOT_EXIST;
+        } else {
+            return U1DB_DOCUMENT_ALREADY_DELETED;
+        }
     }
-    if (strcmp((const char *)cur_doc_rev, *doc_rev) != 0) {
+    if (strcmp((const char *)cur_doc_rev, doc->doc_rev) != 0) {
         // The saved document revision doesn't match
         sqlite3_exec(db->sql_handle, "ROLLBACK", NULL, NULL, NULL);
         sqlite3_finalize(statement);
@@ -577,13 +582,16 @@ u1db_delete_doc(u1database *db, const char *doc_id, char **doc_rev)
     sqlite3_finalize(statement);
 
     // TODO: Implement VectorClockRev
-    *doc_rev = (char *)calloc(1, 128);
-    memcpy(*doc_rev, "test:2", 6);
-    status = write_doc(db, doc_id, *doc_rev, NULL, 0, 1);
+    doc_rev = (char *)calloc(1, 128);
+    memcpy(doc_rev, "test:2", 6);
+    status = write_doc(db, doc->doc_id, doc_rev, NULL, 0, 1);
     if (status != SQLITE_OK) {
         sqlite3_exec(db->sql_handle, "ROLLBACK", NULL, NULL, NULL);
     } else {
         status = sqlite3_exec(db->sql_handle, "COMMIT", NULL, NULL, NULL);
+        // free(doc->doc_rev);
+        doc->doc_rev = doc_rev;
+        doc->doc_rev_len = 6;
     }
     return status;
 }
@@ -1279,9 +1287,15 @@ u1db_free_doc(u1db_document **doc)
     if (doc == NULL || *doc == NULL) {
         return;
     }
-    free((*doc)->doc_id);
-    free((*doc)->doc_rev);
-    free((*doc)->content);
+    if ((*doc)->doc_id != NULL) {
+        free((*doc)->doc_id);
+    }
+    if ((*doc)->doc_rev != NULL) {
+        free((*doc)->doc_rev);
+    }
+    if ((*doc)->content != NULL) {
+        free((*doc)->content);
+    }
     free(*doc);
     *doc = NULL;
 }

@@ -57,10 +57,13 @@ class TestCase(testtools.TestCase):
         self.addCleanup(shutil.rmtree, tempdir)
         return tempdir
 
+    def make_document(self, doc_id, doc_rev, content, has_conflicts):
+        return Document(doc_id, doc_rev, content, has_conflicts)
+
     def assertGetDoc(self, db, doc_id, doc_rev, content, has_conflicts):
         """Assert that the document in the database looks correct."""
-        exp_doc = Document(doc_id, doc_rev, content,
-                           has_conflicts=has_conflicts)
+        exp_doc = self.make_document(doc_id, doc_rev, content,
+                                     has_conflicts=has_conflicts)
         self.assertEqual(exp_doc, db.get_doc(doc_id))
 
     def assertGetDocConflicts(self, db, doc_id, conflicts):

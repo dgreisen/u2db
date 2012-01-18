@@ -72,7 +72,7 @@ cdef extern from "u1db/u1db.h":
     int u1db_put_doc(u1database *db, char *doc_id, char **doc_rev,
                      char *doc, int n)
     int u1db_get_doc(u1database *db, u1db_document **doc, char *doc_id)
-    int u1db_delete_doc(u1database *db, char *doc_id, char **doc_rev)
+    int u1db_delete_doc(u1database *db, u1db_document *doc)
     int u1db_whats_changed(u1database *db, int *db_rev,
                            int (*cb)(void *, char *doc_id), void *context)
     int u1db__sync_get_machine_info(u1database *db, char *other_machine_id,
@@ -100,6 +100,8 @@ cdef extern from "u1db/u1db.h":
     int U1DB_INVALID_PARAMETER
     int U1DB_REVISION_CONFLICT
     int U1DB_INVALID_DOC_ID
+    int U1DB_DOCUMENT_ALREADY_DELETED
+    int U1DB_DOCUMENT_DOES_NOT_EXIST
 
     u1db_document *u1db_make_doc(char *doc_id, int doc_id_len,
                                  char *revision, int revision_len,
@@ -124,14 +126,34 @@ cdef int _append_to_list(void *context, char *doc_id):
 
 def make_document(doc_id, rev, content, has_conflicts=False):
     cdef u1db_document *doc
+    cdef char *c_content, *c_rev, *c_doc_id
+    cdef int c_content_len, c_rev_len, c_doc_id_len
     cdef int conflict
 
     if has_conflicts:
         conflict = 1
     else:
         conflict = 0
-    doc = u1db_make_doc(doc_id, len(doc_id), rev, len(rev),
-                        content, len(content), conflict)
+    if doc_id is None:
+        c_doc_id_len = 0
+        c_doc_id = NULL
+    else:
+        c_doc_id = doc_id
+        c_doc_id_len = len(doc_id)
+    if content is None:
+        c_content = NULL
+        c_content_len = 0
+    else:
+        c_content = content
+        c_content_len = len(content)
+    if rev is None:
+        c_rev = NULL
+        c_rev_len = 0
+    else:
+        c_rev = rev
+        c_rev_len = len(rev)
+    doc = u1db_make_doc(c_doc_id, c_doc_id_len, c_rev, c_rev_len,
+                        c_content, c_content_len, conflict)
     pydoc = CDocument()
     pydoc._doc = doc
     return pydoc
@@ -150,16 +172,22 @@ cdef class CDocument(object):
 
     property doc_id:
         def __get__(self):
+            if self._doc.doc_id == NULL:
+                return None
             return PyString_FromStringAndSize(
                     self._doc.doc_id, self._doc.doc_id_len)
 
     property rev:
         def __get__(self):
+            if self._doc.doc_rev == NULL:
+                return None
             return PyString_FromStringAndSize(
                     self._doc.doc_rev, self._doc.doc_rev_len)
 
     property content:
         def __get__(self):
+            if self._doc.content == NULL:
+                return None
             return PyString_FromStringAndSize(
                     self._doc.content, self._doc.content_len)
 
@@ -209,6 +237,10 @@ cdef handle_status(int status, context):
         raise errors.RevisionConflict()
     if status == U1DB_INVALID_DOC_ID:
         raise errors.InvalidDocId()
+    if status == U1DB_DOCUMENT_ALREADY_DELETED:
+        raise errors.DocumentAlreadyDeleted()
+    if status == U1DB_DOCUMENT_DOES_NOT_EXIST:
+        raise errors.DocumentDoesNotExist()
     if status == U1DB_INVALID_PARAMETER:
         raise RuntimeError('Bad parameters supplied')
     raise RuntimeError('%s (status: %s)' % (context, status))
@@ -364,21 +396,11 @@ cdef class CDatabase(object):
         pydoc._doc = doc
         return pydoc
 
-    def delete_doc(self, doc_id, doc_rev):
+    def delete_doc(self, CDocument doc):
         cdef int status
-        cdef char *c_doc_rev
 
-        c_doc_rev = doc_rev;
-        status = u1db_delete_doc(self._db, doc_id, &c_doc_rev);
-        if status != U1DB_OK:
-            if status == U1DB_REVISION_CONFLICT:
-                raise errors.InvalidDocRev("Failed to delete %s %s, %s"
-                                         % (doc_id, doc_rev, c_doc_rev))
-            elif status == U1DB_INVALID_DOC_ID:
-                raise KeyError
-            raise RuntimeError("Failed to delete_doc: %d" % (status,))
-        doc_rev = c_doc_rev
-        return doc_rev
+        status = u1db_delete_doc(self._db, doc._doc);
+        handle_status(status, "Failed to delete %s" % (doc,))
 
     def whats_changed(self, db_rev=0):
         cdef int status, c_db_rev
