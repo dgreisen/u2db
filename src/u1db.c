@@ -437,8 +437,9 @@ u1db_put_doc(u1database *db, u1db_document *doc)
         // Bad parameter
         return -1;
     }
-    if (doc->doc_id == NULL) {
-        return U1DB_INVALID_DOC_ID;
+    status = u1db__is_doc_id_valid(doc->doc_id);
+    if (status != U1DB_OK) {
+        return status;
     }
     status = sqlite3_exec(db->sql_handle, "BEGIN", NULL, NULL, NULL);
     if (status != SQLITE_OK) {
@@ -1345,4 +1346,23 @@ u1db_doc_set_content(u1db_document *doc, const char *content, int content_len)
     doc->content_len = content_len;
     // TODO: Return success
     return 1;
+}
+
+int
+u1db__is_doc_id_valid(const char *doc_id)
+{
+    int len, i;
+    if (doc_id == NULL) {
+        return U1DB_INVALID_DOC_ID;
+    }
+    len = strlen(doc_id);
+    if (len == 0) {
+        return U1DB_INVALID_DOC_ID;
+    }
+    for (i = 0; i < len; ++i) {
+        if (doc_id[i] == '\\' || doc_id[i] == '/') {
+            return U1DB_INVALID_DOC_ID;
+        }
+    }
+    return U1DB_OK;
 }

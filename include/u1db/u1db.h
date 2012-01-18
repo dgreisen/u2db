@@ -154,6 +154,13 @@ int u1db__sql_close(u1database *db);
 int u1db__sql_is_open(u1database *db);
 
 /**
+ * Check if a doc_id is valid.
+ *
+ * Returns U1DB_OK if everything is ok, otherwise U1DB_INVALID_DOC_ID.
+ */
+int u1db__is_doc_id_valid(const char *doc_id);
+
+/**
  * Internal api, run an SQL query directly.
  */
 typedef struct _u1db_row {

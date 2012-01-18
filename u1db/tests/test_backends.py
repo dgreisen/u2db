@@ -96,6 +96,8 @@ class AllDatabaseTests(tests.DatabaseBaseTests, tests.TestCaseWithServer):
     def test_put_doc_refuses_no_id(self):
         doc = self.make_document(None, None, simple_doc)
         self.assertRaises(errors.InvalidDocId, self.db.put_doc, doc)
+        doc = self.make_document("", None, simple_doc)
+        self.assertRaises(errors.InvalidDocId, self.db.put_doc, doc)
 
     def test_put_doc_refuses_slashes(self):
         doc = self.make_document('/a', None, simple_doc)
@@ -110,9 +112,9 @@ class AllDatabaseTests(tests.DatabaseBaseTests, tests.TestCaseWithServer):
     def test_put_fails_with_bad_old_rev(self):
         doc = self.db.create_doc(simple_doc, doc_id='my_doc_id')
         old_rev = doc.rev
-        doc.rev = 'other:1'
-        doc.content = '{"something": "else"}'
-        self.assertRaises(errors.RevisionConflict, self.db.put_doc, doc)
+        bad_doc = self.make_document(doc.doc_id, 'other:1',
+                                     '{"something": "else"}')
+        self.assertRaises(errors.RevisionConflict, self.db.put_doc, bad_doc)
         self.assertGetDoc(self.db, 'my_doc_id', old_rev, simple_doc, False)
 
     def test_get_doc_after_put(self):

@@ -51,7 +51,7 @@ class TestCDatabase(BackendTests):
     def test__is_closed(self):
         db = c_backend_wrapper.CDatabase(':memory:')
         self.assertTrue(db._sql_is_open())
-        db._close_sqlite_handle()
+        db.close()
         self.assertFalse(db._sql_is_open())
 
     def test__run_sql(self):
@@ -111,7 +111,7 @@ class TestVectorClock(BackendTests):
 class TestCDocument(BackendTests):
 
     def make_document(self, *args, **kwargs):
-        return c_backend_wrapper.CDocument(*args, **kwargs)
+        return c_backend_wrapper.make_document(*args, **kwargs)
 
     def test_create(self):
         doc = self.make_document('doc-id', 'uid:1', tests.simple_doc)
