@@ -43,6 +43,7 @@ typedef struct _u1db_document
 #define U1DB_INVALID_DOC_ID -3
 #define U1DB_DOCUMENT_ALREADY_DELETED -4
 #define U1DB_DOCUMENT_DOES_NOT_EXIST -5
+#define U1DB_NOMEM -6
 
 /**
  * The basic constructor for a new connection.
@@ -85,18 +86,12 @@ int u1db_create_doc(u1database *db, u1db_document **doc,
 /**
  * Put new document content for the given document identifier.
  *
- * @param doc_id: A string identifying the document. If the value supplied is
- *      NULL, then a new doc_id will be generated. Callers are responsible for
- *      then freeing the returned string.
- * @param doc_rev: The document revision. This should contain the revision that
- *      is being replaced, and it will be filled in with the new document revision.
- *      The new revision will be malloced(), callers are responsible for
- *      calling free.
- * @param doc: The JSON string representing the document.
- * @param n: The number of bytes in doc
+ * @param doc: A document that we want to update. The new content should have
+ *             been set with u1db_doc_set_content. The document's revision
+ *             should match what is currently in the database, and will be
+ *             updated to point at the new revision.
  */
-int u1db_put_doc(u1database *db, const char *doc_id, char **doc_rev,
-                 const char *doc, int n);
+int u1db_put_doc(u1database *db, u1db_document *doc);
 
 /**
  * Get the document defined by the given document id.

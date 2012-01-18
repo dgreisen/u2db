@@ -80,6 +80,7 @@ class AllDatabaseTests(tests.DatabaseBaseTests, tests.TestCaseWithServer):
     def test_put_doc_creating_initial(self):
         doc = self.make_document('my_doc_id', None, simple_doc)
         new_rev = self.db.put_doc(doc)
+        self.assertIsNot(None, new_rev)
         self.assertGetDoc(self.db, 'my_doc_id', new_rev, simple_doc, False)
 
     def test_put_doc_update(self):

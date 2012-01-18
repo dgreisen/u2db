@@ -253,7 +253,7 @@ handle_row(sqlite3_stmt *statement, u1db_row **row)
 
     new_row = (u1db_row *)calloc(1, sizeof(u1db_row));
     if (new_row == NULL) {
-        return SQLITE_NOMEM;
+        return U1DB_NOMEM;
     }
     if (*row != NULL) {
         (*row)->next = new_row;
@@ -264,12 +264,12 @@ handle_row(sqlite3_stmt *statement, u1db_row **row)
 
     new_row->column_sizes = (int*)calloc(new_row->num_columns, sizeof(int));
     if (new_row->column_sizes == NULL) {
-        return SQLITE_NOMEM;
+        return U1DB_NOMEM;
     }
     new_row->columns = (unsigned char**)calloc(new_row->num_columns,
                                                sizeof(unsigned char *));
     if (new_row->columns == NULL) {
-        return SQLITE_NOMEM;
+        return U1DB_NOMEM;
     }
     for (i = 0; i < new_row->num_columns; i++) {
         text = sqlite3_column_text(statement, i);
@@ -278,7 +278,7 @@ handle_row(sqlite3_stmt *statement, u1db_row **row)
         new_row->column_sizes[i] = num_bytes;
         new_row->columns[i] = (unsigned char*)calloc(num_bytes+1, 1);
         if (new_row->columns[i] == NULL) {
-            return SQLITE_NOMEM;
+            return U1DB_NOMEM;
         }
         memcpy(new_row->columns[i], text, num_bytes+1);
     }
@@ -301,14 +301,13 @@ u1db_create_doc(u1database *db, u1db_document **doc,
         local_doc_id = u1db__allocate_doc_id(db);
         doc_id = local_doc_id;
     }
-    status = u1db_put_doc(db, doc_id, &doc_rev, content, n);
-    if (status == 0) {
-        *doc = u1db_make_doc(doc_id, strlen(doc_id), doc_rev, strlen(doc_rev),
-                             content, n, 0);
-        if (*doc == NULL) {
-            status = SQLITE_NOMEM;
-        }
+    *doc = u1db_make_doc(doc_id, strlen(doc_id), NULL, 0, content, n, 0);
+    if (*doc == NULL) {
+        status = U1DB_NOMEM;
+        goto finish;
     }
+    status = u1db_put_doc(db, *doc);
+finish:
     if (local_doc_id != NULL) {
         // u1db_make_doc will copy the string anyway, so just free it here.
         free(local_doc_id);
@@ -427,33 +426,33 @@ write_doc(u1database *db, const char *doc_id, const char *doc_rev,
 }
 
 int
-u1db_put_doc(u1database *db, const char *doc_id, char **doc_rev,
-             const char *doc, int n)
+u1db_put_doc(u1database *db, u1db_document *doc)
 {
-    const unsigned char *old_doc, *old_doc_rev;
+    const unsigned char *old_content = NULL, *old_doc_rev = NULL;
     int status;
-    int old_doc_n;
+    int old_content_len;
     sqlite3_stmt *statement;
 
-    if (db == NULL || doc == NULL || doc_rev == NULL) {
+    if (db == NULL || doc == NULL) {
         // Bad parameter
         return -1;
     }
-    if (doc_id == NULL) {
+    if (doc->doc_id == NULL) {
         return U1DB_INVALID_DOC_ID;
     }
     status = sqlite3_exec(db->sql_handle, "BEGIN", NULL, NULL, NULL);
     if (status != SQLITE_OK) {
         return status;
     }
-    old_doc = NULL;
-    status = lookup_doc(db, doc_id, &old_doc_rev, &old_doc, &old_doc_n, &statement);
+    old_content = NULL;
+    status = lookup_doc(db, doc->doc_id, &old_doc_rev, &old_content,
+                        &old_content_len, &statement);
     if (status != SQLITE_OK) {
         sqlite3_finalize(statement);
         sqlite3_exec(db->sql_handle, "ROLLBACK", NULL, NULL, NULL);
         return status;
     }
-    if (*doc_rev == NULL) {
+    if (doc->doc_rev == NULL) {
         if (old_doc_rev == NULL) {
             // We are creating a new document from scratch. No problem.
             status = 0;
@@ -466,18 +465,19 @@ u1db_put_doc(u1database *db, const char *doc_id, char **doc_rev,
             // TODO: Handle this case, it is probably just
             //       U1DB_REVISION_CONFLICT, but we want a test case first.
             // User supplied an old_doc_rev, but there is no entry in the db.
-            status = -12345;
+            status = U1DB_REVISION_CONFLICT;
         } else {
-            if (strcmp(*doc_rev, (const char *)old_doc_rev) == 0) {
-                // The supplied doc_rev exactly matches old_doc_rev, good enough
-                status = 0;
+            if (strcmp(doc->doc_rev, (const char *)old_doc_rev) == 0) {
+                // The supplied doc_rev exactly matches old_doc_rev, good
+                // enough
+                status = U1DB_OK;
             } else {
                 // Invalid old rev, mark it as such
                 status = U1DB_REVISION_CONFLICT;
             }
         }
     }
-    if (status == SQLITE_OK) {
+    if (status == U1DB_OK) {
         // We are ok to proceed, allocating a new document revision, and
         // storing the document
         u1db_vectorclock *vc;
@@ -491,8 +491,12 @@ u1db_put_doc(u1database *db, const char *doc_id, char **doc_rev,
         if (status != U1DB_OK) { goto finish; }
         status = u1db__vectorclock_as_str(vc, &new_rev);
         if (status != U1DB_OK) { goto finish; }
-        *doc_rev = new_rev;
-        status = write_doc(db, doc_id, new_rev, doc, n, (old_doc != NULL));
+        free(doc->doc_rev);
+        doc->doc_rev = new_rev;
+        doc->doc_rev_len = strlen(new_rev);
+        status = write_doc(db, doc->doc_id, new_rev,
+                           doc->content, doc->content_len,
+                           (old_content != NULL));
         if (status == SQLITE_OK) {
             status = sqlite3_exec(db->sql_handle, "COMMIT", NULL, NULL, NULL);
         }
@@ -1014,7 +1018,7 @@ u1db__vectorclock_increment(u1db_vectorclock *clock, const char *machine_id)
     new_buf = (u1db_vectorclock_item*)realloc(clock->items,
         sizeof(u1db_vectorclock_item) * (clock->num_items + 1));
     if (new_buf == NULL) {
-        return SQLITE_NOMEM;
+        return U1DB_NOMEM;
     }
     clock->items = new_buf;
     clock->num_items++;
@@ -1108,7 +1112,7 @@ u1db__vectorclock_maximize(u1db_vectorclock *clock, u1db_vectorclock *other)
                 item_size * (clock->num_items + num_inserts));
     if (new_buf == NULL) {
         free_inserts(&needed);
-        return SQLITE_NOMEM;
+        return U1DB_NOMEM;
     }
     clock->items = new_buf;
     clock->num_items += num_inserts;
@@ -1243,6 +1247,28 @@ u1db__vectorclock_is_newer(u1db_vectorclock *maybe_newer,
     return is_newer;
 }
 
+static int
+copy_str_and_len(char **dest, int *dest_len,
+                 const char *source, int source_len)
+{
+    if (dest == NULL || dest_len == NULL) {
+        // Bad parameters
+        return 0;
+    }
+    if (source == NULL) {
+        *dest = NULL;
+        *dest_len = 0;
+        return 1;
+    }
+    *dest = (char *) calloc(1, source_len + 1);
+    if (*dest == NULL) {
+        return 0;
+    }
+    memcpy(*dest, source, source_len);
+    *dest_len = source_len;
+    return 1;
+}
+
 u1db_document *
 u1db_make_doc(const char *doc_id, int doc_id_len,
               const char *revision, int revision_len,
@@ -1250,18 +1276,15 @@ u1db_make_doc(const char *doc_id, int doc_id_len,
 {
     u1db_document *doc = (u1db_document *)(calloc(1, sizeof(u1db_document)));
     if (doc == NULL) { goto cleanup; }
-    doc->doc_id = (char *)calloc(1, doc_id_len+1);
-    if (doc->doc_id == NULL) { goto cleanup; }
-    memcpy(doc->doc_id, doc_id, doc_id_len);
-    doc->doc_id_len = doc_id_len;
-    doc->doc_rev = (char *)calloc(1, revision_len+1);
-    if (doc->doc_rev == NULL) { goto cleanup; }
-    memcpy(doc->doc_rev, revision, revision_len);
-    doc->doc_rev_len = revision_len;
-    doc->content = (char *)calloc(1, content_len+1);
-    if (doc->content == NULL) { goto cleanup; }
-    memcpy(doc->content, content, content_len);
-    doc->content_len = content_len;
+    if (!copy_str_and_len(&doc->doc_id, &doc->doc_id_len,
+                          doc_id, doc_id_len))
+        goto cleanup;
+    if (!copy_str_and_len(&doc->doc_rev, &doc->doc_rev_len,
+                          revision, revision_len))
+        goto cleanup;
+    if (!copy_str_and_len(&doc->content, &doc->content_len,
+                          content, content_len))
+        goto cleanup;
     doc->has_conflicts = has_conflicts;
     return doc;
 cleanup:

@@ -69,9 +69,9 @@ cdef extern from "u1db/u1db.h":
     void free(void *)
     int u1db_create_doc(u1database *db, u1db_document **doc,
                         char *content, int n, char *doc_id)
-    int u1db_put_doc(u1database *db, char *doc_id, char **doc_rev,
-                     char *doc, int n)
+    int u1db_delete_doc(u1database *db, u1db_document *doc)
     int u1db_get_doc(u1database *db, u1db_document **doc, char *doc_id)
+    int u1db_put_doc(u1database *db, u1db_document *doc)
     int u1db_delete_doc(u1database *db, u1db_document *doc)
     int u1db_whats_changed(u1database *db, int *db_rev,
                            int (*cb)(void *, char *doc_id), void *context)
@@ -359,30 +359,12 @@ cdef class CDatabase(object):
         pydoc._doc = doc
         return pydoc
 
-    def put_doc(self, doc_id, doc_rev, doc):
+    def put_doc(self, CDocument doc):
         cdef int status
-        cdef char *c_doc_rev
-        cdef char *c_doc_id
 
-        if doc_rev is None:
-            c_doc_rev = NULL
-        else:
-            c_doc_rev = doc_rev
-        if doc_id is None:
-            c_doc_id = NULL
-        else:
-            c_doc_id = doc_id
-        status = u1db_put_doc(self._db, c_doc_id, &c_doc_rev, doc, len(doc))
-        if status == 0:
-            doc_rev = c_doc_rev
-            free(c_doc_rev)
-        else:
-            if status == U1DB_REVISION_CONFLICT:
-                raise errors.InvalidDocRev()
-            if status == U1DB_INVALID_DOC_ID:
-                raise errors.InvalidDocId()
-            raise RuntimeError("Failed to put_doc: %d" % (status,))
-        return doc_rev
+        handle_status(u1db_put_doc(self._db, doc._doc),
+                      "Failed to put_doc")
+        return doc.rev
 
     def get_doc(self, doc_id):
         cdef int status
