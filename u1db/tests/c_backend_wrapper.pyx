@@ -67,12 +67,11 @@ cdef extern from "u1db/u1db.h":
     void u1db__free_table(u1db_table **table)
     void *calloc(size_t, size_t)
     void free(void *)
-    int u1db_create_doc(u1database *db, char *doc, size_t n,
-                        char **doc_id, char **doc_rev)
+    u1db_document *u1db_create_doc(u1database *db, char *doc, size_t n,
+                                   char *doc_id)
     int u1db_put_doc(u1database *db, char *doc_id, char **doc_rev,
                      char *doc, int n)
-    int u1db_get_doc(u1database *db, char *doc_id, char **doc_rev,
-                     char **doc, int *n, int *has_conflicts)
+    u1db_document *u1db_get_doc(u1database *db, char *doc_id)
     int u1db_delete_doc(u1database *db, char *doc_id, char **doc_rev)
     int u1db_whats_changed(u1database *db, int *db_rev,
                            int (*cb)(void *, char *doc_id), void *context)
@@ -122,21 +121,28 @@ cdef int _append_to_list(void *context, char *doc_id):
     a_list.append(doc)
 
 
+def make_document(doc_id, rev, content, has_conflicts=False):
+    cdef u1db_document *doc
+    cdef int conflict
+
+    if has_conflicts:
+        conflict = 1
+    else:
+        conflict = 0
+    doc = u1db_make_doc(doc_id, len(doc_id), rev, len(rev),
+                        content, len(content), conflict)
+    pydoc = CDocument()
+    pydoc._doc = doc
+    return pydoc
+
+
 cdef class CDocument(object):
     """A thin wrapper around the C Document struct."""
 
     cdef u1db_document *_doc
 
-    def __init__(self, doc_id, rev, content, has_conflicts=False):
-        cdef int conflict
-
-        if has_conflicts:
-            conflict = 1
-        else:
-            conflict = 0
-        self._doc = u1db_make_doc(doc_id, len(doc_id),
-                                  rev, len(rev), content, len(content),
-                                  conflict)
+    def __init__(self):
+        self._doc = NULL
 
     def __dealloc__(self):
         u1db_free_doc(&self._doc)
@@ -215,7 +221,7 @@ cdef class CDatabase(object):
     def __dealloc__(self):
         u1db_free(&self._db)
 
-    def _close_sqlite_handle(self):
+    def close(self):
         return u1db__sql_close(self._db)
 
     def _sql_is_open(self):
@@ -291,7 +297,8 @@ cdef class CDatabase(object):
         finally:
             u1db__free_table(&tbl)
 
-    def create_doc(self, doc, doc_id=None):
+    def create_doc(self, content, doc_id=None):
+        cdef u1db_document *doc
         cdef int status
         cdef char *c_doc_id, *c_doc_rev
 
@@ -300,23 +307,12 @@ cdef class CDatabase(object):
         else:
             c_doc_id = NULL
         c_doc_rev = NULL
-        status = u1db_create_doc(self._db, doc, len(doc),
-                                 &c_doc_id, &c_doc_rev)
-        if status != 0:
-            if status == U1DB_INVALID_DOC_REV:
-                raise u1db.InvalidDocRev()
-            raise RuntimeError('Failed to create_doc: %d' % (status,))
-        # TODO: Handle the free() calls
-        if c_doc_id == NULL:
-            doc_id = None
-        elif doc_id is None:
-            doc_id = c_doc_id
-            free(c_doc_id)
-        if c_doc_rev == NULL:
-            doc_rev = None
-        else:
-            doc_rev = c_doc_rev
-        return doc_id, doc_rev
+        doc = u1db_create_doc(self._db, content, len(content), c_doc_id)
+        if doc == NULL:
+            raise RuntimeError('Failed to create_doc')
+        pydoc = CDocument()
+        pydoc._doc = doc
+        return pydoc
 
     def put_doc(self, doc_id, doc_rev, doc):
         cdef int status
@@ -344,30 +340,15 @@ cdef class CDatabase(object):
         return doc_rev
 
     def get_doc(self, doc_id):
-        cdef int status, n, c_has_conflicts
-        cdef char *c_doc_rev, *c_doc
+        cdef int n, c_has_conflicts
+        cdef u1db_document *doc
 
-        c_doc_rev = c_doc = NULL
-        c_has_conflicts = n = status = 0
-        status = u1db_get_doc(self._db, doc_id, &c_doc_rev, &c_doc, &n,
-                              &c_has_conflicts)
-        if status != 0:
-            raise RuntimeError("Failed to get_doc: %d" % (status,))
-        if c_has_conflicts:
-            has_conflicts = True
-        else:
-            has_conflicts = False
-        if c_doc == NULL:
-            doc = None
-        else:
-            doc = c_doc
-            free(c_doc)
-        if c_doc_rev == NULL:
-            doc_rev = None
-        else:
-            doc_rev = c_doc_rev
-            free(c_doc_rev)
-        return doc_rev, doc, has_conflicts
+        doc = u1db_get_doc(self._db, doc_id)
+        if doc == NULL:
+            return None
+        pydoc = CDocument()
+        pydoc._doc = doc
+        return pydoc
 
     def delete_doc(self, doc_id, doc_rev):
         cdef int status

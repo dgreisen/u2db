@@ -285,18 +285,27 @@ handle_row(sqlite3_stmt *statement, u1db_row **row)
     return SQLITE_OK;
 }
 
-int
-u1db_create_doc(u1database *db, const char *doc, int n, char **doc_id,
-                char **doc_rev)
+u1db_document *
+u1db_create_doc(u1database *db, const char *content, int n, const char *doc_id)
 {
-    if (db == NULL || doc == NULL || doc_id == NULL || doc_rev == NULL) {
+    u1db_document *doc = NULL;
+    char *doc_rev = NULL;
+    int status;
+
+    if (db == NULL || content == NULL) {
         // Bad parameter
-        return -1;
+        return NULL;
     }
-    if (*doc_id == NULL) {
-        *doc_id = u1db__allocate_doc_id(db);
+    if (doc_id == NULL) {
+        // TODO: Don't leak this doc_id
+        doc_id = u1db__allocate_doc_id(db);
     }
-    return u1db_put_doc(db, *doc_id, doc_rev, doc, n);
+    status = u1db_put_doc(db, doc_id, &doc_rev, content, n);
+    if (status == 0) {
+        doc = u1db_make_doc(doc_id, strlen(doc_id), doc_rev, strlen(doc_rev),
+                            content, n, 0);
+    }
+    return doc;
 }
 
 
@@ -488,60 +497,40 @@ finish:
     return status;
 }
 
-int
-u1db_get_doc(u1database *db, const char *doc_id, char **doc_rev,
-             char **doc, int *n, int *has_conflicts)
+u1db_document *
+u1db_get_doc(u1database *db, const char *doc_id)
 {
-    int status = 0, local_n = 0;
+    u1db_document *doc = NULL;
+    int status = 0, n = 0;
     sqlite3_stmt *statement;
-    const unsigned char *local_doc_rev, *local_doc;
-    if (db == NULL || doc_id == NULL || doc_rev == NULL || doc == NULL || n == NULL
-        || has_conflicts == NULL) {
+    const unsigned char *doc_rev, *content;
+    if (db == NULL || doc_id == NULL) {
         // Bad Parameters
         // TODO: we could handle has_conflicts == NULL meaning that the caller
         //       is ignoring conflicts, but we don't want to make it *too* easy
         //       to do so.
-        return -1;
+        // TODO: Figure out how to do return codes
+        return NULL;
     }
 
-    status = lookup_doc(db, doc_id, &local_doc_rev, &local_doc, &local_n,
+    status = lookup_doc(db, doc_id, &doc_rev, &content, &n,
                         &statement);
     if (status == SQLITE_OK) {
-        if (local_doc_rev == NULL) {
-            *doc_rev = NULL;
-            *doc = NULL;
-            *has_conflicts = 0;
+        if (doc_rev == NULL) {
+            // No such document exists
+            doc = NULL;
             goto finish;
         }
-        if (local_doc == NULL) {
-            *doc = NULL;
-            *n = 0;
-        } else {
-            *doc = (char *)calloc(1, local_n + 1);
-            if (*doc == NULL) {
-                status = SQLITE_NOMEM;
-                goto finish;
-            }
-            memcpy(*doc, local_doc, local_n);
-            *n = local_n;
-        }
-        local_n = strlen((const char*)local_doc_rev);
-        *doc_rev = (char *)calloc(1, local_n+1);
-        if (*doc_rev == NULL) {
-            status = SQLITE_NOMEM;
-            goto finish;
-        }
-        memcpy(*doc_rev, local_doc_rev, local_n);
-        *has_conflicts = 0;
+        doc = u1db_make_doc(doc_id, strlen(doc_id), doc_rev, strlen(doc_rev), 
+                            content, n, 0);
+
     } else {
-        *doc_rev = NULL;
-        *doc = NULL;
-        *n = 0;
-        *has_conflicts = 0;
+        // TODO: Figure out how to return the SQL error code
+        doc = NULL;
     }
 finish:
     sqlite3_finalize(statement);
-    return status;
+    return doc;
 }
 
 int
@@ -1244,13 +1233,13 @@ u1db_make_doc(const char *doc_id, int doc_id_len,
               const char *content, int content_len, int has_conflicts)
 {
     u1db_document *doc = (u1db_document *)(calloc(1, sizeof(u1db_document)));
-    doc->doc_id = (char *)malloc(doc_id_len);
+    doc->doc_id = (char *)calloc(1, doc_id_len+1);
     memcpy(doc->doc_id, doc_id, doc_id_len);
     doc->doc_id_len = doc_id_len;
-    doc->doc_rev = (char *)malloc(revision_len);
+    doc->doc_rev = (char *)calloc(1, revision_len+1);
     memcpy(doc->doc_rev, revision, revision_len);
     doc->doc_rev_len = revision_len;
-    doc->content = (char *)malloc(content_len);
+    doc->content = (char *)calloc(1, content_len+1);
     memcpy(doc->content, content, content_len);
     doc->content_len = content_len;
     doc->has_conflicts = has_conflicts;
@@ -1286,7 +1275,7 @@ u1db_doc_set_content(u1db_document *doc, const char *content, int content_len)
         // TODO: return ENOMEM
         return 0;
     }
-    memcpy(content, tmp, content_len);
+    memcpy(tmp, content, content_len);
     free(doc->content);
     doc->content = tmp;
     doc->content_len = content_len;

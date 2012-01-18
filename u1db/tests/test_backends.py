@@ -53,7 +53,7 @@ class AllDatabaseTests(tests.DatabaseBaseTests, tests.TestCaseWithServer):
         ('http', {'do_create_database': http_create_database,
                   'make_document': tests.create_doc,
                   'server_def': http_server_def})
-        ] # + tests.C_DATABASE_SCENARIOS
+        ] + tests.C_DATABASE_SCENARIOS
 
     def test_close(self):
         self.db.close()

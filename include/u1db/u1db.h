@@ -67,16 +67,16 @@ int u1db_get_machine_id(u1database *db, char **machine_id);
 /**
  * Create a new document.
  *
- * @param doc: The JSON string representing the document.
- * @param n: The number of bytes in doc
+ * @param content: The JSON string representing the document.
+ * @param n: The number of bytes in content
  * @param doc_id: A string identifying the document. If the value supplied is
- *      NULL, then a new doc_id will be generated. Callers are responsible for
- *      then freeing the returned string.
+ *      NULL, then a new doc_id will be generated.
  * @param doc_rev: The document revision. Callers are responsible for freeing
  *      the information.
+ * @return: a u1db_document that needs to be freed with u1db_free_doc
  */
-int u1db_create_doc(u1database *db, const char *doc, int n, char **doc_id,
-                    char **doc_rev);
+u1db_document *u1db_create_doc(u1database *db, const char *content, int n,
+                               const char *doc_id);
 
 /**
  * Put new document content for the given document identifier.
@@ -97,14 +97,10 @@ int u1db_put_doc(u1database *db, const char *doc_id, char **doc_rev,
 /**
  * Get the document defined by the given document id.
  *
- * @param doc_id (IN) The document we are looking for
- * @param doc_rev (OUT) The final document revision. Callers must free the memory
- * @param doc     (OUT) Callers are responsible for freeing the memory
- * @param n       (OUT) Number of bytes for doc
- * @param has_conflicts (OUT) Are there conflicts present for this document?
+ * @param doc_id The document we are looking for
+ * @return a document (or NULL) matching the request
  */
-int u1db_get_doc(u1database *db, const char *doc_id, char **doc_rev,
-                 char **doc, int *n, int *has_conflicts);
+u1db_document *u1db_get_doc(u1database *db, const char *doc_id);
 
 /**
  * Mark a document as deleted.
