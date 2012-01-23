@@ -23,6 +23,8 @@
 #include <stdlib.h>
 #include <sqlite3.h>
 #include "u1db/u1db.h"
+#include "u1db/u1db_internal.h"
+#include "u1db/u1db_vectorclock.h"
 
 struct _u1database
 {

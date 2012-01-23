@@ -18,6 +18,7 @@ cdef extern from "Python.h":
     object PyString_FromStringAndSize(char *s, Py_ssize_t n)
     int PyString_AsStringAndSize(object o, char **buf, Py_ssize_t *length
                                  ) except -1
+    void free(void *)
 
 cdef extern from "u1db/u1db.h":
     ctypedef struct u1database:
@@ -31,6 +32,33 @@ cdef extern from "u1db/u1db.h":
         size_t content_len
         int has_conflicts
 
+    u1database * u1db_open(char *fname)
+    void u1db_free(u1database **)
+    int u1db_set_machine_id(u1database *, char *machine_id)
+    int u1db_get_machine_id(u1database *, char **machine_id)
+    int u1db_create_doc(u1database *db, char *content, char *doc_id,
+                        u1db_document **doc)
+    int u1db_delete_doc(u1database *db, u1db_document *doc)
+    int u1db_get_doc(u1database *db, char *doc_id, u1db_document **doc)
+    int u1db_put_doc(u1database *db, u1db_document *doc)
+    int u1db_delete_doc(u1database *db, u1db_document *doc)
+    int u1db_whats_changed(u1database *db, int *db_rev,
+                           int (*cb)(void *, char *doc_id), void *context)
+
+    int U1DB_OK
+    int U1DB_INVALID_PARAMETER
+    int U1DB_REVISION_CONFLICT
+    int U1DB_INVALID_DOC_ID
+    int U1DB_DOCUMENT_ALREADY_DELETED
+    int U1DB_DOCUMENT_DOES_NOT_EXIST
+
+    u1db_document *u1db_make_doc(char *doc_id, char *revision, char *content,
+                                 int has_conflicts)
+    void u1db_free_doc(u1db_document **doc)
+    int u1db_doc_set_content(u1db_document *doc, char *content)
+
+
+cdef extern from "u1db/u1db_internal.h":
     ctypedef struct u1db_row:
         u1db_row *next
         int num_columns
@@ -47,43 +75,12 @@ cdef extern from "u1db/u1db.h":
         char *doc_rev
         char *doc
 
-    ctypedef struct u1db_vectorclock_item:
-        char *machine_id
-        int db_rev
-
-    ctypedef struct u1db_vectorclock:
-        int num_items
-        u1db_vectorclock_item *items
-
-    u1database * u1db_open(char *fname)
-    void u1db_free(u1database **)
-    int u1db_set_machine_id(u1database *, char *machine_id)
-    int u1db_get_machine_id(u1database *, char **machine_id)
     int u1db__get_db_rev(u1database *, int *db_rev)
     char *u1db__allocate_doc_id(u1database *)
     int u1db__sql_close(u1database *)
     int u1db__sql_is_open(u1database *)
     u1db_table *u1db__sql_run(u1database *, char *sql, size_t n)
     void u1db__free_table(u1db_table **table)
-    void *calloc(size_t, size_t)
-    void free(void *)
-    int u1db_create_doc(u1database *db, char *content, char *doc_id,
-                        u1db_document **doc)
-    int u1db_delete_doc(u1database *db, u1db_document *doc)
-    int u1db_get_doc(u1database *db, char *doc_id, u1db_document **doc)
-    int u1db_put_doc(u1database *db, u1db_document *doc)
-    int u1db_delete_doc(u1database *db, u1db_document *doc)
-    int u1db_whats_changed(u1database *db, int *db_rev,
-                           int (*cb)(void *, char *doc_id), void *context)
-    int u1db__sync_get_machine_info(u1database *db, char *other_machine_id,
-                                    int *other_db_rev, char **my_machine_id,
-                                    int *my_db_rev)
-    int u1db__sync_record_machine_info(u1database *db, char *machine_id,
-                                       int db_rev)
-    int u1db__sync_exchange(u1database *db, char *from_machine_id,
-                            int from_db_rev, int last_known_rev,
-                            u1db_record *from_records, u1db_record **new_records,
-                            u1db_record **conflict_records)
     u1db_record *u1db__create_record(char *doc_id, char *doc_rev, char *doc)
     void u1db__free_records(u1db_record **)
 
@@ -96,17 +93,25 @@ cdef extern from "u1db/u1db.h":
     int u1db__vectorclock_is_newer(u1db_vectorclock *maybe_newer,
                                    u1db_vectorclock *older)
 
-    int U1DB_OK
-    int U1DB_INVALID_PARAMETER
-    int U1DB_REVISION_CONFLICT
-    int U1DB_INVALID_DOC_ID
-    int U1DB_DOCUMENT_ALREADY_DELETED
-    int U1DB_DOCUMENT_DOES_NOT_EXIST
 
-    u1db_document *u1db_make_doc(char *doc_id, char *revision, char *content,
-                                 int has_conflicts)
-    void u1db_free_doc(u1db_document **doc)
-    int u1db_doc_set_content(u1db_document *doc, char *content)
+cdef extern from "u1db/u1db_vectorclock.h":
+    ctypedef struct u1db_vectorclock_item:
+        char *machine_id
+        int db_rev
+
+    ctypedef struct u1db_vectorclock:
+        int num_items
+        u1db_vectorclock_item *items
+
+    int u1db__sync_get_machine_info(u1database *db, char *other_machine_id,
+                                    int *other_db_rev, char **my_machine_id,
+                                    int *my_db_rev)
+    int u1db__sync_record_machine_info(u1database *db, char *machine_id,
+                                       int db_rev)
+    int u1db__sync_exchange(u1database *db, char *from_machine_id,
+                            int from_db_rev, int last_known_rev,
+                            u1db_record *from_records, u1db_record **new_records,
+                            u1db_record **conflict_records)
 
 from u1db import errors
 

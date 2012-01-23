@@ -73,11 +73,9 @@ int u1db_get_machine_id(u1database *db, char **machine_id);
  * @param content: The JSON string representing the document. The content will
  *                 be copied and managed by the 'doc' parameter.
  * @param doc_id: A string identifying the document. If the value supplied is
- *      NULL, then a new doc_id will be generated.
- * @param doc_rev: The document revision. Callers are responsible for freeing
- *      the information.
- * @param doc: a u1db_document that will be allocated and needs to be freed
- *      with u1db_free_doc
+ *                NULL, then a new doc_id will be generated.
+ * @param doc: (OUT) a u1db_document that will be allocated and needs to be
+ *             freed with u1db_free_doc
  * @return a status code indicating success or failure.
  */
 int u1db_create_doc(u1database *db, const char *content, const char *doc_id,
@@ -86,10 +84,11 @@ int u1db_create_doc(u1database *db, const char *content, const char *doc_id,
 /**
  * Put new document content for the given document identifier.
  *
- * @param doc: A document that we want to update. The new content should have
- *             been set with u1db_doc_set_content. The document's revision
- *             should match what is currently in the database, and will be
- *             updated to point at the new revision.
+ * @param doc: (IN/OUT) A document whose content we want to update in the
+ *             database. The new content should have been set with
+ *             u1db_doc_set_content. The document's revision should match what
+ *             is currently in the database, and will be updated to point at
+ *             the new revision.
  */
 int u1db_put_doc(u1database *db, u1db_document *doc);
 
@@ -130,122 +129,6 @@ int u1db_delete_doc(u1database *db, u1db_document *doc);
  */
 int u1db_whats_changed(u1database *db, int *db_rev,
                        int (*cb)(void *, char *doc_id), void *context);
-
-
-/**
- * Internal API, Get the global database rev.
- */
-int u1db__get_db_rev(u1database *db, int *db_rev);
-
-/**
- * Internal API, Allocate a new document id, for cases when callers do not
- * supply their own. Callers of this API are expected to free the result.
- */
-char *u1db__allocate_doc_id(u1database *db);
-
-/**
- * Internal api, close the underlying sql instance.
- */
-int u1db__sql_close(u1database *db);
-
-/**
- * Internal api, check to see if the underlying SQLite handle has been closed.
- */
-int u1db__sql_is_open(u1database *db);
-
-/**
- * Check if a doc_id is valid.
- *
- * Returns U1DB_OK if everything is ok, otherwise U1DB_INVALID_DOC_ID.
- */
-int u1db__is_doc_id_valid(const char *doc_id);
-
-/**
- * Internal api, run an SQL query directly.
- */
-typedef struct _u1db_row {
-    struct _u1db_row *next;
-    int num_columns; 
-    int *column_sizes;
-    unsigned char **columns;
-} u1db_row;
-
-typedef struct _u1db_table {
-    int status;
-    u1db_row *first_row;
-} u1db_table;
-
-u1db_table *u1db__sql_run(u1database *db, const char *sql, size_t n);
-void u1db__free_table(u1db_table **table);
-
-
-/**
- * Internal sync api, get the stored information about another machine.
- */
-int u1db__sync_get_machine_info(u1database *db, const char *other_machine_id,
-                            int *other_db_rev, char **my_machine_id,
-                            int *my_db_rev);
-
-/**
- * Internal sync api, store information about another machine.
- */
-int u1db__sync_record_machine_info(u1database *db, const char *machine_id,
-                                   int db_rev);
-
-typedef struct _u1db_record {
-    struct _u1db_record *next;
-    char *doc_id;
-    char *doc_rev;
-    char *doc;
-} u1db_record;
-
-/**
- * Internal sync api, exchange sync records.
- */
-int u1db__sync_exchange(u1database *db, const char *from_machine_id,
-                        int from_db_rev, int last_known_rev,
-                        u1db_record *from_records, u1db_record **new_records,
-                        u1db_record **conflict_records);
-
-/**
- * Allocate a new u1db_record, and copy all records over.
- */
-u1db_record *u1db__create_record(const char *doc_id, const char *doc_rev,
-                                 const char *doc);
-
-u1db_record *u1db__copy_record(u1db_record *src);
-
-/**
- * Free a linked list of records. All linked records will be freed, including
- * all memory referenced from them.
- */
-void u1db__free_records(u1db_record **record);
-
-typedef struct _u1db_vectorclock_item {
-    char *machine_id;
-    int db_rev;
-} u1db_vectorclock_item;
-
-typedef struct _u1db_vectorclock {
-    int num_items;
-    u1db_vectorclock_item *items;
-} u1db_vectorclock;
-
-u1db_vectorclock *u1db__vectorclock_from_str(const char *s);
-
-void u1db__free_vectorclock(u1db_vectorclock **clock);
-int u1db__vectorclock_increment(u1db_vectorclock *clock,
-                                const char *machine_id);
-
-int u1db__vectorclock_maximize(u1db_vectorclock *clock,
-                               u1db_vectorclock *other);
-/**
- * Return a null-terminated string representation for this vector clock.
- * Callers must take care to free() the result.
- */
-int u1db__vectorclock_as_str(u1db_vectorclock *clock, char **result);
-int u1db__vectorclock_is_newer(u1db_vectorclock *maybe_newer,
-                               u1db_vectorclock *older);
 
 
 /**
