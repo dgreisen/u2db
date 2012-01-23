@@ -168,7 +168,7 @@ url_to_resource = URLToResource()
 
 
 @url_to_resource.register
-class GlobalResourse(object):
+class GlobalResource(object):
     """Global (root) resource."""
 
     url_pattern = "/"
