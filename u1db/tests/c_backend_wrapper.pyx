@@ -52,8 +52,6 @@ cdef extern from "u1db/u1db.h":
     int U1DB_DOCUMENT_ALREADY_DELETED
     int U1DB_DOCUMENT_DOES_NOT_EXIST
 
-    u1db_document *u1db_make_doc(char *doc_id, char *revision, char *content,
-                                 int has_conflicts)
     void u1db_free_doc(u1db_document **doc)
     int u1db_doc_set_content(u1db_document *doc, char *content)
 
@@ -92,6 +90,8 @@ cdef extern from "u1db/u1db_internal.h":
     int u1db__vectorclock_as_str(u1db_vectorclock *clock, char **result)
     int u1db__vectorclock_is_newer(u1db_vectorclock *maybe_newer,
                                    u1db_vectorclock *older)
+    u1db_document *u1db__allocate_document(char *doc_id, char *revision,
+                                           char *content, int has_conflicts)
 
 
 cdef extern from "u1db/u1db_vectorclock.h":
@@ -148,7 +148,7 @@ def make_document(doc_id, rev, content, has_conflicts=False):
         c_rev = NULL
     else:
         c_rev = rev
-    doc = u1db_make_doc(c_doc_id, c_rev, c_content, conflict)
+    doc = u1db__allocate_document(c_doc_id, c_rev, c_content, conflict)
     pydoc = CDocument()
     pydoc._doc = doc
     return pydoc

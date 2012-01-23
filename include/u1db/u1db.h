@@ -132,12 +132,6 @@ int u1db_whats_changed(u1database *db, int *db_rev,
 
 
 /**
- * Create a new u1db_document object. This should be freed 
- */
-u1db_document *u1db_make_doc(const char *doc_id, const char *revision,
-                             const char *content, int has_conflicts);
-
-/**
  * Free a u1db_document.
  *
  * @param doc: A reference to the doc pointer to be freed. Generally used as:

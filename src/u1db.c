@@ -286,11 +286,10 @@ u1db_create_doc(u1database *db, const char *content, const char *doc_id,
         return U1DB_INVALID_PARAMETER;
     }
     if (doc_id == NULL) {
-        // TODO: Don't leak this doc_id
         local_doc_id = u1db__allocate_doc_id(db);
         doc_id = local_doc_id;
     }
-    *doc = u1db_make_doc(doc_id, NULL, content, 0);
+    *doc = u1db__allocate_document(doc_id, NULL, content, 0);
     if (*doc == NULL) {
         status = U1DB_NOMEM;
         goto finish;
@@ -298,19 +297,24 @@ u1db_create_doc(u1database *db, const char *content, const char *doc_id,
     status = u1db_put_doc(db, *doc);
 finish:
     if (local_doc_id != NULL) {
-        // u1db_make_doc will copy the string anyway, so just free it here.
+        // u1db__allocate_document will copy the doc_id string, so we still
+        // have to free our local content.
         free(local_doc_id);
     }
     return status;
 }
 
 
-// Lookup the contents for doc_id. We return the statement object, since it
-// defines the lifetimes of doc and doc_rev. Callers should then finalize
-// statement when they are done with them. 
+/**
+ * Lookup the contents for doc_id.
+ *
+ * The returned strings (doc_rev and content) have their memory managed by the
+ * statement object. So only finalize the statement after you have finished
+ * accessing them.
+ */
 static int
-lookup_doc(u1database *db, const char *doc_id,
-           const unsigned char **doc_rev, const unsigned char **doc, int *n,
+lookup_doc(u1database *db, const char *doc_id, const unsigned char **doc_rev,
+           const unsigned char **content, int *content_len,
            sqlite3_stmt **statement)
 {
     int status;
@@ -328,19 +332,19 @@ lookup_doc(u1database *db, const char *doc_id,
     status = sqlite3_step(*statement);
     if (status == SQLITE_DONE) {
         *doc_rev = NULL;
-        *doc = NULL;
-        *n = 0;
+        *content = NULL;
+        *content_len = 0;
         status = SQLITE_OK;
     } else if (status == SQLITE_ROW) {
         *doc_rev = sqlite3_column_text(*statement, 0);
         // fprintf(stderr, "column_type: %d\n", sqlite3_column_type(*statement, 1));
         if (sqlite3_column_type(*statement, 1) == SQLITE_NULL) {
             // fprintf(stderr, "column_type: NULL\n");
-            *doc = NULL;
-            *n = 0;
+            *content = NULL;
+            *content_len = 0;
         } else {
-            *doc = sqlite3_column_text(*statement, 1);
-            *n = sqlite3_column_bytes(*statement, 1);
+            *content = sqlite3_column_text(*statement, 1);
+            *content_len = sqlite3_column_bytes(*statement, 1);
         }
         status = SQLITE_OK;
     } else { // Error
@@ -351,7 +355,7 @@ lookup_doc(u1database *db, const char *doc_id,
 // Insert the document into the table, we've already done the safety checks
 static int
 write_doc(u1database *db, const char *doc_id, const char *doc_rev,
-          const char *doc, int n, int is_update)
+          const char *content, int content_len, int is_update)
 {
     sqlite3_stmt *statement;
     int status;
@@ -373,10 +377,11 @@ write_doc(u1database *db, const char *doc_id, const char *doc_rev,
         sqlite3_finalize(statement);
         return status;
     }
-    if (doc == NULL) {
+    if (content == NULL) {
         status = sqlite3_bind_null(statement, 2);
     } else {
-        status = sqlite3_bind_text(statement, 2, doc, n, SQLITE_TRANSIENT);
+        status = sqlite3_bind_text(statement, 2, content, content_len,
+                                   SQLITE_TRANSIENT);
     }
     if (status != SQLITE_OK) {
         sqlite3_finalize(statement);
@@ -438,8 +443,8 @@ u1db_put_doc(u1database *db, u1db_document *doc)
     status = lookup_doc(db, doc->doc_id, &old_doc_rev, &old_content,
                         &old_content_len, &statement);
     if (status != SQLITE_OK) {
-        sqlite3_finalize(statement);
         sqlite3_exec(db->sql_handle, "ROLLBACK", NULL, NULL, NULL);
+        sqlite3_finalize(statement);
         return status;
     }
     if (doc->doc_rev == NULL) {
@@ -502,7 +507,7 @@ finish:
 int
 u1db_get_doc(u1database *db, const char *doc_id, u1db_document **doc)
 {
-    int status = 0, n = 0;
+    int status = 0, content_len = 0;
     sqlite3_stmt *statement;
     const unsigned char *doc_rev, *content;
     if (db == NULL || doc_id == NULL || doc == NULL) {
@@ -514,7 +519,7 @@ u1db_get_doc(u1database *db, const char *doc_id, u1db_document **doc)
         return U1DB_INVALID_PARAMETER;
     }
 
-    status = lookup_doc(db, doc_id, &doc_rev, &content, &n,
+    status = lookup_doc(db, doc_id, &doc_rev, &content, &content_len,
                         &statement);
     if (status == SQLITE_OK) {
         if (doc_rev == NULL) {
@@ -522,7 +527,7 @@ u1db_get_doc(u1database *db, const char *doc_id, u1db_document **doc)
             *doc = NULL;
             goto finish;
         }
-        *doc = u1db_make_doc(doc_id, doc_rev, content, 0);
+        *doc = u1db__allocate_document(doc_id, doc_rev, content, 0);
 
     } else {
         // TODO: Figure out how to return the SQL error code
@@ -536,7 +541,7 @@ finish:
 int
 u1db_delete_doc(u1database *db, u1db_document *doc)
 {
-    int status, n;
+    int status, content_len;
     sqlite3_stmt *statement;
     const unsigned char *cur_doc_rev, *content;
     char *doc_rev;
@@ -548,7 +553,7 @@ u1db_delete_doc(u1database *db, u1db_document *doc)
     if (status != SQLITE_OK) {
         return status;
     }
-    status = lookup_doc(db, doc->doc_id, &cur_doc_rev, &content, &n,
+    status = lookup_doc(db, doc->doc_id, &cur_doc_rev, &content, &content_len,
                         &statement);
     if (status != SQLITE_OK) {
         sqlite3_finalize(statement);
@@ -927,8 +932,8 @@ copy_str_and_len(char **dest, int *dest_len, const char *source)
 }
 
 u1db_document *
-u1db_make_doc(const char *doc_id, const char *revision,
-              const char *content, int has_conflicts)
+u1db__allocate_document(const char *doc_id, const char *revision,
+                        const char *content, int has_conflicts)
 {
     u1db_document *doc = (u1db_document *)(calloc(1, sizeof(u1db_document)));
     if (doc == NULL) { goto cleanup; }
