@@ -136,6 +136,15 @@ int u1db_whats_changed(u1database *db, int *db_rev,
  */
 u1db_document *u1db_make_doc(const char *doc_id, const char *revision,
                              const char *content, int has_conflicts);
+
+/**
+ * Free a u1db_document.
+ *
+ * @param doc: A reference to the doc pointer to be freed. Generally used as:
+ *             u1db_free_doc(&doc). If the pointer or its referenced value is
+ *             NULL, this is a no-op. We will set the reference to NULL after
+ *             freeing the memory.
+ */
 void u1db_free_doc(u1db_document **doc);
 
 /**

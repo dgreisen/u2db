@@ -35,6 +35,12 @@ void u1db__free_vectorclock(u1db_vectorclock **clock);
 int u1db__vectorclock_increment(u1db_vectorclock *clock,
                                 const char *machine_id);
 
+/**
+ * Ensure that 'clock' has the maximum rev for every section.
+ *
+ * @param clock: (IN/OUT) A vectorclock we want to make sure has maximal value.
+ * @param other: Another vectorclock we are comparing with.
+ */
 int u1db__vectorclock_maximize(u1db_vectorclock *clock,
                                u1db_vectorclock *other);
 /**
@@ -42,8 +48,15 @@ int u1db__vectorclock_maximize(u1db_vectorclock *clock,
  * Callers must take care to free() the result.
  */
 int u1db__vectorclock_as_str(u1db_vectorclock *clock, char **result);
+
+/**
+ * Is maybe_newer strictly newer than other.
+ *
+ * Strictly newer is defined as being equal to or greater than for every
+ * section, and at least one section is newer.
+ */
 int u1db__vectorclock_is_newer(u1db_vectorclock *maybe_newer,
-                               u1db_vectorclock *older);
+                               u1db_vectorclock *other);
 
 
 #endif // U1DB_VECTORCLOCK_H

@@ -107,5 +107,5 @@ u1db_record *u1db__copy_record(u1db_record *src);
  * all memory referenced from them.
  */
 void u1db__free_records(u1db_record **record);
-
+  
 #endif // U1DB_INTERNAL_H

@@ -69,7 +69,8 @@ synchronize them with other stores.
         kwargs["cmdclass"] = {"build_ext": build_ext}
         ext.append(Extension(
             "u1db.tests.c_backend_wrapper",
-            ["u1db/tests/c_backend_wrapper.pyx", "src/u1db.c"],
+            ["u1db/tests/c_backend_wrapper.pyx",
+             "src/u1db.c", "src/u1db_vectorclock.c"],
             include_dirs=["include"],
             libraries=['sqlite3'],
             ))
