@@ -20,7 +20,7 @@
 #define U1DB_VECTORCLOCK_H
 
 typedef struct _u1db_vectorclock_item {
-    char *machine_id;
+    char *replica_uid;
     int db_rev;
 } u1db_vectorclock_item;
 
@@ -33,7 +33,7 @@ u1db_vectorclock *u1db__vectorclock_from_str(const char *s);
 
 void u1db__free_vectorclock(u1db_vectorclock **clock);
 int u1db__vectorclock_increment(u1db_vectorclock *clock,
-                                const char *machine_id);
+                                const char *replica_uid);
 
 /**
  * Ensure that 'clock' has the maximum rev for every section.

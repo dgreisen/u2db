@@ -63,15 +63,15 @@ void
 u1db__free_vectorclock(u1db_vectorclock **clock)
 {
     int i;
-    char *machine_id;
+    char *replica_uid;
     if (clock == NULL || *clock == NULL) {
         return;
     }
     if ((*clock)->items != NULL) {
         for (i = 0; i < (*clock)->num_items; i++) {
-            machine_id = (*clock)->items[i].machine_id;
-            if (machine_id != NULL) {
-                free(machine_id);
+            replica_uid = (*clock)->items[i].replica_uid;
+            if (replica_uid != NULL) {
+                free(replica_uid);
             }
         }
     }
@@ -126,11 +126,11 @@ u1db__vectorclock_from_str(const char *s)
         }
         colon = memchr(cur, ':', pipe-cur);
         if (colon == NULL || (colon - cur) == 0 || (pipe - colon) == 1) {
-            // Either, no colon, no machine_id, or no digits
+            // Either, no colon, no replica_uid, or no digits
             u1db__free_vectorclock(&res);
             return NULL;
         }
-        res->items[i].machine_id = strndup(cur, colon-cur);
+        res->items[i].replica_uid = strndup(cur, colon-cur);
         res->items[i].db_rev = strtol(colon+1, &last_digit, 10);
         if (last_digit != pipe) {
             u1db__free_vectorclock(&res);
@@ -142,21 +142,21 @@ u1db__vectorclock_from_str(const char *s)
 }
 
 int
-u1db__vectorclock_increment(u1db_vectorclock *clock, const char *machine_id)
+u1db__vectorclock_increment(u1db_vectorclock *clock, const char *replica_uid)
 {
     int i, cmp;
     u1db_vectorclock_item *new_buf;
-    if (clock == NULL || machine_id == NULL) {
+    if (clock == NULL || replica_uid == NULL) {
         return U1DB_INVALID_PARAMETER;
     }
     for (i = 0; i < clock->num_items; ++i) {
-        cmp = strcmp(machine_id, clock->items[i].machine_id);
+        cmp = strcmp(replica_uid, clock->items[i].replica_uid);
         if (cmp == 0) {
             // We found the entry
             clock->items[i].db_rev++;
             return U1DB_OK;
         } else if (cmp < 0) {
-            // machine_id would come right before items[i] if it was present.
+            // replica_uid would come right before items[i] if it was present.
             // So we break, and insert it here
             break;
         }
@@ -172,7 +172,7 @@ u1db__vectorclock_increment(u1db_vectorclock *clock, const char *machine_id)
     clock->num_items++;
     memmove(&clock->items[i + 1], &clock->items[i],
             sizeof(u1db_vectorclock_item) * (clock->num_items - i - 1));
-    clock->items[i].machine_id = strdup(machine_id);
+    clock->items[i].replica_uid = strdup(replica_uid);
     clock->items[i].db_rev = 1;
     return U1DB_OK;
 }
@@ -204,7 +204,8 @@ u1db__vectorclock_maximize(u1db_vectorclock *clock, u1db_vectorclock *other)
             oi++;
             continue;
         }
-        cmp = strcmp(clock->items[ci].machine_id, other->items[oi].machine_id);
+        cmp = strcmp(clock->items[ci].replica_uid,
+                     other->items[oi].replica_uid);
         if (cmp == 0) {
             // These machines are the same, take the 'max' value:
             if (clock->items[ci].db_rev < other->items[oi].db_rev) {
@@ -261,8 +262,8 @@ u1db__vectorclock_maximize(u1db_vectorclock *clock, u1db_vectorclock *other)
                     &clock->items[next->clock_offset - num_inserts + 1],
                     item_size * num_to_move);
         }
-        clock->items[next->clock_offset].machine_id = strdup(
-            other->items[next->other_offset].machine_id);
+        clock->items[next->clock_offset].replica_uid = strdup(
+            other->items[next->other_offset].replica_uid);
         clock->items[next->clock_offset].db_rev =
             other->items[next->other_offset].db_rev;
         num_inserts--;
@@ -290,7 +291,7 @@ u1db__vectorclock_as_str(u1db_vectorclock *clock, char **result)
         return U1DB_OK;
     }
     for (i = 0; i < clock->num_items; i++) {
-        buf_size += strlen(clock->items[i].machine_id);
+        buf_size += strlen(clock->items[i].replica_uid);
         buf_size += 2; // ':' and possible '|'
         val = clock->items[i].db_rev;
         do {
@@ -308,7 +309,7 @@ u1db__vectorclock_as_str(u1db_vectorclock *clock, char **result)
         } else {
             fmt = "|%s:%d";
         }
-        count = snprintf(cur, buf_size, fmt, clock->items[i].machine_id,
+        count = snprintf(cur, buf_size, fmt, clock->items[i].replica_uid,
                          clock->items[i].db_rev);
         cur += count;
         buf_size -= count;
@@ -334,8 +335,8 @@ u1db__vectorclock_is_newer(u1db_vectorclock *maybe_newer,
     is_newer = 0;
     // First pass, walk both lists, determining what items need to be inserted
     while (oi < other->num_items && ci < maybe_newer->num_items) {
-        cmp = strcmp(maybe_newer->items[ci].machine_id,
-                     other->items[oi].machine_id);
+        cmp = strcmp(maybe_newer->items[ci].replica_uid,
+                     other->items[oi].replica_uid);
         if (cmp == 0) {
             // Both clocks have the same machine, see if one is newer
             n_db_rev = maybe_newer->items[ci].db_rev;

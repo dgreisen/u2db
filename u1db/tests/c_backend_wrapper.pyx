@@ -34,8 +34,8 @@ cdef extern from "u1db/u1db.h":
 
     u1database * u1db_open(char *fname)
     void u1db_free(u1database **)
-    int u1db_set_machine_id(u1database *, char *machine_id)
-    int u1db_get_machine_id(u1database *, char **machine_id)
+    int u1db_set_replica_uid(u1database *, char *replica_uid)
+    int u1db_get_replica_uid(u1database *, char **replica_uid)
     int u1db_create_doc(u1database *db, char *content, char *doc_id,
                         u1db_document **doc)
     int u1db_delete_doc(u1database *db, u1db_document *doc)
@@ -84,7 +84,7 @@ cdef extern from "u1db/u1db_internal.h":
 
     u1db_vectorclock *u1db__vectorclock_from_str(char *s)
     void u1db__free_vectorclock(u1db_vectorclock **clock)
-    int u1db__vectorclock_increment(u1db_vectorclock *clock, char *machine_id)
+    int u1db__vectorclock_increment(u1db_vectorclock *clock, char *replica_uid)
     int u1db__vectorclock_maximize(u1db_vectorclock *clock,
                                    u1db_vectorclock *other)
     int u1db__vectorclock_as_str(u1db_vectorclock *clock, char **result)
@@ -96,19 +96,19 @@ cdef extern from "u1db/u1db_internal.h":
 
 cdef extern from "u1db/u1db_vectorclock.h":
     ctypedef struct u1db_vectorclock_item:
-        char *machine_id
+        char *replica_uid
         int db_rev
 
     ctypedef struct u1db_vectorclock:
         int num_items
         u1db_vectorclock_item *items
 
-    int u1db__sync_get_machine_info(u1database *db, char *other_machine_id,
-                                    int *other_db_rev, char **my_machine_id,
+    int u1db__sync_get_machine_info(u1database *db, char *other_replica_uid,
+                                    int *other_db_rev, char **my_replica_uid,
                                     int *my_db_rev)
-    int u1db__sync_record_machine_info(u1database *db, char *machine_id,
+    int u1db__sync_record_machine_info(u1database *db, char *replica_uid,
                                        int db_rev)
-    int u1db__sync_exchange(u1database *db, char *from_machine_id,
+    int u1db__sync_exchange(u1database *db, char *from_replica_uid,
                             int from_db_rev, int last_known_rev,
                             u1db_record *from_records, u1db_record **new_records,
                             u1db_record **conflict_records)
@@ -264,28 +264,28 @@ cdef class CDatabase(object):
             return True
         return u1db__sql_is_open(self._db)
 
-    property _machine_id:
+    property _replica_uid:
         def __get__(self):
             cdef char * val
             cdef int status
-            status = u1db_get_machine_id(self._db, &val)
+            status = u1db_get_replica_uid(self._db, &val)
             if status != 0:
                 if val != NULL:
                     err = str(val)
                 else:
                     err = "<unknown>"
-                raise RuntimeError("Failed to get_machine_id: %d %s"
+                raise RuntimeError("Failed to get_replica_uid: %d %s"
                                    % (status, err))
             if val == NULL:
                 return None
             return str(val)
 
-    def _set_machine_id(self, machine_id):
+    def _set_replica_uid(self, replica_uid):
         cdef int status
-        status = u1db_set_machine_id(self._db, machine_id)
+        status = u1db_set_replica_uid(self._db, replica_uid)
         if status != 0:
             raise RuntimeError('Machine_id could not be set to %s, error: %d'
-                               % (machine_id, status))
+                               % (replica_uid, status))
 
     def _allocate_doc_id(self):
         cdef char *val
@@ -396,25 +396,25 @@ cdef class CDatabase(object):
             raise RuntimeError("Failed to call whats_changed: %d" % (status,))
         return a_list
 
-    def _get_sync_info(self, other_machine_id):
+    def _get_sync_info(self, other_replica_uid):
         cdef int status, my_db_rev, other_db_rev
-        cdef char *my_machine_id
+        cdef char *my_replica_uid
 
-        status = u1db__sync_get_machine_info(self._db, other_machine_id,
-                                             &other_db_rev, &my_machine_id,
+        status = u1db__sync_get_machine_info(self._db, other_replica_uid,
+                                             &other_db_rev, &my_replica_uid,
                                              &my_db_rev)
         if status != U1DB_OK:
             raise RuntimeError("Failed to _get_sync_info: %d" % (status,))
-        return (my_machine_id, my_db_rev, other_db_rev)
+        return (my_replica_uid, my_db_rev, other_db_rev)
 
-    def _record_sync_info(self, machine_id, db_rev):
+    def _record_sync_info(self, replica_uid, db_rev):
         cdef int status
 
-        status = u1db__sync_record_machine_info(self._db, machine_id, db_rev)
+        status = u1db__sync_record_machine_info(self._db, replica_uid, db_rev)
         if status != U1DB_OK:
             raise RuntimeError("Failed to _record_sync_info: %d" % (status,))
 
-    def _sync_exchange(self, docs_info, from_machine_id, from_machine_rev,
+    def _sync_exchange(self, docs_info, from_replica_uid, from_machine_rev,
                        last_known_rev):
         cdef int status
         cdef u1db_record *from_records, *next_record
@@ -426,7 +426,7 @@ cdef class CDatabase(object):
             next_record.next = from_records
             from_records = next_record
         new_records = conflict_records = NULL
-        status = u1db__sync_exchange(self._db, from_machine_id,
+        status = u1db__sync_exchange(self._db, from_replica_uid,
             from_machine_rev, last_known_rev,
             from_records, &new_records, &conflict_records)
         u1db__free_records(&from_records)
@@ -464,7 +464,7 @@ cdef class VectorClockRev:
             return None
         res = {}
         for i from 0 <= i < self._clock.num_items:
-            res[self._clock.items[i].machine_id] = self._clock.items[i].db_rev
+            res[self._clock.items[i].replica_uid] = self._clock.items[i].db_rev
         return res
 
     def as_str(self):
@@ -481,10 +481,10 @@ cdef class VectorClockRev:
             free(res)
         return s
 
-    def increment(self, machine_id):
+    def increment(self, replica_uid):
         cdef int status
 
-        status = u1db__vectorclock_increment(self._clock, machine_id)
+        status = u1db__vectorclock_increment(self._clock, replica_uid)
         if status != U1DB_OK:
             raise RuntimeError("Failed to increment: %d" % (status,))
 
