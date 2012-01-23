@@ -286,8 +286,8 @@ handle_row(sqlite3_stmt *statement, u1db_row **row)
 }
 
 int
-u1db_create_doc(u1database *db, u1db_document **doc,
-                const char *content, const char *doc_id)
+u1db_create_doc(u1database *db, const char *content, const char *doc_id,
+                u1db_document **doc)
 {
     char *doc_rev = NULL, *local_doc_id = NULL;
     int status;
@@ -511,7 +511,7 @@ finish:
 }
 
 int
-u1db_get_doc(u1database *db, u1db_document **doc, const char *doc_id)
+u1db_get_doc(u1database *db, const char *doc_id, u1db_document **doc)
 {
     int status = 0, n = 0;
     sqlite3_stmt *statement;

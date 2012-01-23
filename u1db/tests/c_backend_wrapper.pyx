@@ -67,10 +67,10 @@ cdef extern from "u1db/u1db.h":
     void u1db__free_table(u1db_table **table)
     void *calloc(size_t, size_t)
     void free(void *)
-    int u1db_create_doc(u1database *db, u1db_document **doc,
-                        char *content, char *doc_id)
+    int u1db_create_doc(u1database *db, char *content, char *doc_id,
+                        u1db_document **doc)
     int u1db_delete_doc(u1database *db, u1db_document *doc)
-    int u1db_get_doc(u1database *db, u1db_document **doc, char *doc_id)
+    int u1db_get_doc(u1database *db, char *doc_id, u1db_document **doc)
     int u1db_put_doc(u1database *db, u1db_document *doc)
     int u1db_delete_doc(u1database *db, u1db_document *doc)
     int u1db_whats_changed(u1database *db, int *db_rev,
@@ -342,7 +342,7 @@ cdef class CDatabase(object):
         else:
             c_doc_id = doc_id
         c_doc_rev = NULL
-        status = u1db_create_doc(self._db, &doc, content, c_doc_id)
+        status = u1db_create_doc(self._db, content, c_doc_id, &doc)
         handle_status(status, 'Failed to create_doc')
         pydoc = CDocument()
         pydoc._doc = doc
@@ -359,7 +359,7 @@ cdef class CDatabase(object):
         cdef int status
         cdef u1db_document *doc = NULL
 
-        status = u1db_get_doc(self._db, &doc, doc_id)
+        status = u1db_get_doc(self._db, doc_id, &doc)
         handle_status(status, "get_doc failed")
         if doc == NULL:
             return None

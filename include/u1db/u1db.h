@@ -70,7 +70,8 @@ int u1db_get_machine_id(u1database *db, char **machine_id);
 /**
  * Create a new document.
  *
- * @param content: The JSON string representing the document.
+ * @param content: The JSON string representing the document. The content will
+ *                 be copied and managed by the 'doc' parameter.
  * @param doc_id: A string identifying the document. If the value supplied is
  *      NULL, then a new doc_id will be generated.
  * @param doc_rev: The document revision. Callers are responsible for freeing
@@ -79,8 +80,8 @@ int u1db_get_machine_id(u1database *db, char **machine_id);
  *      with u1db_free_doc
  * @return a status code indicating success or failure.
  */
-int u1db_create_doc(u1database *db, u1db_document **doc,
-                    const char *content, const char *doc_id);
+int u1db_create_doc(u1database *db, const char *content, const char *doc_id,
+                    u1db_document **doc);
 
 /**
  * Put new document content for the given document identifier.
@@ -100,7 +101,7 @@ int u1db_put_doc(u1database *db, u1db_document *doc);
  * @return status, will be U1DB_OK if there is no error, even if there is no
  *      document matching that doc_id.
  */
-int u1db_get_doc(u1database *db, u1db_document **doc, const char *doc_id);
+int u1db_get_doc(u1database *db, const char *doc_id, u1db_document **doc);
 
 /**
  * Mark a document as deleted.
