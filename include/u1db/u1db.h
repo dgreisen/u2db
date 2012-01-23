@@ -261,6 +261,5 @@ void u1db_free_doc(u1db_document **doc);
  * This will copy the string, since the memory is managed by the doc object
  * itself.
  */
-int u1db_doc_set_content(u1db_document *doc, const char *content,
-                         int content_len);
+int u1db_doc_set_content(u1db_document *doc, const char *content);
 #endif // _U1DB_H_

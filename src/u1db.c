@@ -1323,16 +1323,18 @@ u1db_free_doc(u1db_document **doc)
 
 
 int
-u1db_doc_set_content(u1db_document *doc, const char *content, int content_len)
+u1db_doc_set_content(u1db_document *doc, const char *content)
 {
     char *tmp;
+    int content_len;
     if (doc == NULL || content == NULL) {
         // TODO: return an error code
         return 0;
     }
     // What to do about 0 length content? Is it even valid? Not all platforms
     // support malloc(0)
-    tmp = (char*)malloc(content_len);
+    content_len = strlen(content);
+    tmp = (char*)calloc(1, content_len + 1);
     if (tmp == NULL) {
         // TODO: return ENOMEM
         return 0;

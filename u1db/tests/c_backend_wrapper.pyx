@@ -106,7 +106,7 @@ cdef extern from "u1db/u1db.h":
     u1db_document *u1db_make_doc(char *doc_id, char *revision, char *content,
                                  int has_conflicts)
     void u1db_free_doc(u1db_document **doc)
-    int u1db_doc_set_content(u1db_document *doc, char *content, int len)
+    int u1db_doc_set_content(u1db_document *doc, char *content)
 
 from u1db import errors
 
@@ -182,12 +182,7 @@ cdef class CDocument(object):
                     self._doc.content, self._doc.content_len)
 
         def __set__(self, val):
-            cdef char *s_val
-            cdef Py_ssize_t s_len
-            # This returns a direct pointer to the content, so we have to copy
-            # it over.
-            PyString_AsStringAndSize(val, &s_val, &s_len)
-            u1db_doc_set_content(self._doc, s_val, s_len)
+            u1db_doc_set_content(self._doc, val)
 
 
     property has_conflicts:
