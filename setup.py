@@ -34,7 +34,7 @@ def config():
         "ext_modules": ext,
         "install_requires": ["paste", "simplejson", "routes"],
         # informational
-        "tests_require": ["testtools", "testscenarios"],
+        "tests_require": ["testtools", "testscenarios", "Cython"],
         "classifiers": [
             'Development Status :: 4 - Beta',
             'Environment :: Console',
@@ -57,9 +57,24 @@ synchronize them with other stores.
     }
 
     try:
-        from setuptools import setup
+        from setuptools import setup, Extension
     except ImportError:
-        from distutils.core import setup
+        from distutils.core import setup, extension
+
+    try:
+        from Cython.Distutils import build_ext
+    except ImportError, e:
+        print "Unable to import Cython, to test the C implementation"
+    else:
+        kwargs["cmdclass"] = {"build_ext": build_ext}
+        ext.append(Extension(
+            "u1db.tests.c_backend_wrapper",
+            ["u1db/tests/c_backend_wrapper.pyx",
+             "src/u1db.c", "src/u1db_vectorclock.c"],
+            include_dirs=["include"],
+            libraries=['sqlite3'],
+            ))
+
 
     setup(**kwargs)
 

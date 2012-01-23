@@ -8,3 +8,4 @@ html-docs/_build
 html-docs/_build/doctest
 html-docs/_build/doctrees
 html-docs/_build/html
+u1db/tests/c_backend_wrapper.c

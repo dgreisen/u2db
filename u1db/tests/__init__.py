@@ -36,6 +36,10 @@ from u1db.remote import (
     server_state,
     )
 
+try:
+    from u1db.tests import c_backend_wrapper
+except ImportError:
+    c_backend_wrapper = None
 
 # Setting this means that failing assertions will not include this module in
 # their traceback. However testtools doesn't seem to set it, and we don't want
@@ -53,10 +57,13 @@ class TestCase(testtools.TestCase):
         self.addCleanup(shutil.rmtree, tempdir)
         return tempdir
 
+    def make_document(self, doc_id, doc_rev, content, has_conflicts):
+        return Document(doc_id, doc_rev, content, has_conflicts)
+
     def assertGetDoc(self, db, doc_id, doc_rev, content, has_conflicts):
         """Assert that the document in the database looks correct."""
-        exp_doc = Document(doc_id, doc_rev, content,
-                           has_conflicts=has_conflicts)
+        exp_doc = self.make_document(doc_id, doc_rev, content,
+                                     has_conflicts=has_conflicts)
         self.assertEqual(exp_doc, db.get_doc(doc_id))
 
     def assertGetDocConflicts(self, db, doc_id, conflicts):
@@ -101,10 +108,34 @@ def create_sqlite_partial_expanded(test, replica_uid):
     return db
 
 
+def create_doc(doc_id, rev, content, has_conflicts=False):
+    return Document(doc_id, rev, content, has_conflicts=has_conflicts)
+
+
+def create_c_database(test, replica_uid):
+    if c_backend_wrapper is None:
+        test.skipTest('c_backend_wrapper is not available')
+    db = c_backend_wrapper.CDatabase(':memory:')
+    db._set_machine_id(replica_uid)
+    return db
+
+
+def create_c_document(doc_id, rev, content, has_conflicts=False):
+    return c_backend_wrapper.make_document(doc_id, rev, content,
+                                           has_conflicts=has_conflicts)
+
+
 LOCAL_DATABASES_SCENARIOS = [
-        ('mem', {'do_create_database': create_memory_database}),
-        ('sql', {'do_create_database': create_sqlite_partial_expanded}),
+        ('mem', {'do_create_database': create_memory_database,
+                 'make_document': create_doc}),
+        ('sql', {'do_create_database': create_sqlite_partial_expanded,
+                 'make_document': create_doc}),
         ]
+
+
+C_DATABASE_SCENARIOS = [
+        ('c', {'do_create_database': create_c_database,
+               'make_document': create_c_document})]
 
 
 class DatabaseBaseTests(TestCase):
