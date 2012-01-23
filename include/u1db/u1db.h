@@ -71,7 +71,6 @@ int u1db_get_machine_id(u1database *db, char **machine_id);
  * Create a new document.
  *
  * @param content: The JSON string representing the document.
- * @param n: The number of bytes in content
  * @param doc_id: A string identifying the document. If the value supplied is
  *      NULL, then a new doc_id will be generated.
  * @param doc_rev: The document revision. Callers are responsible for freeing
@@ -81,7 +80,7 @@ int u1db_get_machine_id(u1database *db, char **machine_id);
  * @return a status code indicating success or failure.
  */
 int u1db_create_doc(u1database *db, u1db_document **doc,
-                    const char *content, int n, const char *doc_id);
+                    const char *content, const char *doc_id);
 
 /**
  * Put new document content for the given document identifier.
@@ -251,10 +250,8 @@ int u1db__vectorclock_is_newer(u1db_vectorclock *maybe_newer,
 /**
  * Create a new u1db_document object. This should be freed 
  */
-u1db_document *u1db_make_doc(const char *doc_id, int doc_id_len,
-                             const char *revision, int revision_len,
-                             const char *content, int content_len,
-                             int has_conflicts);
+u1db_document *u1db_make_doc(const char *doc_id, const char *revision,
+                             const char *content, int has_conflicts);
 void u1db_free_doc(u1db_document **doc);
 
 /**

@@ -68,7 +68,7 @@ cdef extern from "u1db/u1db.h":
     void *calloc(size_t, size_t)
     void free(void *)
     int u1db_create_doc(u1database *db, u1db_document **doc,
-                        char *content, int n, char *doc_id)
+                        char *content, char *doc_id)
     int u1db_delete_doc(u1database *db, u1db_document *doc)
     int u1db_get_doc(u1database *db, u1db_document **doc, char *doc_id)
     int u1db_put_doc(u1database *db, u1db_document *doc)
@@ -103,9 +103,7 @@ cdef extern from "u1db/u1db.h":
     int U1DB_DOCUMENT_ALREADY_DELETED
     int U1DB_DOCUMENT_DOES_NOT_EXIST
 
-    u1db_document *u1db_make_doc(char *doc_id, int doc_id_len,
-                                 char *revision, int revision_len,
-                                 char *content, int content_len,
+    u1db_document *u1db_make_doc(char *doc_id, char *revision, char *content,
                                  int has_conflicts)
     void u1db_free_doc(u1db_document **doc)
     int u1db_doc_set_content(u1db_document *doc, char *content, int len)
@@ -127,7 +125,6 @@ cdef int _append_to_list(void *context, char *doc_id):
 def make_document(doc_id, rev, content, has_conflicts=False):
     cdef u1db_document *doc
     cdef char *c_content, *c_rev, *c_doc_id
-    cdef int c_content_len, c_rev_len, c_doc_id_len
     cdef int conflict
 
     if has_conflicts:
@@ -135,25 +132,18 @@ def make_document(doc_id, rev, content, has_conflicts=False):
     else:
         conflict = 0
     if doc_id is None:
-        c_doc_id_len = 0
         c_doc_id = NULL
     else:
         c_doc_id = doc_id
-        c_doc_id_len = len(doc_id)
     if content is None:
         c_content = NULL
-        c_content_len = 0
     else:
         c_content = content
-        c_content_len = len(content)
     if rev is None:
         c_rev = NULL
-        c_rev_len = 0
     else:
         c_rev = rev
-        c_rev_len = len(rev)
-    doc = u1db_make_doc(c_doc_id, c_doc_id_len, c_rev, c_rev_len,
-                        c_content, c_content_len, conflict)
+    doc = u1db_make_doc(c_doc_id, c_rev, c_content, conflict)
     pydoc = CDocument()
     pydoc._doc = doc
     return pydoc
@@ -352,8 +342,7 @@ cdef class CDatabase(object):
         else:
             c_doc_id = doc_id
         c_doc_rev = NULL
-        status = u1db_create_doc(self._db, &doc, content, len(content),
-                                 c_doc_id)
+        status = u1db_create_doc(self._db, &doc, content, c_doc_id)
         handle_status(status, 'Failed to create_doc')
         pydoc = CDocument()
         pydoc._doc = doc

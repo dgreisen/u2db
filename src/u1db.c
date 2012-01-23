@@ -287,7 +287,7 @@ handle_row(sqlite3_stmt *statement, u1db_row **row)
 
 int
 u1db_create_doc(u1database *db, u1db_document **doc,
-                const char *content, int n, const char *doc_id)
+                const char *content, const char *doc_id)
 {
     char *doc_rev = NULL, *local_doc_id = NULL;
     int status;
@@ -301,7 +301,7 @@ u1db_create_doc(u1database *db, u1db_document **doc,
         local_doc_id = u1db__allocate_doc_id(db);
         doc_id = local_doc_id;
     }
-    *doc = u1db_make_doc(doc_id, strlen(doc_id), NULL, 0, content, n, 0);
+    *doc = u1db_make_doc(doc_id, NULL, content, 0);
     if (*doc == NULL) {
         status = U1DB_NOMEM;
         goto finish;
@@ -533,8 +533,7 @@ u1db_get_doc(u1database *db, u1db_document **doc, const char *doc_id)
             *doc = NULL;
             goto finish;
         }
-        *doc = u1db_make_doc(doc_id, strlen(doc_id), doc_rev, strlen(doc_rev), 
-                             content, n, 0);
+        *doc = u1db_make_doc(doc_id, doc_rev, content, 0);
 
     } else {
         // TODO: Figure out how to return the SQL error code
@@ -1249,9 +1248,9 @@ u1db__vectorclock_is_newer(u1db_vectorclock *maybe_newer,
 }
 
 static int
-copy_str_and_len(char **dest, int *dest_len,
-                 const char *source, int source_len)
+copy_str_and_len(char **dest, int *dest_len, const char *source)
 {
+    int source_len;
     if (dest == NULL || dest_len == NULL) {
         // Bad parameters
         return 0;
@@ -1260,6 +1259,8 @@ copy_str_and_len(char **dest, int *dest_len,
         *dest = NULL;
         *dest_len = 0;
         return 1;
+    } else {
+        source_len = strlen(source);
     }
     *dest = (char *) calloc(1, source_len + 1);
     if (*dest == NULL) {
@@ -1271,20 +1272,16 @@ copy_str_and_len(char **dest, int *dest_len,
 }
 
 u1db_document *
-u1db_make_doc(const char *doc_id, int doc_id_len,
-              const char *revision, int revision_len,
-              const char *content, int content_len, int has_conflicts)
+u1db_make_doc(const char *doc_id, const char *revision,
+              const char *content, int has_conflicts)
 {
     u1db_document *doc = (u1db_document *)(calloc(1, sizeof(u1db_document)));
     if (doc == NULL) { goto cleanup; }
-    if (!copy_str_and_len(&doc->doc_id, &doc->doc_id_len,
-                          doc_id, doc_id_len))
+    if (!copy_str_and_len(&doc->doc_id, &doc->doc_id_len, doc_id))
         goto cleanup;
-    if (!copy_str_and_len(&doc->doc_rev, &doc->doc_rev_len,
-                          revision, revision_len))
+    if (!copy_str_and_len(&doc->doc_rev, &doc->doc_rev_len, revision))
         goto cleanup;
-    if (!copy_str_and_len(&doc->content, &doc->content_len,
-                          content, content_len))
+    if (!copy_str_and_len(&doc->content, &doc->content_len, content))
         goto cleanup;
     doc->has_conflicts = has_conflicts;
     return doc;
