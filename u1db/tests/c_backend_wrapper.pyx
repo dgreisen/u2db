@@ -336,7 +336,7 @@ cdef class CDatabase(object):
     def create_doc(self, content, doc_id=None):
         cdef u1db_document *doc = NULL
         cdef int status
-        cdef char *c_doc_id, *c_doc_rev
+        cdef char *c_doc_id
 
         if doc_id is None:
             c_doc_id = NULL
