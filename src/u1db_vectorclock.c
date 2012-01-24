@@ -23,6 +23,7 @@
 #include "u1db/u1db_vectorclock.h"
 
 
+#ifdef _MSC_VER
 // Windows doesn't have strndup, so we fake one
 static char *
 _win32_strndup(const char *s, size_t n)
@@ -36,6 +37,7 @@ _win32_strndup(const char *s, size_t n)
     out[n] = '\0';
     return out;
 }
+#endif //_MSC_VER
 
 struct inserts_needed {
     struct inserts_needed *next;
