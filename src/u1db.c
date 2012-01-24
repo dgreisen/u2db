@@ -22,7 +22,6 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <sqlite3.h>
-#include "u1db/u1db.h"
 #include "u1db/u1db_internal.h"
 #include "u1db/u1db_vectorclock.h"
 
@@ -71,7 +70,7 @@ static const char *table_definitions[] = {
     " field TEXT,"
     " CONSTRAINT index_definitions_pkey"
     " PRIMARY KEY (name, offset))",
-    "CREATE TABLE u1db_config (name TEXT, value TEXT)",
+    "CREATE TABLE u1db_config (name TEXT PRIMARY KEY, value TEXT)",
     "INSERT INTO u1db_config VALUES ('sql_schema', '0')",
 };
 
@@ -80,6 +79,7 @@ initialize(u1database *db)
 {
     sqlite3_stmt *statement;
     int i, status, final_status;
+    char default_replica_uid[33] = {'\0'};
 
     for(i = 0; i < sizeof(table_definitions)/sizeof(char*); i++) {
         status = sqlite3_prepare_v2(db->sql_handle,
@@ -96,6 +96,8 @@ initialize(u1database *db)
             return final_status;
         }
     }
+    u1db__generate_hex_uuid(default_replica_uid);
+    u1db_set_replica_uid(db, default_replica_uid);
     return SQLITE_OK;
 }
 
@@ -127,7 +129,7 @@ u1db__sql_close(u1database *db)
     return SQLITE_OK;
 }
 
-int 
+int
 u1db__sql_is_open(u1database *db)
 {
     if (db != NULL && db->sql_handle != NULL) {
@@ -155,17 +157,12 @@ u1db_set_replica_uid(u1database *db, const char *replica_uid)
     sqlite3_stmt *statement;
     int status, final_status, num_bytes;
     status = sqlite3_prepare_v2(db->sql_handle,
-        "INSERT INTO u1db_config VALUES (?, ?)", -1,
-        &statement, NULL); 
+        "INSERT OR REPLACE INTO u1db_config VALUES ('replica_uid', ?)", -1,
+        &statement, NULL);
     if (status != SQLITE_OK) {
         return status;
     }
-    status = sqlite3_bind_text(statement, 1, "replica_uid", -1, SQLITE_STATIC);
-    if (status != SQLITE_OK) {
-        sqlite3_finalize(statement);
-        return status;
-    }
-    status = sqlite3_bind_text(statement, 2, replica_uid, -1, SQLITE_TRANSIENT);
+    status = sqlite3_bind_text(statement, 1, replica_uid, -1, SQLITE_TRANSIENT);
     if (status != SQLITE_OK) {
         sqlite3_finalize(statement);
         return status;
@@ -942,7 +939,7 @@ cleanup:
     if (doc->doc_rev != NULL) {
         free(doc->doc_id);
     }
-    if (doc->content != NULL) { 
+    if (doc->content != NULL) {
         free(doc->content);
     }
     free(doc);

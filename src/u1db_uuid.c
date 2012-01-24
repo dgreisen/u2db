@@ -19,6 +19,9 @@
 #include <string.h>
 #include "u1db/u1db_internal.h"
 
+
+static void uuid_to_hex(char *hex_out, unsigned char *bin_in);
+
 #if defined(_WIN32) || defined(WIN32)
 #include "Wincrypt.h"
 
@@ -40,6 +43,7 @@ int
 u1db__generate_uuid(char *uuid)
 {
     HCRYPTPROV provider;
+    char buf[16];
 
     provider = getProvider();
     if (provider == 0) {
@@ -47,7 +51,7 @@ u1db__generate_uuid(char *uuid)
         //       Parameter for now.
         return U1DB_INVALID_PARAMETER;
     }
-    if (!CryptGenRandom(provider, 16, uuid)) {
+    if (!CryptGenRandom(provider, 16, buf)) {
         // TODO: Probably want a better error here.
         return U1DB_NOMEM;
     }
@@ -59,12 +63,29 @@ u1db__generate_uuid(char *uuid)
 #include "uuid/uuid.h"
 
 int
-u1db__generate_uuid(char *uuid)
+u1db__generate_hex_uuid(char *uuid)
 {
     uuid_t local_uuid;
     uuid_generate_random(local_uuid);
-    memcpy(uuid, local_uuid, 16);
+    uuid_to_hex(uuid, local_uuid);
     return U1DB_OK;
+}
+
+static void
+uuid_to_hex(char *hex_out, unsigned char *bin_in)
+{
+    int i;
+    for (i = 0; i < 16; ++i) {
+        hex_out[i*2] = (bin_in[i] >> 4);
+        hex_out[i*2+1] = (bin_in[i] & 0x0F);
+    }
+    for (i = 0; i < 32; ++i) {
+        if (hex_out[i] < 10) {
+            hex_out[i] += '0';
+        } else {
+            hex_out[i] += 'a' - 10;
+        }
+    }
 }
 
 #endif // defined(_WIN32) || defined(WIN32)

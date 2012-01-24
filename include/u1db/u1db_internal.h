@@ -110,9 +110,9 @@ u1db_record *u1db__copy_record(u1db_record *src);
  * all memory referenced from them.
  */
 void u1db__free_records(u1db_record **record);
-  
+
 /**
- * Create a new u1db_document object. This should be freed 
+ * Create a new u1db_document object. This should be freed
  */
 u1db_document *u1db__allocate_document(const char *doc_id, const char *revision,
                                        const char *content, int has_conflicts);
@@ -120,8 +120,8 @@ u1db_document *u1db__allocate_document(const char *doc_id, const char *revision,
 /**
  * Generate a unique id.
  *
- * @param uuid: A buffer to put the id, must be 16 bytes long.
+ * @param uuid: A buffer to put the id, must be 32 bytes long.
  */
-int u1db__generate_uuid(char *uuid);
+int u1db__generate_hex_uuid(char *uuid);
 
 #endif // U1DB_INTERNAL_H

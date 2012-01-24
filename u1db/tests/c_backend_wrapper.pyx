@@ -85,7 +85,7 @@ cdef extern from "u1db/u1db_internal.h":
 
     u1db_document *u1db__allocate_document(char *doc_id, char *revision,
                                            char *content, int has_conflicts)
-    int u1db__generate_uuid(char *)
+    int u1db__generate_hex_uuid(char *)
 
     int u1db__sync_get_machine_info(u1database *db, char *other_replica_uid,
                                     int *other_db_rev, char **my_replica_uid,
@@ -157,9 +157,9 @@ def make_document(doc_id, rev, content, has_conflicts=False):
     return pydoc
 
 
-def generate_uuid():
-    uuid = PyString_FromStringAndSize(NULL, 16)
-    handle_status(u1db__generate_uuid(PyString_AS_STRING(uuid)),
+def generate_hex_uuid():
+    uuid = PyString_FromStringAndSize(NULL, 32)
+    handle_status(u1db__generate_hex_uuid(PyString_AS_STRING(uuid)),
                   "Failed to generate uuid")
     return uuid
 
