@@ -19,6 +19,9 @@
 #ifndef U1DB_INTERNAL_H
 #define U1DB_INTERNAL_H
 
+#include "u1db/u1db.h"
+#include "u1db/compat.h"
+
 /**
  * Internal API, Get the global database rev.
  */
@@ -113,5 +116,10 @@ void u1db__free_records(u1db_record **record);
  */
 u1db_document *u1db__allocate_document(const char *doc_id, const char *revision,
                                        const char *content, int has_conflicts);
+
+/**
+ * Generate a unique id.
+ */
+int u1db__generate_uuid(char *uuid);
 
 #endif // U1DB_INTERNAL_H

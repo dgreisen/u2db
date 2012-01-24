@@ -70,7 +70,10 @@ synchronize them with other stores.
         ext.append(Extension(
             "u1db.tests.c_backend_wrapper",
             ["u1db/tests/c_backend_wrapper.pyx",
-             "src/u1db.c", "src/u1db_vectorclock.c"],
+             "src/u1db.c",
+             "src/u1db_uuid.c",
+             "src/u1db_vectorclock.c",
+             ],
             include_dirs=["include"],
             libraries=['sqlite3'],
             ))
