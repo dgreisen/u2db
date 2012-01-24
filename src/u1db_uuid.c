@@ -16,6 +16,7 @@
  * along with u1db.  If not, see <http://www.gnu.org/licenses/>.
  */
 
+#include <string.h>
 #include "u1db/u1db_internal.h"
 
 #if defined(_WIN32) || defined(WIN32)
@@ -50,6 +51,19 @@ u1db__generate_uuid(char *uuid)
         // TODO: Probably want a better error here.
         return U1DB_NOMEM;
     }
+    return U1DB_OK;
+}
+
+#else
+
+#include "uuid/uuid.h"
+
+int
+u1db__generate_uuid(char *uuid)
+{
+    uuid_t local_uuid;
+    uuid_generate_random(local_uuid);
+    memcpy(uuid, local_uuid, 16);
     return U1DB_OK;
 }
 
