@@ -40,10 +40,10 @@ static HCRYPTPROV getProvider()
 }
 
 int
-u1db__generate_uuid(char *uuid)
+u1db__generate_hex_uuid(char *uuid)
 {
     HCRYPTPROV provider;
-    char buf[16];
+    unsigned char buf[16];
 
     provider = getProvider();
     if (provider == 0) {
@@ -51,10 +51,11 @@ u1db__generate_uuid(char *uuid)
         //       Parameter for now.
         return U1DB_INVALID_PARAMETER;
     }
-    if (!CryptGenRandom(provider, 16, buf)) {
+    if (!CryptGenRandom(provider, 16, (char*)buf)) {
         // TODO: Probably want a better error here.
         return U1DB_NOMEM;
     }
+    uuid_to_hex(uuid, buf);
     return U1DB_OK;
 }
 
@@ -70,6 +71,9 @@ u1db__generate_hex_uuid(char *uuid)
     uuid_to_hex(uuid, local_uuid);
     return U1DB_OK;
 }
+
+#endif // defined(_WIN32) || defined(WIN32)
+
 
 static void
 uuid_to_hex(char *hex_out, unsigned char *bin_in)
@@ -88,4 +92,3 @@ uuid_to_hex(char *hex_out, unsigned char *bin_in)
     }
 }
 
-#endif // defined(_WIN32) || defined(WIN32)
