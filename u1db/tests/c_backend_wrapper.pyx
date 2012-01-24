@@ -1,4 +1,4 @@
-# Copyright 2011 Canonical Ltd.
+# Copyright 2011-2012 Canonical Ltd.
 #
 # This program is free software: you can redistribute it and/or modify it
 # under the terms of the GNU General Public License version 3, as published
@@ -83,17 +83,19 @@ cdef extern from "u1db/u1db_internal.h":
     u1db_record *u1db__create_record(char *doc_id, char *doc_rev, char *doc)
     void u1db__free_records(u1db_record **)
 
-    u1db_vectorclock *u1db__vectorclock_from_str(char *s)
-    void u1db__free_vectorclock(u1db_vectorclock **clock)
-    int u1db__vectorclock_increment(u1db_vectorclock *clock, char *replica_uid)
-    int u1db__vectorclock_maximize(u1db_vectorclock *clock,
-                                   u1db_vectorclock *other)
-    int u1db__vectorclock_as_str(u1db_vectorclock *clock, char **result)
-    int u1db__vectorclock_is_newer(u1db_vectorclock *maybe_newer,
-                                   u1db_vectorclock *older)
     u1db_document *u1db__allocate_document(char *doc_id, char *revision,
                                            char *content, int has_conflicts)
     int u1db__generate_uuid(char *)
+
+    int u1db__sync_get_machine_info(u1database *db, char *other_replica_uid,
+                                    int *other_db_rev, char **my_replica_uid,
+                                    int *my_db_rev)
+    int u1db__sync_record_machine_info(u1database *db, char *replica_uid,
+                                       int db_rev)
+    int u1db__sync_exchange(u1database *db, char *from_replica_uid,
+                            int from_db_rev, int last_known_rev,
+                            u1db_record *from_records, u1db_record **new_records,
+                            u1db_record **conflict_records)
 
 
 cdef extern from "u1db/u1db_vectorclock.h":
@@ -105,15 +107,14 @@ cdef extern from "u1db/u1db_vectorclock.h":
         int num_items
         u1db_vectorclock_item *items
 
-    int u1db__sync_get_machine_info(u1database *db, char *other_replica_uid,
-                                    int *other_db_rev, char **my_replica_uid,
-                                    int *my_db_rev)
-    int u1db__sync_record_machine_info(u1database *db, char *replica_uid,
-                                       int db_rev)
-    int u1db__sync_exchange(u1database *db, char *from_replica_uid,
-                            int from_db_rev, int last_known_rev,
-                            u1db_record *from_records, u1db_record **new_records,
-                            u1db_record **conflict_records)
+    u1db_vectorclock *u1db__vectorclock_from_str(char *s)
+    void u1db__free_vectorclock(u1db_vectorclock **clock)
+    int u1db__vectorclock_increment(u1db_vectorclock *clock, char *replica_uid)
+    int u1db__vectorclock_maximize(u1db_vectorclock *clock,
+                                   u1db_vectorclock *other)
+    int u1db__vectorclock_as_str(u1db_vectorclock *clock, char **result)
+    int u1db__vectorclock_is_newer(u1db_vectorclock *maybe_newer,
+                                   u1db_vectorclock *older)
 
 from u1db import errors
 
