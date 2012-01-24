@@ -342,7 +342,6 @@ cdef class CDatabase(object):
             c_doc_id = NULL
         else:
             c_doc_id = doc_id
-        c_doc_rev = NULL
         status = u1db_create_doc(self._db, content, c_doc_id, &doc)
         handle_status(status, 'Failed to create_doc')
         pydoc = CDocument()
