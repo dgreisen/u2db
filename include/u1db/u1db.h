@@ -58,14 +58,14 @@ u1database *u1db_open(const char *fname);
 void u1db_free(u1database **db);
 
 /**
- * Set the machine_id defined for this database.
+ * Set the replica_uid defined for this database.
  */
-int u1db_set_machine_id(u1database *db, const char *machine_id);
+int u1db_set_replica_uid(u1database *db, const char *replica_uid);
 
 /**
- * Get the machine_id defined for this database.
+ * Get the replica_uid defined for this database.
  */
-int u1db_get_machine_id(u1database *db, char **machine_id);
+int u1db_get_replica_uid(u1database *db, char **replica_uid);
 
 /**
  * Create a new document.

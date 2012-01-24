@@ -29,7 +29,7 @@
 struct _u1database
 {
     sqlite3 *sql_handle;
-    char *machine_id;
+    char *replica_uid;
 };
 
 // "u1do"
@@ -58,7 +58,7 @@ static const char *table_definitions[] = {
     " CONSTRAINT document_fields_pkey"
     " PRIMARY KEY (doc_id, field_name))",
     "CREATE TABLE sync_log ("
-    " machine_id TEXT PRIMARY KEY,"
+    " replica_uid TEXT PRIMARY KEY,"
     " known_db_rev INTEGER)",
     "CREATE TABLE conflicts ("
     " doc_id TEXT,"
@@ -143,14 +143,14 @@ u1db_free(u1database **db)
     if (db == NULL || *db == NULL) {
         return;
     }
-    free((*db)->machine_id);
+    free((*db)->replica_uid);
     u1db__sql_close(*db);
     free(*db);
     *db = NULL;
 }
 
 int
-u1db_set_machine_id(u1database *db, const char *machine_id)
+u1db_set_replica_uid(u1database *db, const char *replica_uid)
 {
     sqlite3_stmt *statement;
     int status, final_status, num_bytes;
@@ -160,12 +160,12 @@ u1db_set_machine_id(u1database *db, const char *machine_id)
     if (status != SQLITE_OK) {
         return status;
     }
-    status = sqlite3_bind_text(statement, 1, "machine_id", -1, SQLITE_STATIC);
+    status = sqlite3_bind_text(statement, 1, "replica_uid", -1, SQLITE_STATIC);
     if (status != SQLITE_OK) {
         sqlite3_finalize(statement);
         return status;
     }
-    status = sqlite3_bind_text(statement, 2, machine_id, -1, SQLITE_TRANSIENT);
+    status = sqlite3_bind_text(statement, 2, replica_uid, -1, SQLITE_TRANSIENT);
     if (status != SQLITE_OK) {
         sqlite3_finalize(statement);
         return status;
@@ -178,31 +178,31 @@ u1db_set_machine_id(u1database *db, const char *machine_id)
     if (final_status != SQLITE_OK) {
         return final_status;
     }
-    // If we got this far, then machine_id has been properly set. Copy it
-    if (db->machine_id != NULL) {
-        free(db->machine_id);
+    // If we got this far, then replica_uid has been properly set. Copy it
+    if (db->replica_uid != NULL) {
+        free(db->replica_uid);
     }
-    num_bytes = strlen(machine_id);
-    db->machine_id = (char *)calloc(1, num_bytes + 1);
-    memcpy(db->machine_id, machine_id, num_bytes + 1);
+    num_bytes = strlen(replica_uid);
+    db->replica_uid = (char *)calloc(1, num_bytes + 1);
+    memcpy(db->replica_uid, replica_uid, num_bytes + 1);
     return 0;
 }
 
 int
-u1db_get_machine_id(u1database *db, char **machine_id)
+u1db_get_replica_uid(u1database *db, char **replica_uid)
 {
     sqlite3_stmt *statement;
     int status, num_bytes;
     const unsigned char *text;
-    if (db->machine_id != NULL) {
-        *machine_id = db->machine_id;
+    if (db->replica_uid != NULL) {
+        *replica_uid = db->replica_uid;
         return SQLITE_OK;
     }
     status = sqlite3_prepare_v2(db->sql_handle,
-        "SELECT value FROM u1db_config WHERE name = 'machine_id'", -1,
+        "SELECT value FROM u1db_config WHERE name = 'replica_uid'", -1,
         &statement, NULL);
     if(status != SQLITE_OK) {
-        *machine_id = "Failed to prepare statement";
+        *replica_uid = "Failed to prepare statement";
         return status;
     }
     status = sqlite3_step(statement);
@@ -210,23 +210,23 @@ u1db_get_machine_id(u1database *db, char **machine_id)
         // TODO: Check return for failures
         sqlite3_finalize(statement);
         if (status == SQLITE_DONE) {
-            // No machine_id set yet
-            *machine_id = NULL;
+            // No replica_uid set yet
+            *replica_uid = NULL;
             return SQLITE_OK;
         }
-        *machine_id = "Failed to step prepared statement";
+        *replica_uid = "Failed to step prepared statement";
         return status;
     }
     if(sqlite3_column_count(statement) != 1) {
         sqlite3_finalize(statement);
-        *machine_id = "incorrect column count";
+        *replica_uid = "incorrect column count";
         return status;
     }
     text = sqlite3_column_text(statement, 0);
     num_bytes = sqlite3_column_bytes(statement, 0);
-    db->machine_id = (char *)calloc(1, num_bytes + 1);
-    memcpy(db->machine_id, text, num_bytes+1);
-    *machine_id = db->machine_id;
+    db->replica_uid = (char *)calloc(1, num_bytes + 1);
+    memcpy(db->replica_uid, text, num_bytes+1);
+    *replica_uid = db->replica_uid;
     return SQLITE_OK;
 }
 
@@ -476,13 +476,13 @@ u1db_put_doc(u1database *db, u1db_document *doc)
         // We are ok to proceed, allocating a new document revision, and
         // storing the document
         u1db_vectorclock *vc;
-        char *machine_id, *new_rev;
+        char *replica_uid, *new_rev;
 
         vc = u1db__vectorclock_from_str((char*)old_doc_rev);
         if (vc == NULL) { goto finish; }
-        status = u1db_get_machine_id(db, &machine_id);
+        status = u1db_get_replica_uid(db, &replica_uid);
         if (status != U1DB_OK) { goto finish; }
-        status = u1db__vectorclock_increment(vc, machine_id);
+        status = u1db__vectorclock_increment(vc, replica_uid);
         if (status != U1DB_OK) { goto finish; }
         status = u1db__vectorclock_as_str(vc, &new_rev);
         if (status != U1DB_OK) { goto finish; }
@@ -749,17 +749,17 @@ u1db__free_table(u1db_table **table)
 }
 
 int
-u1db__sync_get_machine_info(u1database *db, const char *other_machine_id,
-                            int *other_db_rev, char **my_machine_id,
+u1db__sync_get_machine_info(u1database *db, const char *other_replica_uid,
+                            int *other_db_rev, char **my_replica_uid,
                             int *my_db_rev)
 {
     int status;
     sqlite3_stmt *statement;
 
-    if (db == NULL || other_machine_id == NULL || other_db_rev == NULL) {
+    if (db == NULL || other_replica_uid == NULL || other_db_rev == NULL) {
         return U1DB_INVALID_PARAMETER;
     }
-    status = u1db_get_machine_id(db, my_machine_id);
+    status = u1db_get_replica_uid(db, my_replica_uid);
     if (status != U1DB_OK) {
         return status;
     }
@@ -768,12 +768,12 @@ u1db__sync_get_machine_info(u1database *db, const char *other_machine_id,
         return status;
     }
     status = sqlite3_prepare_v2(db->sql_handle,
-        "SELECT known_db_rev FROM sync_log WHERE machine_id = ?", -1,
+        "SELECT known_db_rev FROM sync_log WHERE replica_uid = ?", -1,
         &statement, NULL);
     if (status != SQLITE_OK) {
         return status;
     }
-    status = sqlite3_bind_text(statement, 1, other_machine_id, -1,
+    status = sqlite3_bind_text(statement, 1, other_replica_uid, -1,
                                SQLITE_TRANSIENT);
     if (status != SQLITE_OK) {
         sqlite3_finalize(statement);
@@ -792,12 +792,12 @@ u1db__sync_get_machine_info(u1database *db, const char *other_machine_id,
 }
 
 int
-u1db__sync_record_machine_info(u1database *db, const char *machine_id,
+u1db__sync_record_machine_info(u1database *db, const char *replica_uid,
                                int db_rev)
 {
     int status;
     sqlite3_stmt *statement;
-    if (db == NULL || machine_id == NULL) {
+    if (db == NULL || replica_uid == NULL) {
         return U1DB_INVALID_PARAMETER;
     }
     status = sqlite3_exec(db->sql_handle, "BEGIN", NULL, NULL, NULL);
@@ -810,7 +810,7 @@ u1db__sync_record_machine_info(u1database *db, const char *machine_id,
     if (status != SQLITE_OK) {
         return status;
     }
-    status = sqlite3_bind_text(statement, 1, machine_id, -1, SQLITE_TRANSIENT);
+    status = sqlite3_bind_text(statement, 1, replica_uid, -1, SQLITE_TRANSIENT);
     if (status != SQLITE_OK) {
         sqlite3_finalize(statement);
         sqlite3_exec(db->sql_handle, "ROLLBACK", NULL, NULL, NULL);
@@ -846,12 +846,12 @@ insert_records(u1database *db, u1db_record *records)
 }
 
 int
-u1db__sync_exchange(u1database *db, const char *from_machine_id,
+u1db__sync_exchange(u1database *db, const char *from_replica_uid,
                     int from_db_rev, int last_known_rev,
                     u1db_record *from_records, u1db_record **new_records,
                     u1db_record **conflict_records)
 {
-    if (db == NULL || from_machine_id == NULL || new_records == NULL
+    if (db == NULL || from_replica_uid == NULL || new_records == NULL
         || conflict_records == NULL) {
         return U1DB_INVALID_PARAMETER;
     }

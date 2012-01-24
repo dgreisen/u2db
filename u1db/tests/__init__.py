@@ -116,7 +116,7 @@ def create_c_database(test, replica_uid):
     if c_backend_wrapper is None:
         test.skipTest('c_backend_wrapper is not available')
     db = c_backend_wrapper.CDatabase(':memory:')
-    db._set_machine_id(replica_uid)
+    db._set_replica_uid(replica_uid)
     return db
 
 

@@ -39,6 +39,7 @@ class BackendTests(tests.TestCase):
         if c_backend_wrapper is None:
             self.skipTest("The c_backend_wrapper could not be imported")
 
+
 class TestCDatabase(BackendTests):
 
     def test_exists(self):
@@ -60,6 +61,14 @@ class TestCDatabase(BackendTests):
         self.assertEqual([], db._run_sql('CREATE TABLE test (id INTEGER)'))
         self.assertEqual([], db._run_sql('INSERT INTO test VALUES (1)'))
         self.assertEqual([('1',)], db._run_sql('SELECT * FROM test'))
+
+    def test__set_replica_uid(self):
+        db = c_backend_wrapper.CDatabase(':memory:')
+        self.assertIs(None, db._replica_uid)
+        db._set_replica_uid('foo')
+        self.assertEqual([('foo',)], db._run_sql(
+            "SELECT value FROM u1db_config WHERE name='replica_uid'"))
+
 
 
 class TestVectorClock(BackendTests):
