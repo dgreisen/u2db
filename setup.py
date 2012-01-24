@@ -15,6 +15,8 @@
 # You should have received a copy of the GNU Lesser General Public License
 # along with u1db.  If not, see <http://www.gnu.org/licenses/>.
 
+import sys
+
 
 def config():
     import u1db
@@ -67,6 +69,10 @@ synchronize them with other stores.
         print "Unable to import Cython, to test the C implementation"
     else:
         kwargs["cmdclass"] = {"build_ext": build_ext}
+        extra_libs = []
+        if sys.platform == 'win32':
+            # Used for the random number generator
+            extra_libs.append('advapi32')
         ext.append(Extension(
             "u1db.tests.c_backend_wrapper",
             ["u1db/tests/c_backend_wrapper.pyx",
@@ -75,7 +81,7 @@ synchronize them with other stores.
              "src/u1db_vectorclock.c",
              ],
             include_dirs=["include"],
-            libraries=['sqlite3'],
+            libraries=['sqlite3'] + extra_libs,
             ))
 
 

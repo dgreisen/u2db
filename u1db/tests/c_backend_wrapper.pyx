@@ -18,6 +18,7 @@ cdef extern from "Python.h":
     object PyString_FromStringAndSize(char *s, Py_ssize_t n)
     int PyString_AsStringAndSize(object o, char **buf, Py_ssize_t *length
                                  ) except -1
+    char * PyString_AS_STRING(object)
     void free(void *)
 
 cdef extern from "u1db/u1db.h":
@@ -92,6 +93,7 @@ cdef extern from "u1db/u1db_internal.h":
                                    u1db_vectorclock *older)
     u1db_document *u1db__allocate_document(char *doc_id, char *revision,
                                            char *content, int has_conflicts)
+    int u1db__generate_uuid(char *)
 
 
 cdef extern from "u1db/u1db_vectorclock.h":
@@ -152,6 +154,13 @@ def make_document(doc_id, rev, content, has_conflicts=False):
     pydoc = CDocument()
     pydoc._doc = doc
     return pydoc
+
+
+def generate_uuid():
+    uuid = PyString_FromStringAndSize(NULL, 16)
+    handle_status(u1db__generate_uuid(PyString_AS_STRING(uuid)),
+                  "Failed to generate uuid")
+    return uuid
 
 
 cdef class CDocument(object):

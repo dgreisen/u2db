@@ -125,3 +125,15 @@ class TestCDocument(BackendTests):
     def test_create(self):
         doc = self.make_document('doc-id', 'uid:1', tests.simple_doc)
 
+
+class TestUUID(BackendTests):
+
+    def test_basic(self):
+        uuid = c_backend_wrapper.generate_uuid()
+        self.assertIsInstance(uuid, str)
+        self.assertEqual(16, len(uuid))
+
+    def test_is_different(self):
+        uuid1 = c_backend_wrapper.generate_uuid() 
+        uuid2 = c_backend_wrapper.generate_uuid()
+        self.assertNotEqual(uuid1, uuid2)

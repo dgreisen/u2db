@@ -119,6 +119,8 @@ u1db_document *u1db__allocate_document(const char *doc_id, const char *revision,
 
 /**
  * Generate a unique id.
+ *
+ * @param uuid: A buffer to put the id, must be 16 bytes long.
  */
 int u1db__generate_uuid(char *uuid);
 

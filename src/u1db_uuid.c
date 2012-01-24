@@ -21,9 +21,35 @@
 #if defined(_WIN32) || defined(WIN32)
 #include "Wincrypt.h"
 
+static HCRYPTPROV cryptProvider = 0;
+
+static HCRYPTPROV getProvider()
+{
+    if (cryptProvider == 0) {
+        if (!CryptAcquireContext(&cryptProvider, NULL, NULL, PROV_RSA_AES,
+                                 CRYPT_VERIFYCONTEXT))
+        {
+            return 0;
+        }
+    }
+    return cryptProvider;
+}
+
 int
 u1db__generate_uuid(char *uuid)
 {
+    HCRYPTPROV provider;
+
+    provider = getProvider();
+    if (provider == 0) {
+        // TODO: This is really system failure, but we'll go with Invalid
+        //       Parameter for now.
+        return U1DB_INVALID_PARAMETER;
+    }
+    if (!CryptGenRandom(provider, 16, uuid)) {
+        // TODO: Probably want a better error here.
+        return U1DB_NOMEM;
+    }
     return U1DB_OK;
 }
 
