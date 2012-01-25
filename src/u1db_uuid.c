@@ -21,59 +21,86 @@
 
 
 static void uuid_to_hex(char *hex_out, unsigned char *bin_in);
+static int random_bytes(void *buf, size_t count);
 
 #if defined(_WIN32) || defined(WIN32)
 #include "Wincrypt.h"
 
-static HCRYPTPROV cryptProvider = 0;
+static HCRYPTPROV crypt_provider = 0;
 
-static HCRYPTPROV getProvider()
+static HCRYPTPROV get_provider()
 {
-    if (cryptProvider == 0) {
-        if (!CryptAcquireContext(&cryptProvider, NULL, NULL, PROV_RSA_AES,
+    if (crypt_provider == 0) {
+        if (!CryptAcquireContext(&crypt_provider, NULL, NULL, PROV_RSA_AES,
                                  CRYPT_VERIFYCONTEXT))
         {
             return 0;
         }
     }
-    return cryptProvider;
+    return crypt_provider;
 }
 
-int
-u1db__generate_hex_uuid(char *uuid)
+static int
+random_bytes(void *buf, size_t count)
 {
     HCRYPTPROV provider;
-    unsigned char buf[16];
 
-    provider = getProvider();
+    provider = get_provider();
     if (provider == 0) {
         // TODO: This is really system failure, but we'll go with Invalid
         //       Parameter for now.
         return U1DB_INVALID_PARAMETER;
     }
-    if (!CryptGenRandom(provider, 16, (char*)buf)) {
+    if (!CryptGenRandom(provider, count, (BYTE*)buf)) {
         // TODO: Probably want a better error here.
         return U1DB_NOMEM;
     }
-    uuid_to_hex(uuid, buf);
     return U1DB_OK;
 }
 
 #else
 
-#include "uuid/uuid.h"
+#include <errno.h>
+#include <fcntl.h>
+#include <unistd.h>
+// We leave the file handle open, and let the process closing close it.
+static int urandom_fd = -1;
 
-int
-u1db__generate_hex_uuid(char *uuid)
+static int
+get_urandom_fd(void)
 {
-    uuid_t local_uuid;
-    uuid_generate_random(local_uuid);
-    uuid_to_hex(uuid, local_uuid);
+    if (urandom_fd < 0) {
+        urandom_fd = open("/dev/urandom", O_RDONLY);
+    }
+    return urandom_fd;
+}
+
+static int
+random_bytes(void *buf, size_t count)
+{
+    int fd, n;
+    fd = get_urandom_fd();
+    if (fd == -1) {
+        return errno;
+    }
+    n = read(fd, buf, count);
+    if (n < count) {
+        return errno;
+    }
     return U1DB_OK;
 }
 
 #endif // defined(_WIN32) || defined(WIN32)
 
+
+int
+u1db__generate_hex_uuid(char *uuid)
+{
+    unsigned char buf[16] = {};
+    random_bytes(buf, 16);
+    uuid_to_hex(uuid, buf);
+    return U1DB_OK;
+}
 
 static void
 uuid_to_hex(char *hex_out, unsigned char *bin_in)
