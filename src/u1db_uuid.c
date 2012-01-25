@@ -96,7 +96,7 @@ random_bytes(void *buf, size_t count)
 int
 u1db__generate_hex_uuid(char *uuid)
 {
-    unsigned char buf[16] = {};
+    unsigned char buf[16] = {0};
     random_bytes(buf, 16);
     // We set the version number to 4
     buf[6] = (buf[6] & 0x0F) | 0x40;
