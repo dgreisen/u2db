@@ -131,14 +131,18 @@ class TestCDocument(BackendTests):
 
 class TestUUID(BackendTests):
 
-    def test_basic(self):
-        uuid = c_backend_wrapper.generate_hex_uuid()
-        self.assertIsInstance(uuid, str)
-        self.assertEqual(32, len(uuid))
-        # This will raise ValueError if it isn't a valid hex string
-        v = int(uuid, 16)
-
-    def test_is_different(self):
-        uuid1 = c_backend_wrapper.generate_hex_uuid()
-        uuid2 = c_backend_wrapper.generate_hex_uuid()
-        self.assertNotEqual(uuid1, uuid2)
+    def test_uuid4_conformance(self):
+        uuids = set()
+        for i in range(20):
+            uuid = c_backend_wrapper.generate_hex_uuid()
+            self.assertIsInstance(uuid, str)
+            self.assertEqual(32, len(uuid))
+            # This will raise ValueError if it isn't a valid hex string
+            v = long(uuid, 16)
+            # Version 4 uuids have 2 other requirements, the high 4 bits of the
+            # seventh byte are always '0x4', and the middle bits of byte 9 are
+            # always set
+            self.assertEqual('4', uuid[12])
+            self.assertTrue(uuid[16] in '89ab')
+            self.assertTrue(uuid not in uuids)
+            uuids.add(uuid)

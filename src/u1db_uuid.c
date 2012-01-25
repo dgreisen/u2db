@@ -98,6 +98,10 @@ u1db__generate_hex_uuid(char *uuid)
 {
     unsigned char buf[16] = {};
     random_bytes(buf, 16);
+    // We set the version number to 4
+    buf[6] = (buf[6] & 0x0F) | 0x40;
+    // And for the clock bits, bit 6 is 0, bit 7 is 1
+    buf[8] = (buf[8] & 0x3F) | 0x80;
     uuid_to_hex(uuid, buf);
     return U1DB_OK;
 }
