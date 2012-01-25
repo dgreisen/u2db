@@ -278,7 +278,7 @@ int
 u1db_create_doc(u1database *db, const char *content, const char *doc_id,
                 u1db_document **doc)
 {
-    char *doc_rev = NULL, *local_doc_id = NULL;
+    char *local_doc_id = NULL;
     int status;
 
     if (db == NULL || content == NULL || doc == NULL || *doc != NULL) {
@@ -527,7 +527,8 @@ u1db_get_doc(u1database *db, const char *doc_id, u1db_document **doc)
             *doc = NULL;
             goto finish;
         }
-        *doc = u1db__allocate_document(doc_id, doc_rev, content, 0);
+        *doc = u1db__allocate_document(doc_id, (const char*)doc_rev,
+                                       (const char*)content, 0);
 
     } else {
         // TODO: Figure out how to return the SQL error code
@@ -830,20 +831,6 @@ u1db__sync_record_machine_info(u1database *db, const char *replica_uid,
     return status;
 }
 
-static int
-compare_and_insert_doc(u1database *db, const char *doc_rev, const char *doc)
-{
-    return U1DB_INVALID_PARAMETER;
-}
-
-static int
-insert_records(u1database *db, u1db_record *records)
-{
-    if (db == NULL || records == NULL) {
-        return U1DB_INVALID_PARAMETER;
-    }
-    return U1DB_INVALID_PARAMETER;
-}
 
 int
 u1db__sync_exchange(u1database *db, const char *from_replica_uid,
@@ -908,7 +895,7 @@ void u1db__free_records(u1db_record **record)
 }
 
 static int
-copy_str_and_len(char **dest, int *dest_len, const char *source)
+copy_str_and_len(char **dest, size_t *dest_len, const char *source)
 {
     int source_len;
     if (dest == NULL || dest_len == NULL) {
