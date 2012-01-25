@@ -43,3 +43,10 @@ class TestError(tests.TestCase):
         self.assertEqual(500, err.status)
         self.assertIs(None, err.wire_description)
         self.assertEqual("Crash.", err.message)
+
+    def test_HTTPError_str(self):
+        err = errors.HTTPError(500)
+        self.assertEqual("HTTPError(500)", str(err))
+
+        err = errors.HTTPError(500, "ERROR")
+        self.assertEqual("HTTPError(500, 'ERROR')", str(err))
