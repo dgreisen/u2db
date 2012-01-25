@@ -116,6 +116,12 @@ class TestVectorClock(BackendTests):
         self.assertEqual('VectorClockRev(ab:1|bc:2|cd:3|de:4|ef:5)',
                      repr(self.create_vcr('ab:1|bc:2|cd:3|de:4|ef:5')))
 
+    def test_unsorted(self):
+        # TODO: Eventually this should just handle the unsorted case, and fix
+        # it.
+        self.assertEqual('VectorClockRev(None)',
+                         repr(self.create_vcr('b:1|a:2')))
+
 
 class TestCDocument(BackendTests):
 
