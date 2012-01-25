@@ -83,6 +83,11 @@ class HTTPError(U1DBError):
         self.message = message
         self.headers = headers
 
+    def __str__(self):
+        if not self.message:
+            return "HTTPError(%d)" % self.status
+        else:
+            return "HTTPError(%d, %r)" % (self.status, self.message)
 
 # mapping wire (transimission) descriptions/tags for errors to the exceptions
 wire_description_to_exc = dict(
