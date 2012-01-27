@@ -30,6 +30,8 @@ static HCRYPTPROV crypt_provider = 0;
 
 static HCRYPTPROV get_provider()
 {
+    // Note: There is a small potential thread-race condition as crypt_provider
+    //       is a global, if we adopt a threading lib, consider adding a lock.
     if (crypt_provider == 0) {
         if (!CryptAcquireContext(&crypt_provider, NULL, NULL, PROV_RSA_AES,
                                  CRYPT_VERIFYCONTEXT))
@@ -69,6 +71,8 @@ static int urandom_fd = -1;
 static int
 get_urandom_fd(void)
 {
+    // Note: There is a small potential thread-race condition as urandom_fd
+    //       is a global, if we adopt a threading lib, consider adding a lock.
     if (urandom_fd < 0) {
         urandom_fd = open("/dev/urandom", O_RDONLY);
     }
