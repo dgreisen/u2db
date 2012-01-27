@@ -100,7 +100,7 @@ class AllDatabaseTests(tests.DatabaseBaseTests, tests.TestCaseWithServer):
         self.assertRaises(errors.InvalidDocId, self.db.put_doc, doc)
 
     def test_put_doc_refuses_slashes(self):
-        doc = self.make_document('/a', None, simple_doc)
+        doc = self.make_document('a/b', None, simple_doc)
         self.assertRaises(errors.InvalidDocId, self.db.put_doc, doc)
         doc = self.make_document(r'\b', None, simple_doc)
         self.assertRaises(errors.InvalidDocId, self.db.put_doc, doc)
@@ -162,6 +162,10 @@ class AllDatabaseTests(tests.DatabaseBaseTests, tests.TestCaseWithServer):
 
 
 class LocalDatabaseTests(tests.DatabaseBaseTests):
+
+    def test_put_doc_refuses_slashes_picky(self):
+        doc = self.make_document('/a', None, simple_doc)
+        self.assertRaises(errors.InvalidDocId, self.db.put_doc, doc)
 
     def test_get_docs(self):
         doc1 = self.db.create_doc(simple_doc)
