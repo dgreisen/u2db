@@ -16,10 +16,7 @@
 
 
 from u1db import tests
-try:
-    from u1db.tests import c_backend_wrapper
-except ImportError:
-    c_backend_wrapper = None
+from u1db.tests import c_backend_wrapper, c_backend_error
 
 
 class TestCDatabaseExists(tests.TestCase):
@@ -27,7 +24,7 @@ class TestCDatabaseExists(tests.TestCase):
     def test_exists(self):
         if c_backend_wrapper is None:
             self.fail("Could not import the c_backend_wrapper module."
-                      " Was it compiled properly?")
+                      " Was it compiled properly?\n%s" % (c_backend_error,))
 
 
 # Rather than lots of failing tests, we have the above check to test that the
@@ -64,10 +61,16 @@ class TestCDatabase(BackendTests):
 
     def test__set_replica_uid(self):
         db = c_backend_wrapper.CDatabase(':memory:')
-        self.assertIs(None, db._replica_uid)
+        self.assertIsNot(None, db._replica_uid)
         db._set_replica_uid('foo')
         self.assertEqual([('foo',)], db._run_sql(
             "SELECT value FROM u1db_config WHERE name='replica_uid'"))
+
+    def test_default_replica_uid(self):
+        self.db = c_backend_wrapper.CDatabase(':memory:')
+        self.assertIsNot(None, self.db._replica_uid)
+        self.assertEqual(32, len(self.db._replica_uid))
+        val = int(self.db._replica_uid, 16)
 
 
 
@@ -125,3 +128,21 @@ class TestCDocument(BackendTests):
     def test_create(self):
         doc = self.make_document('doc-id', 'uid:1', tests.simple_doc)
 
+
+class TestUUID(BackendTests):
+
+    def test_uuid4_conformance(self):
+        uuids = set()
+        for i in range(20):
+            uuid = c_backend_wrapper.generate_hex_uuid()
+            self.assertIsInstance(uuid, str)
+            self.assertEqual(32, len(uuid))
+            # This will raise ValueError if it isn't a valid hex string
+            v = long(uuid, 16)
+            # Version 4 uuids have 2 other requirements, the high 4 bits of the
+            # seventh byte are always '0x4', and the middle bits of byte 9 are
+            # always set
+            self.assertEqual('4', uuid[12])
+            self.assertTrue(uuid[16] in '89ab')
+            self.assertTrue(uuid not in uuids)
+            uuids.add(uuid)

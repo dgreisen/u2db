@@ -38,8 +38,10 @@ from u1db.remote import (
 
 try:
     from u1db.tests import c_backend_wrapper
-except ImportError:
+    c_backend_error = None
+except ImportError, e:
     c_backend_wrapper = None
+    c_backend_error = e
 
 # Setting this means that failing assertions will not include this module in
 # their traceback. However testtools doesn't seem to set it, and we don't want
