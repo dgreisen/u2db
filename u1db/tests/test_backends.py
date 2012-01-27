@@ -100,7 +100,7 @@ class AllDatabaseTests(tests.DatabaseBaseTests, tests.TestCaseWithServer):
         self.assertRaises(errors.InvalidDocId, self.db.put_doc, doc)
 
     def test_put_doc_refuses_slashes(self):
-        doc = self.make_document('/a', None, simple_doc)
+        doc = self.make_document('a/b', None, simple_doc)
         self.assertRaises(errors.InvalidDocId, self.db.put_doc, doc)
         doc = self.make_document(r'\b', None, simple_doc)
         self.assertRaises(errors.InvalidDocId, self.db.put_doc, doc)
