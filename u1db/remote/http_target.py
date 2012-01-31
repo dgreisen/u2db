@@ -75,17 +75,21 @@ class HTTPSyncTarget(http_client.HTTPClientBase, SyncTarget):
         self._conn.putrequest('POST',
                                 '%s/sync-from/%s' % (self._url.path,
                                                      source_replica_uid))
-        self._conn.putheader('content-type', 'application/x-u1db-multi-json')
-        entries = []
-        size = 0
+        self._conn.putheader('content-type', 'application/x-u1db-sync-stream')
+        entries = ['[']
+        size = 1
         def prepare(**dic):
-            entry = simplejson.dumps(dic) + "\r\n"
+            entry = comma + '\r\n' + simplejson.dumps(dic)
             entries.append(entry)
             return len(entry)
+        comma = ''
         size += prepare(last_known_generation=last_known_generation)
+        comma = ','
         for doc, gen in docs_by_generations:
             size += prepare(id=doc.doc_id, rev=doc.rev, content=doc.content,
                             gen=gen)
+        entries.append('\r\n]')
+        size += len(entries[-1])
         self._conn.putheader('content-length', str(size))
         self._conn.endheaders()
         for entry in entries:

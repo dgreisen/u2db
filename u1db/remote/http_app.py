@@ -33,6 +33,7 @@ from u1db import (
     )
 from u1db.remote import (
     http_errors,
+    utils,
     )
 
 
@@ -419,18 +420,27 @@ class HTTPInvocationByMethodWithBody(object):
                 meth = self._lookup(method)
                 body = reader.read_chunk(sys.maxint)
                 return meth(args, body)
-            elif content_type == 'application/x-u1db-multi-json':
+            elif content_type == 'application/x-u1db-sync-stream':
                 meth_args = self._lookup('%s_args' % method)
                 meth_entry = self._lookup('%s_stream_entry' % method)
                 meth_end = self._lookup('%s_end' % method)
                 body_getline = reader.getline
-                meth_args(args, body_getline())
+                if body_getline().strip() != '[':
+                    raise BadRequest
+                line = body_getline()
+                line, comma = utils.check_and_strip_comma(line.strip())
+                meth_args(args, line)
                 while True:
                     line = body_getline()
-                    if not line:
-                        break
                     entry = line.strip()
+                    if entry == ']':
+                        break
+                    if not entry or not comma:  # empty or no prec comma
+                        raise BadRequest
+                    entry, comma = utils.check_and_strip_comma(entry)
                     meth_entry({}, entry)
+                if comma or body_getline():  # extra comma or data
+                    raise BadRequest
                 return meth_end()
             else:
                 raise BadRequest()
