@@ -619,6 +619,7 @@ class TestHTTPApp(tests.TestCase):
                          simplejson.loads(parts[3].rstrip(",")))
         self.assertEqual(']', parts[4])
 
+
 class TestHTTPErrors(tests.TestCase):
 
     def test_wire_description_to_status(self):

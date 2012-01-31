@@ -30,6 +30,50 @@ from u1db.remote import (
     )
 
 
+class TestParsingSyncStream(tests.TestCase):
+
+    def test_wrong_start(self):
+        tgt = http_target.HTTPSyncTarget("http://foo/foo")
+
+        self.assertRaises(errors.BrokenSyncStream,
+                          tgt._parse_sync_stream, "{}\r\n]", None)
+
+        self.assertRaises(errors.BrokenSyncStream,
+                          tgt._parse_sync_stream, "\r\n{}\r\n]", None)
+
+        self.assertRaises(errors.BrokenSyncStream,
+                          tgt._parse_sync_stream, "", None)
+
+    def test_wrong_end(self):
+        tgt = http_target.HTTPSyncTarget("http://foo/foo")
+
+        self.assertRaises(errors.BrokenSyncStream,
+                          tgt._parse_sync_stream, "[\r\n{}", None)
+
+        self.assertRaises(errors.BrokenSyncStream,
+                          tgt._parse_sync_stream, "[\r\n", None)
+
+    def test_missing_comma(self):
+        tgt = http_target.HTTPSyncTarget("http://foo/foo")
+
+        self.assertRaises(errors.BrokenSyncStream,
+                          tgt._parse_sync_stream,
+                          '[\r\n{}\r\n{"id": "i", "rev": "r", '
+                          '"content": "c", "gen": 3}\r\n]', None)
+
+    def test_extra_comma(self):
+        tgt = http_target.HTTPSyncTarget("http://foo/foo")
+
+        self.assertRaises(errors.BrokenSyncStream,
+                          tgt._parse_sync_stream, "[\r\n{},\r\n]", None)
+
+        self.assertRaises(errors.BrokenSyncStream,
+                          tgt._parse_sync_stream,
+                          '[\r\n{},\r\n{"id": "i", "rev": "r", '
+                          '"content": "c", "gen": 3},\r\n]',
+                          lambda doc, gen: None)
+
+
 def http_server_def():
     def make_server(host_port, handler, state):
         application = http_app.HTTPApp(state)

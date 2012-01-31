@@ -20,11 +20,14 @@ import simplejson
 
 from u1db import (
     Document,
-    errors,
     SyncTarget,
+    )
+from u1db.errors import (
+    BrokenSyncStream,
     )
 from u1db.remote import (
     http_client,
+    utils,
     )
 
 
@@ -45,6 +48,26 @@ class HTTPSyncTarget(http_client.HTTPClientBase, SyncTarget):
         self._ensure_connection()
         self._request_json('PUT', ['sync-from', source_replica_uid], {},
                                   {'generation': source_replica_generation})
+
+    def _parse_sync_stream(self, data, return_doc_cb):
+        parts = data.splitlines()  # one at a time
+        if not parts or parts[0] != '[':
+            raise BrokenSyncStream
+        if parts[-1] != ']':
+            raise BrokenSyncStream
+        data = parts[1:-1]
+        line, comma = utils.check_and_strip_comma(data[0])
+        res = simplejson.loads(line)
+        for entry in data[1:]:
+            if not comma:  # missing in between comma
+                raise BrokenSyncStream
+            line, comma = utils.check_and_strip_comma(entry)
+            entry = simplejson.loads(line)
+            doc = Document(entry['id'], entry['rev'], entry['content'])
+            return_doc_cb(doc, entry['gen'])
+        if comma:  # bad extra comma
+            raise BrokenSyncStream
+        return res
 
     def sync_exchange(self, docs_by_generations, source_replica_uid,
                       last_known_generation, return_doc_cb):
@@ -69,17 +92,7 @@ class HTTPSyncTarget(http_client.HTTPClientBase, SyncTarget):
             self._conn.send(entry)
         entries = None
         data, _ = self._response()
-        parts = data.splitlines()  # one at a time
-        if parts[0] != '[':
-            raise errors.BrokenSyncStream("expected [ on first stream line")
-        if parts[-1] != ']':
-            raise errors.BrokenSyncStream("expected ] on last stream line")
-        data = parts[1:-1]
-        res = simplejson.loads(data[0].rstrip(","))
-        for entry in data[1:]:
-            entry = simplejson.loads(entry.rstrip(","))
-            doc = Document(entry['id'], entry['rev'], entry['content'])
-            return_doc_cb(doc, entry['gen'])
+        res = self._parse_sync_stream(data, return_doc_cb)
         data = None
         return res['new_generation']
 
