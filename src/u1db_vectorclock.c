@@ -88,6 +88,7 @@ u1db__vectorclock_from_str(const char *s)
     u1db_vectorclock *res = NULL;
     int i;
     const char *cur, *colon, *pipe, *end;
+    const char *last_replica_uid;
     char *last_digit;
     if (s == NULL) {
         s = "";
@@ -114,6 +115,7 @@ u1db__vectorclock_from_str(const char *s)
                                         sizeof(u1db_vectorclock_item));
     // Now walk through it again, looking for the machine:count pairs
     cur = s;
+    last_replica_uid = "";
     for (i = 0; i < res->num_items; i++) {
         if (cur >= end) {
             // Ran off the end. Most likely indicates a trailing | that isn't
@@ -133,6 +135,14 @@ u1db__vectorclock_from_str(const char *s)
             return NULL;
         }
         res->items[i].replica_uid = strndup(cur, colon-cur);
+        if (strcmp(res->items[i].replica_uid, last_replica_uid) <= 0) {
+            // TODO: We don't have a way to indicate what the error is, but
+            //       we'll just return NULL;
+            // This entry wasn't in sorted order, so treat it as an error.
+            u1db__free_vectorclock(&res);
+            return NULL;
+        }
+        last_replica_uid = res->items[i].replica_uid;
         res->items[i].db_rev = strtol(colon+1, &last_digit, 10);
         if (last_digit != pipe) {
             u1db__free_vectorclock(&res);
