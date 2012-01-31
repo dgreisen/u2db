@@ -22,6 +22,8 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <sqlite3.h>
+#include <json/json.h>
+
 #include "u1db/u1db_internal.h"
 #include "u1db/u1db_vectorclock.h"
 
@@ -491,6 +493,11 @@ u1db_put_doc(u1database *db, u1db_document *doc)
                            (old_content != NULL));
         if (status == SQLITE_OK) {
             status = sqlite3_exec(db->sql_handle, "COMMIT", NULL, NULL, NULL);
+        }
+        if (status != SQLITE_OK) {
+            json_object *obj;
+            obj = json_tokener_parse(doc->content);
+            json_object_put(obj);
         }
     }
 finish:

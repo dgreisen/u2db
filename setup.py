@@ -73,6 +73,8 @@ synchronize them with other stores.
         if sys.platform == 'win32':
             # Used for the random number generator
             extra_libs.append('advapi32')
+        else:
+            extra_libs.append('json')
         ext.append(Extension(
             "u1db.tests.c_backend_wrapper",
             ["u1db/tests/c_backend_wrapper.pyx",
