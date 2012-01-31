@@ -16,6 +16,8 @@
 
 """The Synchronization class for U1DB."""
 
+from wsgiref.simple_server import ServerHandler
+
 from u1db import (
     errors,
     sync,
@@ -202,6 +204,21 @@ class DatabaseSyncTargetTests(tests.DatabaseBaseTests,
                                         last_known_generation=0,
                                         return_doc_cb=self.receive_doc)
         self.assertEqual(([], 2), (self.other_changes, new_gen))
+
+    def test_sync_exchange_detect_incomplete_exchange(self):
+        # suppress traceback printing in the wsgiref server
+        self.patch(ServerHandler, 'log_exception', lambda h, exc_info: None)
+        doc = self.db.create_doc(simple_doc)
+        self.assertEqual([doc.doc_id], self.db._get_transaction_log())
+        class Fail(Exception):
+            pass
+        def exploding_get_docs(doc_ids, check_for_conflicts):
+            raise Fail
+        self.db.get_docs = exploding_get_docs
+        self.assertRaises((Fail, errors.BrokenSyncStream),
+                          self.st.sync_exchange, [], 'other-replica',
+                          last_known_generation=0,
+                          return_doc_cb=self.receive_doc)
 
 
 class DatabaseSyncTests(tests.DatabaseBaseTests):

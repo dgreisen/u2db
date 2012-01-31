@@ -301,9 +301,12 @@ class SyncResource(object):
             self.responder.stream_entry(entry)
         new_gen = self.sync_exch.find_changes_to_return(
                                                     self.last_known_generation)
-        self.responder.content_type = 'application/x-u1db-multi-json'
-        self.responder.start_response(200, {"new_generation": new_gen})
+        self.responder.content_type = 'application/x-u1db-sync-stream'
+        self.responder.start_response(200)
+        self.responder.start_stream(),
+        self.responder.stream_entry({"new_generation": new_gen})
         new_gen = self.sync_exch.return_docs(send_doc)
+        self.responder.end_stream()
         self.responder.finish_response()
 
 
@@ -315,6 +318,8 @@ class HTTPResponder(object):
 
     def __init__(self, start_response):
         self._started = False
+        self._stream_state = -1
+        self._no_initial_obj = True
         self.sent_response = False
         self._start_response = start_response
         self._write = None
@@ -333,6 +338,7 @@ class HTTPResponder(object):
                                              headers.items())
         # xxx version in headers
         if obj_dic is not None:
+            self._no_initial_obj = False
             self._write(simplejson.dumps(obj_dic) + "\r\n")
 
     def finish_response(self):
@@ -351,10 +357,26 @@ class HTTPResponder(object):
         self.content = [content]
         self.finish_response()
 
+    def start_stream(self):
+        "start stream (array) as part of the response."
+        assert self._started and self._no_initial_obj
+        self._stream_state = 0
+        self._write("[")
+
     def stream_entry(self, entry):
         "send stream entry as part of the response."
-        assert self._started
-        self._write(simplejson.dumps(entry) + "\r\n")
+        assert self._stream_state != -1
+        if self._stream_state == 0:
+            self._stream_state = 1
+            self._write('\r\n')
+        else:
+            self._write(',\r\n')
+        self._write(simplejson.dumps(entry))
+
+    def end_stream(self):
+        "end stream (array)."
+        assert self._stream_state != -1
+        self._write("\r\n]\r\n")
 
 
 class HTTPInvocationByMethodWithBody(object):

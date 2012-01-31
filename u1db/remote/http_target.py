@@ -20,6 +20,7 @@ import simplejson
 
 from u1db import (
     Document,
+    errors,
     SyncTarget,
     )
 from u1db.remote import (
@@ -68,10 +69,15 @@ class HTTPSyncTarget(http_client.HTTPClientBase, SyncTarget):
             self._conn.send(entry)
         entries = None
         data, _ = self._response()
-        data = data.splitlines()  # one at a time
-        res = simplejson.loads(data[0])
+        parts = data.splitlines()  # one at a time
+        if parts[0] != '[':
+            raise errors.BrokenSyncStream("expected [ on first stream line")
+        if parts[-1] != ']':
+            raise errors.BrokenSyncStream("expected ] on last stream line")
+        data = parts[1:-1]
+        res = simplejson.loads(data[0].rstrip(","))
         for entry in data[1:]:
-            entry = simplejson.loads(entry)
+            entry = simplejson.loads(entry.rstrip(","))
             doc = Document(entry['id'], entry['rev'], entry['content'])
             return_doc_cb(doc, entry['gen'])
         data = None

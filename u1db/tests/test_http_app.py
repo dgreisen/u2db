@@ -386,14 +386,19 @@ class TestHTTPResponder(tests.TestCase):
     def test_send_stream_entry(self):
         responder = http_app.HTTPResponder(self.start_response)
         responder.content_type = "application/x-u1db-multi-json"
-        responder.start_response(200, {"one": 1})
-        responder.stream_entry({'entry': True})
+        responder.start_response(200)
+        responder.start_stream()
+        responder.stream_entry({'entry': 1})
+        responder.stream_entry({'entry': 2})
+        responder.end_stream()
         responder.finish_response()
         self.assertEqual('200 OK', self.status)
         self.assertEqual({'content-type': 'application/x-u1db-multi-json',
                           'cache-control': 'no-cache'}, self.headers)
-        self.assertEqual(['{"one": 1}\r\n',
-                          '{"entry": true}\r\n'], self.response_body)
+        self.assertEqual(['[',
+                           '\r\n', '{"entry": 1}',
+                           ',\r\n', '{"entry": 2}',
+                          '\r\n]\r\n'], self.response_body)
         self.assertEqual([], responder.content)
 
 
@@ -584,9 +589,9 @@ class TestHTTPApp(tests.TestCase):
                             headers={'content-type':
                                      'application/x-u1db-multi-json'})
         self.assertEqual(200, resp.status)
-        self.assertEqual('application/x-u1db-multi-json',
+        self.assertEqual('application/x-u1db-sync-stream',
                          resp.header('content-type'))
-        self.assertEqual({'new_generation': 2}, simplejson.loads(resp.body))
+        self.assertEqual('[\r\n{"new_generation": 2}\r\n]\r\n', resp.body)
         self.assertEqual([('replica', 10), ('replica', 11)], gens)
 
     def test_sync_exchange_receive(self):
@@ -599,18 +604,20 @@ class TestHTTPApp(tests.TestCase):
                             headers={'content-type':
                                      'application/x-u1db-multi-json'})
         self.assertEqual(200, resp.status)
-        self.assertEqual('application/x-u1db-multi-json',
+        self.assertEqual('application/x-u1db-sync-stream',
                          resp.header('content-type'))
         parts = resp.body.splitlines()
-        self.assertEqual(3, len(parts))
-        self.assertEqual({'new_generation': 2}, simplejson.loads(parts[0]))
+        self.assertEqual(5, len(parts))
+        self.assertEqual('[', parts[0])
+        self.assertEqual({'new_generation': 2},
+                         simplejson.loads(parts[1].rstrip(",")))
         self.assertEqual({'content': '{"value": "there"}',
                           'rev': doc.rev, 'id': doc.doc_id, 'gen': 1},
-                         simplejson.loads(parts[1]))
+                         simplejson.loads(parts[2].rstrip(",")))
         self.assertEqual({'content': '{"value": "there2"}',
                           'rev': doc2.rev, 'id': doc2.doc_id, 'gen': 2},
-                         simplejson.loads(parts[2]))
-
+                         simplejson.loads(parts[3].rstrip(",")))
+        self.assertEqual(']', parts[4])
 
 class TestHTTPErrors(tests.TestCase):
 
