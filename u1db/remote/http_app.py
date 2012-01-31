@@ -52,7 +52,8 @@ class _FencedReader(object):
     def read_chunk(self, atmost):
         if self._kept is not None:
             # ignore atmost, kept data should be a subchunk anyway
-            return self._kept
+            kept, self._kept = self._kept, None
+            return kept
         if self.remaining == 0:
             return ''
         data = self.rfile.read(min(self.remaining, atmost))

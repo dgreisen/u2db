@@ -73,6 +73,7 @@ class TestFencedReader(tests.TestCase):
         self.assertEqual("xyz", data)
         self.assertEqual(0, inp.tell())
         self.assertEqual(4, reader.remaining)
+        self.assertIsNone(reader._kept)
 
     def test_getline(self):
         inp = StringIO.StringIO("abc\r\nde")
@@ -104,6 +105,8 @@ class TestFencedReader(tests.TestCase):
         line = reader.getline()
         self.assertEqual("abcde\r\n", line)
         self.assertEqual("f", reader._kept)
+        line = reader.getline()
+        self.assertEqual("f", line)
 
     def test_getline_empty(self):
         inp = StringIO.StringIO("")
