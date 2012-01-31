@@ -66,6 +66,10 @@ class DatabaseSyncTargetTests(tests.DatabaseBaseTests,
     scenarios = tests.multiply_scenarios(tests.DatabaseBaseTests.scenarios,
                                          target_scenarios)
 
+    # whitebox true means self.db is the actual local db object
+    # against which the sync is performed
+    whitebox = True
+
     def setUp(self):
         super(DatabaseSyncTargetTests, self).setUp()
         self.db, self.st = self.create_db_and_target(self)
@@ -132,8 +136,9 @@ class DatabaseSyncTargetTests(tests.DatabaseBaseTests,
         self.assertEqual([doc.doc_id], self.db._get_transaction_log())
         self.assertEqual(([(doc.doc_id, doc.rev, simple_doc, 1)], 1),
                          (self.other_changes, new_gen))
-        self.assertEqual(self.db._last_exchange_log['return'],
-                         {'last_gen': 1, 'docs': [(doc.doc_id, doc.rev)]})
+        if self.whitebox:
+            self.assertEqual(self.db._last_exchange_log['return'],
+                             {'last_gen': 1, 'docs': [(doc.doc_id, doc.rev)]})
 
     def test_sync_exchange_ignores_convergence(self):
         doc = self.db.create_doc(simple_doc)
@@ -155,8 +160,9 @@ class DatabaseSyncTargetTests(tests.DatabaseBaseTests,
         self.assertEqual([doc.doc_id], self.db._get_transaction_log())
         self.assertEqual(([(doc.doc_id, doc.rev, simple_doc, 1)], 1),
                          (self.other_changes, new_gen))
-        self.assertEqual(self.db._last_exchange_log['return'],
-                         {'last_gen': 1, 'docs': [(doc.doc_id, doc.rev)]})
+        if self.whitebox:
+            self.assertEqual(self.db._last_exchange_log['return'],
+                             {'last_gen': 1, 'docs': [(doc.doc_id, doc.rev)]})
 
     def test_sync_exchange_returns_many_new_docs(self):
         doc = self.db.create_doc(simple_doc)
@@ -171,9 +177,10 @@ class DatabaseSyncTargetTests(tests.DatabaseBaseTests,
         self.assertEqual(([(doc.doc_id, doc.rev, simple_doc, 1),
                            (doc2.doc_id, doc2.rev, nested_doc, 2)], 2),
                          (self.other_changes, new_gen))
-        self.assertEqual(self.db._last_exchange_log['return'],
-                         {'last_gen': 2, 'docs': [(doc.doc_id, doc.rev),
-                                                  (doc2.doc_id, doc2.rev)]})
+        if self.whitebox:
+            self.assertEqual(self.db._last_exchange_log['return'],
+                             {'last_gen': 2, 'docs': [(doc.doc_id, doc.rev),
+                                                      (doc2.doc_id, doc2.rev)]})
 
     def test_sync_exchange_getting_newer_docs(self):
         doc = self.db.create_doc(simple_doc)
@@ -189,6 +196,8 @@ class DatabaseSyncTargetTests(tests.DatabaseBaseTests,
         self.assertEqual(([], 2), (self.other_changes, new_gen))
 
     def test_sync_exchange_with_concurrent_updates(self):
+        if not self.whitebox:
+            self.skipTest("requires to be able to monkeypatch the target db")
         doc = self.db.create_doc(simple_doc)
         self.assertEqual([doc.doc_id], self.db._get_transaction_log())
         orig_wc = self.db.whats_changed
@@ -206,6 +215,8 @@ class DatabaseSyncTargetTests(tests.DatabaseBaseTests,
         self.assertEqual(([], 2), (self.other_changes, new_gen))
 
     def test_sync_exchange_detect_incomplete_exchange(self):
+        if not self.whitebox:
+            self.skipTest("requires to be able to monkeypatch the target db")
         # suppress traceback printing in the wsgiref server
         self.patch(ServerHandler, 'log_exception', lambda h, exc_info: None)
         doc = self.db.create_doc(simple_doc)
