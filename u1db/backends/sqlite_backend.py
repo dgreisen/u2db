@@ -154,6 +154,9 @@ class SQLiteDatabase(CommonBackend):
         c.execute("CREATE TABLE sync_log ("
                   " replica_uid TEXT PRIMARY KEY,"
                   " known_generation INTEGER)")
+        # TODO: We probably want an index on conflicts(doc_id), since we can't
+        #       use the dual-key primary key for lookups.
+        # TODO: Rename 'doc' to 'content'
         c.execute("CREATE TABLE conflicts ("
                   " doc_id TEXT,"
                   " doc_rev TEXT,"
@@ -393,7 +396,9 @@ class SQLiteDatabase(CommonBackend):
         c = self._db_handle.cursor()
         c.execute("SELECT doc_rev, doc FROM conflicts WHERE doc_id = ?",
                   (doc_id,))
-        return c.fetchall()
+        return [Document(doc_id, doc_rev, content)
+                for doc_rev, content in c.fetchall()]
+
 
     def _get_conflict_revs(self, doc_id):
         c = self._db_handle.cursor()
@@ -404,9 +409,10 @@ class SQLiteDatabase(CommonBackend):
         with self._db_handle:
             conflict_docs = self._get_conflicts(doc_id)
             if not conflict_docs:
-                return conflict_docs
+                return []
             this_doc = self._get_doc(doc_id)
-        return [(this_doc.rev, this_doc.content)] + conflict_docs
+            this_doc.has_conflicts = True
+            return [this_doc] + conflict_docs
 
     def get_sync_generation(self, other_replica_uid):
         c = self._db_handle.cursor()

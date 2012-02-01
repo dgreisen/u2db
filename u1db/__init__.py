@@ -204,8 +204,7 @@ class Database(object):
         The order of the conflicts is such that the first entry is the value
         that would be returned by "get_doc".
 
-        :return: [(doc_rev, doc)] a list of tuples of the revision for the
-            content, and the JSON string of the content.
+        :return: [doc] A list of the Document entries that are conflicted.
         """
         raise NotImplementedError(self.get_doc_conflicts)
 

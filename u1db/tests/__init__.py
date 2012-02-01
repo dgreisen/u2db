@@ -71,7 +71,7 @@ class TestCase(testtools.TestCase):
     def assertGetDocConflicts(self, db, doc_id, conflicts):
         """Assert what conflicts are stored for a given doc_id.
 
-        :param conflicts: A list of (doc_Rev, content) pairs.
+        :param conflicts: A list of (doc_rev, content) pairs.
             The first item must match the first item returned from the
             database, however the rest can be returned in any order.
         """
@@ -79,6 +79,7 @@ class TestCase(testtools.TestCase):
             conflicts = conflicts[:1] + sorted(conflicts[1:])
         actual = db.get_doc_conflicts(doc_id)
         if actual:
+            actual = [(doc.rev, doc.content) for doc in actual]
             actual = actual[:1] + sorted(actual[1:])
         self.assertEqual(conflicts, actual)
 
