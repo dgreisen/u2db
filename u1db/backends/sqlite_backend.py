@@ -22,6 +22,8 @@ from sqlite3 import dbapi2
 import time
 import uuid
 
+import pkg_resources
+
 from u1db.backends import CommonBackend, CommonSyncTarget
 from u1db import (
     Document,
@@ -134,18 +136,16 @@ class SQLiteDatabase(CommonBackend):
     def _initialize(self, c):
         """Create the schema in the database."""
         #read the script with sql commands
-        schema_name = os.path.join(os.path.dirname(__file__), 'dbschema.sql')
-        with open(schema_name, 'r') as schema:
-            # Note: We'd like to use c.executescript() here, but it seems that
-            #       executescript always commits, even if you set
-            #       isolation_level = None, so if we want to properly handle
-            #       exclusive locking and rollbacks between processes, we need
-            #       to execute it line-by-line
-            content = schema.read()
-            for line in content.split(';'):
-                if not line:
-                    continue
-                c.execute(line)
+        schema_content = pkg_resources.resource_string(__name__, 'dbschema.sql')
+        # Note: We'd like to use c.executescript() here, but it seems that
+        #       executescript always commits, even if you set
+        #       isolation_level = None, so if we want to properly handle
+        #       exclusive locking and rollbacks between processes, we need
+        #       to execute it line-by-line
+        for line in schema_content.split(';'):
+            if not line:
+                continue
+            c.execute(line)
         #add extra fields
         self._extra_schema_init(c)
         # A unique identifier should be set for this replica. Implementations
