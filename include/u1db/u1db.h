@@ -105,7 +105,9 @@ int u1db_put_doc(u1database *db, u1db_document *doc);
 /**
  * Update content if the revision is newer than what is already present.
  *
- * @param doc: The document we want added to the database.
+ * @param doc: (IN/OUT) The document we want added to the database. If
+ *             save_conflict is true and this conflicts, we will set
+ *             doc->has_conflicts
  * @param save_conflict: If 1, when a document would conflict, it is saved as
  *                       the current version and marked as a conflict.
  *                       Otherwise the document is just rejected as not newer.

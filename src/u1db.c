@@ -417,6 +417,73 @@ write_doc(u1database *db, const char *doc_id, const char *doc_rev,
     return status;
 }
 
+
+// Are there any conflicts for this doc?
+static int
+lookup_conflict(u1database *db, const char *doc_id, int *has_conflict)
+{
+    sqlite3_stmt *statement;
+    int status;
+
+    status = sqlite3_prepare_v2(db->sql_handle, 
+        "SELECT 1 FROM conflicts WHERE doc_id = ? LIMIT 1", -1,
+        &statement, NULL); 
+    if (status != SQLITE_OK) {
+        return status;
+    }
+    status = sqlite3_bind_text(statement, 1, doc_id, -1, SQLITE_TRANSIENT);
+    if (status != SQLITE_OK) { goto finish; }
+    status = sqlite3_step(statement);
+    if (status == SQLITE_ROW) {
+        // fprintf(stderr, "\nFound conflict for %s\n", doc_id);
+        *has_conflict = 1;
+        status = SQLITE_OK;
+    } else if (status == SQLITE_DONE) {
+        // fprintf(stderr, "\nNo conflict for %s\n", doc_id);
+        status = SQLITE_OK;
+        *has_conflict = 0;
+    }
+finish:
+    sqlite3_finalize(statement);
+    return status;
+}
+
+
+// Add a conflict for this doc
+static int
+write_conflict(u1database *db, const char *doc_id, const char *doc_rev,
+               const char *content, int content_len)
+{
+    sqlite3_stmt *statement;
+    int status;
+
+    status = sqlite3_prepare_v2(db->sql_handle, 
+        "INSERT INTO conflicts VALUES (?, ?, ?)", -1,
+        &statement, NULL); 
+    if (status != SQLITE_OK) {
+        return status;
+    }
+    status = sqlite3_bind_text(statement, 1, doc_id, -1, SQLITE_TRANSIENT);
+    if (status != SQLITE_OK) { goto finish; }
+    status = sqlite3_bind_text(statement, 2, doc_rev, -1, SQLITE_TRANSIENT);
+    if (status != SQLITE_OK) { goto finish; }
+    if (content == NULL) {
+        status = sqlite3_bind_null(statement, 3);
+    } else {
+        status = sqlite3_bind_text(statement, 3, content, content_len,
+                                   SQLITE_TRANSIENT);
+    }
+    if (status != SQLITE_OK) { goto finish; }
+    status = sqlite3_step(statement);
+    if (status == SQLITE_DONE) {
+        status = SQLITE_OK;
+    }
+finish:
+    sqlite3_finalize(statement);
+    return status;
+}
+
+
 int
 u1db_put_doc(u1database *db, u1db_document *doc)
 {
@@ -573,6 +640,11 @@ u1db_put_doc_if_newer(u1database *db, u1db_document *doc, int save_conflict,
             status = U1DB_OK;
             *state = U1DB_CONFLICTED;
             store = save_conflict;
+            if (save_conflict) {
+                status = write_conflict(db, doc->doc_id, old_doc_rev,
+                                        old_content, old_content_len);
+                doc->has_conflicts = 1;
+            }
         }
         u1db__free_vectorclock(&old_vcr);
         u1db__free_vectorclock(&new_vcr);
@@ -580,7 +652,7 @@ u1db_put_doc_if_newer(u1database *db, u1db_document *doc, int save_conflict,
     if (status == U1DB_OK && store) {
         status = write_doc(db, doc->doc_id, doc->doc_rev,
                            doc->content, doc->content_len,
-                           (old_content != NULL));
+                           (old_doc_rev != NULL));
         if (status == SQLITE_OK) {
             status = sqlite3_exec(db->sql_handle, "COMMIT", NULL, NULL, NULL);
         }
@@ -601,10 +673,6 @@ u1db_get_doc(u1database *db, const char *doc_id, u1db_document **doc)
     const unsigned char *doc_rev, *content;
     if (db == NULL || doc_id == NULL || doc == NULL) {
         // Bad Parameters
-        // TODO: we could handle has_conflicts == NULL meaning that the caller
-        //       is ignoring conflicts, but we don't want to make it *too* easy
-        //       to do so.
-        // TODO: Figure out how to do return codes
         return U1DB_INVALID_PARAMETER;
     }
 
@@ -619,8 +687,11 @@ u1db_get_doc(u1database *db, const char *doc_id, u1db_document **doc)
         *doc = u1db__allocate_document(doc_id, (const char*)doc_rev,
                                        (const char*)content, 0);
 
+        if (*doc != NULL) {
+            status = lookup_conflict(db, (*doc)->doc_id,
+                                     &((*doc)->has_conflicts));
+        }
     } else {
-        // TODO: Figure out how to return the SQL error code
         *doc = NULL;
     }
 finish:
