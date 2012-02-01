@@ -49,6 +49,12 @@ typedef struct _u1db_document
 #define U1DB_DOCUMENT_DOES_NOT_EXIST -5
 #define U1DB_NOMEM -6
 
+// Used by put_doc_if_newer
+#define U1DB_INSERTED 1
+#define U1DB_SUPERSEDED 2
+#define U1DB_CONVERGED 3
+#define U1DB_CONFLICTED 4
+
 /**
  * The basic constructor for a new connection.
  */
@@ -95,6 +101,28 @@ int u1db_create_doc(u1database *db, const char *content, const char *doc_id,
  *             the new revision.
  */
 int u1db_put_doc(u1database *db, u1db_document *doc);
+
+/**
+ * Update content if the revision is newer than what is already present.
+ *
+ * @param doc: The document we want added to the database.
+ * @param save_conflict: If 1, when a document would conflict, it is saved as
+ *                       the current version and marked as a conflict.
+ *                       Otherwise the document is just rejected as not newer.
+ * @param replica_uid: Used during synchronization to indicate what replica
+ *                     this document came from. (Can be NULL)
+ * @param replica_gen: Generation of the replica. Only meaningful if
+ *                     replica_uid is set.
+ * @param state: (OUT) Return one of:
+ *  U1DB_INSERTED   The document is newer than what we have
+ *  U1DB_SUPERSEDED We already have a newer document than what was passed
+ *  U1DB_CONVERGED  We have exactly the same document
+ *  U1DB_CONFLICTED Neither document is strictly newer than the other. If
+ *                  save_conflict is false, then we will ignore the document.
+ */
+int u1db_put_doc_if_newer(u1database *db, u1db_document *doc, int save_conflict,
+                          char *replica_uid, int replica_gen,
+                          int *state);
 
 /**
  * Get the document defined by the given document id.

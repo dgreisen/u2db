@@ -42,6 +42,9 @@ cdef extern from "u1db/u1db.h":
     int u1db_delete_doc(u1database *db, u1db_document *doc)
     int u1db_get_doc(u1database *db, char *doc_id, u1db_document **doc)
     int u1db_put_doc(u1database *db, u1db_document *doc)
+    int u1db_put_doc_if_newer(u1database *db, u1db_document *doc,
+                              int save_conflict, char *replica_uid,
+                              int replica_gen, int *state)
     int u1db_delete_doc(u1database *db, u1db_document *doc)
     int u1db_whats_changed(u1database *db, int *gen, void *ctx,
                            int (*cb)(void *ctx, char *doc_id, int gen))
@@ -54,6 +57,10 @@ cdef extern from "u1db/u1db.h":
     int U1DB_INVALID_DOC_ID
     int U1DB_DOCUMENT_ALREADY_DELETED
     int U1DB_DOCUMENT_DOES_NOT_EXIST
+    int U1DB_INSERTED
+    int U1DB_SUPERSEDED
+    int U1DB_CONVERGED
+    int U1DB_CONFLICTED
 
     void u1db_free_doc(u1db_document **doc)
     int u1db_doc_set_content(u1db_document *doc, char *content)
@@ -357,6 +364,33 @@ cdef class CDatabase(object):
         handle_status("Failed to put_doc",
             u1db_put_doc(self._db, doc._doc))
         return doc.rev
+
+    def put_doc_if_newer(self, CDocument doc, save_conflict, replica_uid=None,
+                         replica_gen=None):
+        cdef char *c_uid
+        cdef int gen, state = 0
+
+        if replica_uid is None:
+            c_uid = NULL
+        else:
+            c_uid = replica_uid
+        if replica_gen is None:
+            gen = 0
+        else:
+            gen = replica_gen
+        handle_status("Failed to put_doc_if_newer",
+            u1db_put_doc_if_newer(self._db, doc._doc, save_conflict,
+                c_uid, gen, &state)) 
+        if state == U1DB_INSERTED:
+            return 'inserted'
+        elif state == U1DB_SUPERSEDED:
+            return 'superseded'
+        elif state == U1DB_CONVERGED:
+            return 'converged'
+        elif state == U1DB_CONFLICTED:
+            return 'conflicted'
+        else:
+            raise RuntimeError("Unknown put_doc_if_newer state: %d" % (state,))
 
     def get_doc(self, doc_id):
         cdef u1db_document *doc = NULL
