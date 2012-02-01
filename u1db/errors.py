@@ -1,4 +1,4 @@
-# Copyright 2011 Canonical Ltd.
+# Copyright 2011-2012 Canonical Ltd.
 #
 # This file is part of u1db.
 #
@@ -88,6 +88,12 @@ class HTTPError(U1DBError):
             return "HTTPError(%d)" % self.status
         else:
             return "HTTPError(%d, %r)" % (self.status, self.message)
+
+
+class BrokenSyncStream(U1DBError):
+    """Unterminated or otherwise broken sync exchange stream."""
+
+    wire_description = None
 
 # mapping wire (transimission) descriptions/tags for errors to the exceptions
 wire_description_to_exc = dict(
