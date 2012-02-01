@@ -1,4 +1,4 @@
-# Copyright 2011 Canonical Ltd.
+# Copyright 2011-2012 Canonical Ltd.
 #
 # This file is part of u1db.
 #
@@ -73,6 +73,7 @@ class TestFencedReader(tests.TestCase):
         self.assertEqual("xyz", data)
         self.assertEqual(0, inp.tell())
         self.assertEqual(4, reader.remaining)
+        self.assertIsNone(reader._kept)
 
     def test_getline(self):
         inp = StringIO.StringIO("abc\r\nde")
@@ -104,6 +105,8 @@ class TestFencedReader(tests.TestCase):
         line = reader.getline()
         self.assertEqual("abcde\r\n", line)
         self.assertEqual("f", reader._kept)
+        line = reader.getline()
+        self.assertEqual("f", line)
 
     def test_getline_empty(self):
         inp = StringIO.StringIO("")
@@ -250,23 +253,65 @@ class TestHTTPInvocationByMethodWithBody(tests.TestCase):
         self.assertEqual({'a': '1'}, resource.args)
         self.assertEqual('{"body": true}', resource.content)
 
-    def test_put_multi_json(self):
+    def test_put_sync_stream(self):
         resource = TestResource()
         body = (
-            '{"b": 2}\r\n'        # args
-            '{"entry": "x"}\r\n'  # stream entry
-            '{"entry": "y"}\r\n'  # stream entry
+            '[\r\n'
+            '{"b": 2},\r\n'        # args
+            '{"entry": "x"},\r\n'  # stream entry
+            '{"entry": "y"}\r\n'   # stream entry
+            ']'
             )
         environ = {'QUERY_STRING': 'a=1', 'REQUEST_METHOD': 'PUT',
                    'wsgi.input': StringIO.StringIO(body),
                    'CONTENT_LENGTH': str(len(body)),
-                   'CONTENT_TYPE': 'application/x-u1db-multi-json'}
+                   'CONTENT_TYPE': 'application/x-u1db-sync-stream'}
         invoke = http_app.HTTPInvocationByMethodWithBody(resource, environ)
         res = invoke()
         self.assertEqual('Put/end', res)
         self.assertEqual({'a': '1', 'b': 2}, resource.args)
         self.assertEqual(['{"entry": "x"}', '{"entry": "y"}'], resource.entries)
         self.assertEqual(['a', 's', 's', 'e'], resource.order)
+
+    def _put_sync_stream(self, body):
+        resource = TestResource()
+        environ = {'QUERY_STRING': 'a=1&b=2', 'REQUEST_METHOD': 'PUT',
+                   'wsgi.input': StringIO.StringIO(body),
+                   'CONTENT_LENGTH': str(len(body)),
+                   'CONTENT_TYPE': 'application/x-u1db-sync-stream'}
+        invoke = http_app.HTTPInvocationByMethodWithBody(resource, environ)
+        res = invoke()
+
+    def test_put_sync_stream_wrong_start(self):
+        self.assertRaises(http_app.BadRequest,
+                          self._put_sync_stream, "{}\r\n]")
+
+        self.assertRaises(http_app.BadRequest,
+                          self._put_sync_stream, "\r\n{}\r\n]")
+
+        self.assertRaises(http_app.BadRequest,
+                          self._put_sync_stream, "")
+
+    def test_put_sync_stream_wrong_end(self):
+        self.assertRaises(http_app.BadRequest,
+                          self._put_sync_stream, "[\r\n{}")
+
+        self.assertRaises(http_app.BadRequest,
+                          self._put_sync_stream, "[\r\n")
+
+        self.assertRaises(http_app.BadRequest,
+                          self._put_sync_stream, "[\r\n{}\r\n]\r\n...")
+
+    def test_put_sync_stream_missing_comma(self):
+        self.assertRaises(http_app.BadRequest,
+                          self._put_sync_stream, "[\r\n{}\r\n{}\r\n]")
+
+    def test_put_sync_stream_extra_comma(self):
+        self.assertRaises(http_app.BadRequest,
+                          self._put_sync_stream, "[\r\n{},\r\n]")
+
+        self.assertRaises(http_app.BadRequest,
+                          self._put_sync_stream, "[\r\n{},\r\n{},\r\n]")
 
     def test_bad_request_decode_failure(self):
         resource = TestResource()
@@ -386,14 +431,19 @@ class TestHTTPResponder(tests.TestCase):
     def test_send_stream_entry(self):
         responder = http_app.HTTPResponder(self.start_response)
         responder.content_type = "application/x-u1db-multi-json"
-        responder.start_response(200, {"one": 1})
-        responder.stream_entry({'entry': True})
+        responder.start_response(200)
+        responder.start_stream()
+        responder.stream_entry({'entry': 1})
+        responder.stream_entry({'entry': 2})
+        responder.end_stream()
         responder.finish_response()
         self.assertEqual('200 OK', self.status)
         self.assertEqual({'content-type': 'application/x-u1db-multi-json',
                           'cache-control': 'no-cache'}, self.headers)
-        self.assertEqual(['{"one": 1}\r\n',
-                          '{"entry": true}\r\n'], self.response_body)
+        self.assertEqual(['[',
+                           '\r\n', '{"entry": 1}',
+                           ',\r\n', '{"entry": 2}',
+                          '\r\n]\r\n'], self.response_body)
         self.assertEqual([], responder.content)
 
 
@@ -576,40 +626,45 @@ class TestHTTPApp(tests.TestCase):
                    set_sync_generation_witness)
 
         args = dict(last_known_generation=0)
-        body = ("%s\r\n" % simplejson.dumps(args) +
-                "%s\r\n" % simplejson.dumps(entries[10]) +
-                "%s\r\n" % simplejson.dumps(entries[11]))
+        body = ("[\r\n" +
+                "%s,\r\n" % simplejson.dumps(args) +
+                "%s,\r\n" % simplejson.dumps(entries[10]) +
+                "%s\r\n" % simplejson.dumps(entries[11]) +
+                "]\r\n")
         resp = self.app.post('/db0/sync-from/replica',
                             params=body,
                             headers={'content-type':
-                                     'application/x-u1db-multi-json'})
+                                     'application/x-u1db-sync-stream'})
         self.assertEqual(200, resp.status)
-        self.assertEqual('application/x-u1db-multi-json',
+        self.assertEqual('application/x-u1db-sync-stream',
                          resp.header('content-type'))
-        self.assertEqual({'new_generation': 2}, simplejson.loads(resp.body))
+        self.assertEqual('[\r\n{"new_generation": 2}\r\n]\r\n', resp.body)
         self.assertEqual([('replica', 10), ('replica', 11)], gens)
 
     def test_sync_exchange_receive(self):
         doc = self.db0.create_doc('{"value": "there"}')
         doc2 = self.db0.create_doc('{"value": "there2"}')
         args = dict(last_known_generation=0)
-        body = "%s\r\n" % simplejson.dumps(args)
+        body = "[\r\n%s\r\n]" % simplejson.dumps(args)
         resp = self.app.post('/db0/sync-from/replica',
                             params=body,
                             headers={'content-type':
-                                     'application/x-u1db-multi-json'})
+                                     'application/x-u1db-sync-stream'})
         self.assertEqual(200, resp.status)
-        self.assertEqual('application/x-u1db-multi-json',
+        self.assertEqual('application/x-u1db-sync-stream',
                          resp.header('content-type'))
         parts = resp.body.splitlines()
-        self.assertEqual(3, len(parts))
-        self.assertEqual({'new_generation': 2}, simplejson.loads(parts[0]))
+        self.assertEqual(5, len(parts))
+        self.assertEqual('[', parts[0])
+        self.assertEqual({'new_generation': 2},
+                         simplejson.loads(parts[1].rstrip(",")))
         self.assertEqual({'content': '{"value": "there"}',
                           'rev': doc.rev, 'id': doc.doc_id, 'gen': 1},
-                         simplejson.loads(parts[1]))
+                         simplejson.loads(parts[2].rstrip(",")))
         self.assertEqual({'content': '{"value": "there2"}',
                           'rev': doc2.rev, 'id': doc2.doc_id, 'gen': 2},
-                         simplejson.loads(parts[2]))
+                         simplejson.loads(parts[3].rstrip(",")))
+        self.assertEqual(']', parts[4])
 
 
 class TestHTTPErrors(tests.TestCase):

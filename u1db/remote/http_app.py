@@ -1,4 +1,4 @@
-# Copyright 2011 Canonical Ltd.
+# Copyright 2011-2012 Canonical Ltd.
 #
 # This file is part of u1db.
 #
@@ -33,6 +33,7 @@ from u1db import (
     )
 from u1db.remote import (
     http_errors,
+    utils,
     )
 
 
@@ -52,7 +53,8 @@ class _FencedReader(object):
     def read_chunk(self, atmost):
         if self._kept is not None:
             # ignore atmost, kept data should be a subchunk anyway
-            return self._kept
+            kept, self._kept = self._kept, None
+            return kept
         if self.remaining == 0:
             return ''
         data = self.rfile.read(min(self.remaining, atmost))
@@ -301,9 +303,12 @@ class SyncResource(object):
             self.responder.stream_entry(entry)
         new_gen = self.sync_exch.find_changes_to_return(
                                                     self.last_known_generation)
-        self.responder.content_type = 'application/x-u1db-multi-json'
-        self.responder.start_response(200, {"new_generation": new_gen})
+        self.responder.content_type = 'application/x-u1db-sync-stream'
+        self.responder.start_response(200)
+        self.responder.start_stream(),
+        self.responder.stream_entry({"new_generation": new_gen})
         new_gen = self.sync_exch.return_docs(send_doc)
+        self.responder.end_stream()
         self.responder.finish_response()
 
 
@@ -315,6 +320,8 @@ class HTTPResponder(object):
 
     def __init__(self, start_response):
         self._started = False
+        self._stream_state = -1
+        self._no_initial_obj = True
         self.sent_response = False
         self._start_response = start_response
         self._write = None
@@ -333,6 +340,7 @@ class HTTPResponder(object):
                                              headers.items())
         # xxx version in headers
         if obj_dic is not None:
+            self._no_initial_obj = False
             self._write(simplejson.dumps(obj_dic) + "\r\n")
 
     def finish_response(self):
@@ -351,10 +359,26 @@ class HTTPResponder(object):
         self.content = [content]
         self.finish_response()
 
+    def start_stream(self):
+        "start stream (array) as part of the response."
+        assert self._started and self._no_initial_obj
+        self._stream_state = 0
+        self._write("[")
+
     def stream_entry(self, entry):
         "send stream entry as part of the response."
-        assert self._started
-        self._write(simplejson.dumps(entry) + "\r\n")
+        assert self._stream_state != -1
+        if self._stream_state == 0:
+            self._stream_state = 1
+            self._write('\r\n')
+        else:
+            self._write(',\r\n')
+        self._write(simplejson.dumps(entry))
+
+    def end_stream(self):
+        "end stream (array)."
+        assert self._stream_state != -1
+        self._write("\r\n]\r\n")
 
 
 class HTTPInvocationByMethodWithBody(object):
@@ -396,18 +420,27 @@ class HTTPInvocationByMethodWithBody(object):
                 meth = self._lookup(method)
                 body = reader.read_chunk(sys.maxint)
                 return meth(args, body)
-            elif content_type == 'application/x-u1db-multi-json':
+            elif content_type == 'application/x-u1db-sync-stream':
                 meth_args = self._lookup('%s_args' % method)
                 meth_entry = self._lookup('%s_stream_entry' % method)
                 meth_end = self._lookup('%s_end' % method)
                 body_getline = reader.getline
-                meth_args(args, body_getline())
+                if body_getline().strip() != '[':
+                    raise BadRequest
+                line = body_getline()
+                line, comma = utils.check_and_strip_comma(line.strip())
+                meth_args(args, line)
                 while True:
                     line = body_getline()
-                    if not line:
-                        break
                     entry = line.strip()
+                    if entry == ']':
+                        break
+                    if not entry or not comma:  # empty or no prec comma
+                        raise BadRequest
+                    entry, comma = utils.check_and_strip_comma(entry)
                     meth_entry({}, entry)
+                if comma or body_getline():  # extra comma or data
+                    raise BadRequest
                 return meth_end()
             else:
                 raise BadRequest()
