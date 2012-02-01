@@ -378,16 +378,15 @@ cdef class CDatabase(object):
 
         a_list = []
         c_db_rev = db_rev
-        handle_status(u1db_whats_changed(self._db, &c_db_rev, <void*>a_list,
-                                         _append_to_list),
-                      "whats_changed")
+        handle_status("whats_changed",
+            u1db_whats_changed(self._db, &c_db_rev, <void*>a_list,
+                               _append_to_list))
         return c_db_rev, a_list
 
     def _get_transaction_log(self):
         a_list = []
-        handle_status(u1db__get_transaction_log(self._db, <void*>a_list,
-                                                _append_to_list),
-                      "get_transaction_log")
+        handle_status("get_transaction_log",
+            u1db__get_transaction_log(self._db, <void*>a_list, _append_to_list))
         return [doc_id for doc_id, gen in a_list]
 
     def _get_sync_info(self, other_replica_uid):
