@@ -159,8 +159,8 @@ def make_document(doc_id, rev, content, has_conflicts=False):
 
 def generate_hex_uuid():
     uuid = PyString_FromStringAndSize(NULL, 32)
-    handle_status(u1db__generate_hex_uuid(PyString_AS_STRING(uuid)),
-                  "Failed to generate uuid")
+    handle_status("Failed to generate uuid",
+        u1db__generate_hex_uuid(PyString_AS_STRING(uuid)))
     return uuid
 
 
@@ -230,7 +230,7 @@ cdef class CDocument(object):
         return NotImplemented
 
 
-cdef handle_status(int status, context):
+cdef handle_status(context, int status):
     if status == U1DB_OK:
         return
     if status == U1DB_REVISION_CONFLICT:
@@ -344,32 +344,28 @@ cdef class CDatabase(object):
 
     def create_doc(self, content, doc_id=None):
         cdef u1db_document *doc = NULL
-        cdef int status
         cdef char *c_doc_id
 
         if doc_id is None:
             c_doc_id = NULL
         else:
             c_doc_id = doc_id
-        status = u1db_create_doc(self._db, content, c_doc_id, &doc)
-        handle_status(status, 'Failed to create_doc')
+        handle_status('Failed to create_doc',
+            u1db_create_doc(self._db, content, c_doc_id, &doc))
         pydoc = CDocument()
         pydoc._doc = doc
         return pydoc
 
     def put_doc(self, CDocument doc):
-        cdef int status
-
-        handle_status(u1db_put_doc(self._db, doc._doc),
-                      "Failed to put_doc")
+        handle_status("Failed to put_doc",
+            u1db_put_doc(self._db, doc._doc))
         return doc.rev
 
     def get_doc(self, doc_id):
-        cdef int status
         cdef u1db_document *doc = NULL
 
-        status = u1db_get_doc(self._db, doc_id, &doc)
-        handle_status(status, "get_doc failed")
+        handle_status("get_doc failed",
+            u1db_get_doc(self._db, doc_id, &doc))
         if doc == NULL:
             return None
         pydoc = CDocument()
@@ -377,10 +373,8 @@ cdef class CDatabase(object):
         return pydoc
 
     def delete_doc(self, CDocument doc):
-        cdef int status
-
-        status = u1db_delete_doc(self._db, doc._doc);
-        handle_status(status, "Failed to delete %s" % (doc,))
+        handle_status("Failed to delete %s" % (doc,),
+            u1db_delete_doc(self._db, doc._doc))
 
     def whats_changed(self, db_rev=0):
         cdef int status, c_db_rev
