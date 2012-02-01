@@ -390,8 +390,6 @@ cdef class CDatabase(object):
         return c_db_rev, a_list
 
     def _get_transaction_log(self):
-        cdef int status
-
         a_list = []
         handle_status(u1db__get_transaction_log(self._db, <void*>a_list,
                                                 _append_to_list),
