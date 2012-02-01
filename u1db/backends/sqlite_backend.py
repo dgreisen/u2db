@@ -134,8 +134,18 @@ class SQLiteDatabase(CommonBackend):
     def _initialize(self, c):
         """Create the schema in the database."""
         #read the script with sql commands
-        with open(os.path.join(os.path.dirname(__file__), 'dbschema.sql')) as schema:
-            c.executescript(schema.read())
+        schema_name = os.path.join(os.path.dirname(__file__), 'dbschema.sql')
+        with open(schema_name, 'r') as schema:
+            # Note: We'd like to use c.executescript() here, but it seems that
+            #       executescript always commits, even if you set
+            #       isolation_level = None, so if we want to properly handle
+            #       exclusive locking and rollbacks between processes, we need
+            #       to execute it line-by-line
+            content = schema.read()
+            for line in content.split(';'):
+                if not line:
+                    continue
+                c.execute(line)
         #add extra fields
         self._extra_schema_init(c)
         # A unique identifier should be set for this replica. Implementations

@@ -32,6 +32,7 @@ def config():
         "download_url": "https://launchpad.net/u1db/+download",
         "packages": ["u1db", "u1db.backends", "u1db.remote",
                      "u1db.commandline", "u1db.compat"],
+        "package_data": {'': ["*.sql"]},
         "scripts": ['u1db-client', 'u1db-serve'],
         "ext_modules": ext,
         "install_requires": ["paste", "simplejson", "routes"],
