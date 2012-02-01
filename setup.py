@@ -80,6 +80,7 @@ synchronize them with other stores.
              "src/u1db.c",
              "src/u1db_uuid.c",
              "src/u1db_vectorclock.c",
+             "src/u1db_schema.c",
              ],
             include_dirs=["include"],
             libraries=['sqlite3'] + extra_libs,
