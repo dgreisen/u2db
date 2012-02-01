@@ -569,6 +569,82 @@ finish:
     return status;
 }
 
+
+int
+u1db_get_doc_conflicts(u1database *db, const char *doc_id, void *ctx,
+                       int (*cb)(void *ctx, u1db_document *doc))
+{
+    int status = U1DB_OK;
+    sqlite3_stmt *statement;
+    u1db_document *cur_doc;
+    const char *doc_rev, *content;
+    int content_len;
+
+    if (db == NULL || doc_id == NULL || cb == NULL) {
+        return U1DB_INVALID_PARAMETER;
+    }
+    status = sqlite3_prepare_v2(db->sql_handle, 
+        "SELECT doc_rev, doc FROM conflicts WHERE doc_id = ?", -1,
+        &statement, NULL);
+    if (status != SQLITE_OK) { goto finish; }
+    status = sqlite3_bind_text(statement, 1, doc_id, -1, SQLITE_TRANSIENT);
+    if (status != SQLITE_OK) { goto finish; }
+    status = sqlite3_step(statement);
+    if (status == SQLITE_ROW) {
+        // There is a row to handle, so we first must return the original doc.
+        int local_status;
+        sqlite3_stmt *lookup_stmt;
+        // fprintf(stderr, "\nFound a row in conflicts for %s\n", doc_id);
+        local_status = lookup_doc(db, doc_id, &doc_rev, &content, &content_len,
+                                  &lookup_stmt);
+        if (local_status == SQLITE_OK) {
+            if (doc_rev == NULL) {
+                // ERROR: There is an entry in the conflicts table, but nothing
+                // in docs?
+            }
+            cur_doc = u1db__allocate_document(doc_id, doc_rev, content,
+                                              content_len);
+            if (cur_doc == NULL) {
+                status = U1DB_NOMEM;
+            } else {
+                // We know this, or we wouldn't be here :)
+                cur_doc->has_conflicts = 1;
+                cb(ctx, cur_doc);
+            }
+        } else {
+            status = local_status;
+        }
+        sqlite3_finalize(lookup_stmt);
+    }
+    while (status == SQLITE_ROW) {
+        doc_rev = sqlite3_column_text(statement, 0);
+        if (sqlite3_column_type(statement, 1) == SQLITE_NULL) {
+            content = NULL;
+            content_len = 0;
+        } else {
+            content = sqlite3_column_text(statement, 1);
+            content_len = sqlite3_column_bytes(statement, 1);
+        }
+        cur_doc = u1db__allocate_document(doc_id, doc_rev, content,
+                                          content_len);
+        if (cur_doc == NULL) {
+            // fprintf(stderr, "Failed to allocate_document\n");
+            status = U1DB_NOMEM;
+        } else {
+            // fprintf(stderr, "Invoking cb for %s, %s\n", doc_id, doc_rev);
+            cb(ctx, cur_doc);
+            status = sqlite3_step(statement);
+        }
+    }
+    if (status == SQLITE_DONE) {
+        status = SQLITE_OK;
+    }
+finish:
+    sqlite3_finalize(statement);
+    return status;
+}
+
+
 int
 u1db_put_doc_if_newer(u1database *db, u1db_document *doc, int save_conflict,
                       char *replica_uid, int replica_gen, int *state)

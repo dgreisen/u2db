@@ -50,6 +50,8 @@ cdef extern from "u1db/u1db.h":
                            int (*cb)(void *ctx, char *doc_id, int gen))
     int u1db__get_transaction_log(u1database *db, void *ctx,
                                   int (*cb)(void *ctx, char *doc_id, int gen))
+    int u1db_get_doc_conflicts(u1database *db, char *doc_id, void *ctx,
+                               int (*cb)(void *ctx, u1db_document *doc))
 
     int U1DB_OK
     int U1DB_INVALID_PARAMETER
@@ -128,10 +130,19 @@ cdef extern from "u1db/u1db_vectorclock.h":
 from u1db import errors
 
 
-cdef int _append_to_list(void *context, char *doc_id, int generation):
+cdef int _append_doc_gen_to_list(void *context, char *doc_id, int generation):
     a_list = <object>(context)
     doc = doc_id
     a_list.append((doc, generation))
+    return 0
+
+
+cdef int _append_doc_to_list(void *context, u1db_document *doc):
+    a_list = <object>context
+    pydoc = CDocument()
+    pydoc._doc = doc
+    a_list.append(pydoc)
+    return 0
 
 
 def make_document(doc_id, rev, content, has_conflicts=False):
@@ -403,6 +414,13 @@ cdef class CDatabase(object):
         pydoc._doc = doc
         return pydoc
 
+    def get_doc_conflicts(self, doc_id):
+        conflict_docs = []
+        handle_status("get_doc_conflicts",
+            u1db_get_doc_conflicts(self._db, doc_id, <void*>conflict_docs,
+                _append_doc_to_list))
+        return [(doc.rev, doc.content) for doc in conflict_docs] 
+
     def delete_doc(self, CDocument doc):
         handle_status("Failed to delete %s" % (doc,),
             u1db_delete_doc(self._db, doc._doc))
@@ -414,13 +432,14 @@ cdef class CDatabase(object):
         c_db_rev = db_rev
         handle_status("whats_changed",
             u1db_whats_changed(self._db, &c_db_rev, <void*>a_list,
-                               _append_to_list))
+                               _append_doc_gen_to_list))
         return c_db_rev, a_list
 
     def _get_transaction_log(self):
         a_list = []
         handle_status("get_transaction_log",
-            u1db__get_transaction_log(self._db, <void*>a_list, _append_to_list))
+            u1db__get_transaction_log(self._db, <void*>a_list,
+                                      _append_doc_gen_to_list))
         return [doc_id for doc_id, gen in a_list]
 
     def _get_sync_info(self, other_replica_uid):

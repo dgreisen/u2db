@@ -153,6 +153,8 @@ class SQLiteDatabase(CommonBackend):
         c.execute("CREATE TABLE sync_log ("
                   " replica_uid TEXT PRIMARY KEY,"
                   " known_generation INTEGER)")
+        # TODO: We probably want an index on conflicts(doc_id), since we can't
+        #       use the dual-key primary key for lookups.
         c.execute("CREATE TABLE conflicts ("
                   " doc_id TEXT,"
                   " doc_rev TEXT,"
