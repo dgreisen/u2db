@@ -43,9 +43,10 @@ cdef extern from "u1db/u1db.h":
     int u1db_get_doc(u1database *db, char *doc_id, u1db_document **doc)
     int u1db_put_doc(u1database *db, u1db_document *doc)
     int u1db_delete_doc(u1database *db, u1db_document *doc)
-    int u1db_whats_changed(u1database *db, int *gen,
-                           int (*cb)(void *ctx, char *doc_id, int gen),
-                           void *ctx)
+    int u1db_whats_changed(u1database *db, int *gen, void *ctx,
+                           int (*cb)(void *ctx, char *doc_id, int gen))
+    int u1db__get_transaction_log(u1database *db, void *ctx,
+                                  int (*cb)(void *ctx, char *doc_id, int gen))
 
     int U1DB_OK
     int U1DB_INVALID_PARAMETER
@@ -379,25 +380,22 @@ cdef class CDatabase(object):
         handle_status(status, "Failed to delete %s" % (doc,))
 
     def whats_changed(self, db_rev=0):
-        cdef int status, c_db_rev
+        cdef int c_db_rev
 
         a_list = []
         c_db_rev = db_rev
-        status = u1db_whats_changed(self._db, &c_db_rev, _append_to_list,
-                                    <void*>a_list)
-        if status != 0:
-            raise RuntimeError("Failed to call whats_changed: %d" % (status,))
+        handle_status(u1db_whats_changed(self._db, &c_db_rev, <void*>a_list,
+                                         _append_to_list),
+                      "whats_changed")
         return c_db_rev, a_list
 
     def _get_transaction_log(self):
-        cdef int status, c_db_rev
+        cdef int status
 
-        c_db_rev = 0;
         a_list = []
-        status = u1db_whats_changed(self._db, &c_db_rev, _append_to_list,
-                                    <void*>a_list)
-        if status != 0:
-            raise RuntimeError("Failed to call whats_changed: %d" % (status,))
+        handle_status(u1db__get_transaction_log(self._db, <void*>a_list,
+                                                _append_to_list),
+                      "get_transaction_log")
         return [doc_id for doc_id, gen in a_list]
 
     def _get_sync_info(self, other_replica_uid):

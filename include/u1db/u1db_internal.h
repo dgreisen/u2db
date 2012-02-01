@@ -70,6 +70,12 @@ void u1db__free_table(u1db_table **table);
 
 
 /**
+ * Get the list of everything that has changed that we've recorded.
+ */
+int u1db__get_transaction_log(u1database *db, void *ctx,
+                              int (*cb)(void *ctx, char *doc_id, int gen));
+
+/**
  * Internal sync api, get the stored information about another machine.
  */
 int u1db__sync_get_machine_info(u1database *db, const char *other_replica_uid,

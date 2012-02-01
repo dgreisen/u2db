@@ -131,8 +131,8 @@ int u1db_delete_doc(u1database *db, u1db_document *doc);
  *               once per doc_id.
  * @param context Opaque context, passed back to the caller.
  */
-int u1db_whats_changed(u1database *db, int *gen,
-                       int (*cb)(void *ctx, char *doc_id, int gen), void *ctx);
+int u1db_whats_changed(u1database *db, int *gen, void *ctx,
+                       int (*cb)(void *ctx, char *doc_id, int gen));
 
 
 /**
