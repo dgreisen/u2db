@@ -35,6 +35,7 @@ typedef struct _u1db_document
     char *content;
     size_t content_len;
     int has_conflicts;
+    int _generation; // Used as part of sync api
 } u1db_document;
 
 
@@ -118,9 +119,9 @@ int u1db_delete_doc(u1database *db, u1db_document *doc);
 /**
  * Get the document defined by the given document id.
  *
- * @param db_rev The global database revision to start at. You can pass '0' to
+ * @param gen 	 The global database revision to start at. You can pass '0' to
  *               get all changes in the database. The integer will be updated
- *               to point at the current db_rev.
+ *               to point at the current generation.
  * @param cb     A callback function. This will be called passing in 'context',
  *               and a document identifier for each document that has been modified.
  *               The doc_id string is transient, so callers must copy it to
@@ -130,8 +131,8 @@ int u1db_delete_doc(u1database *db, u1db_document *doc);
  *               once per doc_id.
  * @param context Opaque context, passed back to the caller.
  */
-int u1db_whats_changed(u1database *db, int *db_rev,
-                       int (*cb)(void *, char *doc_id), void *context);
+int u1db_whats_changed(u1database *db, int *gen,
+                       int (*cb)(void *ctx, char *doc_id, int gen), void *ctx);
 
 
 /**

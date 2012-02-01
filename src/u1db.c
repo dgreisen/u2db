@@ -44,7 +44,7 @@ typedef struct _u1db_document_internal
 
 static const char *table_definitions[] = {
     "CREATE TABLE transaction_log ("
-    " db_rev INTEGER PRIMARY KEY AUTOINCREMENT,"
+    " generation INTEGER PRIMARY KEY AUTOINCREMENT,"
     " doc_id TEXT)",
     "CREATE TABLE document ("
     " doc_id TEXT PRIMARY KEY,"
@@ -593,35 +593,37 @@ u1db_delete_doc(u1database *db, u1db_document *doc)
 }
 
 int
-u1db_whats_changed(u1database *db, int *db_rev,
-                   int (*cb)(void *, char *doc_id), void *context)
+u1db_whats_changed(u1database *db, int *gen,
+                   int (*cb)(void *, char *doc_id, int gen), void *context)
 {
     int status;
     sqlite3_stmt *statement;
-    if (db == NULL || db_rev == NULL || cb == NULL) {
+    if (db == NULL || gen == NULL || cb == NULL) {
         return -1; // Bad parameters
     }
     status = sqlite3_prepare_v2(db->sql_handle,
-        "SELECT db_rev, doc_id FROM transaction_log WHERE db_rev > ?", -1,
-        &statement, NULL);
+        "SELECT max(generation) as g, doc_id FROM transaction_log"
+        " WHERE generation > ?"
+        " GROUP BY doc_id ORDER BY g",
+        -1, &statement, NULL);
     if (status != SQLITE_OK) {
         return status;
     }
-    status = sqlite3_bind_int(statement, 1, *db_rev);
+    status = sqlite3_bind_int(statement, 1, *gen);
     if (status != SQLITE_OK) {
         sqlite3_finalize(statement);
         return status;
     }
     status = sqlite3_step(statement);
     while (status == SQLITE_ROW) {
-        int local_db_rev;
+        int local_gen;
         char *doc_id;
-        local_db_rev = sqlite3_column_int(statement, 0);
-        if (local_db_rev > *db_rev) {
-            *db_rev = local_db_rev;
+        local_gen = sqlite3_column_int(statement, 0);
+        if (local_gen > *gen) {
+            *gen = local_gen;
         }
         doc_id = (char *)sqlite3_column_text(statement, 1);
-        cb(context, doc_id);
+        cb(context, doc_id, local_gen);
         status = sqlite3_step(statement);
     }
     if (status == SQLITE_DONE) {
@@ -641,7 +643,7 @@ u1db__get_db_rev(u1database *db, int *db_rev)
         return U1DB_INVALID_PARAMETER;
     }
     status = sqlite3_prepare_v2(db->sql_handle,
-        "SELECT max(db_rev) FROM transaction_log", -1,
+        "SELECT max(generation) FROM transaction_log", -1,
         &statement, NULL);
     if (status != SQLITE_OK) {
         return status;
