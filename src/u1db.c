@@ -53,12 +53,12 @@ static const char *table_definitions[] = {
     "CREATE TABLE document_fields ("
     " doc_id TEXT,"
     " field_name TEXT,"
-    " value TEXT,"
-    " CONSTRAINT document_fields_pkey"
-    " PRIMARY KEY (doc_id, field_name))",
+    " value TEXT)",
+    "CREATE INDEX document_fields_field_value_doc_idx"
+    " ON document_fields(field_name, value, doc_id)",
     "CREATE TABLE sync_log ("
     " replica_uid TEXT PRIMARY KEY,"
-    " known_db_rev INTEGER)",
+    " known_generation INTEGER)",
     "CREATE TABLE conflicts ("
     " doc_id TEXT,"
     " doc_rev TEXT,"
@@ -72,6 +72,7 @@ static const char *table_definitions[] = {
     " PRIMARY KEY (name, offset))",
     "CREATE TABLE u1db_config (name TEXT PRIMARY KEY, value TEXT)",
     "INSERT INTO u1db_config VALUES ('sql_schema', '0')",
+    "INSERT INTO u1db_config VALUES ('index_storage', 'expand referenced')",
 };
 
 static int
@@ -892,7 +893,7 @@ u1db__sync_get_machine_info(u1database *db, const char *other_replica_uid,
         return status;
     }
     status = sqlite3_prepare_v2(db->sql_handle,
-        "SELECT known_db_rev FROM sync_log WHERE replica_uid = ?", -1,
+        "SELECT known_generation FROM sync_log WHERE replica_uid = ?", -1,
         &statement, NULL);
     if (status != SQLITE_OK) {
         return status;
