@@ -114,7 +114,7 @@ class CmdGet(OneDbCmd):
         doc = db.get_doc(doc_id)
         if doc is None:
             self.stderr.write('Document not found (id: %s)\n' % (doc_id,))
-            return
+            return 1  # failed
         outfile.write(doc.content)
         self.stderr.write('rev: %s\n' % (doc.rev,))
         if doc.has_conflicts:
@@ -206,5 +206,3 @@ client_commands.register(CmdSync)
 def main(args):
     return client_commands.run_argv(args, sys.stdin, sys.stdout, sys.stderr)
 
-if __name__ == "__main__":
-    main(sys.argv[1:])
