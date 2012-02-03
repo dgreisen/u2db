@@ -17,6 +17,7 @@
 """Test the WSGI app."""
 
 import paste.fixture
+import sys
 import simplejson
 import StringIO
 
@@ -667,6 +668,51 @@ class TestHTTPApp(tests.TestCase):
         self.assertEqual(']', parts[4])
 
 
+class TestRequestHooks(tests.TestCase):
+
+    def setUp(self):
+        super(TestRequestHooks, self).setUp()
+        self.state = tests.ServerStateForTests()
+        self.http_app = http_app.HTTPApp(self.state)
+        self.app = paste.fixture.TestApp(self.http_app)
+        self.db0 = self.state._create_database('db0')
+
+    def test_begin_and_done(self):
+        calls = []
+        def begin(environ):
+            self.assertTrue('PATH_INFO' in environ)
+            calls.append('begin')
+        def done(environ):
+            self.assertTrue('PATH_INFO' in environ)
+            calls.append('done')
+        self.http_app.request_begin = begin
+        self.http_app.request_done = done
+
+        doc = self.db0.create_doc('{"x": 1}', doc_id='doc1')
+        resp = self.app.get('/db0/doc/%s' % doc.doc_id)
+
+        self.assertEqual(['begin', 'done'], calls)
+
+    def test_bad_request(self):
+        calls = []
+        def begin(environ):
+            self.assertTrue('PATH_INFO' in environ)
+            calls.append('begin')
+        def bad_request(environ):
+            self.assertTrue('PATH_INFO' in environ)
+            calls.append('bad-request')
+        self.http_app.request_begin = begin
+        self.http_app.request_bad_request = bad_request
+        # shouldn't be called
+        self.http_app.request_done = lambda env: borken
+
+        resp = self.app.put('/db0/foo/doc1', params='{"x": 1}',
+                            headers={'content-type': 'application/json'},
+                            expect_errors=True)
+        self.assertEqual(400, resp.status)
+        self.assertEqual(['begin', 'bad-request'], calls)
+
+
 class TestHTTPErrors(tests.TestCase):
 
     def test_wire_description_to_status(self):
@@ -687,9 +733,9 @@ class TestHTTPAppErrorHandling(tests.TestCase):
         def lookup_resource(environ, responder):
             return ErroringResource()
 
-        application = http_app.HTTPApp(self.state)
-        application._lookup_resource = lookup_resource
-        self.app = paste.fixture.TestApp(application)
+        self.http_app = http_app.HTTPApp(self.state)
+        self.http_app._lookup_resource = lookup_resource
+        self.app = paste.fixture.TestApp(self.http_app)
 
     def test_RevisionConflict_etc(self):
         self.exc = errors.RevisionConflict()
@@ -710,3 +756,54 @@ class TestHTTPAppErrorHandling(tests.TestCase):
         self.assertEqual('application/json', resp.header('content-type'))
         self.assertEqual({"error": "error"},
                          simplejson.loads(resp.body))
+
+    def test_generic_u1db_errors_hooks(self):
+        calls = []
+        def begin(environ):
+            self.assertTrue('PATH_INFO' in environ)
+            calls.append('begin')
+        def u1db_error(environ, exc):
+            self.assertTrue('PATH_INFO' in environ)
+            calls.append(('error', exc))
+        self.http_app.request_begin = begin
+        self.http_app.request_u1db_error = u1db_error
+        # shouldn't be called
+        self.http_app.request_done = lambda env: borken
+
+        self.exc = errors.U1DBError()
+        resp = self.app.post('/req', params='{}',
+                             headers={'content-type': 'application/json'},
+                             expect_errors=True)
+        self.assertEqual(500, resp.status)
+        self.assertEqual(['begin', ('error', self.exc)], calls)
+
+    def test_failure(self):
+        class Failure(Exception):
+            pass
+        self.exc = Failure()
+        self.assertRaises(Failure, self.app.post, '/req', params='{}',
+                          headers={'content-type': 'application/json'})
+
+    def test_failure_hooks(self):
+        class Failure(Exception):
+            pass
+        calls = []
+        def begin(environ):
+            calls.append('begin')
+        def failed(environ):
+            self.assertTrue('PATH_INFO' in environ)
+            calls.append(('failed', sys.exc_info()))
+        self.http_app.request_begin = begin
+        self.http_app.request_failed = failed
+        # shouldn't be called
+        self.http_app.request_done = lambda env: borken
+
+        self.exc = Failure()
+        self.assertRaises(Failure, self.app.post, '/req', params='{}',
+                          headers={'content-type': 'application/json'})
+
+        self.assertEqual(2, len(calls))
+        self.assertEqual('begin', calls[0])
+        marker, (exc_type, exc, tb) = calls[1]
+        self.assertEqual('failed', marker)
+        self.assertEqual(self.exc, exc)
