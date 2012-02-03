@@ -55,7 +55,7 @@ int u1db__is_doc_id_valid(const char *doc_id);
  */
 typedef struct _u1db_row {
     struct _u1db_row *next;
-    int num_columns; 
+    int num_columns;
     int *column_sizes;
     unsigned char **columns;
 } u1db_row;
