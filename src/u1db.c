@@ -53,12 +53,12 @@ static const char *table_definitions[] = {
     "CREATE TABLE document_fields ("
     " doc_id TEXT,"
     " field_name TEXT,"
-    " value TEXT,"
-    " CONSTRAINT document_fields_pkey"
-    " PRIMARY KEY (doc_id, field_name))",
+    " value TEXT)",
+    "CREATE INDEX document_fields_field_value_doc_idx"
+    " ON document_fields(field_name, value, doc_id)",
     "CREATE TABLE sync_log ("
     " replica_uid TEXT PRIMARY KEY,"
-    " known_db_rev INTEGER)",
+    " known_generation INTEGER)",
     "CREATE TABLE conflicts ("
     " doc_id TEXT,"
     " doc_rev TEXT,"
@@ -72,6 +72,7 @@ static const char *table_definitions[] = {
     " PRIMARY KEY (name, offset))",
     "CREATE TABLE u1db_config (name TEXT PRIMARY KEY, value TEXT)",
     "INSERT INTO u1db_config VALUES ('sql_schema', '0')",
+    "INSERT INTO u1db_config VALUES ('index_storage', 'expand referenced')",
 };
 
 static int
@@ -416,6 +417,73 @@ write_doc(u1database *db, const char *doc_id, const char *doc_rev,
     return status;
 }
 
+
+// Are there any conflicts for this doc?
+static int
+lookup_conflict(u1database *db, const char *doc_id, int *has_conflict)
+{
+    sqlite3_stmt *statement;
+    int status;
+
+    status = sqlite3_prepare_v2(db->sql_handle, 
+        "SELECT 1 FROM conflicts WHERE doc_id = ? LIMIT 1", -1,
+        &statement, NULL); 
+    if (status != SQLITE_OK) {
+        return status;
+    }
+    status = sqlite3_bind_text(statement, 1, doc_id, -1, SQLITE_TRANSIENT);
+    if (status != SQLITE_OK) { goto finish; }
+    status = sqlite3_step(statement);
+    if (status == SQLITE_ROW) {
+        // fprintf(stderr, "\nFound conflict for %s\n", doc_id);
+        *has_conflict = 1;
+        status = SQLITE_OK;
+    } else if (status == SQLITE_DONE) {
+        // fprintf(stderr, "\nNo conflict for %s\n", doc_id);
+        status = SQLITE_OK;
+        *has_conflict = 0;
+    }
+finish:
+    sqlite3_finalize(statement);
+    return status;
+}
+
+
+// Add a conflict for this doc
+static int
+write_conflict(u1database *db, const char *doc_id, const char *doc_rev,
+               const char *content, int content_len)
+{
+    sqlite3_stmt *statement;
+    int status;
+
+    status = sqlite3_prepare_v2(db->sql_handle, 
+        "INSERT INTO conflicts VALUES (?, ?, ?)", -1,
+        &statement, NULL); 
+    if (status != SQLITE_OK) {
+        return status;
+    }
+    status = sqlite3_bind_text(statement, 1, doc_id, -1, SQLITE_TRANSIENT);
+    if (status != SQLITE_OK) { goto finish; }
+    status = sqlite3_bind_text(statement, 2, doc_rev, -1, SQLITE_TRANSIENT);
+    if (status != SQLITE_OK) { goto finish; }
+    if (content == NULL) {
+        status = sqlite3_bind_null(statement, 3);
+    } else {
+        status = sqlite3_bind_text(statement, 3, content, content_len,
+                                   SQLITE_TRANSIENT);
+    }
+    if (status != SQLITE_OK) { goto finish; }
+    status = sqlite3_step(statement);
+    if (status == SQLITE_DONE) {
+        status = SQLITE_OK;
+    }
+finish:
+    sqlite3_finalize(statement);
+    return status;
+}
+
+
 int
 u1db_put_doc(u1database *db, u1db_document *doc)
 {
@@ -501,6 +569,196 @@ finish:
     return status;
 }
 
+
+static int
+find_current_doc_for_conflict(u1database *db, const char *doc_id,
+        void *context, int (*cb)(void *context, u1db_document *doc))
+{
+    // There is a row to handle, so we first must return the original doc.
+    int status;
+    sqlite3_stmt *statement;
+    const char *doc_rev, *content;
+    int content_len;
+    u1db_document *cur_doc;
+    // fprintf(stderr, "\nFound a row in conflicts for %s\n", doc_id);
+    status = lookup_doc(db, doc_id, &doc_rev, &content, &content_len,
+                              &statement);
+    if (status == SQLITE_OK) {
+        if (doc_rev == NULL) {
+            // There is an entry in conflicts, but no entry in documents,
+            // something is broken here, this is the closest error we have
+            status = U1DB_DOCUMENT_DOES_NOT_EXIST;
+            goto finish;
+        }
+        cur_doc = u1db__allocate_document(doc_id, doc_rev, content,
+                                          content_len);
+        if (cur_doc == NULL) {
+            status = U1DB_NOMEM;
+        } else {
+            // We know this, or we wouldn't be here :)
+            cur_doc->has_conflicts = 1;
+            cb(context, cur_doc);
+        }
+    }
+finish:
+    sqlite3_finalize(statement);
+    return status;
+}
+
+
+int
+u1db_get_doc_conflicts(u1database *db, const char *doc_id, void *context,
+                       int (*cb)(void *context, u1db_document *doc))
+{
+    int status = U1DB_OK;
+    sqlite3_stmt *statement;
+    u1db_document *cur_doc;
+    const char *doc_rev, *content;
+    int content_len;
+
+    if (db == NULL || doc_id == NULL || cb == NULL) {
+        return U1DB_INVALID_PARAMETER;
+    }
+    status = sqlite3_prepare_v2(db->sql_handle, 
+        "SELECT doc_rev, doc FROM conflicts WHERE doc_id = ?", -1,
+        &statement, NULL);
+    if (status != SQLITE_OK) { goto finish; }
+    status = sqlite3_bind_text(statement, 1, doc_id, -1, SQLITE_TRANSIENT);
+    if (status != SQLITE_OK) { goto finish; }
+    status = sqlite3_step(statement);
+    if (status == SQLITE_ROW) {
+        int local_status;
+        local_status = find_current_doc_for_conflict(db, doc_id, context, cb);
+        if (local_status != U1DB_OK) {
+            status = local_status;
+            goto finish;
+        }
+    }
+    while (status == SQLITE_ROW) {
+        doc_rev = sqlite3_column_text(statement, 0);
+        if (sqlite3_column_type(statement, 1) == SQLITE_NULL) {
+            content = NULL;
+            content_len = 0;
+        } else {
+            content = sqlite3_column_text(statement, 1);
+            content_len = sqlite3_column_bytes(statement, 1);
+        }
+        cur_doc = u1db__allocate_document(doc_id, doc_rev, content,
+                                          content_len);
+        if (cur_doc == NULL) {
+            // fprintf(stderr, "Failed to allocate_document\n");
+            status = U1DB_NOMEM;
+        } else {
+            // fprintf(stderr, "Invoking cb for %s, %s\n", doc_id, doc_rev);
+            cb(context, cur_doc);
+            status = sqlite3_step(statement);
+        }
+    }
+    if (status == SQLITE_DONE) {
+        status = SQLITE_OK;
+    }
+finish:
+    sqlite3_finalize(statement);
+    return status;
+}
+
+
+int
+u1db_put_doc_if_newer(u1database *db, u1db_document *doc, int save_conflict,
+                      char *replica_uid, int replica_gen, int *state)
+{
+    const unsigned char *old_content = NULL, *old_doc_rev = NULL;
+    int status = U1DB_INVALID_PARAMETER, store = 0;
+    int old_content_len;
+    sqlite3_stmt *statement;
+
+    if (db == NULL || doc == NULL || state == NULL || doc->doc_rev == NULL) {
+        return U1DB_INVALID_PARAMETER;
+    }
+
+    status = u1db__is_doc_id_valid(doc->doc_id);
+    if (status != U1DB_OK) {
+        return status;
+    }
+    status = sqlite3_exec(db->sql_handle, "BEGIN", NULL, NULL, NULL);
+    if (status != SQLITE_OK) {
+        return status;
+    }
+    old_content = NULL;
+    status = lookup_doc(db, doc->doc_id, &old_doc_rev, &old_content,
+                        &old_content_len, &statement);
+    if (status != SQLITE_OK) {
+        sqlite3_exec(db->sql_handle, "ROLLBACK", NULL, NULL, NULL);
+        sqlite3_finalize(statement);
+        return status;
+    }
+    if (old_doc_rev == NULL) {
+        status = U1DB_OK;
+        *state = U1DB_INSERTED;
+        store = 1;
+    } else if (strcmp(doc->doc_rev, (const char *)old_doc_rev) == 0) {
+        status = U1DB_OK;
+        *state = U1DB_CONVERGED;
+        store = 0;
+    } else {
+        u1db_vectorclock *old_vcr = NULL, *new_vcr = NULL;
+        // TODO: u1db__vectorclock_from_str returns NULL if there is an error
+        //       in the vector clock, or if we run out of memory... Probably
+        //       shouldn't be U1DB_NOMEM
+        old_vcr = u1db__vectorclock_from_str(old_doc_rev);
+        if (old_vcr == NULL) {
+            status = U1DB_NOMEM;
+            goto finish;
+        }
+        new_vcr = u1db__vectorclock_from_str(doc->doc_rev);
+        if (new_vcr == NULL) {
+            status = U1DB_NOMEM;
+            u1db__free_vectorclock(&old_vcr);
+            goto finish;
+        }
+        if (u1db__vectorclock_is_newer(new_vcr, old_vcr)) {
+            // Just take the newer version
+            store = 1;
+            status = U1DB_OK;
+            *state = U1DB_INSERTED;
+        } else if (u1db__vectorclock_is_newer(old_vcr, new_vcr)) {
+            // The existing version is newer than the one supplied
+            store = 0;
+            status = U1DB_OK;
+            *state = U1DB_SUPERSEDED;
+        } else {
+            // TODO: Handle the case where the vcr strings are not identical,
+            //       but they are functionally equivalent.
+            // Neither is strictly newer than the other, so we treat this as a
+            // conflict
+            status = U1DB_OK;
+            *state = U1DB_CONFLICTED;
+            store = save_conflict;
+            if (save_conflict) {
+                status = write_conflict(db, doc->doc_id, old_doc_rev,
+                                        old_content, old_content_len);
+                doc->has_conflicts = 1;
+            }
+        }
+        u1db__free_vectorclock(&old_vcr);
+        u1db__free_vectorclock(&new_vcr);
+    }
+    if (status == U1DB_OK && store) {
+        status = write_doc(db, doc->doc_id, doc->doc_rev,
+                           doc->content, doc->content_len,
+                           (old_doc_rev != NULL));
+        if (status == SQLITE_OK) {
+            status = sqlite3_exec(db->sql_handle, "COMMIT", NULL, NULL, NULL);
+        }
+    }
+finish:
+    sqlite3_finalize(statement);
+    if (status != SQLITE_OK) {
+        sqlite3_exec(db->sql_handle, "ROLLBACK", NULL, NULL, NULL);
+    }
+    return status;
+}
+
 int
 u1db_get_doc(u1database *db, const char *doc_id, u1db_document **doc)
 {
@@ -509,10 +767,6 @@ u1db_get_doc(u1database *db, const char *doc_id, u1db_document **doc)
     const unsigned char *doc_rev, *content;
     if (db == NULL || doc_id == NULL || doc == NULL) {
         // Bad Parameters
-        // TODO: we could handle has_conflicts == NULL meaning that the caller
-        //       is ignoring conflicts, but we don't want to make it *too* easy
-        //       to do so.
-        // TODO: Figure out how to do return codes
         return U1DB_INVALID_PARAMETER;
     }
 
@@ -527,8 +781,11 @@ u1db_get_doc(u1database *db, const char *doc_id, u1db_document **doc)
         *doc = u1db__allocate_document(doc_id, (const char*)doc_rev,
                                        (const char*)content, 0);
 
+        if (*doc != NULL) {
+            status = lookup_conflict(db, (*doc)->doc_id,
+                                     &((*doc)->has_conflicts));
+        }
     } else {
-        // TODO: Figure out how to return the SQL error code
         *doc = NULL;
     }
 finish:
@@ -801,7 +1058,7 @@ u1db__sync_get_machine_info(u1database *db, const char *other_replica_uid,
         return status;
     }
     status = sqlite3_prepare_v2(db->sql_handle,
-        "SELECT known_db_rev FROM sync_log WHERE replica_uid = ?", -1,
+        "SELECT known_generation FROM sync_log WHERE replica_uid = ?", -1,
         &statement, NULL);
     if (status != SQLITE_OK) {
         return status;
