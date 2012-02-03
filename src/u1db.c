@@ -571,8 +571,8 @@ finish:
 
 
 int
-u1db_get_doc_conflicts(u1database *db, const char *doc_id, void *ctx,
-                       int (*cb)(void *ctx, u1db_document *doc))
+u1db_get_doc_conflicts(u1database *db, const char *doc_id, void *context,
+                       int (*cb)(void *context, u1db_document *doc))
 {
     int status = U1DB_OK;
     sqlite3_stmt *statement;
@@ -609,7 +609,7 @@ u1db_get_doc_conflicts(u1database *db, const char *doc_id, void *ctx,
             } else {
                 // We know this, or we wouldn't be here :)
                 cur_doc->has_conflicts = 1;
-                cb(ctx, cur_doc);
+                cb(context, cur_doc);
             }
         } else {
             status = local_status;
@@ -632,7 +632,7 @@ u1db_get_doc_conflicts(u1database *db, const char *doc_id, void *ctx,
             status = U1DB_NOMEM;
         } else {
             // fprintf(stderr, "Invoking cb for %s, %s\n", doc_id, doc_rev);
-            cb(ctx, cur_doc);
+            cb(context, cur_doc);
             status = sqlite3_step(statement);
         }
     }

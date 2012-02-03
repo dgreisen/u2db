@@ -207,6 +207,13 @@ class TestCmdGet(TestCaseWithDB):
         self.assertEqual('rev: %s\n' % (self.doc.rev,),
                          cmd.stderr.getvalue())
 
+    def test_get_fail(self):
+        cmd = self.make_command(client.CmdGet)
+        result = cmd.run(self.db_path, 'doc-not-there', None)
+        self.assertEqual(result, 1)
+        self.assertEqual(cmd.stdout.getvalue(), "")
+        self.assertTrue("not found" in cmd.stderr.getvalue())
+
 
 class TestCmdInit(TestCaseWithDB):
 

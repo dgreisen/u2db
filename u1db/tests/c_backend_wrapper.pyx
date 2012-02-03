@@ -46,12 +46,12 @@ cdef extern from "u1db/u1db.h":
                               int save_conflict, char *replica_uid,
                               int replica_gen, int *state)
     int u1db_delete_doc(u1database *db, u1db_document *doc)
-    int u1db_whats_changed(u1database *db, int *gen, void *ctx,
-                           int (*cb)(void *ctx, char *doc_id, int gen))
-    int u1db__get_transaction_log(u1database *db, void *ctx,
-                                  int (*cb)(void *ctx, char *doc_id, int gen))
-    int u1db_get_doc_conflicts(u1database *db, char *doc_id, void *ctx,
-                               int (*cb)(void *ctx, u1db_document *doc))
+    int u1db_whats_changed(u1database *db, int *gen, void *context,
+                           int (*cb)(void *context, char *doc_id, int gen))
+    int u1db__get_transaction_log(u1database *db, void *context,
+                              int (*cb)(void *context, char *doc_id, int gen))
+    int u1db_get_doc_conflicts(u1database *db, char *doc_id, void *context,
+                               int (*cb)(void *context, u1db_document *doc))
 
     int U1DB_OK
     int U1DB_INVALID_PARAMETER

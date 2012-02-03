@@ -142,15 +142,15 @@ int u1db_get_doc(u1database *db, const char *doc_id, u1db_document **doc);
  * If a document is not conflicted, then this will not invoke the callback
  * function.
  *
- * @param ctx: A void* that is returned to the callback function.
+ * @param context: A void* that is returned to the callback function.
  * @param cb: This callback function will be invoked for each content that is
  *      conflicted. The first item will be the same document that you get from
  *      get_doc(). The document objects passed into the callback function will
  *      have been allocated on the heap, and the callback is responsible for
  *      freeing the memory (or saving it somewhere).
  */
-int u1db_get_doc_conflicts(u1database *db, const char *doc_id, void *ctx,
-                           int (*cb)(void *ctx, u1db_document *doc));
+int u1db_get_doc_conflicts(u1database *db, const char *doc_id, void *context,
+                           int (*cb)(void *context, u1db_document *doc));
 
 /**
  * Mark a document as deleted.
@@ -177,8 +177,8 @@ int u1db_delete_doc(u1database *db, u1db_document *doc);
  *               once per doc_id.
  * @param context Opaque context, passed back to the caller.
  */
-int u1db_whats_changed(u1database *db, int *gen, void *ctx,
-                       int (*cb)(void *ctx, char *doc_id, int gen));
+int u1db_whats_changed(u1database *db, int *gen, void *context,
+                       int (*cb)(void *context, char *doc_id, int gen));
 
 
 /**
