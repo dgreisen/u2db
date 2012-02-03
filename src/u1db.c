@@ -570,6 +570,42 @@ finish:
 }
 
 
+static int
+find_current_doc_for_conflict(u1database *db, const char *doc_id,
+        void *context, int (*cb)(void *context, u1db_document *doc))
+{
+    // There is a row to handle, so we first must return the original doc.
+    int status;
+    sqlite3_stmt *statement;
+    const char *doc_rev, *content;
+    int content_len;
+    u1db_document *cur_doc;
+    // fprintf(stderr, "\nFound a row in conflicts for %s\n", doc_id);
+    status = lookup_doc(db, doc_id, &doc_rev, &content, &content_len,
+                              &statement);
+    if (status == SQLITE_OK) {
+        if (doc_rev == NULL) {
+            // There is an entry in conflicts, but no entry in documents,
+            // something is broken here, this is the closest error we have
+            status = U1DB_DOCUMENT_DOES_NOT_EXIST;
+            goto finish;
+        }
+        cur_doc = u1db__allocate_document(doc_id, doc_rev, content,
+                                          content_len);
+        if (cur_doc == NULL) {
+            status = U1DB_NOMEM;
+        } else {
+            // We know this, or we wouldn't be here :)
+            cur_doc->has_conflicts = 1;
+            cb(context, cur_doc);
+        }
+    }
+finish:
+    sqlite3_finalize(statement);
+    return status;
+}
+
+
 int
 u1db_get_doc_conflicts(u1database *db, const char *doc_id, void *context,
                        int (*cb)(void *context, u1db_document *doc))
@@ -591,30 +627,12 @@ u1db_get_doc_conflicts(u1database *db, const char *doc_id, void *context,
     if (status != SQLITE_OK) { goto finish; }
     status = sqlite3_step(statement);
     if (status == SQLITE_ROW) {
-        // There is a row to handle, so we first must return the original doc.
         int local_status;
-        sqlite3_stmt *lookup_stmt;
-        // fprintf(stderr, "\nFound a row in conflicts for %s\n", doc_id);
-        local_status = lookup_doc(db, doc_id, &doc_rev, &content, &content_len,
-                                  &lookup_stmt);
-        if (local_status == SQLITE_OK) {
-            if (doc_rev == NULL) {
-                // ERROR: There is an entry in the conflicts table, but nothing
-                // in docs?
-            }
-            cur_doc = u1db__allocate_document(doc_id, doc_rev, content,
-                                              content_len);
-            if (cur_doc == NULL) {
-                status = U1DB_NOMEM;
-            } else {
-                // We know this, or we wouldn't be here :)
-                cur_doc->has_conflicts = 1;
-                cb(context, cur_doc);
-            }
-        } else {
+        local_status = find_current_doc_for_conflict(db, doc_id, context, cb);
+        if (local_status != U1DB_OK) {
             status = local_status;
+            goto finish;
         }
-        sqlite3_finalize(lookup_stmt);
     }
     while (status == SQLITE_ROW) {
         doc_rev = sqlite3_column_text(statement, 0);
