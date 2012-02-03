@@ -502,7 +502,7 @@ class HTTPApp(object):
     def request_bad_request(self, environ):
         """Hook called when processing a bad request.
 
-        No actual processing done.
+        No actual processing was done.
         """
         pass
 
