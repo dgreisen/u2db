@@ -43,8 +43,10 @@ cdef extern from "u1db/u1db.h":
     int u1db_get_doc(u1database *db, char *doc_id, u1db_document **doc)
     int u1db_put_doc(u1database *db, u1db_document *doc)
     int u1db_delete_doc(u1database *db, u1db_document *doc)
-    int u1db_whats_changed(u1database *db, int *db_rev,
-                           int (*cb)(void *, char *doc_id), void *context)
+    int u1db_whats_changed(u1database *db, int *gen, void *context,
+                           int (*cb)(void *context, char *doc_id, int gen))
+    int u1db__get_transaction_log(u1database *db, void *context,
+                              int (*cb)(void *context, char *doc_id, int gen))
 
     int U1DB_OK
     int U1DB_INVALID_PARAMETER
@@ -118,16 +120,11 @@ cdef extern from "u1db/u1db_vectorclock.h":
 
 from u1db import errors
 
-cdef int _add_to_set(void *context, char *doc_id):
-    a_set = <object>(context)
-    doc = doc_id
-    a_set.add(doc)
 
-
-cdef int _append_to_list(void *context, char *doc_id):
-    a_list = <object>context
+cdef int _append_to_list(void *context, char *doc_id, int generation):
+    a_list = <object>(context)
     doc = doc_id
-    a_list.append(doc)
+    a_list.append((doc, generation))
 
 
 def make_document(doc_id, rev, content, has_conflicts=False):
@@ -383,27 +380,21 @@ cdef class CDatabase(object):
         handle_status(status, "Failed to delete %s" % (doc,))
 
     def whats_changed(self, db_rev=0):
-        cdef int status, c_db_rev
+        cdef int c_db_rev
 
-        a_set = set()
+        a_list = []
         c_db_rev = db_rev
-        status = u1db_whats_changed(self._db, &c_db_rev, _add_to_set, <void*>a_set)
-        if status != 0:
-            raise RuntimeError("Failed to call whats_changed: %d" % (status,))
-        return c_db_rev, a_set
+        handle_status(u1db_whats_changed(self._db, &c_db_rev, <void*>a_list,
+                                         _append_to_list),
+                      "whats_changed")
+        return c_db_rev, a_list
 
     def _get_transaction_log(self):
-        cdef int status, c_db_rev
-
-        c_db_rev = 0;
-        # For now, whats_changed does a callback for every item, so we can use
-        # it to inspect the transaction log.
         a_list = []
-        status = u1db_whats_changed(self._db, &c_db_rev, _append_to_list,
-                                    <void*>a_list)
-        if status != 0:
-            raise RuntimeError("Failed to call whats_changed: %d" % (status,))
-        return a_list
+        handle_status(u1db__get_transaction_log(self._db, <void*>a_list,
+                                                _append_to_list),
+                      "get_transaction_log")
+        return [doc_id for doc_id, gen in a_list]
 
     def _get_sync_info(self, other_replica_uid):
         cdef int status, my_db_rev, other_db_rev
