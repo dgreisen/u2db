@@ -458,7 +458,7 @@ class DatabaseSyncTests(tests.DatabaseBaseTests):
         # resolve
         conflicts = self.db2.get_doc_conflicts('the-doc')
         doc4 = self.make_document('the-doc', None, '{"a": 4}')
-        revs = [confl[0] for confl in conflicts]
+        revs = [doc.rev for doc in conflicts]
         self.db2.resolve_doc(doc4, revs)
         doc2 = self.db2.get_doc('the-doc')
         self.assertEqual(doc4.content, doc2.content)
@@ -512,9 +512,8 @@ class DatabaseSyncTests(tests.DatabaseBaseTests):
         content1 = '{"key": "altval"}'
         doc2 = self.db2.create_doc(content1, doc_id=doc1.doc_id)
         self.sync(self.db1, self.db2)
-        self.assertEqual([(doc2.rev, content1),
-                          (doc1.rev, simple_doc)],
-                         self.db1.get_doc_conflicts(doc1.doc_id))
+        self.assertGetDocConflicts(self.db1, doc1.doc_id,
+            [(doc2.rev, content1), (doc1.rev, simple_doc)])
 
 
 class TestDbSync(tests.TestCaseWithServer):

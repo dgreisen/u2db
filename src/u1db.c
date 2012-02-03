@@ -590,13 +590,10 @@ find_current_doc_for_conflict(u1database *db, const char *doc_id,
             status = U1DB_DOCUMENT_DOES_NOT_EXIST;
             goto finish;
         }
-        cur_doc = u1db__allocate_document(doc_id, doc_rev, content,
-                                          content_len);
+        cur_doc = u1db__allocate_document(doc_id, doc_rev, content, 1);
         if (cur_doc == NULL) {
             status = U1DB_NOMEM;
         } else {
-            // We know this, or we wouldn't be here :)
-            cur_doc->has_conflicts = 1;
             cb(context, cur_doc);
         }
     }
@@ -643,8 +640,7 @@ u1db_get_doc_conflicts(u1database *db, const char *doc_id, void *context,
             content = sqlite3_column_text(statement, 1);
             content_len = sqlite3_column_bytes(statement, 1);
         }
-        cur_doc = u1db__allocate_document(doc_id, doc_rev, content,
-                                          content_len);
+        cur_doc = u1db__allocate_document(doc_id, doc_rev, content, 0);
         if (cur_doc == NULL) {
             // fprintf(stderr, "Failed to allocate_document\n");
             status = U1DB_NOMEM;

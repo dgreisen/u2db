@@ -419,7 +419,7 @@ cdef class CDatabase(object):
         handle_status("get_doc_conflicts",
             u1db_get_doc_conflicts(self._db, doc_id, <void*>conflict_docs,
                 _append_doc_to_list))
-        return [(doc.rev, doc.content) for doc in conflict_docs] 
+        return conflict_docs
 
     def delete_doc(self, CDocument doc):
         handle_status("Failed to delete %s" % (doc,),

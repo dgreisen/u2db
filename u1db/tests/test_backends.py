@@ -202,19 +202,25 @@ class LocalDatabaseTests(tests.DatabaseBaseTests):
                          self.db.get_docs([doc1.doc_id, doc2.doc_id],
                                           check_for_conflicts=False))
 
+    def test_get_doc_conflicts(self):
+        doc = self.db.create_doc(simple_doc)
+        alt_doc = self.make_document(doc.doc_id, 'alternate:1', nested_doc)
+        self.db.put_doc_if_newer(alt_doc, save_conflict=True)
+        self.assertEqual([alt_doc, doc],
+                         self.db.get_doc_conflicts(doc.doc_id))
+
     def test_resolve_doc(self):
         doc = self.db.create_doc(simple_doc)
         alt_doc = self.make_document(doc.doc_id, 'alternate:1', nested_doc)
         self.db.put_doc_if_newer(alt_doc, save_conflict=True)
-        self.assertEqual([('alternate:1', nested_doc),
-                          (doc.rev, simple_doc)],
-                         self.db.get_doc_conflicts(doc.doc_id))
+        self.assertGetDocConflicts(self.db, doc.doc_id,
+            [('alternate:1', nested_doc), (doc.rev, simple_doc)])
         orig_rev = doc.rev
         self.db.resolve_doc(doc, [alt_doc.rev, doc.rev])
         self.assertNotEqual(orig_rev, doc.rev)
         self.assertFalse(doc.has_conflicts)
         self.assertGetDoc(self.db, doc.doc_id, doc.rev, simple_doc, False)
-        self.assertEqual([], self.db.get_doc_conflicts(doc.doc_id))
+        self.assertGetDocConflicts(self.db, doc.doc_id, [])
 
     def test_resolve_doc_picks_biggest_vcr(self):
         doc1 = self.db.create_doc(simple_doc)
@@ -376,10 +382,10 @@ class LocalDatabaseTests(tests.DatabaseBaseTests):
         self.db.put_doc_if_newer(doc3, save_conflict=True)
         doc22 = self.make_document(doc1.doc_id, 'alternate:2', '{"b": 2}')
         self.db.put_doc_if_newer(doc22, save_conflict=True)
-        self.assertEqual(3, len(self.db.get_doc_conflicts(doc1.doc_id)))
-        self.assertEqual(sorted([('test:1', '{"key": "value"}'),
-                                 ('altalt:1', '{"c": 1}')]),
-                         sorted(self.db.get_doc_conflicts(doc1.doc_id)[1:]))
+        self.assertGetDocConflicts(self.db, doc1.doc_id,
+            [('alternate:2', doc22.content),
+             ('altalt:1', doc3.content),
+             (doc1.rev, simple_doc)])
 
     def test_put_doc_if_newer_save_conflict_was_deleted(self):
         doc1 = self.db.create_doc(simple_doc)
@@ -388,9 +394,8 @@ class LocalDatabaseTests(tests.DatabaseBaseTests):
         self.db.put_doc_if_newer(doc2, save_conflict=True)
         self.assertTrue(doc2.has_conflicts)
         self.assertGetDoc(self.db, doc1.doc_id, 'alternate:1', nested_doc, True)
-        self.assertEqual([('alternate:1', nested_doc),
-                          (doc1.rev, None)],
-                         self.db.get_doc_conflicts(doc1.doc_id))
+        self.assertGetDocConflicts(self.db, doc1.doc_id,
+            [('alternate:1', nested_doc), (doc1.rev, None)])
 
     def test_put_doc_if_newer_propagates_full_resolution(self):
         doc1 = self.db.create_doc(simple_doc)
@@ -405,7 +410,7 @@ class LocalDatabaseTests(tests.DatabaseBaseTests):
         state = self.db.put_doc_if_newer(doc_resolved, save_conflict=True)
         self.assertEqual('inserted', state)
         self.assertFalse(doc_resolved.has_conflicts)
-        self.assertEqual([], self.db.get_doc_conflicts(doc1.doc_id))
+        self.assertGetDocConflicts(self.db, doc1.doc_id, [])
         doc3 = self.db.get_doc(doc1.doc_id)
         self.assertFalse(doc3.has_conflicts)
 
@@ -426,9 +431,8 @@ class LocalDatabaseTests(tests.DatabaseBaseTests):
         self.assertTrue(doc_resolved.has_conflicts)
         doc4 = self.db.get_doc(doc1.doc_id)
         self.assertTrue(doc4.has_conflicts)
-        self.assertEqual([('alternate:2|test:1', '{"good": 1}'),
-                          ('altalt:1', '{}')],
-                         self.db.get_doc_conflicts(doc1.doc_id))
+        self.assertGetDocConflicts(self.db, doc1.doc_id,
+            [('alternate:2|test:1', '{"good": 1}'), ('altalt:1', '{}')])
 
     def test_get_sync_generation(self):
         self.assertEqual(0, self.db.get_sync_generation('other-db'))

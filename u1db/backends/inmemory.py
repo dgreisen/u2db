@@ -113,8 +113,10 @@ class InMemoryDatabase(CommonBackend):
     def get_doc_conflicts(self, doc_id):
         if doc_id not in self._conflicts:
             return []
-        result = [self._docs[doc_id]]
-        result.extend(self._conflicts[doc_id])
+        result = [self._get_doc(doc_id)]
+        result[0].has_conflicts = True
+        result.extend([Document(doc_id, rev, content)
+                       for rev, content in self._conflicts[doc_id]])
         return result
 
     def _replace_conflicts(self, doc, conflicts):
