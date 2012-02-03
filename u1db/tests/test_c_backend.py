@@ -72,6 +72,13 @@ class TestCDatabase(BackendTests):
         self.assertEqual(32, len(self.db._replica_uid))
         val = int(self.db._replica_uid, 16)
 
+    def test_get_conflicts_with_borked_data(self):
+        self.db = c_backend_wrapper.CDatabase(':memory:')
+        # We add an entry to conflicts, but not to documents, which is an
+        # invalid situation
+        self.db._run_sql("INSERT INTO conflicts"
+                         " VALUES ('doc-id', 'doc-rev', '{}')")
+        self.assertRaises(Exception, self.db.get_doc_conflicts, 'doc-id')
 
 
 class TestVectorClock(BackendTests):

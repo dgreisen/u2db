@@ -136,6 +136,7 @@ class SQLiteDatabase(CommonBackend):
         c.execute("CREATE TABLE transaction_log ("
                   " generation INTEGER PRIMARY KEY AUTOINCREMENT,"
                   " doc_id TEXT)")
+        # TODO: Rename 'doc' to 'content'
         c.execute("CREATE TABLE document ("
                   " doc_id TEXT PRIMARY KEY,"
                   " doc_rev TEXT,"
@@ -145,10 +146,8 @@ class SQLiteDatabase(CommonBackend):
                   " doc_id TEXT,"
                   " field_name TEXT,"
                   " value TEXT)")
-        # TODO: Should we include doc_id or not? By including it, the
-        #       content can be returned directly from the index, and
-        #       matched with the documents table, roughly saving 1 btree
-        #       lookup per query. It costs us extra data storage.
+        # Note: Including doc_id made significant improvement in lookup
+        #   performance.
         c.execute("CREATE INDEX document_fields_field_value_doc_idx"
                   " ON document_fields(field_name, value, doc_id)")
         c.execute("CREATE TABLE sync_log ("

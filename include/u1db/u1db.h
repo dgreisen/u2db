@@ -35,6 +35,7 @@ typedef struct _u1db_document
     char *content;
     size_t content_len;
     int has_conflicts;
+    int _generation; // Used as part of sync api
 } u1db_document;
 
 
@@ -47,6 +48,12 @@ typedef struct _u1db_document
 #define U1DB_DOCUMENT_ALREADY_DELETED -4
 #define U1DB_DOCUMENT_DOES_NOT_EXIST -5
 #define U1DB_NOMEM -6
+
+// Used by put_doc_if_newer
+#define U1DB_INSERTED 1
+#define U1DB_SUPERSEDED 2
+#define U1DB_CONVERGED 3
+#define U1DB_CONFLICTED 4
 
 /**
  * The basic constructor for a new connection.
@@ -96,6 +103,30 @@ int u1db_create_doc(u1database *db, const char *content, const char *doc_id,
 int u1db_put_doc(u1database *db, u1db_document *doc);
 
 /**
+ * Update content if the revision is newer than what is already present.
+ *
+ * @param doc: (IN/OUT) The document we want added to the database. If
+ *             save_conflict is true and this conflicts, we will set
+ *             doc->has_conflicts
+ * @param save_conflict: If 1, when a document would conflict, it is saved as
+ *                       the current version and marked as a conflict.
+ *                       Otherwise the document is just rejected as not newer.
+ * @param replica_uid: Used during synchronization to indicate what replica
+ *                     this document came from. (Can be NULL)
+ * @param replica_gen: Generation of the replica. Only meaningful if
+ *                     replica_uid is set.
+ * @param state: (OUT) Return one of:
+ *  U1DB_INSERTED   The document is newer than what we have
+ *  U1DB_SUPERSEDED We already have a newer document than what was passed
+ *  U1DB_CONVERGED  We have exactly the same document
+ *  U1DB_CONFLICTED Neither document is strictly newer than the other. If
+ *                  save_conflict is false, then we will ignore the document.
+ */
+int u1db_put_doc_if_newer(u1database *db, u1db_document *doc, int save_conflict,
+                          char *replica_uid, int replica_gen,
+                          int *state);
+
+/**
  * Get the document defined by the given document id.
  *
  * @param doc_id: The document we are looking for
@@ -104,6 +135,22 @@ int u1db_put_doc(u1database *db, u1db_document *doc);
  *      document matching that doc_id.
  */
 int u1db_get_doc(u1database *db, const char *doc_id, u1db_document **doc);
+
+/**
+ * Get all of the contents associated with a conflicted document.
+ *
+ * If a document is not conflicted, then this will not invoke the callback
+ * function.
+ *
+ * @param context: A void* that is returned to the callback function.
+ * @param cb: This callback function will be invoked for each content that is
+ *      conflicted. The first item will be the same document that you get from
+ *      get_doc(). The document objects passed into the callback function will
+ *      have been allocated on the heap, and the callback is responsible for
+ *      freeing the memory (or saving it somewhere).
+ */
+int u1db_get_doc_conflicts(u1database *db, const char *doc_id, void *context,
+                           int (*cb)(void *context, u1db_document *doc));
 
 /**
  * Mark a document as deleted.
@@ -118,9 +165,9 @@ int u1db_delete_doc(u1database *db, u1db_document *doc);
 /**
  * Get the document defined by the given document id.
  *
- * @param db_rev The global database revision to start at. You can pass '0' to
+ * @param gen 	 The global database revision to start at. You can pass '0' to
  *               get all changes in the database. The integer will be updated
- *               to point at the current db_rev.
+ *               to point at the current generation.
  * @param cb     A callback function. This will be called passing in 'context',
  *               and a document identifier for each document that has been modified.
  *               The doc_id string is transient, so callers must copy it to
@@ -130,8 +177,8 @@ int u1db_delete_doc(u1database *db, u1db_document *doc);
  *               once per doc_id.
  * @param context Opaque context, passed back to the caller.
  */
-int u1db_whats_changed(u1database *db, int *db_rev,
-                       int (*cb)(void *, char *doc_id), void *context);
+int u1db_whats_changed(u1database *db, int *gen, void *context,
+                       int (*cb)(void *context, char *doc_id, int gen));
 
 
 /**

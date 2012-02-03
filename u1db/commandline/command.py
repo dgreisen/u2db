@@ -50,7 +50,7 @@ class CommandGroup(object):
         vals = []
         for param in params[1:]:
             vals.append(getattr(args, param))
-        cmd.run(*vals)
+        return cmd.run(*vals)
 
 
 class Command(object):

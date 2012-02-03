@@ -198,6 +198,8 @@ class Database(object):
         """
         raise NotImplementedError(self.get_from_index)
 
+    # XXX: get_doc_conflicts still uses tuples, we need to change this to using
+    #      Document objects
     def get_doc_conflicts(self, doc_id):
         """Get the list of conflict texts for the given document.
 
