@@ -171,6 +171,10 @@ class ServerStateForTests(server_state.ServerState):
         except KeyError:
             raise errors.DatabaseDoesNotExist
 
+    def check_database(self, path):
+        # cares only about the possible exception
+        self.open_database(path)
+
     def ensure_database(self, path):
         try:
             return self.open_database(path)
