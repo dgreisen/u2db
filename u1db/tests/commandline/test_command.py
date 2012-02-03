@@ -37,6 +37,7 @@ class MyTestCommand(command.Command):
 
     def run(self, foo, nbar):
         self.stdout.write('foo: %s nbar: %d' % (foo, nbar))
+        return 0
 
 
 def make_stdin_out_err():
@@ -79,9 +80,10 @@ class TestCommandGroup(tests.TestCase):
         group = command.CommandGroup()
         group.register(MyTestCommand)
         stdin, stdout, stderr = make_stdin_out_err()
-        self.trap_system_exit(group.run_argv,
-            ['mycmd', 'foozizle', '--bar=10'],
-            stdin, stdout, stderr)
+        ret = self.trap_system_exit(group.run_argv,
+                                    ['mycmd', 'foozizle', '--bar=10'],
+                                    stdin, stdout, stderr)
+        self.assertEqual(0, ret)
 
 
 class TestCommand(tests.TestCase):

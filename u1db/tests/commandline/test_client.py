@@ -355,6 +355,8 @@ class TestCommandLine(TestCaseWithDB, RunMainHelper):
         self.assertEqual(0, ret)
         self.assertEqual(tests.simple_doc, stdout)
         self.assertEqual('rev: %s\n' % (doc.rev,), stderr)
+        ret, stdout, stderr = self.run_main(['get', self.db_path, 'not-there'])
+        self.assertEqual(1, ret)
 
     def test_delete(self):
         doc = self.db.create_doc(tests.simple_doc, doc_id='test-id')
