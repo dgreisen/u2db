@@ -460,18 +460,56 @@ class HTTPApp(object):
 
     def __call__(self, environ, start_response):
         responder = HTTPResponder(start_response)
+        self.request_begin(environ)
         try:
             resource = self._lookup_resource(environ, responder)
             HTTPInvocationByMethodWithBody(resource, environ)()
         except errors.U1DBError, e:
+            self.request_u1db_error(environ, e)
             status = http_errors.wire_description_to_status.get(
                                                             e.wire_description,
                                                             500)
             responder.send_response_json(status, error=e.wire_description)
         except BadRequest:
-            # xxx introduce logging
-            #print environ['PATH_INFO']
-            #import traceback
-            #traceback.print_exc()
+            self.request_bad_request(environ)
             responder.send_response_json(400, error="bad request")
+        except KeyboardInterrupt:
+            raise
+        except:
+            self.request_failed(environ)
+            raise
+        else:
+            self.request_done(environ)
         return responder.content
+
+    # hooks for tracing requests
+
+    def request_begin(self, environ):
+        """Hook called at the beginning of processing a request."""
+        pass
+
+    def request_done(self, environ):
+        """Hook called when done processing a request."""
+        pass
+
+    def request_u1db_error(self, environ, exc):
+        """Hook called when processing a request resulted in a U1DBError.
+
+        U1DBError passed as exc.
+        """
+        pass
+
+    def request_bad_request(self, environ):
+        """Hook called when processing a bad request.
+
+        No actual processing was done.
+        """
+        pass
+
+    def request_failed(self, environ):
+        """Hook called when processing a request failed unexpectedly.
+
+        Invoked from an except block, so there's interpreter exception
+        information available.
+        """
+        pass
