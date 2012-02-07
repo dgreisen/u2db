@@ -158,7 +158,8 @@ int u1db_get_doc_conflicts(u1database *db, const char *doc_id, void *context,
  * @param doc (IN/OUT) The document we want to delete, the document must match
  *                the stored value, or the delete will fail. After being
  *                deleted, the doc_rev parameter will be updated to match the
- *                new value in the database.
+ *                new value in the database. Also, doc->content will be set to
+ *                NULL.
  */
 int u1db_delete_doc(u1database *db, u1db_document *doc);
 

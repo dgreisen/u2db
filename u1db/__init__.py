@@ -145,6 +145,7 @@ class Database(object):
     def delete_doc(self, doc):
         """Mark a document as deleted.
         Will abort if the current revision doesn't match doc.rev.
+        This will also set doc.content to None.
         """
         raise NotImplementedError(self.delete_doc)
 
