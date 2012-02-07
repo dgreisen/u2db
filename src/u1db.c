@@ -661,7 +661,7 @@ finish:
 // rev.
 static int
 prune_conflicts(u1database *db, u1db_document *doc,
-                u1db_vectorclock *new_vcr)
+                u1db_vectorclock *new_vc)
 {
     int status = U1DB_OK;
     sqlite3_stmt *statement;
@@ -674,14 +674,14 @@ prune_conflicts(u1database *db, u1db_document *doc,
     status = sqlite3_step(statement);
     while (status == SQLITE_ROW) {
         const char *conflict_rev;
-        u1db_vectorclock *conflict_vcr;
+        u1db_vectorclock *conflict_vc;
 
         conflict_rev = (const char*)sqlite3_column_text(statement, 0);
-        conflict_vcr = u1db__vectorclock_from_str(conflict_rev);
-        if (conflict_vcr == NULL) {
+        conflict_vc = u1db__vectorclock_from_str(conflict_rev);
+        if (conflict_vc == NULL) {
             status = U1DB_NOMEM;
         } else {
-            if (u1db__vectorclock_is_newer(new_vcr, conflict_vcr)) {
+            if (u1db__vectorclock_is_newer(new_vc, conflict_vc)) {
                 // Note: Testing so far shows that it is ok to delete a record
                 //        from a table that we are currently selecting. If we
                 //        find out differently, update this to create a list of
@@ -692,7 +692,7 @@ prune_conflicts(u1database *db, u1db_document *doc,
                 // make sure the document is marked conflicted
                 doc->has_conflicts = 1;
             }
-            u1db__free_vectorclock(&conflict_vcr);
+            u1db__free_vectorclock(&conflict_vc);
         }
         if (status != SQLITE_ROW) {
             break;
@@ -746,37 +746,37 @@ u1db_put_doc_if_newer(u1database *db, u1db_document *doc, int save_conflict,
         *state = U1DB_CONVERGED;
         store = 0;
     } else {
-        u1db_vectorclock *stored_vcr = NULL, *new_vcr = NULL;
+        u1db_vectorclock *stored_vc = NULL, *new_vc = NULL;
         // TODO: u1db__vectorclock_from_str returns NULL if there is an error
         //       in the vector clock, or if we run out of memory... Probably
         //       shouldn't be U1DB_NOMEM
-        stored_vcr = u1db__vectorclock_from_str(stored_doc_rev);
-        if (stored_vcr == NULL) {
+        stored_vc = u1db__vectorclock_from_str(stored_doc_rev);
+        if (stored_vc == NULL) {
             status = U1DB_NOMEM;
             goto finish;
         }
-        new_vcr = u1db__vectorclock_from_str(doc->doc_rev);
-        if (new_vcr == NULL) {
+        new_vc = u1db__vectorclock_from_str(doc->doc_rev);
+        if (new_vc == NULL) {
             status = U1DB_NOMEM;
-            u1db__free_vectorclock(&stored_vcr);
+            u1db__free_vectorclock(&stored_vc);
             goto finish;
         }
-        if (u1db__vectorclock_is_newer(new_vcr, stored_vcr)) {
+        if (u1db__vectorclock_is_newer(new_vc, stored_vc)) {
             // Just take the newer version
             store = 1;
             *state = U1DB_INSERTED;
-            status = prune_conflicts(db, doc, new_vcr);
-        } else if (u1db__vectorclock_is_newer(stored_vcr, new_vcr)) {
+            status = prune_conflicts(db, doc, new_vc);
+        } else if (u1db__vectorclock_is_newer(stored_vc, new_vc)) {
             // The existing version is newer than the one supplied
             store = 0;
             status = U1DB_OK;
             *state = U1DB_SUPERSEDED;
         } else {
-            // TODO: Handle the case where the vcr strings are not identical,
+            // TODO: Handle the case where the vc strings are not identical,
             //       but they are functionally equivalent.
             // Neither is strictly newer than the other, so we treat this as a
             // conflict
-            status = prune_conflicts(db, doc, new_vcr);
+            status = prune_conflicts(db, doc, new_vc);
             if (status == U1DB_OK) {
                 *state = U1DB_CONFLICTED;
                 store = save_conflict;
@@ -787,8 +787,8 @@ u1db_put_doc_if_newer(u1database *db, u1db_document *doc, int save_conflict,
                 }
             }
         }
-        u1db__free_vectorclock(&stored_vcr);
-        u1db__free_vectorclock(&new_vcr);
+        u1db__free_vectorclock(&stored_vc);
+        u1db__free_vectorclock(&new_vc);
     }
     if (status == U1DB_OK && store) {
         status = write_doc(db, doc->doc_id, doc->doc_rev,
@@ -805,6 +805,113 @@ finish:
     }
     return status;
 }
+
+
+// Go through all of the revs, and make sure new_vc supersedes all of them
+static int
+ensure_maximal_rev(u1database *db, int n_revs, const char **revs,
+                   u1db_vectorclock *new_vc)
+{
+    int i;
+    int status = U1DB_OK;
+    u1db_vectorclock *superseded_vc;
+    char *replica_uid;
+
+    for (i = 0; i < n_revs; ++i) {
+        superseded_vc = u1db__vectorclock_from_str(revs[i]);
+        if (superseded_vc == NULL) {
+            status = U1DB_NOMEM;
+            goto finish;
+        }
+        u1db__vectorclock_maximize(new_vc, superseded_vc);
+        u1db__free_vectorclock(&superseded_vc);
+    }
+    status = u1db_get_replica_uid(db, &replica_uid);
+    if (status != U1DB_OK) { goto finish; }
+    status = u1db__vectorclock_increment(new_vc, replica_uid);
+    free(replica_uid);
+finish:
+    return status;
+}
+                   
+
+int
+u1db_resolve_doc(u1database *db, u1db_document *doc,
+                 int n_revs, const char **revs)
+{
+    int i = 0;
+    int status = U1DB_OK;
+    const char *stored_content, *stored_doc_rev;
+    char *new_doc_rev;
+    int stored_content_len;
+    u1db_vectorclock *new_vc = NULL;
+    sqlite3_stmt *statement;
+    int cur_in_superseded = 0;
+
+    if (db == NULL || doc == NULL || revs == NULL) {
+        return U1DB_INVALID_PARAMETER;
+    }
+    if (n_revs == 0) {
+        // Is it invalid to call resolve with no revs to resolve?
+        return U1DB_OK;
+    }
+    for (i = 0; i < n_revs; ++i) {
+        if (revs[i] == NULL) {
+            return U1DB_INVALID_PARAMETER;
+        }
+    }
+    status = lookup_doc(db, doc->doc_id, &stored_doc_rev, &stored_content,
+                        &stored_content_len, &statement);
+    if (status != SQLITE_OK) { goto finish; }
+    // Check to see if one of the resolved revs is the current one
+    cur_in_superseded = 0;
+    if (stored_doc_rev == NULL) {
+        // This seems an odd state, but we'll deal for now, everything
+        // supersedes NULL
+        cur_in_superseded = 1;
+    } else {
+        for (i = 0; i < n_revs; ++i) {
+            if (strcmp(stored_doc_rev, revs[i]) == 0) {
+                cur_in_superseded = 1;
+            }
+        }
+    }
+    new_vc = u1db__vectorclock_from_str(stored_doc_rev);
+    if (new_vc == NULL) {
+        status = U1DB_NOMEM;
+        goto finish;
+    }
+    status = ensure_maximal_rev(db, n_revs, revs, new_vc);
+    if (status != U1DB_OK) { goto finish; }
+    status = u1db__vectorclock_as_str(new_vc, &new_doc_rev);
+    if (status != U1DB_OK) { goto finish; }
+    free(doc->doc_rev);
+    doc->doc_rev = new_doc_rev;
+    doc->doc_rev_len = strlen(new_doc_rev);
+    if (cur_in_superseded) {
+        status = write_doc(db, doc->doc_id, new_doc_rev, doc->content,
+                doc->content_len, (stored_doc_rev != NULL));
+    } else {
+        // The current value is not listed as being superseded, so we just put
+        // this rev as a conflict
+        status = write_conflict(db, doc->doc_id, new_doc_rev, doc->content,
+                                doc->content_len);
+    }
+    if (status != U1DB_OK) {
+        goto finish;
+    }
+    for (i = 0; i < n_revs; ++i) {
+        status = delete_conflict(db, doc->doc_id, revs[i]);
+        if (status != SQLITE_OK) { goto finish; }
+    }
+    // After deleting the conflicts, see if any remain
+    status = lookup_conflict(db, doc->doc_id, &(doc->has_conflicts));
+finish:
+    u1db__free_vectorclock(&new_vc);
+    sqlite3_finalize(statement);
+    return status;
+}
+
 
 int
 u1db_get_doc(u1database *db, const char *doc_id, u1db_document **doc)
