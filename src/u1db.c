@@ -42,39 +42,6 @@ typedef struct _u1db_document_internal
 } u1db_document_internal;
 
 
-static const char *table_definitions[] = {
-    "CREATE TABLE transaction_log ("
-    " generation INTEGER PRIMARY KEY AUTOINCREMENT,"
-    " doc_id TEXT)",
-    "CREATE TABLE document ("
-    " doc_id TEXT PRIMARY KEY,"
-    " doc_rev TEXT,"
-    " doc TEXT)",
-    "CREATE TABLE document_fields ("
-    " doc_id TEXT,"
-    " field_name TEXT,"
-    " value TEXT)",
-    "CREATE INDEX document_fields_field_value_doc_idx"
-    " ON document_fields(field_name, value, doc_id)",
-    "CREATE TABLE sync_log ("
-    " replica_uid TEXT PRIMARY KEY,"
-    " known_generation INTEGER)",
-    "CREATE TABLE conflicts ("
-    " doc_id TEXT,"
-    " doc_rev TEXT,"
-    " doc TEXT,"
-    " CONSTRAINT conflicts_pkey PRIMARY KEY (doc_id, doc_rev))",
-    "CREATE TABLE index_definitions ("
-    " name TEXT,"
-    " offset INT,"
-    " field TEXT,"
-    " CONSTRAINT index_definitions_pkey"
-    " PRIMARY KEY (name, offset))",
-    "CREATE TABLE u1db_config (name TEXT PRIMARY KEY, value TEXT)",
-    "INSERT INTO u1db_config VALUES ('sql_schema', '0')",
-    "INSERT INTO u1db_config VALUES ('index_storage', 'expand referenced')",
-};
-
 static int
 initialize(u1database *db)
 {
@@ -82,15 +49,19 @@ initialize(u1database *db)
     int i, status, final_status;
     char default_replica_uid[33] = {'\0'};
 
-    for(i = 0; i < sizeof(table_definitions)/sizeof(char*); i++) {
+    for(i = 0; i < u1db__schema_len; i++) {
         status = sqlite3_prepare_v2(db->sql_handle,
-            table_definitions[i], -1, &statement, NULL);
+            u1db__schema[i], -1, &statement, NULL);
         if(status != SQLITE_OK) {
+            // fprintf(stderr, "Could not compile the %d statement:\n%s\n",
+            //         i, u1db__schema[i]);
             return status;
         }
         status = sqlite3_step(statement);
         final_status = sqlite3_finalize(statement);
         if(status != SQLITE_DONE) {
+            // fprintf(stderr, "Failed to step %d:\n%s\n",
+            //         i, u1db__schema[i]);
             return status;
         }
         if(final_status != SQLITE_OK) {
@@ -285,6 +256,10 @@ u1db_create_doc(u1database *db, const char *content, const char *doc_id,
     }
     if (doc_id == NULL) {
         local_doc_id = u1db__allocate_doc_id(db);
+        if (local_doc_id == NULL) {
+            status = U1DB_INVALID_DOC_ID;
+            goto finish;
+        }
         doc_id = local_doc_id;
     }
     *doc = u1db__allocate_document(doc_id, NULL, content, 0);

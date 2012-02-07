@@ -22,6 +22,8 @@ from sqlite3 import dbapi2
 import time
 import uuid
 
+import pkg_resources
+
 from u1db.backends import CommonBackend, CommonSyncTarget
 from u1db import (
     Document,
@@ -133,44 +135,22 @@ class SQLiteDatabase(CommonBackend):
 
     def _initialize(self, c):
         """Create the schema in the database."""
-        c.execute("CREATE TABLE transaction_log ("
-                  " generation INTEGER PRIMARY KEY AUTOINCREMENT,"
-                  " doc_id TEXT)")
-        # TODO: Rename 'doc' to 'content'
-        c.execute("CREATE TABLE document ("
-                  " doc_id TEXT PRIMARY KEY,"
-                  " doc_rev TEXT,"
-                  " doc TEXT)"
-                  )
-        c.execute("CREATE TABLE document_fields ("
-                  " doc_id TEXT,"
-                  " field_name TEXT,"
-                  " value TEXT)")
-        # Note: Including doc_id made significant improvement in lookup
-        #   performance.
-        c.execute("CREATE INDEX document_fields_field_value_doc_idx"
-                  " ON document_fields(field_name, value, doc_id)")
-        c.execute("CREATE TABLE sync_log ("
-                  " replica_uid TEXT PRIMARY KEY,"
-                  " known_generation INTEGER)")
-        # TODO: We probably want an index on conflicts(doc_id), since we can't
-        #       use the dual-key primary key for lookups.
-        # TODO: Rename 'doc' to 'content'
-        c.execute("CREATE TABLE conflicts ("
-                  " doc_id TEXT,"
-                  " doc_rev TEXT,"
-                  " doc TEXT,"
-              " CONSTRAINT conflicts_pkey PRIMARY KEY (doc_id, doc_rev))")
-        c.execute("CREATE TABLE index_definitions ("
-                  " name TEXT,"
-                  " offset INT,"
-                  " field TEXT,"
-                  " CONSTRAINT index_definitions_pkey"
-                  " PRIMARY KEY (name, offset))")
-        c.execute("CREATE TABLE u1db_config ("
-                  " name TEXT PRIMARY KEY,"
-                  " value TEXT)")
-        c.execute("INSERT INTO u1db_config VALUES ('sql_schema', '0')")
+        #read the script with sql commands
+	# TODO: Change how we set up the dependency. Most likely use something
+	# 	like lp:dirspec to grab the file from a common resource
+	# 	directory. Doesn't specifically need to be handled until we get
+	# 	to the point of packaging this.
+        schema_content = pkg_resources.resource_string(__name__, 'dbschema.sql')
+        # Note: We'd like to use c.executescript() here, but it seems that
+        #       executescript always commits, even if you set
+        #       isolation_level = None, so if we want to properly handle
+        #       exclusive locking and rollbacks between processes, we need
+        #       to execute it line-by-line
+        for line in schema_content.split(';'):
+            if not line:
+                continue
+            c.execute(line)
+        #add extra fields
         self._extra_schema_init(c)
         # A unique identifier should be set for this replica. Implementations
         # don't have to strictly use uuid here, but we do want the uid to be
