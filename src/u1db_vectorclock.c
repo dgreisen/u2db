@@ -143,7 +143,7 @@ u1db__vectorclock_from_str(const char *s)
             return NULL;
         }
         last_replica_uid = res->items[i].replica_uid;
-        res->items[i].db_rev = strtol(colon+1, &last_digit, 10);
+        res->items[i].generation = strtol(colon+1, &last_digit, 10);
         if (last_digit != pipe) {
             u1db__free_vectorclock(&res);
             return NULL;
@@ -165,7 +165,7 @@ u1db__vectorclock_increment(u1db_vectorclock *clock, const char *replica_uid)
         cmp = strcmp(replica_uid, clock->items[i].replica_uid);
         if (cmp == 0) {
             // We found the entry
-            clock->items[i].db_rev++;
+            clock->items[i].generation++;
             return U1DB_OK;
         } else if (cmp < 0) {
             // replica_uid would come right before items[i] if it was present.
@@ -185,7 +185,7 @@ u1db__vectorclock_increment(u1db_vectorclock *clock, const char *replica_uid)
     memmove(&clock->items[i + 1], &clock->items[i],
             sizeof(u1db_vectorclock_item) * (clock->num_items - i - 1));
     clock->items[i].replica_uid = strdup(replica_uid);
-    clock->items[i].db_rev = 1;
+    clock->items[i].generation = 1;
     return U1DB_OK;
 }
 
@@ -220,8 +220,8 @@ u1db__vectorclock_maximize(u1db_vectorclock *clock, u1db_vectorclock *other)
                      other->items[oi].replica_uid);
         if (cmp == 0) {
             // These machines are the same, take the 'max' value:
-            if (clock->items[ci].db_rev < other->items[oi].db_rev) {
-                clock->items[ci].db_rev = other->items[oi].db_rev;
+            if (clock->items[ci].generation < other->items[oi].generation) {
+                clock->items[ci].generation = other->items[oi].generation;
             }
             ci++;
             oi++;
@@ -276,8 +276,8 @@ u1db__vectorclock_maximize(u1db_vectorclock *clock, u1db_vectorclock *other)
         }
         clock->items[next->clock_offset].replica_uid = strdup(
             other->items[next->other_offset].replica_uid);
-        clock->items[next->clock_offset].db_rev =
-            other->items[next->other_offset].db_rev;
+        clock->items[next->clock_offset].generation =
+            other->items[next->other_offset].generation;
         num_inserts--;
         move_to_end = next->clock_offset - 1;
         next = next->next;
@@ -305,7 +305,7 @@ u1db__vectorclock_as_str(u1db_vectorclock *clock, char **result)
     for (i = 0; i < clock->num_items; i++) {
         buf_size += strlen(clock->items[i].replica_uid);
         buf_size += 2; // ':' and possible '|'
-        val = clock->items[i].db_rev;
+        val = clock->items[i].generation;
         do {
             // divide by 8 is close to divide by 10, to get the number of
             // binary digits we will need to represent the decimal form
@@ -322,7 +322,7 @@ u1db__vectorclock_as_str(u1db_vectorclock *clock, char **result)
             fmt = "|%s:%d";
         }
         count = snprintf(cur, buf_size, fmt, clock->items[i].replica_uid,
-                         clock->items[i].db_rev);
+                         clock->items[i].generation);
         cur += count;
         buf_size -= count;
     }
@@ -333,7 +333,7 @@ int
 u1db__vectorclock_is_newer(u1db_vectorclock *maybe_newer,
                            u1db_vectorclock *other)
 {
-    int ci, oi, cmp, is_newer, n_db_rev, o_db_rev;
+    int ci, oi, cmp, is_newer, n_generation, o_generation;
     if (maybe_newer == NULL || maybe_newer->num_items == 0) {
         // NULL is never newer
         return 0;
@@ -351,12 +351,12 @@ u1db__vectorclock_is_newer(u1db_vectorclock *maybe_newer,
                      other->items[oi].replica_uid);
         if (cmp == 0) {
             // Both clocks have the same machine, see if one is newer
-            n_db_rev = maybe_newer->items[ci].db_rev;
-            o_db_rev = other->items[oi].db_rev;
-            if (n_db_rev < o_db_rev) {
+            n_generation = maybe_newer->items[ci].generation;
+            o_generation = other->items[oi].generation;
+            if (n_generation < o_generation) {
                 // At least one entry in other is newer than this
                 return 0;
-            } else if (n_db_rev > o_db_rev) {
+            } else if (n_generation > o_generation) {
                 // If we have no conflicts, this is strictly newer
                 is_newer = 1;
             }

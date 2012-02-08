@@ -21,7 +21,7 @@
 
 typedef struct _u1db_vectorclock_item {
     char *replica_uid;
-    int db_rev;
+    int generation;
 } u1db_vectorclock_item;
 
 typedef struct _u1db_vectorclock {

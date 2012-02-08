@@ -112,7 +112,7 @@ cdef extern from "u1db/u1db_internal.h":
 cdef extern from "u1db/u1db_vectorclock.h":
     ctypedef struct u1db_vectorclock_item:
         char *replica_uid
-        int db_rev
+        int generation
 
     ctypedef struct u1db_vectorclock:
         int num_items
@@ -425,15 +425,15 @@ cdef class CDatabase(object):
         handle_status("Failed to delete %s" % (doc,),
             u1db_delete_doc(self._db, doc._doc))
 
-    def whats_changed(self, db_rev=0):
-        cdef int c_db_rev
+    def whats_changed(self, generation=0):
+        cdef int c_generation
 
         a_list = []
-        c_db_rev = db_rev
+        c_generation = generation
         handle_status("whats_changed",
-            u1db_whats_changed(self._db, &c_db_rev, <void*>a_list,
+            u1db_whats_changed(self._db, &c_generation, <void*>a_list,
                                _append_doc_gen_to_list))
-        return c_db_rev, a_list
+        return c_generation, a_list
 
     def _get_transaction_log(self):
         a_list = []
@@ -506,11 +506,13 @@ cdef class VectorClockRev:
     def as_dict(self):
         cdef u1db_vectorclock *cur
         cdef int i
+        cdef int gen
         if self._clock == NULL:
             return None
         res = {}
         for i from 0 <= i < self._clock.num_items:
-            res[self._clock.items[i].replica_uid] = self._clock.items[i].db_rev
+            gen = self._clock.items[i].generation
+            res[self._clock.items[i].replica_uid] = gen
         return res
 
     def as_str(self):
