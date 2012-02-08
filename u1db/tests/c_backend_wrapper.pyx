@@ -19,6 +19,7 @@ cdef extern from "Python.h":
     int PyString_AsStringAndSize(object o, char **buf, Py_ssize_t *length
                                  ) except -1
     char * PyString_AS_STRING(object)
+    void *calloc(size_t, size_t)
     void free(void *)
 
 cdef extern from "u1db/u1db.h":
@@ -33,10 +34,11 @@ cdef extern from "u1db/u1db.h":
         size_t content_len
         int has_conflicts
 
+    ctypedef char* const_char_ptr "const char*"
     u1database * u1db_open(char *fname)
     void u1db_free(u1database **)
     int u1db_set_replica_uid(u1database *, char *replica_uid)
-    int u1db_get_replica_uid(u1database *, char **replica_uid)
+    int u1db_get_replica_uid(u1database *, const_char_ptr *replica_uid)
     int u1db_create_doc(u1database *db, char *content, char *doc_id,
                         u1db_document **doc)
     int u1db_delete_doc(u1database *db, u1db_document *doc)
@@ -45,6 +47,8 @@ cdef extern from "u1db/u1db.h":
     int u1db_put_doc_if_newer(u1database *db, u1db_document *doc,
                               int save_conflict, char *replica_uid,
                               int replica_gen, int *state)
+    int u1db_resolve_doc(u1database *db, u1db_document *doc,
+                         int n_revs, const_char_ptr *revs)
     int u1db_delete_doc(u1database *db, u1db_document *doc)
     int u1db_whats_changed(u1database *db, int *gen, void *context,
                            int (*cb)(void *context, char *doc_id, int gen))
@@ -291,7 +295,7 @@ cdef class CDatabase(object):
 
     property _replica_uid:
         def __get__(self):
-            cdef char * val
+            cdef const_char_ptr val
             cdef int status
             status = u1db_get_replica_uid(self._db, &val)
             if status != 0:
@@ -414,6 +418,21 @@ cdef class CDatabase(object):
         pydoc._doc = doc
         return pydoc
 
+    def get_docs(self, doc_ids, check_for_conflicts=True):
+        # TODO: Implement
+        return []
+
+    def resolve_doc(self, CDocument doc, conflicted_doc_revs):
+        cdef const_char_ptr *revs
+        cdef int n_revs
+        n_revs = len(conflicted_doc_revs)
+        revs = <const_char_ptr*>calloc(sizeof(char*), n_revs)
+        for idx, rev in enumerate(conflicted_doc_revs):
+            revs[idx] = rev
+        handle_status("resolve_doc",
+            u1db_resolve_doc(self._db, doc._doc, n_revs, revs))
+        free(<void*>revs)
+
     def get_doc_conflicts(self, doc_id):
         conflict_docs = []
         handle_status("get_doc_conflicts",
@@ -441,6 +460,14 @@ cdef class CDatabase(object):
             u1db__get_transaction_log(self._db, <void*>a_list,
                                       _append_doc_gen_to_list))
         return [doc_id for doc_id, gen in a_list]
+
+    def get_sync_generation(self, other_replica_uid):
+        # TODO: Implement
+        return None
+
+    def set_sync_generation(self, other_replica_uid, other_generation):
+        # TODO: Implement
+        return None
 
     def _get_sync_info(self, other_replica_uid):
         cdef int status, my_db_rev, other_db_rev

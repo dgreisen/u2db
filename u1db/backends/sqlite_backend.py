@@ -451,6 +451,19 @@ class SQLiteDatabase(CommonBackend):
     def resolve_doc(self, doc, conflicted_doc_revs):
         with self._db_handle:
             cur_doc = self._get_doc(doc.doc_id)
+            # TODO: https://bugs.launchpad.net/u1db/+bug/928274 
+            #       I think we have a logic bug in resolve_doc
+            #       Specifically, cur_doc.rev is always in the final vector
+            #       clock of revisions that we supersede, even if it wasn't in
+            #       conflicted_doc_revs. We still add it as a conflict, but the
+            #       fact that put_doc_if_newer propagates resolutions means I
+            #       think that conflict could accidentally be resolved. We need
+            #       to add a test for this case first. (create a rev, create a
+            #       conflict, create another conflict, resolve the first rev
+            #       and first conflict, then make sure that the resolved
+            #       rev doesn't supersede the second conflict rev.) It *might*
+            #       not matter, because the superseding rev is in as a
+            #       conflict, but it does seem incorrect
             new_rev = self._ensure_maximal_rev(cur_doc.rev,
                                                conflicted_doc_revs)
             superseded_revs = set(conflicted_doc_revs)
@@ -460,6 +473,9 @@ class SQLiteDatabase(CommonBackend):
                 self._put_and_update_indexes(cur_doc, doc)
             else:
                 self._add_conflict(c, doc.doc_id, new_rev, doc.content)
+            # TODO: Is there some way that we could construct a rev that would
+            #       end up in superseded_revs, such that we add a conflict, and
+            #       then immediately delete it?
             self._delete_conflicts(c, doc, superseded_revs)
 
     def create_index(self, index_name, index_expression):

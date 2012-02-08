@@ -74,8 +74,12 @@ int u1db_set_replica_uid(u1database *db, const char *replica_uid);
 
 /**
  * Get the replica_uid defined for this database.
+ *
+ * @param replica_uid: (OUT) The unique identifier for this replica. The
+ *                      returned pointer is managed by the db object and should
+ *                      not be modified.
  */
-int u1db_get_replica_uid(u1database *db, char **replica_uid);
+int u1db_get_replica_uid(u1database *db, const char **replica_uid);
 
 /**
  * Create a new document.
@@ -125,6 +129,18 @@ int u1db_put_doc(u1database *db, u1db_document *doc);
 int u1db_put_doc_if_newer(u1database *db, u1db_document *doc, int save_conflict,
                           char *replica_uid, int replica_gen,
                           int *state);
+
+
+/**
+ * Mark conflicts as having been resolved.
+ * @param doc: (IN/OUT) The new content. doc->doc_rev will be updated with the
+ *             new revision. Also if there are still conflicts remaining, we
+ *             will set doc->has_conflicts.
+ * @param n_revs: The number of revisions being passed
+ * @param revs: The revisions we are resolving.
+ */
+int u1db_resolve_doc(u1database *db, u1db_document *doc,
+                     int n_revs, const char **revs);
 
 /**
  * Get the document defined by the given document id.
