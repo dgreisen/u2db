@@ -438,6 +438,9 @@ class LocalDatabaseTests(tests.DatabaseBaseTests):
         self.db.put_doc_if_newer(doc2, save_conflict=True)
         doc3 = self.make_document(doc1.doc_id, 'alternate:1', nested_doc)
         self.db.put_doc_if_newer(doc3, save_conflict=True)
+        self.assertGetDocConflicts(self.db, doc1.doc_id,
+            [('alternate:1', nested_doc), ('test:1', simple_doc),
+             ('altalt:1', '{}')])
         resolved_vcr = vectorclock.VectorClockRev(doc1.rev)
         vcr_3 = vectorclock.VectorClockRev(doc3.rev)
         resolved_vcr.maximize(vcr_3)
