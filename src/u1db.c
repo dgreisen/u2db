@@ -791,9 +791,7 @@ u1db_delete_doc(u1database *db, u1db_document *doc)
     int status, content_len;
     sqlite3_stmt *statement;
     const char *cur_doc_rev, *content;
-    u1db_vectorclock *vc;
     char *doc_rev = NULL;
-    char *replica_uid;
 
     if (db == NULL || doc == NULL) {
         return U1DB_INVALID_PARAMETER;
