@@ -70,6 +70,9 @@ class TestVectorClockRev(tests.TestCase):
         self.assertRoundTrips('a:1|b:2')
         self.assertRoundTrips('alternate:2|test:1')
 
+    def test_handles_sort_order(self):
+        self.assertEqual('a:1|b:2', self.create_vcr('b:2|a:1').as_str())
+
     def assertIncrement(self, original, replica_uid, after_increment):
         vcr = self.create_vcr(original)
         vcr.increment(replica_uid)
