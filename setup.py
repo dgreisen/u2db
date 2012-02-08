@@ -62,7 +62,7 @@ synchronize them with other stores.
     try:
         from setuptools import setup, Extension
     except ImportError:
-        from distutils.core import setup, extension
+        from distutils.core import setup, Extension
 
     try:
         from Cython.Distutils import build_ext
