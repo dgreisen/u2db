@@ -74,8 +74,12 @@ int u1db_set_replica_uid(u1database *db, const char *replica_uid);
 
 /**
  * Get the replica_uid defined for this database.
+ *
+ * @param replica_uid: (OUT) The unique identifier for this replica. The
+ *                      returned pointer is managed by the db object and should
+ *                      not be modified.
  */
-int u1db_get_replica_uid(u1database *db, char **replica_uid);
+int u1db_get_replica_uid(u1database *db, const char **replica_uid);
 
 /**
  * Create a new document.

@@ -158,7 +158,7 @@ u1db_set_replica_uid(u1database *db, const char *replica_uid)
 }
 
 int
-u1db_get_replica_uid(u1database *db, char **replica_uid)
+u1db_get_replica_uid(u1database *db, const char **replica_uid)
 {
     sqlite3_stmt *statement;
     int status, num_bytes;
@@ -515,7 +515,8 @@ u1db_put_doc(u1database *db, u1db_document *doc)
         // We are ok to proceed, allocating a new document revision, and
         // storing the document
         u1db_vectorclock *vc;
-        char *replica_uid, *new_rev;
+        char *new_rev;
+        const char *replica_uid;
 
         vc = u1db__vectorclock_from_str((char*)old_doc_rev);
         if (vc == NULL) { goto finish; }
@@ -805,13 +806,13 @@ finish:
 
 // Go through all of the revs, and make sure new_vc supersedes all of them
 static int
-ensure_maximal_rev(u1database *db, int n_revs, const char **revs,
+ensure_maximal_rev(u1database *db, int n_revs, char **revs,
                    u1db_vectorclock *new_vc)
 {
     int i;
     int status = U1DB_OK;
     u1db_vectorclock *superseded_vc;
-    char *replica_uid;
+    const char *replica_uid;
 
     for (i = 0; i < n_revs; ++i) {
         superseded_vc = u1db__vectorclock_from_str(revs[i]);
@@ -825,11 +826,10 @@ ensure_maximal_rev(u1database *db, int n_revs, const char **revs,
     status = u1db_get_replica_uid(db, &replica_uid);
     if (status != U1DB_OK) { goto finish; }
     status = u1db__vectorclock_increment(new_vc, replica_uid);
-    free(replica_uid);
 finish:
     return status;
 }
-                   
+
 
 int
 u1db_resolve_doc(u1database *db, u1db_document *doc,
@@ -949,14 +949,14 @@ static int
 increment_doc_rev(u1database *db, const char *cur_rev, char **doc_rev)
 {
     u1db_vectorclock *vc = NULL;
-    char *replica_uid;
+    const char *replica_uid;
     int status = U1DB_OK;
 
     vc = u1db__vectorclock_from_str(cur_rev);
     if (vc == NULL) {
         status = U1DB_NOMEM;
         goto finish;
-    } 
+    }
     status = u1db_get_replica_uid(db, &replica_uid);
     if (status != U1DB_OK) { goto finish; }
     status = u1db__vectorclock_increment(vc, replica_uid);
@@ -974,9 +974,7 @@ u1db_delete_doc(u1database *db, u1db_document *doc)
     int status, content_len;
     sqlite3_stmt *statement;
     const char *cur_doc_rev, *content;
-    u1db_vectorclock *vc;
     char *doc_rev = NULL;
-    char *replica_uid;
 
     if (db == NULL || doc == NULL) {
         return U1DB_INVALID_PARAMETER;

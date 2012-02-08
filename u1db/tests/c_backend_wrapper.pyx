@@ -34,10 +34,11 @@ cdef extern from "u1db/u1db.h":
         size_t content_len
         int has_conflicts
 
+    ctypedef char* const_char_ptr "const char*"
     u1database * u1db_open(char *fname)
     void u1db_free(u1database **)
     int u1db_set_replica_uid(u1database *, char *replica_uid)
-    int u1db_get_replica_uid(u1database *, char **replica_uid)
+    int u1db_get_replica_uid(u1database *, const_char_ptr *replica_uid)
     int u1db_create_doc(u1database *db, char *content, char *doc_id,
                         u1db_document **doc)
     int u1db_delete_doc(u1database *db, u1db_document *doc)
@@ -47,7 +48,7 @@ cdef extern from "u1db/u1db.h":
                               int save_conflict, char *replica_uid,
                               int replica_gen, int *state)
     int u1db_resolve_doc(u1database *db, u1db_document *doc,
-                         int n_revs, char **revs)
+                         int n_revs, const_char_ptr *revs)
     int u1db_delete_doc(u1database *db, u1db_document *doc)
     int u1db_whats_changed(u1database *db, int *gen, void *context,
                            int (*cb)(void *context, char *doc_id, int gen))
@@ -294,7 +295,7 @@ cdef class CDatabase(object):
 
     property _replica_uid:
         def __get__(self):
-            cdef char * val
+            cdef const_char_ptr val
             cdef int status
             status = u1db_get_replica_uid(self._db, &val)
             if status != 0:
@@ -422,10 +423,10 @@ cdef class CDatabase(object):
         return []
 
     def resolve_doc(self, CDocument doc, conflicted_doc_revs):
-        cdef char **revs
+        cdef const_char_ptr *revs
         cdef int n_revs
         n_revs = len(conflicted_doc_revs)
-        revs = <char**>calloc(sizeof(char*), n_revs)
+        revs = <const_char_ptr*>calloc(sizeof(char*), n_revs)
         for idx, rev in enumerate(conflicted_doc_revs):
             revs[idx] = rev
         handle_status("resolve_doc",
