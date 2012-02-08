@@ -292,7 +292,7 @@ lookup_doc(u1database *db, const char *doc_id, const char **doc_rev,
     int status;
 
     status = sqlite3_prepare_v2(db->sql_handle,
-        "SELECT doc_rev, doc FROM document WHERE doc_id = ?", -1,
+        "SELECT doc_rev, content FROM document WHERE doc_id = ?", -1,
         statement, NULL);
     if (status != SQLITE_OK) {
         return status;
@@ -334,11 +334,11 @@ write_doc(u1database *db, const char *doc_id, const char *doc_rev,
 
     if (is_update) {
         status = sqlite3_prepare_v2(db->sql_handle, 
-            "UPDATE document SET doc_rev = ?, doc = ? WHERE doc_id = ?", -1,
+            "UPDATE document SET doc_rev = ?, content = ? WHERE doc_id = ?", -1,
             &statement, NULL); 
     } else {
         status = sqlite3_prepare_v2(db->sql_handle, 
-            "INSERT INTO document (doc_rev, doc, doc_id) VALUES (?, ?, ?)", -1,
+            "INSERT INTO document (doc_rev, content, doc_id) VALUES (?, ?, ?)", -1,
             &statement, NULL); 
     }
     if (status != SQLITE_OK) {
@@ -589,8 +589,8 @@ u1db_get_doc_conflicts(u1database *db, const char *doc_id, void *context,
     if (db == NULL || doc_id == NULL || cb == NULL) {
         return U1DB_INVALID_PARAMETER;
     }
-    status = sqlite3_prepare_v2(db->sql_handle,
-        "SELECT doc_rev, doc FROM conflicts WHERE doc_id = ?", -1,
+    status = sqlite3_prepare_v2(db->sql_handle, 
+        "SELECT doc_rev, content FROM conflicts WHERE doc_id = ?", -1,
         &statement, NULL);
     if (status != SQLITE_OK) { goto finish; }
     status = sqlite3_bind_text(statement, 1, doc_id, -1, SQLITE_TRANSIENT);
