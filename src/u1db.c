@@ -224,8 +224,7 @@ handle_row(sqlite3_stmt *statement, u1db_row **row)
     if (new_row->column_sizes == NULL) {
         return U1DB_NOMEM;
     }
-    new_row->columns = (unsigned char**)calloc(new_row->num_columns,
-                                               sizeof(unsigned char *));
+    new_row->columns = (unsigned char**)calloc(new_row->num_columns, sizeof(char *));
     if (new_row->columns == NULL) {
         return U1DB_NOMEM;
     }
@@ -286,8 +285,8 @@ finish:
  * accessing them.
  */
 static int
-lookup_doc(u1database *db, const char *doc_id, const unsigned char **doc_rev,
-           const unsigned char **content, int *content_len,
+lookup_doc(u1database *db, const char *doc_id, const char **doc_rev,
+           const char **content, int *content_len,
            sqlite3_stmt **statement)
 {
     int status;
@@ -309,14 +308,14 @@ lookup_doc(u1database *db, const char *doc_id, const unsigned char **doc_rev,
         *content_len = 0;
         status = SQLITE_OK;
     } else if (status == SQLITE_ROW) {
-        *doc_rev = sqlite3_column_text(*statement, 0);
+        *doc_rev = (const char *)sqlite3_column_text(*statement, 0);
         // fprintf(stderr, "column_type: %d\n", sqlite3_column_type(*statement, 1));
         if (sqlite3_column_type(*statement, 1) == SQLITE_NULL) {
             // fprintf(stderr, "column_type: NULL\n");
             *content = NULL;
             *content_len = 0;
         } else {
-            *content = sqlite3_column_text(*statement, 1);
+            *content = (const char *)sqlite3_column_text(*statement, 1);
             *content_len = sqlite3_column_bytes(*statement, 1);
         }
         status = SQLITE_OK;
@@ -462,7 +461,7 @@ finish:
 int
 u1db_put_doc(u1database *db, u1db_document *doc)
 {
-    const unsigned char *old_content = NULL, *old_doc_rev = NULL;
+    const char *old_content = NULL, *old_doc_rev = NULL;
     int status;
     int old_content_len;
     sqlite3_stmt *statement;
@@ -586,12 +585,11 @@ u1db_get_doc_conflicts(u1database *db, const char *doc_id, void *context,
     sqlite3_stmt *statement;
     u1db_document *cur_doc;
     const char *doc_rev, *content;
-    int content_len;
 
     if (db == NULL || doc_id == NULL || cb == NULL) {
         return U1DB_INVALID_PARAMETER;
     }
-    status = sqlite3_prepare_v2(db->sql_handle, 
+    status = sqlite3_prepare_v2(db->sql_handle,
         "SELECT doc_rev, doc FROM conflicts WHERE doc_id = ?", -1,
         &statement, NULL);
     if (status != SQLITE_OK) { goto finish; }
@@ -607,13 +605,11 @@ u1db_get_doc_conflicts(u1database *db, const char *doc_id, void *context,
         }
     }
     while (status == SQLITE_ROW) {
-        doc_rev = sqlite3_column_text(statement, 0);
+        doc_rev = (const char*)sqlite3_column_text(statement, 0);
         if (sqlite3_column_type(statement, 1) == SQLITE_NULL) {
             content = NULL;
-            content_len = 0;
         } else {
-            content = sqlite3_column_text(statement, 1);
-            content_len = sqlite3_column_bytes(statement, 1);
+            content = (const char*)sqlite3_column_text(statement, 1);
         }
         cur_doc = u1db__allocate_document(doc_id, doc_rev, content, 0);
         if (cur_doc == NULL) {
@@ -638,7 +634,7 @@ int
 u1db_put_doc_if_newer(u1database *db, u1db_document *doc, int save_conflict,
                       char *replica_uid, int replica_gen, int *state)
 {
-    const unsigned char *old_content = NULL, *old_doc_rev = NULL;
+    const char *old_content = NULL, *old_doc_rev = NULL;
     int status = U1DB_INVALID_PARAMETER, store = 0;
     int old_content_len;
     sqlite3_stmt *statement;
@@ -735,7 +731,7 @@ u1db_get_doc(u1database *db, const char *doc_id, u1db_document **doc)
 {
     int status = 0, content_len = 0;
     sqlite3_stmt *statement;
-    const unsigned char *doc_rev, *content;
+    const char *doc_rev, *content;
     if (db == NULL || doc_id == NULL || doc == NULL) {
         // Bad Parameters
         return U1DB_INVALID_PARAMETER;
@@ -769,7 +765,7 @@ u1db_delete_doc(u1database *db, u1db_document *doc)
 {
     int status, content_len;
     sqlite3_stmt *statement;
-    const unsigned char *cur_doc_rev, *content;
+    const char *cur_doc_rev, *content;
     char *doc_rev;
 
     if (db == NULL || doc == NULL) {
