@@ -224,8 +224,7 @@ handle_row(sqlite3_stmt *statement, u1db_row **row)
     if (new_row->column_sizes == NULL) {
         return U1DB_NOMEM;
     }
-    new_row->columns = (unsigned char**)calloc(new_row->num_columns,
-                                               sizeof(unsigned char *));
+    new_row->columns = (unsigned char**)calloc(new_row->num_columns, sizeof(char *));
     if (new_row->columns == NULL) {
         return U1DB_NOMEM;
     }
@@ -286,14 +285,14 @@ finish:
  * accessing them.
  */
 static int
-lookup_doc(u1database *db, const char *doc_id, const unsigned char **doc_rev,
-           const unsigned char **content, int *content_len,
+lookup_doc(u1database *db, const char *doc_id, const char **doc_rev,
+           const char **content, int *content_len,
            sqlite3_stmt **statement)
 {
     int status;
 
     status = sqlite3_prepare_v2(db->sql_handle,
-        "SELECT doc_rev, doc FROM document WHERE doc_id = ?", -1,
+        "SELECT doc_rev, content FROM document WHERE doc_id = ?", -1,
         statement, NULL);
     if (status != SQLITE_OK) {
         return status;
@@ -309,14 +308,14 @@ lookup_doc(u1database *db, const char *doc_id, const unsigned char **doc_rev,
         *content_len = 0;
         status = SQLITE_OK;
     } else if (status == SQLITE_ROW) {
-        *doc_rev = sqlite3_column_text(*statement, 0);
+        *doc_rev = (const char *)sqlite3_column_text(*statement, 0);
         // fprintf(stderr, "column_type: %d\n", sqlite3_column_type(*statement, 1));
         if (sqlite3_column_type(*statement, 1) == SQLITE_NULL) {
             // fprintf(stderr, "column_type: NULL\n");
             *content = NULL;
             *content_len = 0;
         } else {
-            *content = sqlite3_column_text(*statement, 1);
+            *content = (const char *)sqlite3_column_text(*statement, 1);
             *content_len = sqlite3_column_bytes(*statement, 1);
         }
         status = SQLITE_OK;
@@ -335,11 +334,11 @@ write_doc(u1database *db, const char *doc_id, const char *doc_rev,
 
     if (is_update) {
         status = sqlite3_prepare_v2(db->sql_handle, 
-            "UPDATE document SET doc_rev = ?, doc = ? WHERE doc_id = ?", -1,
+            "UPDATE document SET doc_rev = ?, content = ? WHERE doc_id = ?", -1,
             &statement, NULL); 
     } else {
         status = sqlite3_prepare_v2(db->sql_handle, 
-            "INSERT INTO document (doc_rev, doc, doc_id) VALUES (?, ?, ?)", -1,
+            "INSERT INTO document (doc_rev, content, doc_id) VALUES (?, ?, ?)", -1,
             &statement, NULL); 
     }
     if (status != SQLITE_OK) {
@@ -462,7 +461,7 @@ finish:
 int
 u1db_put_doc(u1database *db, u1db_document *doc)
 {
-    const unsigned char *old_content = NULL, *old_doc_rev = NULL;
+    const char *old_content = NULL, *old_doc_rev = NULL;
     int status;
     int old_content_len;
     sqlite3_stmt *statement;
@@ -586,13 +585,12 @@ u1db_get_doc_conflicts(u1database *db, const char *doc_id, void *context,
     sqlite3_stmt *statement;
     u1db_document *cur_doc;
     const char *doc_rev, *content;
-    int content_len;
 
     if (db == NULL || doc_id == NULL || cb == NULL) {
         return U1DB_INVALID_PARAMETER;
     }
     status = sqlite3_prepare_v2(db->sql_handle, 
-        "SELECT doc_rev, doc FROM conflicts WHERE doc_id = ?", -1,
+        "SELECT doc_rev, content FROM conflicts WHERE doc_id = ?", -1,
         &statement, NULL);
     if (status != SQLITE_OK) { goto finish; }
     status = sqlite3_bind_text(statement, 1, doc_id, -1, SQLITE_TRANSIENT);
@@ -607,13 +605,11 @@ u1db_get_doc_conflicts(u1database *db, const char *doc_id, void *context,
         }
     }
     while (status == SQLITE_ROW) {
-        doc_rev = sqlite3_column_text(statement, 0);
+        doc_rev = (const char*)sqlite3_column_text(statement, 0);
         if (sqlite3_column_type(statement, 1) == SQLITE_NULL) {
             content = NULL;
-            content_len = 0;
         } else {
-            content = sqlite3_column_text(statement, 1);
-            content_len = sqlite3_column_bytes(statement, 1);
+            content = (const char*)sqlite3_column_text(statement, 1);
         }
         cur_doc = u1db__allocate_document(doc_id, doc_rev, content, 0);
         if (cur_doc == NULL) {
@@ -712,7 +708,7 @@ int
 u1db_put_doc_if_newer(u1database *db, u1db_document *doc, int save_conflict,
                       char *replica_uid, int replica_gen, int *state)
 {
-    const unsigned char *stored_content = NULL, *stored_doc_rev = NULL;
+    const char *stored_content = NULL, *stored_doc_rev = NULL;
     int status = U1DB_INVALID_PARAMETER, store = 0;
     int stored_content_len;
     sqlite3_stmt *statement;
@@ -918,7 +914,7 @@ u1db_get_doc(u1database *db, const char *doc_id, u1db_document **doc)
 {
     int status = 0, content_len = 0;
     sqlite3_stmt *statement;
-    const unsigned char *doc_rev, *content;
+    const char *doc_rev, *content;
     if (db == NULL || doc_id == NULL || doc == NULL) {
         // Bad Parameters
         return U1DB_INVALID_PARAMETER;
@@ -947,13 +943,40 @@ finish:
     return status;
 }
 
+// Take cur_rev, and update it to have a version incremented based on the
+// database replica uid
+static int
+increment_doc_rev(u1database *db, const char *cur_rev, char **doc_rev)
+{
+    u1db_vectorclock *vc = NULL;
+    char *replica_uid;
+    int status = U1DB_OK;
+
+    vc = u1db__vectorclock_from_str(cur_rev);
+    if (vc == NULL) {
+        status = U1DB_NOMEM;
+        goto finish;
+    } 
+    status = u1db_get_replica_uid(db, &replica_uid);
+    if (status != U1DB_OK) { goto finish; }
+    status = u1db__vectorclock_increment(vc, replica_uid);
+    if (status != U1DB_OK) { goto finish; }
+    status = u1db__vectorclock_as_str(vc, doc_rev);
+    if (status != U1DB_OK) { goto finish; }
+finish:
+    u1db__free_vectorclock(&vc);
+    return status;
+}
+
 int
 u1db_delete_doc(u1database *db, u1db_document *doc)
 {
     int status, content_len;
     sqlite3_stmt *statement;
-    const unsigned char *cur_doc_rev, *content;
-    char *doc_rev;
+    const char *cur_doc_rev, *content;
+    u1db_vectorclock *vc;
+    char *doc_rev = NULL;
+    char *replica_uid;
 
     if (db == NULL || doc == NULL) {
         return U1DB_INVALID_PARAMETER;
@@ -964,41 +987,39 @@ u1db_delete_doc(u1database *db, u1db_document *doc)
     }
     status = lookup_doc(db, doc->doc_id, &cur_doc_rev, &content, &content_len,
                         &statement);
-    if (status != SQLITE_OK) {
-        sqlite3_finalize(statement);
-        sqlite3_exec(db->sql_handle, "ROLLBACK", NULL, NULL, NULL);
-        return status;
+    if (status != SQLITE_OK) { goto finish; }
+    if (cur_doc_rev == NULL) {
+        // Can't delete a doc that never existed
+        status = U1DB_DOCUMENT_DOES_NOT_EXIST;
+        goto finish;
     }
-    if (cur_doc_rev == NULL || content == NULL) {
-        // Can't delete a doc that doesn't exist
-        sqlite3_exec(db->sql_handle, "ROLLBACK", NULL, NULL, NULL);
-        sqlite3_finalize(statement);
-        if (cur_doc_rev == NULL) {
-            return U1DB_DOCUMENT_DOES_NOT_EXIST;
-        } else {
-            return U1DB_DOCUMENT_ALREADY_DELETED;
-        }
+    if (content == NULL) {
+        // Can't delete a doc is already deleted
+        status = U1DB_DOCUMENT_ALREADY_DELETED;
+        goto finish;
     }
     if (strcmp((const char *)cur_doc_rev, doc->doc_rev) != 0) {
         // The saved document revision doesn't match
-        sqlite3_exec(db->sql_handle, "ROLLBACK", NULL, NULL, NULL);
-        sqlite3_finalize(statement);
-        return U1DB_REVISION_CONFLICT;
+        status = U1DB_REVISION_CONFLICT;
+        goto finish;
     }
-    // TODO: Handle conflicts
-    sqlite3_finalize(statement);
-
-    // TODO: Implement VectorClockRev
-    doc_rev = (char *)calloc(1, 128);
-    memcpy(doc_rev, "test:2", 6);
+    // TODO: Handle deleting a document with conflicts
+    status = increment_doc_rev(db, cur_doc_rev, &doc_rev);
+    if (status != U1DB_OK) { goto finish; }
     status = write_doc(db, doc->doc_id, doc_rev, NULL, 0, 1);
+
+finish:
+    sqlite3_finalize(statement);
     if (status != SQLITE_OK) {
         sqlite3_exec(db->sql_handle, "ROLLBACK", NULL, NULL, NULL);
     } else {
         status = sqlite3_exec(db->sql_handle, "COMMIT", NULL, NULL, NULL);
-        // free(doc->doc_rev);
+        free(doc->doc_rev);
         doc->doc_rev = doc_rev;
-        doc->doc_rev_len = 6;
+        doc->doc_rev_len = strlen(doc_rev);
+        free(doc->content);
+        doc->content = NULL;
+        doc->content_len = 0;
     }
     return status;
 }

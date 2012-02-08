@@ -136,10 +136,10 @@ class SQLiteDatabase(CommonBackend):
     def _initialize(self, c):
         """Create the schema in the database."""
         #read the script with sql commands
-	# TODO: Change how we set up the dependency. Most likely use something
-	# 	like lp:dirspec to grab the file from a common resource
-	# 	directory. Doesn't specifically need to be handled until we get
-	# 	to the point of packaging this.
+        # TODO: Change how we set up the dependency. Most likely use something
+        #   like lp:dirspec to grab the file from a common resource
+        #   directory. Doesn't specifically need to be handled until we get
+        #   to the point of packaging this.
         schema_content = pkg_resources.resource_string(__name__, 'dbschema.sql')
         # Note: We'd like to use c.executescript() here, but it seems that
         #       executescript always commits, even if you set
@@ -254,7 +254,7 @@ class SQLiteDatabase(CommonBackend):
     def _get_doc(self, doc_id):
         """Get just the document content, without fancy handling."""
         c = self._db_handle.cursor()
-        c.execute("SELECT doc_rev, doc FROM document WHERE doc_id = ?",
+        c.execute("SELECT doc_rev, content FROM document WHERE doc_id = ?",
                   (doc_id,))
         val = c.fetchone()
         if val is None:
@@ -373,7 +373,7 @@ class SQLiteDatabase(CommonBackend):
 
     def _get_conflicts(self, doc_id):
         c = self._db_handle.cursor()
-        c.execute("SELECT doc_rev, doc FROM conflicts WHERE doc_id = ?",
+        c.execute("SELECT doc_rev, content FROM conflicts WHERE doc_id = ?",
                   (doc_id,))
         return [Document(doc_id, doc_rev, content)
                 for doc_rev, content in c.fetchall()]
@@ -568,7 +568,8 @@ class SQLiteDatabase(CommonBackend):
                         raise errors.InvalidValueForIndex()
                     where.append(exact_where[idx])
                     args.append(value)
-            statement = ("SELECT d.doc_id, d.doc_rev, d.doc FROM document d, "
+            statement = ("SELECT d.doc_id, d.doc_rev, d.content"
+                         " FROM document d, "
                          + ', '.join(tables) + " WHERE " + ' AND '.join(where))
             try:
                 c.execute(statement, tuple(args))
@@ -626,12 +627,14 @@ class SQLitePartialExpandDatabase(SQLiteDatabase):
         else:
             raw_doc = {}
         if old_doc is not None:
-            c.execute("UPDATE document SET doc_rev=?, doc=? WHERE doc_id = ?",
+            c.execute("UPDATE document SET doc_rev=?, content=?"
+                      " WHERE doc_id = ?",
                       (doc.rev, doc.content, doc.doc_id))
             c.execute("DELETE FROM document_fields WHERE doc_id = ?",
                       (doc.doc_id,))
         else:
-            c.execute("INSERT INTO document VALUES (?, ?, ?)",
+            c.execute("INSERT INTO document (doc_id, doc_rev, content)"
+                      " VALUES (?, ?, ?)",
                       (doc.doc_id, doc.rev, doc.content))
         indexed_fields = self._get_indexed_fields()
         if indexed_fields:
@@ -658,7 +661,7 @@ class SQLitePartialExpandDatabase(SQLiteDatabase):
 
     def _iter_all_docs(self):
         c = self._db_handle.cursor()
-        c.execute("SELECT doc_id, doc FROM document")
+        c.execute("SELECT doc_id, content FROM document")
         while True:
             next_rows = c.fetchmany()
             if not next_rows:

@@ -3,11 +3,10 @@ CREATE TABLE transaction_log (
     generation INTEGER PRIMARY KEY AUTOINCREMENT,
     doc_id TEXT
 );
--- TODO: Rename 'doc' to 'content'
 CREATE TABLE document (
     doc_id TEXT PRIMARY KEY,
     doc_rev TEXT,
-    doc TEXT
+    content TEXT
 );
 CREATE TABLE document_fields (
     doc_id TEXT,
@@ -21,11 +20,10 @@ CREATE TABLE sync_log (
     replica_uid TEXT PRIMARY KEY,
     known_generation INTEGER
 );
--- TODO: Rename 'doc' to 'content'
 CREATE TABLE conflicts (
     doc_id TEXT,
     doc_rev TEXT,
-    doc TEXT,
+    content TEXT,
     CONSTRAINT conflicts_pkey PRIMARY KEY (doc_id, doc_rev)
 );
 CREATE TABLE index_definitions (

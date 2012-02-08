@@ -160,6 +160,24 @@ class AllDatabaseTests(tests.DatabaseBaseTests, tests.TestCaseWithServer):
         self.assertRaises(errors.RevisionConflict, self.db.delete_doc, doc2)
         self.assertGetDoc(self.db, doc1.doc_id, doc1.rev, simple_doc, False)
 
+    def test_delete_doc_sets_content_to_None(self):
+        doc = self.db.create_doc(simple_doc)
+        self.db.delete_doc(doc)
+        self.assertIs(None, doc.content)
+
+    def test_delete_doc_rev_supersedes(self):
+        doc = self.db.create_doc(simple_doc)
+        doc.content = nested_doc
+        self.db.put_doc(doc)
+        doc.content = '{"fishy": "content"}'
+        self.db.put_doc(doc)
+        old_rev = doc.rev
+        self.db.delete_doc(doc)
+        cur_vc = vectorclock.VectorClockRev(old_rev)
+        deleted_vc = vectorclock.VectorClockRev(doc.rev)
+        self.assertTrue(deleted_vc.is_newer(cur_vc),
+                "%s does not supersede %s" % (doc.rev, old_rev))
+
 
 class LocalDatabaseTests(tests.DatabaseBaseTests):
 
