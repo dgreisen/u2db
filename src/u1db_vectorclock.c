@@ -352,7 +352,7 @@ u1db__vectorclock_is_newer(u1db_vectorclock *maybe_newer,
         if (cmp == 0) {
             // Both clocks have the same machine, see if one is newer
             n_db_rev = maybe_newer->items[ci].db_rev;
-            o_db_rev = other->items[ci].db_rev;
+            o_db_rev = other->items[oi].db_rev;
             if (n_db_rev < o_db_rev) {
                 // At least one entry in other is newer than this
                 return 0;

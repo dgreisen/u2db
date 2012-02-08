@@ -47,11 +47,16 @@ class TestVectorClockRev(tests.TestCase):
         self.assertFalse(vcr_a.is_newer(vcr_b))
         self.assertFalse(vcr_b.is_newer(vcr_a))
 
+    def assertRoundTrips(self, rev):
+        self.assertEqual(rev, self.create_vcr(rev).as_str())
+
     def test__is_newer_doc_rev(self):
         self.assertIsNewer('test:1', None)
         self.assertIsNewer('test:2', 'test:1')
         self.assertIsNewer('other:2|test:1', 'other:1|test:1')
         self.assertIsNewer('other:1|test:1', 'other:1')
+        self.assertIsNewer('a:2|b:1', 'b:1')
+        self.assertIsNewer('a:1|b:2', 'a:1')
         self.assertIsConflicted('other:2|test:1', 'other:1|test:2')
         self.assertIsConflicted('other:1|test:1', 'other:2')
         self.assertIsConflicted('test:1', 'test:1')
@@ -59,6 +64,11 @@ class TestVectorClockRev(tests.TestCase):
     def test_None(self):
         vcr = self.create_vcr(None)
         self.assertEqual('', vcr.as_str())
+
+    def test_round_trips(self):
+        self.assertRoundTrips('test:1')
+        self.assertRoundTrips('a:1|b:2')
+        self.assertRoundTrips('alternate:2|test:1')
 
     def assertIncrement(self, original, replica_uid, after_increment):
         vcr = self.create_vcr(original)
