@@ -200,4 +200,5 @@ void u1db_free_doc(u1db_document **doc);
  */
 int u1db_doc_set_content(u1db_document *doc, const char *content);
 
+
 #endif // _U1DB_H_

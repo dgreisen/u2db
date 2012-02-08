@@ -76,6 +76,23 @@ int u1db__get_transaction_log(u1database *db, void *context,
                               int (*cb)(void *context, char *doc_id, int gen));
 
 /**
+ * Get the known generation we synchronized with another implementation.
+ *
+ * @param replica_uid:  The identifier for the other database
+ * @param generation:   (OUT) The last generation that we know we synchronized
+ *                      with the other database.
+ */
+int u1db__get_sync_generation(u1database *db, const char *replica_uid,
+                              int *generation);
+
+/**
+ * Set the known sync generation for another replica.
+ *
+ */
+int u1db__set_sync_generation(u1database *db, const char *replica_uid,
+                              int generation);
+
+/**
  * Internal sync api, get the stored information about another machine.
  */
 int u1db__sync_get_machine_info(u1database *db, const char *other_replica_uid,
