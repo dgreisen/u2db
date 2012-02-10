@@ -263,10 +263,8 @@ def socket_pair():
 
 consumer1 = oauth.OAuthConsumer('K1', 'S1')
 token1 = oauth.OAuthToken('kkkk1', 'XYZ')
-token1.user_id = 83
 consumer2 = oauth.OAuthConsumer('K2', 'S2')
 token2 = oauth.OAuthToken('kkkk2', 'ZYX')
-token2.user_id = 84
 token3 = oauth.OAuthToken('kkkk3', 'ZYX')
 
 

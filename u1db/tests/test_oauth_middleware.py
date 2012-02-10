@@ -34,11 +34,16 @@ class TestAuthMiddleware(tests.TestCase):
         self.got = []
         def witness_app(environ, start_response):
             start_response("200 OK", [("content-type", "text/plain")])
-            self.got.append((environ['u1.user_id'], environ['PATH_INFO'],
+            self.got.append((environ['token_key'], environ['PATH_INFO'],
                              environ['QUERY_STRING']))
             return ["ok"]
         class MyOAuthMiddleware(OAuthMiddleware):
             get_oauth_data_store = lambda self: tests.testingOAuthStore
+
+            def verify(self, environ, oauth_req):
+                consumer, token = super(MyOAuthMiddleware, self).verify(
+                    environ, oauth_req)
+                environ['token_key'] = token.key
         application = MyOAuthMiddleware(witness_app, BASE_URL)
         self.app = paste.fixture.TestApp(application)
 
@@ -72,7 +77,8 @@ class TestAuthMiddleware(tests.TestCase):
                                tests.consumer1, tests.token1)
         resp = self.app.delete(oauth_req.to_url())
         self.assertEqual(200, resp.status)
-        self.assertEqual([(83, '/foo/doc/doc-id', 'old_rev=old-rev')], self.got)
+        self.assertEqual([(tests.token1.key,
+                           '/foo/doc/doc-id', 'old_rev=old-rev')], self.got)
 
     def test_oauth_invalid(self):
         url = BASE_URL + '/~/foo/doc/doc-id'
@@ -111,7 +117,8 @@ class TestAuthMiddleware(tests.TestCase):
                                tests.consumer2, tests.token2)
         resp = self.app.delete(url, headers=oauth_req.to_header())
         self.assertEqual(200, resp.status)
-        self.assertEqual([(84, '/foo/doc/doc-id', 'old_rev=old-rev')], self.got)
+        self.assertEqual([(tests.token2.key,
+                           '/foo/doc/doc-id', 'old_rev=old-rev')], self.got)
 
     def test_oauth_plain_text(self):
         url = BASE_URL + '/~/foo/doc/doc-id'
@@ -127,4 +134,5 @@ class TestAuthMiddleware(tests.TestCase):
                                tests.consumer1, tests.token1)
         resp = self.app.delete(oauth_req.to_url())
         self.assertEqual(200, resp.status)
-        self.assertEqual([(83, '/foo/doc/doc-id', 'old_rev=old-rev')], self.got)
+        self.assertEqual([(tests.token1.key,
+                           '/foo/doc/doc-id', 'old_rev=old-rev')], self.got)

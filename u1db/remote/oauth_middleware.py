@@ -73,8 +73,8 @@ class OAuthMiddleware(object):
         oauth_server.add_signature_method(sign_meth_HMAC_SHA1)
         oauth_server.add_signature_method(sign_meth_PLAINTEXT)
         consumer, token, parameters = oauth_server.verify_request(oauth_req)
-        environ['u1.user_id'] = token.user_id
         # filter out oauth bits
         environ['QUERY_STRING'] = '&'.join("%s=%s" % (quote(k, safe=''),
                                                       quote(v, safe=''))
                                            for k, v in parameters.iteritems())
+        return consumer, token
