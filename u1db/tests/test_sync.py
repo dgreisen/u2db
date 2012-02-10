@@ -16,7 +16,8 @@
 
 """The Synchronization class for U1DB."""
 
-from wsgiref.simple_server import ServerHandler
+import os
+from wsgiref import simple_server
 
 from u1db import (
     errors,
@@ -32,6 +33,7 @@ from u1db.remote import (
 
 from u1db.tests.test_remote_sync_target import (
     http_server_def,
+    oauth_http_server_def,
     )
 
 simple_doc = tests.simple_doc
@@ -44,10 +46,17 @@ def _make_local_db_and_target(test):
     return db, st
 
 
-def _make_local_db_and_http_target(test):
+def _make_local_db_and_http_target(test, path='test'):
     test.startServer()
-    db = test.request_state._create_database('test')
-    st = http_target.HTTPSyncTarget.connect(test.getURL('test'))
+    db = test.request_state._create_database(os.path.basename(path))
+    st = http_target.HTTPSyncTarget.connect(test.getURL(path))
+    return db, st
+
+
+def _make_local_db_and_oauth_http_target(test):
+    db, st = _make_local_db_and_http_target(test, '~/test')
+    st.set_oauth_credentials(tests.consumer1.key, tests.consumer1.secret,
+                             tests.token1.key, tests.token1.secret)
     return db, st
 
 
@@ -57,6 +66,10 @@ target_scenarios = [
     ('http', {'create_db_and_target': _make_local_db_and_http_target,
               'make_document': tests.create_doc,
               'server_def': http_server_def}),
+    ('oauth_http', {'create_db_and_target':
+                    _make_local_db_and_oauth_http_target,
+                    'make_document': tests.create_doc,
+                    'server_def': oauth_http_server_def}),
     ]
 
 
@@ -218,7 +231,8 @@ class DatabaseSyncTargetTests(tests.DatabaseBaseTests,
         if not self.whitebox:
             self.skipTest("requires to be able to monkeypatch the target db")
         # suppress traceback printing in the wsgiref server
-        self.patch(ServerHandler, 'log_exception', lambda h, exc_info: None)
+        self.patch(simple_server.ServerHandler,
+                   'log_exception', lambda h, exc_info: None)
         doc = self.db.create_doc(simple_doc)
         self.assertEqual([doc.doc_id], self.db._get_transaction_log())
         class Fail(Exception):

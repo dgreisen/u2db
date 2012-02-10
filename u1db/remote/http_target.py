@@ -72,10 +72,11 @@ class HTTPSyncTarget(http_client.HTTPClientBase, SyncTarget):
     def sync_exchange(self, docs_by_generations, source_replica_uid,
                       last_known_generation, return_doc_cb):
         self._ensure_connection()
-        self._conn.putrequest('POST',
-                                '%s/sync-from/%s' % (self._url.path,
-                                                     source_replica_uid))
+        url = '%s/sync-from/%s' % (self._url.path, source_replica_uid)
+        self._conn.putrequest('POST', url)
         self._conn.putheader('content-type', 'application/x-u1db-sync-stream')
+        for header_name, header_value in self._sign_request('POST', url, {}):
+            self._conn.putheader(header_name, header_value)
         entries = ['[']
         size = 1
         def prepare(**dic):

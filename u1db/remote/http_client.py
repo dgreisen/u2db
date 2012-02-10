@@ -77,26 +77,7 @@ class HTTPClientBase(object):
                     raise exc_cls(message)
         raise errors.HTTPError(resp.status, body, headers)
 
-    def _request(self, method, url_parts, params=None, body=None,
-                                                       content_type=None):
-        self._ensure_connection()
-        url_query = self._url.path
-        if url_parts:
-            if not url_query.endswith('/'):
-                url_query += '/'
-            url_query += '/'.join(urllib.quote(part, safe='')
-                                  for part in url_parts)
-        if params:
-            params = dict((unicode(v).encode('utf-8'),
-                           unicode(k).encode('utf-8'))
-                                                   for v, k in params.items())
-            url_query += ('?' + urllib.urlencode(params))
-        if body is not None and not isinstance(body, basestring):
-            body = simplejson.dumps(body)
-            content_type = 'application/json'
-        headers = {}
-        if content_type:
-            headers['content-type'] = content_type
+    def _sign_request(self, method, url_query, params):
         if self._oauth_creds:
             consumer, token = self._oauth_creds
             full_url = "%s://%s%s" % (self._url.scheme, self._url.netloc,
@@ -108,8 +89,34 @@ class HTTPClientBase(object):
                 http_url=full_url
                 )
             oauth_req.sign_request(self.oauth_signature_method, consumer, token)
-            # Add Authorization: OAuth ...
-            headers.update(oauth_req.to_header())
+            # Authorization: OAuth ...
+            return oauth_req.to_header().items()
+        else:
+            return []
+
+    def _request(self, method, url_parts, params=None, body=None,
+                                                       content_type=None):
+        self._ensure_connection()
+        unquoted_url = url_query = self._url.path
+        if url_parts:
+            if not url_query.endswith('/'):
+                url_query += '/'
+                unquoted_url = url_query
+            url_query += '/'.join(urllib.quote(part, safe='')
+                                  for part in url_parts)
+            unquoted_url += '/'.join(url_parts)
+        if params:
+            params = dict((unicode(v).encode('utf-8'),
+                           unicode(k).encode('utf-8'))
+                                                   for v, k in params.items())
+            url_query += ('?' + urllib.urlencode(params))
+        if body is not None and not isinstance(body, basestring):
+            body = simplejson.dumps(body)
+            content_type = 'application/json'
+        headers = {}
+        if content_type:
+            headers['content-type'] = content_type
+        headers.update(self._sign_request(method, unquoted_url, params))
         self._conn.request(method, url_query, body, headers)
         return self._response()
 

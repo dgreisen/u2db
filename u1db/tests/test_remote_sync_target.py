@@ -26,8 +26,23 @@ from u1db import (
     )
 from u1db.remote import (
     http_app,
-    http_target
+    http_target,
+    oauth_middleware,
     )
+
+
+class TestHTTPSyncTargetBasics(tests.TestCase):
+
+    def test_parse_url(self):
+        remote_target = http_target.HTTPSyncTarget('http://127.0.0.1:12345/')
+        self.assertEqual('http', remote_target._url.scheme)
+        self.assertEqual('127.0.0.1', remote_target._url.hostname)
+        self.assertEqual(12345, remote_target._url.port)
+        self.assertEqual('/', remote_target._url.path)
+
+    def test_no_sync_exchange_object(self):
+        remote_target = http_target.HTTPSyncTarget('http://127.0.0.1:12345/')
+        self.assertEqual(None, remote_target.get_sync_exchange(None))
 
 
 class TestParsingSyncStream(tests.TestCase):
@@ -91,30 +106,50 @@ def http_server_def():
     return make_server, req_handler, "shutdown", "http"
 
 
+def http_sync_target(test, path):
+    return http_target.HTTPSyncTarget(test.getURL(path))
+
+
+def oauth_http_server_def():
+    def make_server(host_port, handler, state):
+        app = http_app.HTTPApp(state)
+        application = oauth_middleware.OAuthMiddleware(
+            app,
+            None,
+            lambda: tests.testingOAuthStore)
+        srv = simple_server.WSGIServer(host_port, handler)
+        # patch the value in
+        application.base_url = "http://%s:%s" % srv.server_address
+        srv.set_app(application)
+        return srv
+    class req_handler(simple_server.WSGIRequestHandler):
+        def log_request(*args):
+            pass  # suppress
+    return make_server, req_handler, "shutdown", "http"
+
+
+def oauth_http_sync_target(test, path):
+    st = http_sync_target(test, '~/' + path)
+    st.set_oauth_credentials(tests.consumer1.key, tests.consumer1.secret,
+                             tests.token1.key, tests.token1.secret)
+    return st
+
+
 class TestRemoteSyncTargets(tests.TestCaseWithServer):
 
     scenarios = [
         ('http', {'server_def': http_server_def,
                   'make_document': tests.create_doc,
-                  'sync_target_class': http_target.HTTPSyncTarget}),
+                  'sync_target': http_sync_target}),
+        ('oauth_http', {'server_def': oauth_http_server_def,
+                        'make_document': tests.create_doc,
+                        'sync_target': oauth_http_sync_target}),
         ]
 
     def getSyncTarget(self, path=None):
         if self.server is None:
             self.startServer()
-        return self.sync_target_class(self.getURL(path))
-
-    def test_parse_url(self):
-        remote_target = self.sync_target_class(
-                                     '%s://127.0.0.1:12345/' % self.url_scheme)
-        self.assertEqual(self.url_scheme, remote_target._url.scheme)
-        self.assertEqual('127.0.0.1', remote_target._url.hostname)
-        self.assertEqual(12345, remote_target._url.port)
-        self.assertEqual('/', remote_target._url.path)
-
-    def test_no_sync_exchange_object(self):
-        remote_target = self.getSyncTarget()
-        self.assertEqual(None, remote_target.get_sync_exchange(None))
+        return self.sync_target(self, path)
 
     def test_get_sync_info(self):
         self.startServer()

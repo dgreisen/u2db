@@ -54,7 +54,7 @@ class TestHTTPClientBase(tests.TestCaseWithServer):
                 start_response(error['status'],
                                [('Content-Type', 'application/json')])
                 return [simplejson.dumps(error['response'])]
-        elif environ['PATH_INFO'].endswith('oauth'):
+        elif '/oauth' in environ['PATH_INFO']:
             base_url = self.getURL('').rstrip('/')
             oauth_req = oauth.OAuthRequest.from_request(
                 http_method=environ['REQUEST_METHOD'],
@@ -220,6 +220,13 @@ class TestHTTPClientBase(tests.TestCaseWithServer):
         res, headers = cli._request('GET', ['doc', 'oauth'], params)
         self.assertEqual(['/dbase/doc/oauth', tests.token1.key, params],
                          simplejson.loads(res))
+
+        # oauth does its own internal quoting
+        params = {'x': u'\xf0', 'y': "foo"}
+        res, headers = cli._request('GET', ['doc', 'oauth', 'foo bar'], params)
+        self.assertEqual(['/dbase/doc/oauth/foo bar', tests.token1.key, params],
+                         simplejson.loads(res))
+
 
     def test_oauth_Unauthorized(self):
         cli = self.getClient()

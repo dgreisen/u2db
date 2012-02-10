@@ -295,6 +295,7 @@ class TestingOAuthDataStore(oauth.OAuthDataStore):
 testingOAuthStore = TestingOAuthDataStore()
 
 sign_meth_HMAC_SHA1 = oauth.OAuthSignatureMethod_HMAC_SHA1()
+sign_meth_PLAINTEXT = oauth.OAuthSignatureMethod_PLAINTEXT()
 
 
 def load_with_scenarios(loader, standard_tests, pattern):
