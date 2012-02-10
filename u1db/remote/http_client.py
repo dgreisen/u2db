@@ -1,4 +1,4 @@
-# Copyright 2012 Canonical Ltd.
+# Copyright 2011-2012 Canonical Ltd.
 #
 # This file is part of u1db.
 #
