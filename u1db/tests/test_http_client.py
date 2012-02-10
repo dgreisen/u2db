@@ -227,7 +227,6 @@ class TestHTTPClientBase(tests.TestCaseWithServer):
         self.assertEqual(['/dbase/doc/oauth/foo bar', tests.token1.key, params],
                          simplejson.loads(res))
 
-
     def test_oauth_Unauthorized(self):
         cli = self.getClient()
         cli.set_oauth_credentials(tests.consumer1.key, tests.consumer1.secret,
