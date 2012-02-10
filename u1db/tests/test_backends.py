@@ -29,6 +29,7 @@ nested_doc = tests.nested_doc
 
 from u1db.tests.test_remote_sync_target import (
     http_server_def,
+    oauth_http_server_def,
 )
 
 from u1db.remote import (
@@ -41,10 +42,17 @@ except ImportError:
     c_backend_wrapper = None
 
 
-def http_create_database(test, replica_uid):
+def http_create_database(test, replica_uid, path='test'):
     test.startServer()
     db = test.request_state._create_database(replica_uid)
-    return http_database.HTTPDatabase(test.getURL('test'))
+    return http_database.HTTPDatabase(test.getURL(path))
+
+
+def oauth_http_create_database(test, replica_uid):
+    http_db = http_create_database(test, replica_uid, '~/test')
+    http_db.set_oauth_credentials(tests.consumer1.key, tests.consumer1.secret,
+                                  tests.token1.key, tests.token1.secret)
+    return http_db
 
 
 class AllDatabaseTests(tests.DatabaseBaseTests, tests.TestCaseWithServer):
@@ -52,7 +60,10 @@ class AllDatabaseTests(tests.DatabaseBaseTests, tests.TestCaseWithServer):
     scenarios = tests.LOCAL_DATABASES_SCENARIOS + [
         ('http', {'do_create_database': http_create_database,
                   'make_document': tests.create_doc,
-                  'server_def': http_server_def})
+                  'server_def': http_server_def}),
+        ('oauth_http', {'do_create_database': oauth_http_create_database,
+                        'make_document': tests.create_doc,
+                        'server_def': oauth_http_server_def})
         ] + tests.C_DATABASE_SCENARIOS
 
     def test_close(self):
@@ -82,6 +93,12 @@ class AllDatabaseTests(tests.DatabaseBaseTests, tests.TestCaseWithServer):
         new_rev = self.db.put_doc(doc)
         self.assertIsNot(None, new_rev)
         self.assertGetDoc(self.db, 'my_doc_id', new_rev, simple_doc, False)
+
+    def test_put_doc_space_in_id(self):
+        doc = self.make_document('my doc id', None, simple_doc)
+        new_rev = self.db.put_doc(doc)
+        self.assertIsNot(None, new_rev)
+        self.assertGetDoc(self.db, 'my doc id', new_rev, simple_doc, False)
 
     def test_put_doc_update(self):
         doc = self.db.create_doc(simple_doc, doc_id='my_doc_id')

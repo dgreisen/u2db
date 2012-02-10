@@ -1,4 +1,4 @@
-# Copyright 2011 Canonical Ltd.
+# Copyright 2011-2012 Canonical Ltd.
 #
 # This file is part of u1db.
 #
@@ -20,6 +20,8 @@ import shutil
 import socket
 import tempfile
 import threading
+
+from oauth import oauth
 
 import testscenarios
 import testtools
@@ -47,6 +49,7 @@ except ImportError, e:
 # their traceback. However testtools doesn't seem to set it, and we don't want
 # this level to be omitted, but the lower levels to be shown.
 # __unittest = 1
+
 
 class TestCase(testtools.TestCase):
 
@@ -254,6 +257,43 @@ def socket_pair():
     server_sock, addr = listen_sock.accept()
     listen_sock.close()
     return server_sock, client_sock
+
+
+# OAuth related testing
+
+consumer1 = oauth.OAuthConsumer('K1', 'S1')
+token1 = oauth.OAuthToken('kkkk1', 'XYZ')
+consumer2 = oauth.OAuthConsumer('K2', 'S2')
+token2 = oauth.OAuthToken('kkkk2', 'ZYX')
+token3 = oauth.OAuthToken('kkkk3', 'ZYX')
+
+
+class TestingOAuthDataStore(oauth.OAuthDataStore):
+    """In memory predefined OAuthDataStore for testing."""
+
+    consumers = {
+        consumer1.key: consumer1,
+        consumer2.key: consumer2,
+        }
+
+    tokens = {
+        token1.key: token1,
+        token2.key: token2
+        }
+
+    def lookup_consumer(self, key):
+        return self.consumers.get(key)
+
+    def lookup_token(self, token_type, token_token):
+        return self.tokens.get(token_token)
+
+    def lookup_nonce(self, oauth_consumer, oauth_token, nonce):
+        return None
+
+testingOAuthStore = TestingOAuthDataStore()
+
+sign_meth_HMAC_SHA1 = oauth.OAuthSignatureMethod_HMAC_SHA1()
+sign_meth_PLAINTEXT = oauth.OAuthSignatureMethod_PLAINTEXT()
 
 
 def load_with_scenarios(loader, standard_tests, pattern):

@@ -1,4 +1,4 @@
-# Copyright 2011 Canonical Ltd.
+# Copyright 2011-2012 Canonical Ltd.
 #
 # This file is part of u1db.
 #
@@ -24,6 +24,7 @@ from u1db import (
 # error wire descriptions mapping to HTTP status codes
 wire_description_to_status = dict([
     (errors.InvalidDocId.wire_description, 400),
+    (errors.Unauthorized.wire_description, 401),
     (errors.DatabaseDoesNotExist.wire_description, 404),
     (errors.DocumentDoesNotExist.wire_description, 404),
     (errors.DocumentAlreadyDeleted.wire_description, 404),

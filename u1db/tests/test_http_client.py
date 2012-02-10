@@ -1,4 +1,4 @@
-# Copyright 2011 Canonical Ltd.
+# Copyright 2011-2012 Canonical Ltd.
 #
 # This file is part of u1db.
 #
@@ -16,6 +16,7 @@
 
 """Tests for HTTPDatabase"""
 
+from oauth import oauth
 import simplejson
 from wsgiref import simple_server
 
@@ -53,6 +54,27 @@ class TestHTTPClientBase(tests.TestCaseWithServer):
                 start_response(error['status'],
                                [('Content-Type', 'application/json')])
                 return [simplejson.dumps(error['response'])]
+        elif '/oauth' in environ['PATH_INFO']:
+            base_url = self.getURL('').rstrip('/')
+            oauth_req = oauth.OAuthRequest.from_request(
+                http_method=environ['REQUEST_METHOD'],
+                http_url=base_url + environ['PATH_INFO'],
+                headers={'Authorization': environ['HTTP_AUTHORIZATION']},
+                query_string=environ['QUERY_STRING']
+            )
+            oauth_server = oauth.OAuthServer(tests.testingOAuthStore)
+            oauth_server.add_signature_method(tests.sign_meth_HMAC_SHA1)
+            try:
+                consumer, token, params = oauth_server.verify_request(oauth_req)
+            except oauth.OAuthError, e:
+                start_response("401 Unauthorized",
+                               [('Content-Type', 'application/json')])
+                return [simplejson.dumps({"error": "unauthorized",
+                                          "message": e.message})]
+            start_response("200 OK", [('Content-Type', 'application/json')])
+            return [simplejson.dumps([environ['PATH_INFO'],
+                                      token.key,
+                                      params])]
 
     def server_def(self):
         def make_server(host_port, handler, state):
@@ -189,3 +211,26 @@ class TestHTTPClientBase(tests.TestCaseWithServer):
         self.assertEqual(400, e.status)
         self.assertEqual("<Bad Request>", e.message)
         self.assertTrue("content-type" in e.headers)
+
+    def test_oauth(self):
+        cli = self.getClient()
+        cli.set_oauth_credentials(tests.consumer1.key, tests.consumer1.secret,
+                                  tests.token1.key, tests.token1.secret)
+        params = {'x': u'\xf0', 'y': "foo"}
+        res, headers = cli._request('GET', ['doc', 'oauth'], params)
+        self.assertEqual(['/dbase/doc/oauth', tests.token1.key, params],
+                         simplejson.loads(res))
+
+        # oauth does its own internal quoting
+        params = {'x': u'\xf0', 'y': "foo"}
+        res, headers = cli._request('GET', ['doc', 'oauth', 'foo bar'], params)
+        self.assertEqual(['/dbase/doc/oauth/foo bar', tests.token1.key, params],
+                         simplejson.loads(res))
+
+    def test_oauth_Unauthorized(self):
+        cli = self.getClient()
+        cli.set_oauth_credentials(tests.consumer1.key, tests.consumer1.secret,
+                                  tests.token1.key, "WRONG")
+        params = {'y': 'foo'}
+        self.assertRaises(errors.Unauthorized, cli._request, 'GET',
+                          ['doc', 'oauth'], params)

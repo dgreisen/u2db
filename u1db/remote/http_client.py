@@ -1,4 +1,4 @@
-# Copyright 2011 Canonical Ltd.
+# Copyright 2011-2012 Canonical Ltd.
 #
 # This file is part of u1db.
 #
@@ -17,6 +17,7 @@
 """Base class to make requests to a remote HTTP server."""
 
 import httplib
+from oauth import oauth
 import simplejson
 import urlparse
 import urllib
@@ -32,9 +33,18 @@ from u1db.remote import (
 class HTTPClientBase(object):
     """Base class to make requests to a remote HTTP server."""
 
+    # by default use HMAC-SHA1 OAuth signature method
+    oauth_signature_method = oauth.OAuthSignatureMethod_HMAC_SHA1()
+
     def __init__(self, url):
         self._url = urlparse.urlsplit(url)
         self._conn = None
+        self._oauth_creds = None
+
+    def set_oauth_credentials(self, consumer_key, consumer_secret,
+                              token_key, token_secret):
+        self._oauth_creds = (oauth.OAuthConsumer(consumer_key, consumer_secret),
+                             oauth.OAuthToken(token_key, token_secret))
 
     def _ensure_connection(self):
         if self._conn is not None:
@@ -68,26 +78,47 @@ class HTTPClientBase(object):
                     raise exc_cls(message)
         raise errors.HTTPError(resp.status, body, headers)
 
+    def _sign_request(self, method, url_query, params):
+        if self._oauth_creds:
+            consumer, token = self._oauth_creds
+            full_url = "%s://%s%s" % (self._url.scheme, self._url.netloc,
+                                      url_query)
+            oauth_req = oauth.OAuthRequest.from_consumer_and_token(
+                consumer, token,
+                http_method=method,
+                parameters=params,
+                http_url=full_url
+                )
+            oauth_req.sign_request(self.oauth_signature_method, consumer, token)
+            # Authorization: OAuth ...
+            return oauth_req.to_header().items()
+        else:
+            return []
+
     def _request(self, method, url_parts, params=None, body=None,
                                                        content_type=None):
         self._ensure_connection()
-        url_query = self._url.path
+        unquoted_url = url_query = self._url.path
         if url_parts:
             if not url_query.endswith('/'):
                 url_query += '/'
+                unquoted_url = url_query
             url_query += '/'.join(urllib.quote(part, safe='')
                                   for part in url_parts)
+            # oauth performs its own quoting
+            unquoted_url += '/'.join(url_parts)
         if params:
-            url_query += ('?' +
-                      urllib.urlencode(dict((unicode(v).encode('utf-8'),
-                                             unicode(k).encode('utf-8'))
-                                            for v, k in params.items())))
+            params = dict((unicode(v).encode('utf-8'),
+                           unicode(k).encode('utf-8'))
+                                                   for v, k in params.items())
+            url_query += ('?' + urllib.urlencode(params))
         if body is not None and not isinstance(body, basestring):
             body = simplejson.dumps(body)
             content_type = 'application/json'
         headers = {}
         if content_type:
             headers['content-type'] = content_type
+        headers.update(self._sign_request(method, unquoted_url, params))
         self._conn.request(method, url_query, body, headers)
         return self._response()
 
