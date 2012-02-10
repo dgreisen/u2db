@@ -37,8 +37,9 @@ class TestAuthMiddleware(tests.TestCase):
             self.got.append((environ['u1.user_id'], environ['PATH_INFO'],
                              environ['QUERY_STRING']))
             return ["ok"]
-        application = OAuthMiddleware(witness_app, BASE_URL,
-                    oauth_data_store_factory=lambda: tests.testingOAuthStore)
+        class MyOAuthMiddleware(OAuthMiddleware):
+            get_oauth_data_store = lambda self: tests.testingOAuthStore
+        application = MyOAuthMiddleware(witness_app, BASE_URL)
         self.app = paste.fixture.TestApp(application)
 
     def test_expect_tilde(self):

@@ -28,10 +28,13 @@ sign_meth_PLAINTEXT = oauth.OAuthSignatureMethod_PLAINTEXT()
 class OAuthMiddleware(object):
     """U1DB OAuth Authorisation WSGI middleware."""
 
-    def __init__(self, app, base_url, oauth_data_store_factory):
+    def __init__(self, app, base_url):
         self.app = app
         self.base_url = base_url
-        self.oauth_data_store_factory = oauth_data_store_factory
+
+    def get_oauth_data_store(self):
+        """Provide a oauth.OAuthDataStore."""
+        raise NotImplementedError(self.get_oauth_data_store)
 
     def _error(self, start_response, status, description, message=None):
         start_response("%d %s" % (status, httplib.responses[status]),
@@ -66,7 +69,7 @@ class OAuthMiddleware(object):
 
     def verify(self, environ, oauth_req):
         """Verify OAuth request, put user_id in the environ."""
-        oauth_server = oauth.OAuthServer(self.oauth_data_store_factory())
+        oauth_server = oauth.OAuthServer(self.get_oauth_data_store())
         oauth_server.add_signature_method(sign_meth_HMAC_SHA1)
         oauth_server.add_signature_method(sign_meth_PLAINTEXT)
         consumer, token, parameters = oauth_server.verify_request(oauth_req)
