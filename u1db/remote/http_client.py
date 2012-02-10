@@ -33,12 +33,13 @@ from u1db.remote import (
 class HTTPClientBase(object):
     """Base class to make requests to a remote HTTP server."""
 
+    # by default use HMAC-SHA1 OAuth signature method
+    oauth_signature_method = oauth.OAuthSignatureMethod_HMAC_SHA1()
+
     def __init__(self, url):
         self._url = urlparse.urlsplit(url)
         self._conn = None
         self._oauth_creds = None
-
-    oauth_signature_method = oauth.OAuthSignatureMethod_HMAC_SHA1()
 
     def set_oauth_credentials(self, consumer_key, consumer_secret,
                               token_key, token_secret):
