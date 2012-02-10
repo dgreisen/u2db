@@ -95,6 +95,7 @@ class HTTPError(U1DBError):
         else:
             return "HTTPError(%d, %r)" % (self.status, self.message)
 
+
 class BrokenSyncStream(U1DBError):
     """Unterminated or otherwise broken sync exchange stream."""
 

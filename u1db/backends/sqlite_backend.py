@@ -378,7 +378,6 @@ class SQLiteDatabase(CommonBackend):
         return [Document(doc_id, doc_rev, content)
                 for doc_rev, content in c.fetchall()]
 
-
     def _get_conflict_revs(self, doc_id):
         c = self._db_handle.cursor()
         c.execute("SELECT doc_rev FROM conflicts WHERE doc_id = ?", (doc_id,))
@@ -451,7 +450,7 @@ class SQLiteDatabase(CommonBackend):
     def resolve_doc(self, doc, conflicted_doc_revs):
         with self._db_handle:
             cur_doc = self._get_doc(doc.doc_id)
-            # TODO: https://bugs.launchpad.net/u1db/+bug/928274 
+            # TODO: https://bugs.launchpad.net/u1db/+bug/928274
             #       I think we have a logic bug in resolve_doc
             #       Specifically, cur_doc.rev is always in the final vector
             #       clock of revisions that we supersede, even if it wasn't in

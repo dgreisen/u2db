@@ -205,4 +205,3 @@ client_commands.register(CmdSync)
 
 def main(args):
     return client_commands.run_argv(args, sys.stdin, sys.stdout, sys.stderr)
-

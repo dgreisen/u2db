@@ -21,7 +21,8 @@ from u1db import tests
 
 class TestDocument(tests.TestCase):
 
-    scenarios = [('py', {'make_document': Document})] + tests.C_DATABASE_SCENARIOS
+    scenarios = ([('py', {'make_document': Document})] +
+                 tests.C_DATABASE_SCENARIOS)
 
     def test_create_doc(self):
         doc = self.make_document('doc-id', 'uid:1', tests.simple_doc)
