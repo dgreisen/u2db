@@ -104,6 +104,7 @@ class HTTPClientBase(object):
                 unquoted_url = url_query
             url_query += '/'.join(urllib.quote(part, safe='')
                                   for part in url_parts)
+            # oauth performs its own quoting
             unquoted_url += '/'.join(url_parts)
         if params:
             params = dict((unicode(v).encode('utf-8'),
