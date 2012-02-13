@@ -196,7 +196,7 @@ class DatabaseResource(object):
 
     @http_method()
     def get(self):
-        db = self.state.open_database(self.dbname)
+        self.state.check_database(self.dbname)
         self.responder.send_response_json(200)
 
     @http_method(content_as_args=True)

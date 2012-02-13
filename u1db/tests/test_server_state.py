@@ -19,6 +19,7 @@
 import os
 
 from u1db import (
+    errors,
     tests,
     )
 from u1db.remote import (
@@ -47,6 +48,22 @@ class TestServerState(tests.TestCase):
         sqlite_backend.SQLitePartialExpandDatabase(path)
         db = self.state.open_database('test.db')
         self.assertIsInstance(db, sqlite_backend.SQLitePartialExpandDatabase)
+
+    def test_check_database(self):
+        tempdir = self.createTempDir()
+        self.state.set_workingdir(tempdir)
+        path = tempdir + '/test.db'
+        self.assertFalse(os.path.exists(path))
+
+        # doesn't exist => raises
+        self.assertRaises(errors.DatabaseDoesNotExist,
+                          self.state.check_database, 'test.db')
+
+        # Create the db, but don't do anything with it
+        sqlite_backend.SQLitePartialExpandDatabase(path)
+        # exists => returns
+        res = self.state.check_database('test.db')
+        self.assertIsNone(res)
 
     def test_ensure_database(self):
         tempdir = self.createTempDir()

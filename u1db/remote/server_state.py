@@ -43,6 +43,14 @@ class ServerState(object):
         return sqlite_backend.SQLiteDatabase.open_database(full_path,
                                                            create=False)
 
+    def check_database(self, path):
+        """Check if the database at the given location exists.
+
+        Simply returns if it does or raises DatabaseDoesNotExist.
+        """
+        db = self.open_database(path)
+        db.close()
+
     def ensure_database(self, path):
         """Ensure database at the given location."""
         from u1db.backends import sqlite_backend
