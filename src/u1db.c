@@ -976,6 +976,9 @@ u1db_get_docs(u1database *db, int n_doc_ids, const char **doc_ids,
             revision = (char *)sqlite3_column_text(statement, 0);
             content = (char *)sqlite3_column_text(statement, 1);
             doc = u1db__allocate_document(doc_ids[i], revision, content, 0);
+            if (check_for_conflicts) {
+                status = lookup_conflict(db, doc_ids[i], &(doc->has_conflicts));
+            }
             cb(context, doc);
         } else if (status == SQLITE_DONE) {
             // This document doesn't exist
@@ -989,7 +992,7 @@ u1db_get_docs(u1database *db, int n_doc_ids, const char **doc_ids,
         // Was there more than one matching entry?
         if (status != SQLITE_DONE) { goto finish; }
         status = sqlite3_reset(statement);
-        if (status != SQLITE_DONE) { goto finish; }
+        if (status != SQLITE_OK) { goto finish; }
     }
 finish:
     sqlite3_finalize(statement);
