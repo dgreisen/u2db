@@ -82,13 +82,53 @@ u1db__free_vectorclock(u1db_vectorclock **clock)
     *clock = NULL;
 }
 
+// Add this replica_uid, generation to the vectorclock entries.
+// offset is the current location in vectorclock which is empty.
+// Since vectorclocks are generally sorted, it will usually be the location
+// where we want to insert the new value.
+// This is roughly insertion sort, though we don't bisect existing values. We
+// could, but it adds a fair amount of complexity, and 99% of the time the
+// clocks are already sorted.
+// If the vector is reverse sorted, this becomes quadratic, though.
+static int
+insert_replica_and_generation(u1db_vectorclock *vc, int offset,
+                              char *replica_uid, int generation)
+{
+    int cmp;
+    for (; offset >= 0; offset--) {
+        if (offset == 0) {
+            // We know that the item comes here
+            cmp = -1;
+        } else {
+            cmp = strcmp(vc->items[offset-1].replica_uid, replica_uid);
+        }
+        if (cmp < 0) {
+            // replica_uid comes after the stored value, this is where we want
+            // to insert it
+            vc->items[offset].replica_uid = replica_uid;
+            vc->items[offset].generation = generation;
+            return 1; // Found the spot
+        } else if (cmp == 0) {
+            // This is invalid, the vector has the same value twice...
+            return 0;
+        } else {
+            // replica_uid comes before the stored value, so move the stored
+            // value and try again.
+            vc->items[offset].replica_uid = vc->items[offset-1].replica_uid;
+            vc->items[offset].generation = vc->items[offset-1].generation;
+            vc->items[offset-1].replica_uid = NULL;
+        }
+    }
+    return 0;
+}
+
 u1db_vectorclock *
 u1db__vectorclock_from_str(const char *s)
 {
     u1db_vectorclock *res = NULL;
-    int i;
+    int i, generation;
     const char *cur, *colon, *pipe, *end;
-    const char *last_replica_uid;
+    char *replica_uid;
     char *last_digit;
     if (s == NULL) {
         s = "";
@@ -115,7 +155,6 @@ u1db__vectorclock_from_str(const char *s)
                                         sizeof(u1db_vectorclock_item));
     // Now walk through it again, looking for the machine:count pairs
     cur = s;
-    last_replica_uid = "";
     for (i = 0; i < res->num_items; i++) {
         if (cur >= end) {
             // Ran off the end. Most likely indicates a trailing | that isn't
@@ -134,17 +173,19 @@ u1db__vectorclock_from_str(const char *s)
             u1db__free_vectorclock(&res);
             return NULL;
         }
-        res->items[i].replica_uid = strndup(cur, colon-cur);
-        if (strcmp(res->items[i].replica_uid, last_replica_uid) <= 0) {
-            // TODO: We don't have a way to indicate what the error is, but
-            //       we'll just return NULL;
-            // This entry wasn't in sorted order, so treat it as an error.
+        replica_uid = strndup(cur, colon-cur);
+        if (replica_uid == NULL) {
             u1db__free_vectorclock(&res);
             return NULL;
         }
-        last_replica_uid = res->items[i].replica_uid;
-        res->items[i].generation = strtol(colon+1, &last_digit, 10);
+        generation = strtol(colon+1, &last_digit, 10);
         if (last_digit != pipe) {
+            free(replica_uid);
+            u1db__free_vectorclock(&res);
+            return NULL;
+        }
+        if (!insert_replica_and_generation(res, i, replica_uid, generation)) {
+            free(replica_uid);
             u1db__free_vectorclock(&res);
             return NULL;
         }
