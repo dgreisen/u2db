@@ -102,6 +102,10 @@ cdef extern from "u1db/u1db_internal.h":
                                            char *content, int has_conflicts)
     int u1db__generate_hex_uuid(char *)
 
+    int u1db__get_sync_generation(u1database *db, char *replica_uid,
+                                  int *generation)
+    int u1db__set_sync_generation(u1database *db, char *replica_uid,
+                                  int generation)
     int u1db__sync_get_machine_info(u1database *db, char *other_replica_uid,
                                     int *other_db_rev, char **my_replica_uid,
                                     int *my_db_rev)
@@ -461,31 +465,16 @@ cdef class CDatabase(object):
                                       _append_doc_gen_to_list))
         return [doc_id for doc_id, gen in a_list]
 
-    def get_sync_generation(self, other_replica_uid):
-        # TODO: Implement
-        return None
+    def get_sync_generation(self, replica_uid):
+        cdef int generation
 
-    def set_sync_generation(self, other_replica_uid, other_generation):
-        # TODO: Implement
-        return None
+        handle_status("get_sync_generation",
+            u1db__get_sync_generation(self._db, replica_uid, &generation))
+        return generation
 
-    def _get_sync_info(self, other_replica_uid):
-        cdef int status, my_db_rev, other_db_rev
-        cdef char *my_replica_uid
-
-        status = u1db__sync_get_machine_info(self._db, other_replica_uid,
-                                             &other_db_rev, &my_replica_uid,
-                                             &my_db_rev)
-        if status != U1DB_OK:
-            raise RuntimeError("Failed to _get_sync_info: %d" % (status,))
-        return (my_replica_uid, my_db_rev, other_db_rev)
-
-    def _record_sync_info(self, replica_uid, db_rev):
-        cdef int status
-
-        status = u1db__sync_record_machine_info(self._db, replica_uid, db_rev)
-        if status != U1DB_OK:
-            raise RuntimeError("Failed to _record_sync_info: %d" % (status,))
+    def set_sync_generation(self, replica_uid, generation):
+        handle_status("set_sync_generation",
+            u1db__set_sync_generation(self._db, replica_uid, generation))
 
     def _sync_exchange(self, docs_info, from_replica_uid, from_machine_rev,
                        last_known_rev):

@@ -1211,84 +1211,60 @@ u1db__free_table(u1db_table **table)
     *table = NULL;
 }
 
+
 int
-u1db__sync_get_machine_info(u1database *db, const char *other_replica_uid,
-                            int *other_db_rev, char **my_replica_uid,
-                            int *my_db_rev)
+u1db__get_sync_generation(u1database *db, const char *replica_uid,
+                          int *generation)
 {
     int status;
     sqlite3_stmt *statement;
 
-    if (db == NULL || other_replica_uid == NULL || other_db_rev == NULL) {
+    if (db == NULL || replica_uid == NULL || generation == NULL) {
         return U1DB_INVALID_PARAMETER;
-    }
-    status = u1db_get_replica_uid(db, my_replica_uid);
-    if (status != U1DB_OK) {
-        return status;
-    }
-    status = u1db__get_db_rev(db, my_db_rev);
-    if (status != U1DB_OK) {
-        return status;
     }
     status = sqlite3_prepare_v2(db->sql_handle,
         "SELECT known_generation FROM sync_log WHERE replica_uid = ?", -1,
         &statement, NULL);
-    if (status != SQLITE_OK) {
-        return status;
-    }
-    status = sqlite3_bind_text(statement, 1, other_replica_uid, -1,
-                               SQLITE_TRANSIENT);
-    if (status != SQLITE_OK) {
-        sqlite3_finalize(statement);
-        return status;
-    }
+    if (status != SQLITE_OK) { goto finish; }
+    status = sqlite3_bind_text(statement, 1, replica_uid, -1, SQLITE_TRANSIENT);
+    if (status != SQLITE_OK) { goto finish; }
     status = sqlite3_step(statement);
     if (status == SQLITE_DONE) {
         status = SQLITE_OK;
-        *other_db_rev = 0;
+        *generation = 0;
     } else if (status == SQLITE_ROW) {
-        *other_db_rev = sqlite3_column_int(statement, 0);
+        *generation = sqlite3_column_int(statement, 0);
         status = SQLITE_OK;
     }
+finish:
     sqlite3_finalize(statement);
     return status;
 }
 
+
 int
-u1db__sync_record_machine_info(u1database *db, const char *replica_uid,
-                               int db_rev)
+u1db__set_sync_generation(u1database *db, const char *replica_uid,
+                          int generation)
 {
     int status;
     sqlite3_stmt *statement;
+
     if (db == NULL || replica_uid == NULL) {
         return U1DB_INVALID_PARAMETER;
-    }
-    status = sqlite3_exec(db->sql_handle, "BEGIN", NULL, NULL, NULL);
-    if (status != SQLITE_OK) {
-        return status;
     }
     status = sqlite3_prepare_v2(db->sql_handle,
         "INSERT OR REPLACE INTO sync_log VALUES (?, ?)", -1,
         &statement, NULL);
-    if (status != SQLITE_OK) {
-        return status;
-    }
+    if (status != SQLITE_OK) { goto finish; }
     status = sqlite3_bind_text(statement, 1, replica_uid, -1, SQLITE_TRANSIENT);
-    if (status != SQLITE_OK) {
-        sqlite3_finalize(statement);
-        sqlite3_exec(db->sql_handle, "ROLLBACK", NULL, NULL, NULL);
-        return status;
-    }
-    status = sqlite3_bind_int(statement, 2, db_rev);
-    if (status != SQLITE_OK) {
-        sqlite3_finalize(statement);
-        sqlite3_exec(db->sql_handle, "ROLLBACK", NULL, NULL, NULL);
-        return status;
-    }
+    if (status != SQLITE_OK) { goto finish; }
+    status = sqlite3_bind_int(statement, 2, generation);
+    if (status != SQLITE_OK) { goto finish; }
     status = sqlite3_step(statement);
     if (status == SQLITE_DONE) {
         status = SQLITE_OK;
     }
+finish:
     sqlite3_finalize(statement);
     return status;
 }
