@@ -72,6 +72,12 @@ class TestVectorClockRev(tests.TestCase):
 
     def test_handles_sort_order(self):
         self.assertEqual('a:1|b:2', self.create_vcr('b:2|a:1').as_str())
+        # Last one out of place
+        self.assertEqual('a:1|b:2|c:3|d:4|e:5|f:6',
+                self.create_vcr('f:6|a:1|b:2|c:3|d:4|e:5').as_str())
+        # Fully reversed
+        self.assertEqual('a:1|b:2|c:3|d:4|e:5|f:6',
+                self.create_vcr('f:6|e:5|d:4|c:3|b:2|a:1').as_str())
 
     def assertIncrement(self, original, replica_uid, after_increment):
         vcr = self.create_vcr(original)
