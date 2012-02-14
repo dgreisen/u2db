@@ -791,9 +791,12 @@ u1db_put_doc_if_newer(u1database *db, u1db_document *doc, int save_conflict,
         status = write_doc(db, doc->doc_id, doc->doc_rev,
                            doc->content, doc->content_len,
                            (stored_doc_rev != NULL));
-        if (status == SQLITE_OK) {
-            status = sqlite3_exec(db->sql_handle, "COMMIT", NULL, NULL, NULL);
-        }
+    }
+    if (status == U1DB_OK && replica_uid != NULL) {
+        status = u1db__set_sync_generation(db, replica_uid, replica_gen);
+    }
+    if (status == SQLITE_OK) {
+        status = sqlite3_exec(db->sql_handle, "COMMIT", NULL, NULL, NULL);
     }
 finish:
     sqlite3_finalize(statement);
@@ -1252,6 +1255,8 @@ u1db__set_sync_generation(u1database *db, const char *replica_uid,
     if (db == NULL || replica_uid == NULL) {
         return U1DB_INVALID_PARAMETER;
     }
+    // TODO: Do we need BEGIN & COMMIT here? There is a single mutation, it
+    //       doesn't seem like it needs anything but autocommit...
     status = sqlite3_prepare_v2(db->sql_handle,
         "INSERT OR REPLACE INTO sync_log VALUES (?, ?)", -1,
         &statement, NULL);
