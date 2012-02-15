@@ -198,9 +198,7 @@ class AllDatabaseTests(tests.DatabaseBaseTests, tests.TestCaseWithServer):
 
 class LocalDatabaseTests(tests.DatabaseBaseTests):
 
-    # Uncomment to run all tests against the C implementation, some currently
-    # fail, though
-    # scenarios = tests.LOCAL_DATABASES_SCENARIOS + tests.C_DATABASE_SCENARIOS
+    scenarios = tests.LOCAL_DATABASES_SCENARIOS + tests.C_DATABASE_SCENARIOS
 
     def test_put_doc_refuses_slashes_picky(self):
         doc = self.make_document('/a', None, simple_doc)
@@ -384,17 +382,23 @@ class LocalDatabaseTests(tests.DatabaseBaseTests):
             self.db.put_doc_if_newer(doc2, save_conflict=True,
                 replica_uid='other', replica_gen=2))
         self.assertEqual(2, self.db.get_sync_generation('other'))
-        doc2.rev = doc1.rev
+        # Compare to the old rev, should be superseded
+        doc2 = self.make_document(doc1.doc_id, doc1.rev, nested_doc)
         self.assertEqual('superseded',
             self.db.put_doc_if_newer(doc2, save_conflict=True,
                 replica_uid='other', replica_gen=3))
         self.assertEqual(3, self.db.get_sync_generation('other'))
-        doc2.rev = doc1.rev + '|third:3'
+        # Conflict vs the current update
+        doc2 = self.make_document(doc1.doc_id, doc1.rev + '|third:3',
+                                  nested_doc)
         self.assertEqual('conflicted',
             self.db.put_doc_if_newer(doc2, save_conflict=True,
                 replica_uid='other', replica_gen=4))
         self.assertEqual(4, self.db.get_sync_generation('other'))
-        doc2.rev = doc1.rev + '|fourth:1'
+        # A conflict that isn't saved still records the sync gen, because we
+        # don't need to see it again
+        doc2 = self.make_document(doc1.doc_id, doc1.rev + '|fourth:1',
+                                  nested_doc)
         self.assertEqual('conflicted',
             self.db.put_doc_if_newer(doc2, save_conflict=False,
                 replica_uid='other', replica_gen=5))
