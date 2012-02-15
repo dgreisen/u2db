@@ -42,6 +42,8 @@ typedef struct _u1db_document_internal
 } u1db_document_internal;
 
 
+static int increment_doc_rev(u1database *db, const char *cur_rev,
+                             char **doc_rev);
 static int
 initialize(u1database *db)
 {
@@ -514,24 +516,15 @@ u1db_put_doc(u1database *db, u1db_document *doc)
     if (status == U1DB_OK) {
         // We are ok to proceed, allocating a new document revision, and
         // storing the document
-        u1db_vectorclock *vc;
         char *new_rev;
-        const char *replica_uid;
-
-        vc = u1db__vectorclock_from_str((char*)old_doc_rev);
-        if (vc == NULL) { goto finish; }
-        status = u1db_get_replica_uid(db, &replica_uid);
-        if (status != U1DB_OK) { goto finish; }
-        status = u1db__vectorclock_increment(vc, replica_uid);
-        if (status != U1DB_OK) { goto finish; }
-        status = u1db__vectorclock_as_str(vc, &new_rev);
+        status = increment_doc_rev(db, old_doc_rev, &new_rev);
         if (status != U1DB_OK) { goto finish; }
         free(doc->doc_rev);
         doc->doc_rev = new_rev;
         doc->doc_rev_len = strlen(new_rev);
         status = write_doc(db, doc->doc_id, new_rev,
                            doc->content, doc->content_len,
-                           (old_content != NULL));
+                           (old_doc_rev != NULL));
         if (status == SQLITE_OK) {
             status = sqlite3_exec(db->sql_handle, "COMMIT", NULL, NULL, NULL);
         }
