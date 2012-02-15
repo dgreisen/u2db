@@ -43,6 +43,9 @@ cdef extern from "u1db/u1db.h":
                         u1db_document **doc)
     int u1db_delete_doc(u1database *db, u1db_document *doc)
     int u1db_get_doc(u1database *db, char *doc_id, u1db_document **doc)
+    int u1db_get_docs(u1database *db, int n_doc_ids, const_char_ptr *doc_ids,
+                      int check_for_conflicts, void *context,
+                      int (*cb)(void *context, u1db_document *doc))
     int u1db_put_doc(u1database *db, u1db_document *doc)
     int u1db_put_doc_if_newer(u1database *db, u1db_document *doc,
                               int save_conflict, char *replica_uid,
@@ -151,6 +154,15 @@ cdef int _append_doc_to_list(void *context, u1db_document *doc):
     pydoc._doc = doc
     a_list.append(pydoc)
     return 0
+
+
+cdef _list_to_array(lst, const_char_ptr **res, int *count):
+    cdef const_char_ptr *tmp
+    count[0] = len(lst)
+    tmp = <const_char_ptr*>calloc(sizeof(char*), count[0])
+    for idx, x in enumerate(lst):
+        tmp[idx] = x
+    res[0] = tmp
 
 
 def make_document(doc_id, rev, content, has_conflicts=False):
@@ -423,16 +435,26 @@ cdef class CDatabase(object):
         return pydoc
 
     def get_docs(self, doc_ids, check_for_conflicts=True):
-        # TODO: Implement
-        return []
+        cdef int n_doc_ids, conflicts
+        cdef const_char_ptr *c_doc_ids
+
+        _list_to_array(doc_ids, &c_doc_ids, &n_doc_ids)
+        if check_for_conflicts:
+            conflicts = 1
+        else:
+            conflicts = 0
+        a_list = []
+        handle_status("get_docs",
+            u1db_get_docs(self._db, n_doc_ids, c_doc_ids,
+                conflicts, <void*>a_list, _append_doc_to_list))
+        free(<void*>c_doc_ids)
+        return a_list
 
     def resolve_doc(self, CDocument doc, conflicted_doc_revs):
         cdef const_char_ptr *revs
         cdef int n_revs
-        n_revs = len(conflicted_doc_revs)
-        revs = <const_char_ptr*>calloc(sizeof(char*), n_revs)
-        for idx, rev in enumerate(conflicted_doc_revs):
-            revs[idx] = rev
+
+        _list_to_array(conflicted_doc_revs, &revs, &n_revs)
         handle_status("resolve_doc",
             u1db_resolve_doc(self._db, doc._doc, n_revs, revs))
         free(<void*>revs)

@@ -152,6 +152,24 @@ int u1db_resolve_doc(u1database *db, u1db_document *doc,
  */
 int u1db_get_doc(u1database *db, const char *doc_id, u1db_document **doc);
 
+
+/**
+ * Retrieve multiple documents from the database.
+ *
+ * @param n_doc_ids: The number of document ids being passed.
+ * @param doc_ids: An array of document ids to retrieve.
+ * @param check_for_conflicts: If true, check if each document has any
+ *          conflicts, if false, the conflict checking will be skipped.
+ * @param context: A void* that is returned via the callback function.
+ * @param cb: This will be called with each document requested. The api is
+ *          cb(void* context, u1db_document *doc). The returned documents are
+ *          allocated on the heap, and must be freed by the caller via
+ *          u1db_free_doc.
+ */
+int u1db_get_docs(u1database *db, int n_doc_ids, const char **doc_ids,
+                  int check_for_conflicts, void *context,
+                  int (*cb)(void *context, u1db_document *doc));
+
 /**
  * Get all of the contents associated with a conflicted document.
  *

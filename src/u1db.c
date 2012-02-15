@@ -943,6 +943,62 @@ finish:
     return status;
 }
 
+int
+u1db_get_docs(u1database *db, int n_doc_ids, const char **doc_ids,
+              int check_for_conflicts, void *context,
+              int (*cb)(void *context, u1db_document *doc))
+{
+    int status, i;
+    sqlite3_stmt *statement;
+
+    if (db == NULL || doc_ids == NULL || cb == NULL || n_doc_ids < 0) {
+        return U1DB_INVALID_PARAMETER;
+    }
+    for (i = 0; i < n_doc_ids; ++i) {
+        if (doc_ids[i] == NULL) {
+            return U1DB_INVALID_PARAMETER;
+        }
+    }
+    status = sqlite3_prepare_v2(db->sql_handle,
+        "SELECT doc_rev, content FROM document WHERE doc_id = ?", -1,
+        &statement, NULL);
+    if (status != SQLITE_OK) { goto finish; }
+    for (i = 0; i < n_doc_ids; ++i) {
+        status = sqlite3_bind_text(statement, 1, doc_ids[i], -1,
+                                   SQLITE_TRANSIENT);
+        if (status != SQLITE_OK) { goto finish; }
+        status = sqlite3_step(statement);
+        if (status == SQLITE_ROW) {
+            // We have a document
+            const char *revision;
+            const char *content;
+            u1db_document *doc;
+            revision = (char *)sqlite3_column_text(statement, 0);
+            content = (char *)sqlite3_column_text(statement, 1);
+            doc = u1db__allocate_document(doc_ids[i], revision, content, 0);
+            if (check_for_conflicts) {
+                status = lookup_conflict(db, doc_ids[i], &(doc->has_conflicts));
+            }
+            cb(context, doc);
+        } else if (status == SQLITE_DONE) {
+            // This document doesn't exist
+            // TODO: I believe the python implementation returns the Null
+            //       document here (possibly just None)
+        } else {
+            // Unknown error
+            goto finish;
+        }
+        status = sqlite3_step(statement);
+        // Was there more than one matching entry?
+        if (status != SQLITE_DONE) { goto finish; }
+        status = sqlite3_reset(statement);
+        if (status != SQLITE_OK) { goto finish; }
+    }
+finish:
+    sqlite3_finalize(statement);
+    return status;
+}
+
 // Take cur_rev, and update it to have a version incremented based on the
 // database replica uid
 static int
