@@ -483,11 +483,7 @@ u1db_put_doc(u1database *db, u1db_document *doc)
     old_content = NULL;
     status = lookup_doc(db, doc->doc_id, &old_doc_rev, &old_content,
                         &old_content_len, &statement);
-    if (status != SQLITE_OK) {
-        sqlite3_exec(db->sql_handle, "ROLLBACK", NULL, NULL, NULL);
-        sqlite3_finalize(statement);
-        return status;
-    }
+    if (status != SQLITE_OK) { goto finish; }
     if (doc->doc_rev == NULL) {
         if (old_doc_rev == NULL) {
             // We are creating a new document from scratch. No problem.
@@ -525,13 +521,12 @@ u1db_put_doc(u1database *db, u1db_document *doc)
         status = write_doc(db, doc->doc_id, new_rev,
                            doc->content, doc->content_len,
                            (old_doc_rev != NULL));
-        if (status == SQLITE_OK) {
-            status = sqlite3_exec(db->sql_handle, "COMMIT", NULL, NULL, NULL);
-        }
     }
 finish:
     sqlite3_finalize(statement);
-    if (status != SQLITE_OK) {
+    if (status == SQLITE_OK) {
+        status = sqlite3_exec(db->sql_handle, "COMMIT", NULL, NULL, NULL);
+    } else {
         sqlite3_exec(db->sql_handle, "ROLLBACK", NULL, NULL, NULL);
     }
     return status;
@@ -788,12 +783,11 @@ u1db_put_doc_if_newer(u1database *db, u1db_document *doc, int save_conflict,
     if (status == U1DB_OK && replica_uid != NULL) {
         status = u1db__set_sync_generation(db, replica_uid, replica_gen);
     }
-    if (status == SQLITE_OK) {
-        status = sqlite3_exec(db->sql_handle, "COMMIT", NULL, NULL, NULL);
-    }
 finish:
     sqlite3_finalize(statement);
-    if (status != SQLITE_OK) {
+    if (status == SQLITE_OK) {
+        status = sqlite3_exec(db->sql_handle, "COMMIT", NULL, NULL, NULL);
+    } else {
         sqlite3_exec(db->sql_handle, "ROLLBACK", NULL, NULL, NULL);
     }
     return status;
