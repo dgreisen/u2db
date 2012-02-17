@@ -200,7 +200,7 @@ int u1db_delete_doc(u1database *db, u1db_document *doc);
 /**
  * Get the document defined by the given document id.
  *
- * @param gen 	 The global database revision to start at. You can pass '0' to
+ * @param gen    The global database revision to start at. You can pass '0' to
  *               get all changes in the database. The integer will be updated
  *               to point at the current generation.
  * @param cb     A callback function. This will be called passing in 'context',
@@ -235,4 +235,43 @@ void u1db_free_doc(u1db_document **doc);
 int u1db_doc_set_content(u1db_document *doc, const char *content);
 
 
+/**
+ * Create an index that you can query for matching documents.
+ *
+ * @param index_name    An identifier for this index.
+ * @param n_expressions The number of index expressions.
+ * @param expressions   An array of expressions.
+ */
+int u1db_create_index(u1database *db, const char *index_name,
+                      int n_expressions, const char **expressions);
+
+/**
+ * Delete a defined index.
+ */
+int u1db_delete_index(u1database *db, const char *index_name);
+
+
+/**
+ * List indexes which have been defined, along with their definitions.
+ *
+ * @param context An opaque pointer that will be returned to the callback
+ *                function.
+ * @param cb A function callback that will be called once for each index that
+ *           is defined in the database. The parameters passed are only valid
+ *           until the callback returns (memory is managed by the u1db
+ *           library). So if users want to keep the information, they must copy
+ *           it.
+ */
+int u1db_list_indexes(u1database *db, void *context,
+                      int (*cb)(void *context, const char *index_name,
+                                int n_expressions, const char **expressions));
+
+
+/**
+ * Get documents which match a given index.
+ */
+int u1db_get_from_index(u1database *db,
+                        const char *index_name, int n_key_values,
+                        const char **key_values, void *context,
+                        int (*cb)(void *context, u1db_document *doc));
 #endif // _U1DB_H_

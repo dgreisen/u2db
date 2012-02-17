@@ -526,10 +526,15 @@ class LocalDatabaseTests(tests.DatabaseBaseTests):
 
 class DatabaseIndexTests(tests.DatabaseBaseTests):
 
+    scenarios = tests.LOCAL_DATABASES_SCENARIOS + tests.C_DATABASE_SCENARIOS
+
     def test_create_index(self):
         self.db.create_index('test-idx', ['name'])
         self.assertEqual([('test-idx', ['name'])],
                          self.db.list_indexes())
+
+
+class PyDatabaseIndexTests(tests.DatabaseBaseTests):
 
     def test_create_index_evaluates_it(self):
         doc = self.db.create_doc(simple_doc)
