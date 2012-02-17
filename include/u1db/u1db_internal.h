@@ -78,9 +78,9 @@ int u1db__get_transaction_log(u1database *db, void *context,
 /**
  * Get the known generation we synchronized with another implementation.
  *
- * @param replica_uid:  The identifier for the other database
- * @param generation:   (OUT) The last generation that we know we synchronized
- *                      with the other database.
+ * @param replica_uid The identifier for the other database
+ * @param generation  (OUT) The last generation that we know we synchronized
+ *                    with the other database.
  */
 int u1db__get_sync_generation(u1database *db, const char *replica_uid,
                               int *generation);
@@ -146,7 +146,7 @@ u1db_document *u1db__allocate_document(const char *doc_id, const char *revision,
 /**
  * Generate a unique id.
  *
- * @param uuid: A buffer to put the id, must be 32 bytes long.
+ * @param uuid A buffer to put the id, must be 32 bytes long.
  */
 int u1db__generate_hex_uuid(char *uuid);
 
