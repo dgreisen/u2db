@@ -75,21 +75,21 @@ int u1db_set_replica_uid(u1database *db, const char *replica_uid);
 /**
  * Get the replica_uid defined for this database.
  *
- * @param replica_uid: (OUT) The unique identifier for this replica. The
- *                      returned pointer is managed by the db object and should
- *                      not be modified.
+ * @param replica_uid (OUT) The unique identifier for this replica. The
+ *                     returned pointer is managed by the db object and should
+ *                     not be modified.
  */
 int u1db_get_replica_uid(u1database *db, const char **replica_uid);
 
 /**
  * Create a new document.
  *
- * @param content: The JSON string representing the document. The content will
- *                 be copied and managed by the 'doc' parameter.
- * @param doc_id: A string identifying the document. If the value supplied is
- *                NULL, then a new doc_id will be generated.
- * @param doc: (OUT) a u1db_document that will be allocated and needs to be
- *             freed with u1db_free_doc
+ * @param content The JSON string representing the document. The content will
+ *                be copied and managed by the 'doc' parameter.
+ * @param doc_id A string identifying the document. If the value supplied is
+ *               NULL, then a new doc_id will be generated.
+ * @param doc (OUT) a u1db_document that will be allocated and needs to be
+ *            freed with u1db_free_doc
  * @return a status code indicating success or failure.
  */
 int u1db_create_doc(u1database *db, const char *content, const char *doc_id,
@@ -98,28 +98,28 @@ int u1db_create_doc(u1database *db, const char *content, const char *doc_id,
 /**
  * Put new document content for the given document identifier.
  *
- * @param doc: (IN/OUT) A document whose content we want to update in the
- *             database. The new content should have been set with
- *             u1db_doc_set_content. The document's revision should match what
- *             is currently in the database, and will be updated to point at
- *             the new revision.
+ * @param doc (IN/OUT) A document whose content we want to update in the
+ *            database. The new content should have been set with
+ *            u1db_doc_set_content. The document's revision should match what
+ *            is currently in the database, and will be updated to point at
+ *            the new revision.
  */
 int u1db_put_doc(u1database *db, u1db_document *doc);
 
 /**
  * Update content if the revision is newer than what is already present.
  *
- * @param doc: (IN/OUT) The document we want added to the database. If
- *             save_conflict is true and this conflicts, we will set
- *             doc->has_conflicts
- * @param save_conflict: If 1, when a document would conflict, it is saved as
- *                       the current version and marked as a conflict.
- *                       Otherwise the document is just rejected as not newer.
- * @param replica_uid: Used during synchronization to indicate what replica
- *                     this document came from. (Can be NULL)
- * @param replica_gen: Generation of the replica. Only meaningful if
- *                     replica_uid is set.
- * @param state: (OUT) Return one of:
+ * @param doc (IN/OUT) The document we want added to the database. If
+ *            save_conflict is true and this conflicts, we will set
+ *            doc->has_conflicts
+ * @param save_conflict If 1, when a document would conflict, it is saved as
+ *                      the current version and marked as a conflict.
+ *                      Otherwise the document is just rejected as not newer.
+ * @param replica_uid Used during synchronization to indicate what replica
+ *                    this document came from. (Can be NULL)
+ * @param replica_gen Generation of the replica. Only meaningful if
+ *                    replica_uid is set.
+ * @param state (OUT) Return one of:
  *  U1DB_INSERTED   The document is newer than what we have
  *  U1DB_SUPERSEDED We already have a newer document than what was passed
  *  U1DB_CONVERGED  We have exactly the same document
@@ -133,11 +133,11 @@ int u1db_put_doc_if_newer(u1database *db, u1db_document *doc, int save_conflict,
 
 /**
  * Mark conflicts as having been resolved.
- * @param doc: (IN/OUT) The new content. doc->doc_rev will be updated with the
- *             new revision. Also if there are still conflicts remaining, we
- *             will set doc->has_conflicts.
- * @param n_revs: The number of revisions being passed
- * @param revs: The revisions we are resolving.
+ * @param doc (IN/OUT) The new content. doc->doc_rev will be updated with the
+ *            new revision. Also if there are still conflicts remaining, we
+ *            will set doc->has_conflicts.
+ * @param n_revs The number of revisions being passed
+ * @param revs The revisions we are resolving.
  */
 int u1db_resolve_doc(u1database *db, u1db_document *doc,
                      int n_revs, const char **revs);
@@ -145,8 +145,8 @@ int u1db_resolve_doc(u1database *db, u1db_document *doc,
 /**
  * Get the document defined by the given document id.
  *
- * @param doc_id: The document we are looking for
- * @param doc: (OUT) a document (or NULL) matching the request
+ * @param doc_id The document we are looking for
+ * @param doc (OUT) a document (or NULL) matching the request
  * @return status, will be U1DB_OK if there is no error, even if there is no
  *      document matching that doc_id.
  */
@@ -156,15 +156,15 @@ int u1db_get_doc(u1database *db, const char *doc_id, u1db_document **doc);
 /**
  * Retrieve multiple documents from the database.
  *
- * @param n_doc_ids: The number of document ids being passed.
- * @param doc_ids: An array of document ids to retrieve.
- * @param check_for_conflicts: If true, check if each document has any
+ * @param n_doc_ids The number of document ids being passed.
+ * @param doc_ids An array of document ids to retrieve.
+ * @param check_for_conflicts If true, check if each document has any
  *          conflicts, if false, the conflict checking will be skipped.
- * @param context: A void* that is returned via the callback function.
- * @param cb: This will be called with each document requested. The api is
- *          cb(void* context, u1db_document *doc). The returned documents are
- *          allocated on the heap, and must be freed by the caller via
- *          u1db_free_doc.
+ * @param context A void* that is returned via the callback function.
+ * @param cb This will be called with each document requested. The api is
+ *           cb(void* context, u1db_document *doc). The returned documents are
+ *           allocated on the heap, and must be freed by the caller via
+ *           u1db_free_doc.
  */
 int u1db_get_docs(u1database *db, int n_doc_ids, const char **doc_ids,
                   int check_for_conflicts, void *context,
@@ -176,8 +176,8 @@ int u1db_get_docs(u1database *db, int n_doc_ids, const char **doc_ids,
  * If a document is not conflicted, then this will not invoke the callback
  * function.
  *
- * @param context: A void* that is returned to the callback function.
- * @param cb: This callback function will be invoked for each content that is
+ * @param context A void* that is returned to the callback function.
+ * @param cb This callback function will be invoked for each content that is
  *      conflicted. The first item will be the same document that you get from
  *      get_doc(). The document objects passed into the callback function will
  *      have been allocated on the heap, and the callback is responsible for
@@ -219,10 +219,10 @@ int u1db_whats_changed(u1database *db, int *gen, void *context,
 /**
  * Free a u1db_document.
  *
- * @param doc: A reference to the doc pointer to be freed. Generally used as:
- *             u1db_free_doc(&doc). If the pointer or its referenced value is
- *             NULL, this is a no-op. We will set the reference to NULL after
- *             freeing the memory.
+ * @param doc A reference to the doc pointer to be freed. Generally used as:
+ *            u1db_free_doc(&doc). If the pointer or its referenced value is
+ *            NULL, this is a no-op. We will set the reference to NULL after
+ *            freeing the memory.
  */
 void u1db_free_doc(u1db_document **doc);
 

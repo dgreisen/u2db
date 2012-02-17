@@ -38,8 +38,8 @@ int u1db__vectorclock_increment(u1db_vectorclock *clock,
 /**
  * Ensure that 'clock' has the maximum rev for every section.
  *
- * @param clock: (IN/OUT) A vectorclock we want to make sure has maximal value.
- * @param other: Another vectorclock we are comparing with.
+ * @param clock (IN/OUT) A vectorclock we want to make sure has maximal value.
+ * @param other Another vectorclock we are comparing with.
  */
 int u1db__vectorclock_maximize(u1db_vectorclock *clock,
                                u1db_vectorclock *other);
