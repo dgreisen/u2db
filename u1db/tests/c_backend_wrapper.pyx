@@ -557,6 +557,10 @@ cdef class CDatabase(object):
                               _append_index_definition_to_list))
         return a_list
 
+    def delete_index(self, index_name):
+        handle_status("delete_index",
+            u1db_delete_index(self._db, index_name))
+
 
 cdef class VectorClockRev:
 

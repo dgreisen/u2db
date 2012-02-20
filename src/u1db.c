@@ -1549,6 +1549,30 @@ finish:
 }
 
 
+int
+u1db_delete_index(u1database *db, const char *index_name)
+{
+    int status = U1DB_OK;
+    sqlite3_stmt *statement;
+
+    if (db == NULL || index_name == NULL) {
+        return U1DB_INVALID_PARAMETER;
+    }
+    status = sqlite3_prepare_v2(db->sql_handle, 
+        "DELETE FROM index_definitions WHERE name = ?", -1,
+        &statement, NULL); 
+    if (status != SQLITE_OK) { goto finish; }
+    status = sqlite3_bind_text(statement, 1, index_name, -1, SQLITE_TRANSIENT);
+    if (status != SQLITE_OK) { goto finish; }
+    status = sqlite3_step(statement);
+    if (status != SQLITE_DONE) { goto finish; }
+    status = SQLITE_OK;
+finish:
+    sqlite3_finalize(statement);
+    return status;
+}
+
+
 static void
 free_expressions(int n_expressions, char **expressions)
 {
@@ -1641,3 +1665,4 @@ finish:
     }
     return status;
 }
+
