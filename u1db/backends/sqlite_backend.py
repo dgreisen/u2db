@@ -477,14 +477,6 @@ class SQLiteDatabase(CommonBackend):
             #       then immediately delete it?
             self._delete_conflicts(c, doc, superseded_revs)
 
-    def create_index(self, index_name, index_expression):
-        with self._db_handle:
-            c = self._db_handle.cursor()
-            definition = [(index_name, idx, field)
-                          for idx, field in enumerate(index_expression)]
-            c.executemany("INSERT INTO index_definitions VALUES (?, ?, ?)",
-                          definition)
-
     def list_indexes(self):
         """Return the list of indexes and their definitions."""
         c = self._db_handle.cursor()

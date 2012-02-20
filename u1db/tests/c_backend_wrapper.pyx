@@ -60,6 +60,18 @@ cdef extern from "u1db/u1db.h":
     int u1db_get_doc_conflicts(u1database *db, char *doc_id, void *context,
                                int (*cb)(void *context, u1db_document *doc))
 
+    int u1db_create_index(u1database *db, char *index_name,
+                          int n_expressions, const_char_ptr *expressions)
+    int u1db_delete_index(u1database *db, char *index_name)
+
+    int u1db_list_indexes(u1database *db, void *context,
+                  int (*cb)(void *context, const_char_ptr index_name,
+                            int n_expressions, const_char_ptr *expressions))
+    int u1db_get_from_index(u1database *db,
+                            char *index_name, int n_key_values,
+                            const_char_ptr *key_values, void *context,
+                            int (*cb)(void *context, u1db_document *doc))
+
     int U1DB_OK
     int U1DB_INVALID_PARAMETER
     int U1DB_REVISION_CONFLICT
@@ -163,6 +175,18 @@ cdef _list_to_array(lst, const_char_ptr **res, int *count):
     for idx, x in enumerate(lst):
         tmp[idx] = x
     res[0] = tmp
+
+
+cdef int _append_index_definition_to_list(void *context, 
+    const_char_ptr index_name, int n_expressions, const_char_ptr *expressions):
+    cdef int i
+
+    a_list = <object>(context)
+    exp_list = []
+    for i from 0 <= i < n_expressions:
+        exp_list.append(expressions[i])
+    a_list.append((index_name, exp_list))
+    return 0
 
 
 def make_document(doc_id, rev, content, has_conflicts=False):
@@ -516,6 +540,22 @@ cdef class CDatabase(object):
         u1db__free_records(&from_records)
         if status != U1DB_OK:
             raise RuntimeError("Failed to _sync_exchange: %d" % (status,))
+
+    def create_index(self, index_name, index_expression):
+        cdef const_char_ptr *expressions
+        cdef int n_expressions
+
+        _list_to_array(index_expression, &expressions, &n_expressions)
+        handle_status("create_index",
+            u1db_create_index(self._db, index_name, n_expressions, expressions))
+        free(<void*>expressions)
+
+    def list_indexes(self):
+        a_list = []
+        handle_status("list_indexes",
+            u1db_list_indexes(self._db, <void *>a_list,
+                              _append_index_definition_to_list))
+        return a_list
 
 
 cdef class VectorClockRev:

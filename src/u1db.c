@@ -1498,3 +1498,146 @@ u1db__is_doc_id_valid(const char *doc_id)
     }
     return U1DB_OK;
 }
+
+
+int
+u1db_create_index(u1database *db, const char *index_name, int n_expressions,
+                  const char **expressions)
+{
+    int status = U1DB_OK, i = 0;
+    sqlite3_stmt *statement;
+
+    if (db == NULL || index_name == NULL || expressions == NULL) {
+        return U1DB_INVALID_PARAMETER;
+    }
+    for (i = 0; i < n_expressions; ++i) {
+        if (expressions[i] == NULL) {
+            return U1DB_INVALID_PARAMETER;
+        }
+    }
+    status = sqlite3_exec(db->sql_handle, "BEGIN", NULL, NULL, NULL);
+    if (status != SQLITE_OK) {
+        return status;
+    }
+    status = sqlite3_prepare_v2(db->sql_handle,
+        "INSERT INTO index_definitions VALUES (?, ?, ?)", -1,
+        &statement, NULL);
+    if (status != SQLITE_OK) {
+        return status;
+    }
+    status = sqlite3_bind_text(statement, 1, index_name, -1, SQLITE_TRANSIENT);
+    if (status != SQLITE_OK) { goto finish; }
+    for (i = 0; i < n_expressions; ++i) {
+        status = sqlite3_bind_int(statement, 2, i);
+        if (status != SQLITE_OK) { goto finish; }
+        status = sqlite3_bind_text(statement, 3, expressions[i], -1,
+                                   SQLITE_TRANSIENT);
+        if (status != SQLITE_OK) { goto finish; }
+        status = sqlite3_step(statement);
+        if (status != SQLITE_DONE) { goto finish; }
+        status = sqlite3_reset(statement);
+        if (status != SQLITE_OK) { goto finish; }
+    }
+finish:
+    sqlite3_finalize(statement);
+    if (status == SQLITE_OK) {
+        status = sqlite3_exec(db->sql_handle, "COMMIT", NULL, NULL, NULL);
+    } else {
+        sqlite3_exec(db->sql_handle, "ROLLBACK", NULL, NULL, NULL);
+    }
+    return status;
+}
+
+
+static void
+free_expressions(int n_expressions, char **expressions)
+{
+    int i;
+    if (expressions == NULL) {
+        return;
+    }
+    for (i = 0; i < n_expressions; ++i) {
+        if (expressions[i] != NULL) {
+            free(expressions[i]);
+            expressions[i] = NULL;
+        }
+    }
+    free(expressions);
+}
+
+
+int
+u1db_list_indexes(u1database *db, void *context,
+                  int (*cb)(void *context, const char *index_name,
+                            int n_expressions, const char **expressions))
+{
+    int status = U1DB_OK, i = 0, n_expressions = -1;
+    int offset;
+    char *last_index_name = NULL;
+    const char *index_name, *expression;
+    sqlite3_stmt *statement;
+    char **expressions = NULL;
+
+    if (db == NULL || cb == NULL) {
+        return U1DB_INVALID_PARAMETER;
+    }
+
+    // We query by offset descending, so we know how many entries there will be
+    // after we see the first one.
+    status = sqlite3_prepare_v2(db->sql_handle,
+        "SELECT name, offset, field FROM index_definitions"
+        " ORDER BY name, offset DESC",
+        -1, &statement, NULL);
+    if (status != SQLITE_OK) {
+        return status;
+    }
+    status = sqlite3_step(statement);
+    while (status == SQLITE_ROW) {
+        index_name = sqlite3_column_text(statement, 0);
+        if (index_name == NULL) {
+            status = U1DB_INVALID_PARAMETER; // TODO: better error code
+            goto finish;
+        }
+        offset = sqlite3_column_int(statement, 1);
+        expression = sqlite3_column_text(statement, 2);
+        if (expression == NULL) {
+            status = U1DB_INVALID_PARAMETER; // TODO: better error code
+            goto finish;
+        }
+        if (last_index_name != NULL && expressions != NULL
+            && strcmp(last_index_name, index_name) != 0)
+        {
+            // offset should be 0, we should be at the last item in the list
+            cb(context, last_index_name, n_expressions, expressions);
+            free_expressions(n_expressions, expressions);
+            expressions = NULL;
+            free(last_index_name);
+            last_index_name = NULL;
+        }
+        if (expressions == NULL) {
+            n_expressions = offset + 1;
+            expressions = (char **)calloc(n_expressions, sizeof(char*));
+            last_index_name = strdup(index_name);
+        }
+        if (offset >= n_expressions) {
+            status = U1DB_INVALID_PARAMETER; // TODO: better error code
+            goto finish;
+        }
+        expressions[offset] = strdup(expression);
+        status = sqlite3_step(statement);
+    }
+    if (last_index_name != NULL && expressions != NULL) {
+        // offset should be 0, we should be at the last item in the list
+        cb(context, last_index_name, n_expressions, expressions);
+    }
+    if (status == SQLITE_DONE) {
+        status = U1DB_OK;
+    }
+finish:
+    sqlite3_finalize(statement);
+    free_expressions(n_expressions, expressions);
+    if (last_index_name != NULL) {
+        free(last_index_name);
+    }
+    return status;
+}
