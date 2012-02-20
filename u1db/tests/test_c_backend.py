@@ -80,6 +80,33 @@ class TestCDatabase(BackendTests):
                          " VALUES ('doc-id', 'doc-rev', '{}')")
         self.assertRaises(Exception, self.db.get_doc_conflicts, 'doc-id')
 
+    def test_get_from_index(self):
+        # We manually poke data into the DB, so that we test just the "get_doc"
+        # code, rather than also testing the index management code.
+        self.db = c_backend_wrapper.CDatabase(':memory:')
+        doc = self.db.create_doc(tests.simple_doc)
+        self.db.create_index("key", ["key"])
+        self.db._run_sql("INSERT INTO document_fields"
+                         " VALUES ('%s', 'key', 'value')" % (doc.doc_id,))
+        docs = self.db.get_from_index('key', [('value',)])
+        self.assertEqual([doc], docs)
+
+    def test__query_init_one_field(self):
+        self.db = c_backend_wrapper.CDatabase(':memory:')
+        self.db.create_index("key-idx", ["key"])
+        query = self.db._query_init("key-idx", 0)
+        self.assertEqual("key-idx", query.index_name)
+        self.assertEqual(1, query.num_fields)
+        self.assertEqual(["key"], query.fields)
+
+    def test__query_init_two_fields(self):
+        self.db = c_backend_wrapper.CDatabase(':memory:')
+        self.db.create_index("two-idx", ["key", "key2"])
+        query = self.db._query_init("two-idx", 0)
+        self.assertEqual("two-idx", query.index_name)
+        self.assertEqual(2, query.num_fields)
+        self.assertEqual(["key", "key2"], query.fields)
+
 
 class TestVectorClock(BackendTests):
 

@@ -25,12 +25,6 @@
 #include "u1db/u1db_internal.h"
 #include "u1db/u1db_vectorclock.h"
 
-struct _u1database
-{
-    sqlite3 *sql_handle;
-    char *replica_uid;
-};
-
 // "u1do"
 #define U1DB_DOCUMENT_MAGIC 0x7531646f
 typedef struct _u1db_document_internal

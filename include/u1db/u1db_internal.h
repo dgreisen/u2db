@@ -22,6 +22,24 @@
 #include "u1db/u1db.h"
 #include "u1db/compat.h"
 
+typedef struct sqlite3 sqlite3;
+
+struct _u1database
+{
+    sqlite3 *sql_handle;
+    char *replica_uid;
+};
+
+struct _u1query {
+    const char *index_name;
+    int num_fields;
+    char **fields;
+    int num_entries;
+    int max_num_entries;
+    const char ***entries;
+    void *buffer;
+};
+
 /**
  * Internal API, Get the global database rev.
  */

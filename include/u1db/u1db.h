@@ -35,9 +35,10 @@ typedef struct _u1db_document
     char *content;
     size_t content_len;
     int has_conflicts;
-    int _generation; // Used as part of sync api
 } u1db_document;
 
+
+typedef struct _u1query u1query;
 
 #define U1DB_OK 0
 #define U1DB_INVALID_PARAMETER -1
@@ -268,10 +269,40 @@ int u1db_list_indexes(u1database *db, void *context,
 
 
 /**
- * Get documents which match a given index.
+ * Initialize a structure for querying an index.
+ *
+ * @param index_name The index that you want to query. We will use the database
+ *                   definition to determine how many columns need to be
+ *                   initialized.
+ * @param num_entries The number of entries you will be querying.
+ * @param query (OUT) This will hold the query structure.
  */
-int u1db_get_from_index(u1database *db,
-                        const char *index_name, int n_key_values,
-                        const char **key_values, void *context,
+int u1db_query_init(u1database *db, const char *index_name,
+                    int num_entries, u1query **query);
+
+/**
+ * Free the memory pointed to by query and all associated buffers.
+ *
+ * query will be updated to point to NULL when finished.
+ */
+void u1db_free_query(u1query **query);
+
+/**
+ * Add another entry to an existing query.
+ *
+ * This populates the appropriate query fields with values. Note that the
+ * number of parameters passed should equal the number of columns in the index
+ * definition. 'value' is the first such parameter.
+ */
+int u1db_query_add_entry(u1query *query, const char *value, ...);
+
+/**
+ * Get documents which match a given index.
+ *
+ * @param index_name The index to be queried.
+ * @param n_key_values the length of the key_values parameter.
+ * @param key_values A list of queries against the index. Each ...
+ */
+int u1db_get_from_index(u1database *db, u1query *query, void *context,
                         int (*cb)(void *context, u1db_document *doc));
 #endif // _U1DB_H_

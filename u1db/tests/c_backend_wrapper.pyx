@@ -72,6 +72,10 @@ cdef extern from "u1db/u1db.h":
                             const_char_ptr *key_values, void *context,
                             int (*cb)(void *context, u1db_document *doc))
 
+    int u1db_query_init(u1database *db, char *index_name,
+                        int num_entries, u1query **query)
+    void u1db_free_query(u1query **query)
+
     int U1DB_OK
     int U1DB_INVALID_PARAMETER
     int U1DB_REVISION_CONFLICT
@@ -103,6 +107,14 @@ cdef extern from "u1db/u1db_internal.h":
         char *doc_id
         char *doc_rev
         char *doc
+
+    ctypedef struct u1query:
+        char *index_name
+        int num_fields
+        char **fields
+        int num_entries
+        int max_num_entries
+        char ***entries
 
     int u1db__get_db_rev(u1database *, int *db_rev)
     char *u1db__allocate_doc_id(u1database *)
@@ -287,6 +299,62 @@ cdef class CDocument(object):
                     and self.has_conflicts == other.has_conflicts)
 
         return NotImplemented
+
+
+cdef object safe_str(const_char_ptr s):
+    if s == NULL:
+        return None
+    return s
+
+
+cdef class CQuery:
+    
+    cdef u1query *_query
+
+    def __init__(self):
+        self._query = NULL
+
+    def __dealloc__(self):
+        u1db_free_query(&self._query)
+
+    def _check(self):
+        if self._query == NULL:
+            raise RuntimeError("No valid _query.")
+
+    property index_name:
+        def __get__(self):
+            self._check()
+            return safe_str(self._query.index_name)
+
+    property num_fields:
+        def __get__(self):
+            self._check()
+            return self._query.num_fields
+
+    property fields:
+        def __get__(self):
+            cdef int i
+            self._check()
+            fields = []
+            for i from 0 <= i < self._query.num_fields:
+                fields.append(safe_str(self._query.fields[i]))
+            return fields
+
+    property num_entries:
+        def __get__(self):
+            self._check()
+            return self._query.num_entries
+
+    property max_num_entries:
+        def __get__(self):
+            self._check()
+            return self._query.max_num_entries
+
+    property entries:
+        def __get__(self):
+            cdef int i, j
+            self._check()
+            return []
 
 
 cdef handle_status(context, int status):
@@ -560,6 +628,16 @@ cdef class CDatabase(object):
     def delete_index(self, index_name):
         handle_status("delete_index",
             u1db_delete_index(self._db, index_name))
+
+    def get_from_index(self, index_name, key_values):
+        return []
+
+    def _query_init(self, index_name, num_entries):
+        cdef CQuery query
+        query = CQuery()
+        handle_status("query_init",
+            u1db_query_init(self._db, index_name, num_entries, &query._query))
+        return query
 
 
 cdef class VectorClockRev:
