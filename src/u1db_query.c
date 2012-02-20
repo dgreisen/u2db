@@ -183,6 +183,7 @@ u1db_free_query(u1query **query)
     *query = NULL;
 }
 
+
 int
 u1db_simple_lookup1(u1database *db, const char *index_name,
                     const char *val1, void *context, u1db_doc_callback cb)

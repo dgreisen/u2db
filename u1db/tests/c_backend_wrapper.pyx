@@ -84,6 +84,7 @@ cdef extern from "u1db/u1db.h":
     int U1DB_INVALID_DOC_ID
     int U1DB_DOCUMENT_ALREADY_DELETED
     int U1DB_DOCUMENT_DOES_NOT_EXIST
+    int U1DB_NOT_IMPLEMENTED
     int U1DB_INSERTED
     int U1DB_SUPERSEDED
     int U1DB_CONVERGED
@@ -398,6 +399,9 @@ cdef handle_status(context, int status):
         raise errors.DocumentDoesNotExist()
     if status == U1DB_INVALID_PARAMETER:
         raise RuntimeError('Bad parameters supplied')
+    if status == U1DB_NOT_IMPLEMENTED:
+        raise NotImplementedError("Functionality not implemented yet: %s"
+                                  % (context,))
     raise RuntimeError('%s (status: %s)' % (context, status))
 
 
