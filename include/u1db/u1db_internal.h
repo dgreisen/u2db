@@ -30,14 +30,18 @@ struct _u1database
     char *replica_uid;
 };
 
+typedef struct _u1query_entry {
+    char **values;
+    struct _u1query_entry *next;
+} u1query_entry;
+
 struct _u1query {
     const char *index_name;
     int num_fields;
     char **fields;
     int num_entries;
-    int max_num_entries;
-    const char ***entries;
-    void *buffer;
+    u1query_entry *head;
+    u1query_entry *last;
 };
 
 /**

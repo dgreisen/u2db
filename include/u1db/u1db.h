@@ -39,6 +39,7 @@ typedef struct _u1db_document
 
 
 typedef struct _u1query u1query;
+typedef int (*u1db_doc_callback)(void *context, u1db_document *doc);
 
 #define U1DB_OK 0
 #define U1DB_INVALID_PARAMETER -1
@@ -274,11 +275,9 @@ int u1db_list_indexes(u1database *db, void *context,
  * @param index_name The index that you want to query. We will use the database
  *                   definition to determine how many columns need to be
  *                   initialized.
- * @param num_entries The number of entries you will be querying.
  * @param query (OUT) This will hold the query structure.
  */
-int u1db_query_init(u1database *db, const char *index_name,
-                    int num_entries, u1query **query);
+int u1db_query_init(u1database *db, const char *index_name, u1query **query);
 
 /**
  * Free the memory pointed to by query and all associated buffers.
@@ -305,4 +304,11 @@ int u1db_query_add_entry(u1query *query, const char *value, ...);
  */
 int u1db_get_from_index(u1database *db, u1query *query, void *context,
                         int (*cb)(void *context, u1db_document *doc));
+
+/**
+ * Get documents matching a single column index.
+ */
+int u1db_simple_lookup1(u1database *db, const char *index_name,
+                        const char *val1,
+                        void *context, u1db_doc_callback cb);
 #endif // _U1DB_H_

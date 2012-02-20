@@ -35,6 +35,8 @@ cdef extern from "u1db/u1db.h":
         int has_conflicts
 
     ctypedef char* const_char_ptr "const char*"
+    ctypedef int (*u1db_doc_callback)(void *context, u1db_document *doc)
+
     u1database * u1db_open(char *fname)
     void u1db_free(u1database **)
     int u1db_set_replica_uid(u1database *, char *replica_uid)
@@ -67,13 +69,13 @@ cdef extern from "u1db/u1db.h":
     int u1db_list_indexes(u1database *db, void *context,
                   int (*cb)(void *context, const_char_ptr index_name,
                             int n_expressions, const_char_ptr *expressions))
-    int u1db_get_from_index(u1database *db,
-                            char *index_name, int n_key_values,
-                            const_char_ptr *key_values, void *context,
+    int u1db_get_from_index(u1database *db, u1query *query, void *context,
                             int (*cb)(void *context, u1db_document *doc))
+    int u1db_simple_lookup1(u1database *db, char *index_name, char *val1,
+                            void *context, u1db_doc_callback cb)
 
-    int u1db_query_init(u1database *db, char *index_name,
-                        int num_entries, u1query **query)
+    int u1db_query_init(u1database *db, char *index_name, u1query **query)
+    int u1db_query_add_entry(u1query *query, char *value, ...)
     void u1db_free_query(u1query **query)
 
     int U1DB_OK
@@ -108,13 +110,17 @@ cdef extern from "u1db/u1db_internal.h":
         char *doc_rev
         char *doc
 
+    ctypedef struct u1query_entry:
+        char **values
+        u1query_entry *next
+
     ctypedef struct u1query:
         char *index_name
         int num_fields
         char **fields
         int num_entries
-        int max_num_entries
-        char ***entries
+        u1query_entry *head
+        u1query_entry *last
 
     int u1db__get_db_rev(u1database *, int *db_rev)
     char *u1db__allocate_doc_id(u1database *)
@@ -345,16 +351,38 @@ cdef class CQuery:
             self._check()
             return self._query.num_entries
 
-    property max_num_entries:
-        def __get__(self):
-            self._check()
-            return self._query.max_num_entries
-
     property entries:
         def __get__(self):
             cdef int i, j
+            cdef u1query_entry *cur
             self._check()
-            return []
+            cur = self._query.head
+            res = []
+            while cur != NULL:
+                tmp = []
+                for i from 0 <= i < self._query.num_fields:
+                    tmp.append(safe_str(cur.values[i]))
+                res.append(tuple(tmp))
+                cur = cur.next
+            return res
+
+    def add_entry(self, *args):
+        self._check()
+        if len(args) == 0:
+            raise AssertionError("need more than one argument")
+        elif len(args) == 1:
+            handle_status("query_add_entry",
+                u1db_query_add_entry(self._query, <char*>args[0]))
+        elif len(args) == 2:
+            handle_status("query_add_entry",
+                u1db_query_add_entry(self._query, <char*>args[0],
+                                     <char*>args[1]))
+        elif len(args) == 3:
+            handle_status("query_add_entry",
+                u1db_query_add_entry(self._query, <char*>args[0],
+                                     <char*>args[1], <char*>args[2]))
+        else:
+            raise RuntimeError("We don't support more than 3 args yet.")
 
 
 cdef handle_status(context, int status):
@@ -630,13 +658,19 @@ cdef class CDatabase(object):
             u1db_delete_index(self._db, index_name))
 
     def get_from_index(self, index_name, key_values):
-        return []
+        res = []
+        for entry in key_values:
+            if len(entry) == 1:
+                handle_status("simple_lookup1",
+                    u1db_simple_lookup1(self._db, index_name, entry[0],
+                        <void*>res, _append_doc_to_list))
+        return res
 
-    def _query_init(self, index_name, num_entries):
+    def _query_init(self, index_name):
         cdef CQuery query
         query = CQuery()
         handle_status("query_init",
-            u1db_query_init(self._db, index_name, num_entries, &query._query))
+            u1db_query_init(self._db, index_name, &query._query))
         return query
 
 

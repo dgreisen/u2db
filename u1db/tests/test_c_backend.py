@@ -85,16 +85,16 @@ class TestCDatabase(BackendTests):
         # code, rather than also testing the index management code.
         self.db = c_backend_wrapper.CDatabase(':memory:')
         doc = self.db.create_doc(tests.simple_doc)
-        self.db.create_index("key", ["key"])
+        self.db.create_index("key-idx", ["key"])
         self.db._run_sql("INSERT INTO document_fields"
                          " VALUES ('%s', 'key', 'value')" % (doc.doc_id,))
-        docs = self.db.get_from_index('key', [('value',)])
+        docs = self.db.get_from_index('key-idx', [('value',)])
         self.assertEqual([doc], docs)
 
     def test__query_init_one_field(self):
         self.db = c_backend_wrapper.CDatabase(':memory:')
         self.db.create_index("key-idx", ["key"])
-        query = self.db._query_init("key-idx", 0)
+        query = self.db._query_init("key-idx")
         self.assertEqual("key-idx", query.index_name)
         self.assertEqual(1, query.num_fields)
         self.assertEqual(["key"], query.fields)
@@ -102,10 +102,28 @@ class TestCDatabase(BackendTests):
     def test__query_init_two_fields(self):
         self.db = c_backend_wrapper.CDatabase(':memory:')
         self.db.create_index("two-idx", ["key", "key2"])
-        query = self.db._query_init("two-idx", 0)
+        query = self.db._query_init("two-idx")
         self.assertEqual("two-idx", query.index_name)
         self.assertEqual(2, query.num_fields)
         self.assertEqual(["key", "key2"], query.fields)
+
+    def test__query_add_entry(self):
+        self.db = c_backend_wrapper.CDatabase(':memory:')
+        self.db.create_index("two-idx", ["key", "key2"])
+        query = self.db._query_init("two-idx")
+        query.add_entry("a", "b")
+        self.assertEqual(1, query.num_entries)
+        self.assertEqual([("a", "b")], query.entries)
+
+    def test__query_add_two_entries(self):
+        self.db = c_backend_wrapper.CDatabase(':memory:')
+        self.db.create_index("two-idx", ["key", "key2"])
+        query = self.db._query_init("two-idx")
+        query.add_entry("a", "b")
+        query.add_entry("c", "d")
+        self.assertEqual(2, query.num_entries)
+        self.assertEqual([("a", "b"), ("c", "d")], query.entries)
+
 
 
 class TestVectorClock(BackendTests):
