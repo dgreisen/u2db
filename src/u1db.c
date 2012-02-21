@@ -1512,13 +1512,14 @@ u1db__is_doc_id_valid(const char *doc_id)
     return U1DB_OK;
 }
 
-
 int
 u1db_create_index(u1database *db, const char *index_name, int n_expressions,
                   const char **expressions)
 {
     int status = U1DB_OK, i = 0;
     sqlite3_stmt *statement;
+    const char **unique_expressions;
+    int n_unique;
 
     if (db == NULL || index_name == NULL || expressions == NULL) {
         return U1DB_INVALID_PARAMETER;
@@ -1532,6 +1533,9 @@ u1db_create_index(u1database *db, const char *index_name, int n_expressions,
     if (status != SQLITE_OK) {
         return status;
     }
+    status = u1db__find_unique_expressions(db, n_expressions, expressions,
+            &n_unique, &unique_expressions);
+    if (status != U1DB_OK) { goto finish; }
     status = sqlite3_prepare_v2(db->sql_handle,
         "INSERT INTO index_definitions VALUES (?, ?, ?)", -1,
         &statement, NULL);
@@ -1551,7 +1555,11 @@ u1db_create_index(u1database *db, const char *index_name, int n_expressions,
         status = sqlite3_reset(statement);
         if (status != SQLITE_OK) { goto finish; }
     }
+    status = u1db__index_all_docs(db, n_unique, unique_expressions);
 finish:
+    if (unique_expressions != NULL) {
+        free(unique_expressions);
+    }
     sqlite3_finalize(statement);
     if (status == SQLITE_OK) {
         status = sqlite3_exec(db->sql_handle, "COMMIT", NULL, NULL, NULL);

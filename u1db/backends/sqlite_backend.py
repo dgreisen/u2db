@@ -602,6 +602,8 @@ class SQLitePartialExpandDatabase(SQLiteDatabase):
     def _get_indexed_fields(self):
         """Determine what fields are indexed."""
         c = self._db_handle.cursor()
+        # Note: We could SELECT DISTINCT field, though the calling code just
+        #       shoves it into a set anyway
         c.execute("SELECT field FROM index_definitions")
         return set([x[0] for x in c.fetchall()])
 
@@ -627,6 +629,7 @@ class SQLitePartialExpandDatabase(SQLiteDatabase):
             c.execute("INSERT INTO document (doc_id, doc_rev, content)"
                       " VALUES (?, ?, ?)",
                       (doc.doc_id, doc.rev, doc.content))
+        # TODO: Doesn't this need to worry about duplicate index fields?
         indexed_fields = self._get_indexed_fields()
         if indexed_fields:
             # It is expected that len(indexed_fields) is shorter than

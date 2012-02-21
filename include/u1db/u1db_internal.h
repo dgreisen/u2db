@@ -176,4 +176,24 @@ int u1db__format_query(u1query *query, char **buf);
 int u1db__update_indexes(u1database *db, const char *doc_id,
                          const char *content);
 
+/**
+ * Find what expressions do not already exist in the database.
+ *
+ * @param n_unique (OUT) The number of unique expressions found
+ * @param unique_expressions (OUT) An array holding pointers to the strings in
+ *                       expressions, must be freed by the caller if there
+ *                       isn't an error.
+ */
+int u1db__find_unique_expressions(u1database *db,
+                              int n_expressions, const char **expressions,
+                              int *n_unique, const char ***unique_expressions);
+
+/**
+ * Add the given field expressions to be indexed.
+ *
+ * This will iterate over all documents, and request that they be indexed.
+ */
+int u1db__index_all_docs(u1database *db, int n_expressions,
+                         const char **expressions);
+
 #endif // U1DB_INTERNAL_H
