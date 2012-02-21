@@ -22,6 +22,8 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <sqlite3.h>
+#include <json/json.h>
+
 #include "u1db/u1db_internal.h"
 #include "u1db/u1db_vectorclock.h"
 
