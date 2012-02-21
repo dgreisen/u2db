@@ -172,4 +172,10 @@ u1db_document *u1db__allocate_document(const char *doc_id, const char *revision,
  */
 int u1db__generate_hex_uuid(char *uuid);
 
+
+/**
+ * Format a given query.
+ */
+int u1db__format_query(u1query *query, char **buf);
+
 #endif // U1DB_INTERNAL_H

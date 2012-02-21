@@ -199,30 +199,107 @@ u1db_simple_lookup1(u1database *db, const char *index_name,
     }
     status = u1db_query_init(db, index_name, &query);
     if (status != U1DB_OK) { goto finish; }
-    status = lookup_index_fields(db, query);
+    status = u1db_query_add_entry(query, val1);
     if (status != U1DB_OK) { goto finish; }
-    status = sqlite3_prepare_v2(db->sql_handle,
-        "SELECT doc_id FROM document_fields d0"
-        " WHERE d0.field_name = ? AND d0.value = ?",
-        -1, &statement, NULL);
-    if (status != SQLITE_OK) { goto finish; }
-    status = sqlite3_bind_text(statement, 1, query->fields[0], -1,
-                               SQLITE_TRANSIENT);
-    if (status != SQLITE_OK) { goto finish; }
-    status = sqlite3_bind_text(statement, 2, val1, -1, SQLITE_TRANSIENT);
-    if (status != SQLITE_OK) { goto finish; }
-    status = sqlite3_step(statement);
-    while (status == SQLITE_ROW) {
-        doc_id = (char*)sqlite3_column_text(statement, 0);
-        status = u1db_get_doc(db, doc_id, &doc);
-        if (status != U1DB_OK) { goto finish; }
-        cb(context, doc);
-        status = sqlite3_step(statement);
-    }
-    if (status == SQLITE_DONE) {
-        status = SQLITE_OK;
-    }
+    status = u1db_get_from_index(db, query, context, cb);
 finish:
     u1db_free_query(&query);
+    return status;
+}
+
+
+int
+u1db_get_from_index(u1database *db, u1query *query,
+                    void *context, u1db_doc_callback cb)
+{
+    int status = U1DB_OK;
+    sqlite3_stmt *statement;
+    char *doc_id = NULL;
+    u1db_document *doc = NULL;
+    char *query_str = NULL;
+    u1query_entry *entry;
+    int i, sql_param;
+
+    if (db == NULL || query == NULL || cb == NULL) {
+        return U1DB_INVALID_PARAMETER;
+    }
+    status = u1db__format_query(query, &query_str);
+    if (status != U1DB_OK) { goto finish; }
+    status = sqlite3_prepare_v2(db->sql_handle, query_str, -1,
+                                &statement, NULL);
+    if (status != SQLITE_OK) { goto finish; }
+    // Bind all of the 'field_name' parameters.
+    for (i = 0; i < query->num_fields; ++i) {
+        // for some reason bind_text starts at 1
+        status = sqlite3_bind_text(statement, (i*2) + 1, query->fields[i], -1,
+                                   SQLITE_TRANSIENT);
+        if (status != SQLITE_OK) { goto finish; }
+    }
+    for (entry = query->head; entry != NULL; entry = entry->next) {
+        // Bind all of the value parameters
+        for (i = 0; i < query->num_fields; ++i) {
+            status = sqlite3_bind_text(statement, (i*2)+2,
+                    entry->values[i], -1, SQLITE_TRANSIENT);
+            if (status != SQLITE_OK) { goto finish; }
+        }
+        status = sqlite3_step(statement);
+        while (status == SQLITE_ROW) {
+            doc_id = (char*)sqlite3_column_text(statement, 0);
+            status = u1db_get_doc(db, doc_id, &doc);
+            if (status != U1DB_OK) { goto finish; }
+            cb(context, doc);
+            status = sqlite3_step(statement);
+        }
+        if (status != SQLITE_DONE) { goto finish; }
+        status = sqlite3_reset(statement);
+    }
+finish:
+    if (query_str != NULL) {
+        free(query_str);
+    }
+    return status;
+}
+
+
+static void
+add_to_buf(char **buf, int *buf_size, const char *fmt, ...)
+{
+    int count;
+    va_list argp;
+    va_start(argp, fmt);
+    count = vsnprintf(*buf, *buf_size, fmt, argp);
+    va_end(argp);
+    *buf += count;
+    *buf_size -= count;
+}
+
+
+int
+u1db__format_query(u1query *query, char **buf)
+{
+    int status = U1DB_OK;
+    int buf_size, i;
+    char *cur;
+
+    if (query->num_fields == 0) {
+        return U1DB_INVALID_PARAMETER;
+    }
+    // 81 for 1 doc, 166 for 2, 251 for 3
+    buf_size = (1 + query->num_fields) * 100;
+    // The first field is treated specially
+    cur = (char*)calloc(buf_size, 1);
+    *buf = cur;
+    add_to_buf(&cur, &buf_size, "SELECT d0.doc_id FROM document_fields d0");
+    for (i = 1; i < query->num_fields; ++i) {
+        add_to_buf(&cur, &buf_size, ", document_fields d%d", i);
+    }
+    add_to_buf(&cur, &buf_size, " WHERE d0.field_name = ? AND d0.value = ?");
+    for (i = 1; i < query->num_fields; ++i) {
+        add_to_buf(&cur, &buf_size,
+            " AND d0.doc_id = d%d.doc_id"
+            " AND d%d.field_name = ?"
+            " AND d%d.value = ?",
+            i, i, i);
+    }
     return status;
 }

@@ -19,6 +19,7 @@ cdef extern from "Python.h":
     int PyString_AsStringAndSize(object o, char **buf, Py_ssize_t *length
                                  ) except -1
     char * PyString_AS_STRING(object)
+    char *strdup(char *)
     void *calloc(size_t, size_t)
     void free(void *)
 
@@ -149,6 +150,7 @@ cdef extern from "u1db/u1db_internal.h":
                             int from_db_rev, int last_known_rev,
                             u1db_record *from_records, u1db_record **new_records,
                             u1db_record **conflict_records)
+    int u1db__format_query(u1query *query, char **buf)
 
 
 cdef extern from "u1db/u1db_vectorclock.h":
@@ -206,6 +208,31 @@ cdef int _append_index_definition_to_list(void *context,
         exp_list.append(expressions[i])
     a_list.append((index_name, exp_list))
     return 0
+
+
+def _format_query(fields):
+    """Wrapper around u1db__format_query for testing."""
+    cdef CQuery query
+    cdef int i
+    cdef char *buf
+
+    # We use CQuery because we know it will safely dealloc when we exit
+    # Build up the query object so we can format the request.
+    query = CQuery()
+    query._query = <u1query*>calloc(1, sizeof(u1query))
+    query._query.num_fields = len(fields)
+    query._query.fields = <char**>calloc(query._query.num_fields, sizeof(char*))
+    for i from 0 <= i < query._query.num_fields:
+        query._query.fields[i] = strdup(fields[i])
+    handle_status("format_query",
+        u1db__format_query(query._query, &buf))
+    if buf == NULL:
+        res = None
+    else:
+        res = buf
+        free(buf)
+    return res
+
 
 
 def make_document(doc_id, rev, content, has_conflicts=False):

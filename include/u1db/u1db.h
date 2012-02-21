@@ -303,8 +303,8 @@ int u1db_query_add_entry(u1query *query, const char *value, ...);
  * @param n_key_values the length of the key_values parameter.
  * @param key_values A list of queries against the index. Each ...
  */
-int u1db_get_from_index(u1database *db, u1query *query, void *context,
-                        int (*cb)(void *context, u1db_document *doc));
+int u1db_get_from_index(u1database *db, u1query *query,
+                        void *context, u1db_doc_callback cb);
 
 /**
  * Get documents matching a single column index.

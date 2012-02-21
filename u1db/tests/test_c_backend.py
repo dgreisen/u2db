@@ -124,6 +124,31 @@ class TestCDatabase(BackendTests):
         self.assertEqual(2, query.num_entries)
         self.assertEqual([("a", "b"), ("c", "d")], query.entries)
 
+    def assertFormatQueryEquals(self, expected, fields):
+        val = c_backend_wrapper._format_query(fields)
+        self.assertEqual(expected, val)
+
+    def test__format_query(self):
+        self.assertFormatQueryEquals(
+            "SELECT d0.doc_id FROM document_fields d0"
+            " WHERE d0.field_name = ? AND d0.value = ?",
+            ["1"])
+        self.assertFormatQueryEquals(
+            "SELECT d0.doc_id"
+            " FROM document_fields d0, document_fields d1"
+            " WHERE d0.field_name = ? AND d0.value = ?"
+            " AND d0.doc_id = d1.doc_id"
+            " AND d1.field_name = ? AND d1.value = ?",
+            ["1", "2"])
+        self.assertFormatQueryEquals(
+            "SELECT d0.doc_id"
+            " FROM document_fields d0, document_fields d1, document_fields d2"
+            " WHERE d0.field_name = ? AND d0.value = ?"
+            " AND d0.doc_id = d1.doc_id"
+            " AND d1.field_name = ? AND d1.value = ?"
+            " AND d0.doc_id = d2.doc_id"
+            " AND d2.field_name = ? AND d2.value = ?",
+                ["1", "2", "3"])
 
 
 class TestVectorClock(BackendTests):
