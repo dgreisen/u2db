@@ -120,23 +120,6 @@ class TestCDatabase(BackendTests):
         self.assertEqual(2, query.num_fields)
         self.assertEqual(["key", "key2"], query.fields)
 
-    def test__query_add_entry(self):
-        self.db = c_backend_wrapper.CDatabase(':memory:')
-        self.db.create_index("two-idx", ["key", "key2"])
-        query = self.db._query_init("two-idx")
-        query.add_entry("a", "b")
-        self.assertEqual(1, query.num_entries)
-        self.assertEqual([("a", "b")], query.entries)
-
-    def test__query_add_two_entries(self):
-        self.db = c_backend_wrapper.CDatabase(':memory:')
-        self.db.create_index("two-idx", ["key", "key2"])
-        query = self.db._query_init("two-idx")
-        query.add_entry("a", "b")
-        query.add_entry("c", "d")
-        self.assertEqual(2, query.num_entries)
-        self.assertEqual([("a", "b"), ("c", "d")], query.entries)
-
     def assertFormatQueryEquals(self, expected, fields):
         val = c_backend_wrapper._format_query(fields)
         self.assertEqual(expected, val)

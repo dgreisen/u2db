@@ -86,71 +86,6 @@ u1db_query_init(u1database *db, const char *index_name, u1query **query)
 }
 
 
-int
-u1db_query_add_entry(u1query *query, const char *value, ...)
-{
-    int status = U1DB_OK, i;
-    int buffer_size, len;
-    char *val, *data;
-    u1query_entry *entry;
-    va_list argp;
-
-    if (query == NULL || value == NULL) {
-        return U1DB_INVALID_PARAMETER;
-    }
-    // We allocate a u1query_entry as a single block with self-referencing
-    // pointers. The structure is:
-    // entry_data, values pointers, string0, string1, ..., stringN
-    // So first we compute how much to allocate by iterating over the data,
-    // then we allocate, and fill in all the pointers.
-    va_start(argp, value);
-    // the first argument is 'value', the others are in '...'
-    buffer_size = sizeof(u1query_entry) + (sizeof(char*)*query->num_fields);
-    buffer_size += strlen(value) + 1;
-    for (i = 1; i < query->num_fields; ++i) {
-        val = va_arg(argp, char *);
-        if (val == NULL) {
-            status = U1DB_INVALID_PARAMETER;
-            goto finish;
-        }
-        buffer_size += strlen(val) + 1;
-    }
-    data = (char*)calloc(buffer_size, 1);
-    if (data == NULL) {
-        status = U1DB_NOMEM;
-        goto finish;
-    }
-    entry = (u1query_entry*)data;
-    data += sizeof(u1query_entry);
-    entry->values = (char**)data;
-    data += sizeof(char*)*query->num_fields;
-    va_end(argp);
-    va_start(argp, value);
-    entry->values[0] = data;
-    len = strlen(value);
-    memcpy(entry->values[0], value, len);
-    data += (len+1);
-    for (i = 1; i < query->num_fields; ++i) {
-        entry->values[i] = data;
-        val = va_arg(argp, char *);
-        len = strlen(val);
-        memcpy(entry->values[i], val, len);
-        data += len + 1;
-    }
-    query->num_entries += 1;
-    entry->next = NULL;
-    if (query->head == NULL) {
-        query->head = entry;
-    } else {
-        query->last->next = entry;
-    }
-    query->last = entry;
-finish:
-    va_end(argp);
-    return status;
-}
-
-
 void
 u1db_free_query(u1query **query)
 {
@@ -160,15 +95,6 @@ u1db_free_query(u1query **query)
         return;
     }
     q = *query;
-    if (q->head != NULL) {
-        u1query_entry *cur, *next = NULL;
-        for (cur = q->head; cur != NULL; cur = next) {
-            next = cur->next;
-            free(cur);
-        }
-        q->head = NULL;
-        q->last = NULL;
-    }
     if (q->fields != NULL) {
         for (i = 0; i < q->num_fields; ++i) {
             if (q->fields[i] != NULL) {
@@ -186,22 +112,17 @@ u1db_free_query(u1query **query)
 
 int
 u1db_simple_lookup1(u1database *db, const char *index_name,
-                    const char *val1, void *context, u1db_doc_callback cb)
+                    const char *val0, void *context, u1db_doc_callback cb)
 {
     int status = U1DB_OK;
-    sqlite3_stmt *statement;
     u1query *query = NULL;
-    char *doc_id = NULL;
-    u1db_document *doc = NULL;
 
-    if (db == NULL || index_name == NULL || val1 == NULL || cb == NULL) {
+    if (db == NULL || index_name == NULL || val0 == NULL || cb == NULL) {
         return U1DB_INVALID_PARAMETER;
     }
     status = u1db_query_init(db, index_name, &query);
     if (status != U1DB_OK) { goto finish; }
-    status = u1db_query_add_entry(query, val1);
-    if (status != U1DB_OK) { goto finish; }
-    status = u1db_get_from_index(db, query, context, cb);
+    status = u1db_get_from_index(db, query, context, cb, 1, val0);
 finish:
     u1db_free_query(&query);
     return status;
@@ -210,17 +131,21 @@ finish:
 
 int
 u1db_get_from_index(u1database *db, u1query *query,
-                    void *context, u1db_doc_callback cb)
+                    void *context, u1db_doc_callback cb,
+                    int n_values, const char *val0, ...)
 {
     int status = U1DB_OK;
     sqlite3_stmt *statement;
     char *doc_id = NULL;
     u1db_document *doc = NULL;
     char *query_str = NULL;
-    u1query_entry *entry;
     int i, sql_param;
+    va_list argp;
+    char *valN = NULL;
 
-    if (db == NULL || query == NULL || cb == NULL) {
+    if (db == NULL || query == NULL || cb == NULL
+        || n_values < 1 || val0 == NULL)
+    {
         return U1DB_INVALID_PARAMETER;
     }
     status = u1db__format_query(query, &query_str);
@@ -235,25 +160,27 @@ u1db_get_from_index(u1database *db, u1query *query,
                                    SQLITE_TRANSIENT);
         if (status != SQLITE_OK) { goto finish; }
     }
-    for (entry = query->head; entry != NULL; entry = entry->next) {
-        // Bind all of the value parameters
-        for (i = 0; i < query->num_fields; ++i) {
-            status = sqlite3_bind_text(statement, (i*2)+2,
-                    entry->values[i], -1, SQLITE_TRANSIENT);
-            if (status != SQLITE_OK) { goto finish; }
-        }
-        status = sqlite3_step(statement);
-        while (status == SQLITE_ROW) {
-            doc_id = (char*)sqlite3_column_text(statement, 0);
-            status = u1db_get_doc(db, doc_id, &doc);
-            if (status != U1DB_OK) { goto finish; }
-            cb(context, doc);
-            status = sqlite3_step(statement);
-        }
-        if (status != SQLITE_DONE) { goto finish; }
-        status = sqlite3_reset(statement);
+    // Bind all of the value parameters
+    status = sqlite3_bind_text(statement, 2, val0, -1, SQLITE_TRANSIENT);
+    if (status != SQLITE_OK) { goto finish; }
+    va_start(argp, val0);
+    for (i = 1; i < n_values; ++i) {
+        valN = va_arg(argp, char *);
+        status = sqlite3_bind_text(statement, (i*2)+2, valN, -1,
+                                   SQLITE_TRANSIENT);
+        if (status != SQLITE_OK) { goto finish; }
     }
+    status = sqlite3_step(statement);
+    while (status == SQLITE_ROW) {
+        doc_id = (char*)sqlite3_column_text(statement, 0);
+        status = u1db_get_doc(db, doc_id, &doc);
+        if (status != U1DB_OK) { goto finish; }
+        cb(context, doc);
+        status = sqlite3_step(statement);
+    }
+    if (status != SQLITE_DONE) { goto finish; }
 finish:
+    va_end(argp);
     if (query_str != NULL) {
         free(query_str);
     }

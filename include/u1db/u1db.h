@@ -288,23 +288,16 @@ int u1db_query_init(u1database *db, const char *index_name, u1query **query);
 void u1db_free_query(u1query **query);
 
 /**
- * Add another entry to an existing query.
- *
- * This populates the appropriate query fields with values. Note that the
- * number of parameters passed should equal the number of columns in the index
- * definition. 'value' is the first such parameter.
- */
-int u1db_query_add_entry(u1query *query, const char *value, ...);
-
-/**
  * Get documents which match a given index.
  *
- * @param index_name The index to be queried.
- * @param n_key_values the length of the key_values parameter.
- * @param key_values A list of queries against the index. Each ...
+ * @param query A u1query object, as created by u1db_query_init.
+ * @param context Will be returned via the document callback
+ * @param n_values The number of parameters being passed, must be >= 1
+ * @param val0... The values to match in the index, all of these should be char*
  */
 int u1db_get_from_index(u1database *db, u1query *query,
-                        void *context, u1db_doc_callback cb);
+                        void *context, u1db_doc_callback cb,
+                        int n_values, const char *val0, ...);
 
 /**
  * Get documents matching a single column index.
