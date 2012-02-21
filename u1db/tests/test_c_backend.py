@@ -91,6 +91,19 @@ class TestCDatabase(BackendTests):
         docs = self.db.get_from_index('key-idx', [('value',)])
         self.assertEqual([doc], docs)
 
+    def test_get_from_index_2(self):
+        self.db = c_backend_wrapper.CDatabase(':memory:')
+        doc = self.db.create_doc(tests.nested_doc)
+        self.db.create_index("multi-idx", ["key", "sub.doc"])
+        self.db._run_sql("INSERT INTO document_fields"
+                         " VALUES ('%s', 'key', 'value')"
+                         % (doc.doc_id,))
+        self.db._run_sql("INSERT INTO document_fields"
+                         " VALUES ('%s', 'sub.doc', 'underneath')"
+                         % (doc.doc_id,))
+        docs = self.db.get_from_index('multi-idx', [('value', 'underneath')])
+        self.assertEqual([doc], docs)
+
     def test__query_init_one_field(self):
         self.db = c_backend_wrapper.CDatabase(':memory:')
         self.db.create_index("key-idx", ["key"])

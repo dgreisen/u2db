@@ -71,7 +71,7 @@ cdef extern from "u1db/u1db.h":
                   int (*cb)(void *context, const_char_ptr index_name,
                             int n_expressions, const_char_ptr *expressions))
     int u1db_get_from_index(u1database *db, u1query *query, void *context,
-                            int (*cb)(void *context, u1db_document *doc))
+                            u1db_doc_callback cb)
     int u1db_simple_lookup1(u1database *db, char *index_name, char *val1,
                             void *context, u1db_doc_callback cb)
 
@@ -232,7 +232,6 @@ def _format_query(fields):
         res = buf
         free(buf)
     return res
-
 
 
 def make_document(doc_id, rev, content, has_conflicts=False):
@@ -689,12 +688,14 @@ cdef class CDatabase(object):
             u1db_delete_index(self._db, index_name))
 
     def get_from_index(self, index_name, key_values):
-        res = []
+        cdef CQuery query
+        query = self._query_init(index_name)
         for entry in key_values:
-            if len(entry) == 1:
-                handle_status("simple_lookup1",
-                    u1db_simple_lookup1(self._db, index_name, entry[0],
-                        <void*>res, _append_doc_to_list))
+            query.add_entry(*entry)
+        res = []
+        handle_status("get_from_index",
+            u1db_get_from_index(self._db, query._query, <void*>res,
+                                _append_doc_to_list))
         return res
 
     def _query_init(self, index_name):
