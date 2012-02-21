@@ -22,7 +22,6 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <sqlite3.h>
-#include <json/json.h>
 
 #include "u1db/u1db_internal.h"
 #include "u1db/u1db_vectorclock.h"
@@ -322,6 +321,31 @@ lookup_doc(u1database *db, const char *doc_id, const char **doc_rev,
     return status;
 }
 
+
+static int
+delete_old_fields(u1database *db, const char *doc_id)
+{
+    sqlite3_stmt *statement;
+    int status;
+
+    status = sqlite3_prepare_v2(db->sql_handle,
+        "DELETE FROM document_fields WHERE doc_id = ?", -1,
+        &statement, NULL);
+    if (status != SQLITE_OK) {
+        return status;
+    }
+    status = sqlite3_bind_text(statement, 1, doc_id, -1, SQLITE_TRANSIENT);
+    if (status != SQLITE_OK) { goto finish; }
+    status = sqlite3_step(statement);
+    if (status == SQLITE_DONE) {
+        status = SQLITE_OK;
+    }
+finish:
+    sqlite3_finalize(statement);
+    return status;
+}
+
+
 // Insert the document into the table, we've already done the safety checks
 static int
 write_doc(u1database *db, const char *doc_id, const char *doc_rev,
@@ -334,6 +358,8 @@ write_doc(u1database *db, const char *doc_id, const char *doc_rev,
         status = sqlite3_prepare_v2(db->sql_handle, 
             "UPDATE document SET doc_rev = ?, content = ? WHERE doc_id = ?", -1,
             &statement, NULL); 
+        if (status != SQLITE_OK) { goto finish; }
+        status = delete_old_fields(db, doc_id);
     } else {
         status = sqlite3_prepare_v2(db->sql_handle, 
             "INSERT INTO document (doc_rev, content, doc_id) VALUES (?, ?, ?)", -1,
@@ -343,33 +369,23 @@ write_doc(u1database *db, const char *doc_id, const char *doc_rev,
         return status;
     }
     status = sqlite3_bind_text(statement, 1, doc_rev, -1, SQLITE_TRANSIENT);
-    if (status != SQLITE_OK) {
-        sqlite3_finalize(statement);
-        return status;
-    }
+    if (status != SQLITE_OK) { goto finish; }
     if (content == NULL) {
         status = sqlite3_bind_null(statement, 2);
     } else {
         status = sqlite3_bind_text(statement, 2, content, content_len,
                                    SQLITE_TRANSIENT);
     }
-    if (status != SQLITE_OK) {
-        sqlite3_finalize(statement);
-        return status;
-    }
+    if (status != SQLITE_OK) { goto finish; }
     status = sqlite3_bind_text(statement, 3, doc_id, -1, SQLITE_TRANSIENT);
-    if (status != SQLITE_OK) {
-        sqlite3_finalize(statement);
-        return status;
-    }
+    if (status != SQLITE_OK) { goto finish; }
     status = sqlite3_step(statement);
     if (status == SQLITE_DONE) {
         status = SQLITE_OK;
     }
     sqlite3_finalize(statement);
-    if (status != SQLITE_OK) {
-        return status;
-    }
+    if (status != SQLITE_OK) { goto finish; }
+    status = u1db__update_indexes(db, doc_id, content);
     status = sqlite3_prepare_v2(db->sql_handle, 
         "INSERT INTO transaction_log(doc_id) VALUES (?)", -1,
         &statement, NULL);
@@ -385,6 +401,7 @@ write_doc(u1database *db, const char *doc_id, const char *doc_rev,
     if (status == SQLITE_DONE) {
         status = SQLITE_OK;
     }
+finish:
     sqlite3_finalize(statement);
     return status;
 }

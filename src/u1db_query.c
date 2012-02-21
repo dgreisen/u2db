@@ -19,6 +19,7 @@
 #include "u1db/u1db_internal.h"
 #include <sqlite3.h>
 #include <stdarg.h>
+#include <json/json.h>
 
 
 static int
@@ -229,4 +230,132 @@ u1db__format_query(u1query *query, char **buf)
             i, i, i);
     }
     return status;
+}
+
+struct sqlcb_to_field_cb {
+    void *user_context;
+    int (*user_cb)(void *, const char*);
+};
+
+// Thunk from the SQL interface, to a nicer single value interface
+static int
+sqlite_cb_to_field_cb(void *context, int n_cols, char **cols, char **rows)
+{
+    struct sqlcb_to_field_cb *ctx;
+    ctx = (struct sqlcb_to_field_cb*)context;
+    if (n_cols != 1) {
+        return 1; // Error
+    }
+    return ctx->user_cb(ctx->user_context, cols[0]);
+}
+
+
+// Iterate over the fields that are indexed, and invoke cb for each one
+static int
+iter_field_definitions(u1database *db, void *context,
+                      int (*cb)(void *context, const char *expression))
+{
+    int status;
+    struct sqlcb_to_field_cb ctx;
+
+    ctx.user_context = context;
+    ctx.user_cb = cb;
+    status = sqlite3_exec(db->sql_handle,
+        "SELECT field FROM index_definitions",
+        sqlite_cb_to_field_cb, &ctx, NULL);
+    return status;
+}
+
+struct evaluate_index_context {
+    u1database *db;
+    const char *doc_id;
+    json_object *obj;
+};
+
+static int
+add_to_document_fields(u1database *db, const char *doc_id, 
+                       const char *expression, const char *val)
+{
+    int status;
+    sqlite3_stmt *statement;
+
+    status = sqlite3_prepare_v2(db->sql_handle,
+        "INSERT INTO document_fields (doc_id, field_name, value)"
+        " VALUES (?, ?, ?)", -1,
+        &statement, NULL);
+    if (status != SQLITE_OK) {
+        return status;
+    }
+    status = sqlite3_bind_text(statement, 1, doc_id, -1, SQLITE_TRANSIENT);
+    if (status != SQLITE_OK) { goto finish; }
+    status = sqlite3_bind_text(statement, 2, expression, -1, SQLITE_TRANSIENT);
+    if (status != SQLITE_OK) { goto finish; }
+    status = sqlite3_bind_text(statement, 3, val, -1, SQLITE_TRANSIENT);
+    if (status != SQLITE_OK) { goto finish; }
+finish:
+    sqlite3_finalize(statement);
+    return status;
+}
+
+static int
+evaluate_index_and_insert_into_db(void *context, const char *expression)
+{
+    struct evaluate_index_context *ctx;
+    json_object *val;
+    const char *str_val;
+    int status = U1DB_OK;
+
+    ctx = (struct evaluate_index_context *)context;
+    fprintf(stderr, "\nEvaluating '%s'\n", expression);
+    if (ctx->obj == NULL || !json_object_is_type(ctx->obj, json_type_object)) {
+        fprintf(stderr, "object is NULL???\n");
+        return U1DB_INVALID_JSON;
+    }
+    {
+        json_object_object_foreach((ctx->obj), key, iter_val) {
+            if (key == NULL || iter_val == NULL) {
+                continue;
+            }
+            fprintf(stderr, "Found: '%s'\n", key);
+//                        json_object_get_string(iter_val));
+        }
+    }
+    return U1DB_OK;
+    val = json_object_object_get(ctx->obj, expression);
+    if (val != NULL) {
+        str_val = json_object_get_string(val);
+        if (str_val != NULL) {
+            fprintf(stderr, "Evaluating '%s' yielded '%s'\n", expression,
+                    str_val);
+            status = add_to_document_fields(ctx->db, ctx->doc_id, expression,
+                    str_val);
+        }
+        json_object_put(val);
+    } else {
+        fprintf(stderr, "Evaluating '%s' yielded NULL\n", expression);
+    }
+    return status;
+}
+
+int
+u1db__update_indexes(u1database *db, const char *doc_id, const char *content)
+{
+    struct evaluate_index_context context;
+
+    if (content == NULL) {
+        // No new fields to add to the database.
+        return U1DB_OK;
+    }
+    context.db = db;
+    context.doc_id = doc_id;
+    context.obj = json_tokener_parse(content);
+    if (context.obj == NULL
+            || !json_object_is_type(context.obj, json_type_object))
+    {
+        return U1DB_INVALID_JSON;
+    }
+    // Release the refcount
+    json_object_put(context.obj);
+    return iter_field_definitions(db, &context,
+            evaluate_index_and_insert_into_db);
 }

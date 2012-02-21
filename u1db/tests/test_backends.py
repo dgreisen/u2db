@@ -539,6 +539,12 @@ class DatabaseIndexTests(tests.DatabaseBaseTests):
         self.db.delete_index('test-idx')
         self.assertEqual([], self.db.list_indexes())
 
+    def test_create_adds_to_index(self):
+        self.db.create_index('test-idx', ['key'])
+        doc = self.db.create_doc(simple_doc)
+        self.assertEqual([doc],
+            self.db.get_from_index('test-idx', [('value',)]))
+
 
 class PyDatabaseIndexTests(tests.DatabaseBaseTests):
 
@@ -588,12 +594,6 @@ class PyDatabaseIndexTests(tests.DatabaseBaseTests):
         self.assertEqual(
             sorted([doc, doc2]),
             sorted(self.db.get_from_index('test-idx', [('underneath',)])))
-
-    def test_create_adds_to_index(self):
-        self.db.create_index('test-idx', ['key'])
-        doc = self.db.create_doc(simple_doc)
-        self.assertEqual([doc],
-            self.db.get_from_index('test-idx', [('value',)]))
 
     def test_put_updates_index(self):
         doc = self.db.create_doc(simple_doc)

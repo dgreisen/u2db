@@ -170,4 +170,10 @@ int u1db__generate_hex_uuid(char *uuid);
  */
 int u1db__format_query(u1query *query, char **buf);
 
+/**
+ * Given this document content, update the indexed fields in the db.
+ */
+int u1db__update_indexes(u1database *db, const char *doc_id,
+                         const char *content);
+
 #endif // U1DB_INTERNAL_H
