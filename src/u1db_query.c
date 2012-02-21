@@ -139,7 +139,7 @@ u1db_get_from_index(u1database *db, u1query *query,
     char *doc_id = NULL;
     u1db_document *doc = NULL;
     char *query_str = NULL;
-    int i, sql_param;
+    int i;
     va_list argp;
     char *valN = NULL;
 
