@@ -533,6 +533,12 @@ class DatabaseIndexTests(tests.DatabaseBaseTests):
         self.assertEqual([('test-idx', ['name'])],
                          self.db.list_indexes())
 
+    def test_delete_index(self):
+        self.db.create_index('test-idx', ['key'])
+        self.assertEqual([('test-idx', ['key'])], self.db.list_indexes())
+        self.db.delete_index('test-idx')
+        self.assertEqual([], self.db.list_indexes())
+
 
 class PyDatabaseIndexTests(tests.DatabaseBaseTests):
 
@@ -774,12 +780,6 @@ class PyDatabaseIndexTests(tests.DatabaseBaseTests):
         self.db.delete_doc(doc)
         self.assertEqual([doc2],
             self.db.get_from_index('test-idx', [('value',)]))
-
-    def test_delete_index(self):
-        self.db.create_index('test-idx', ['key'])
-        self.assertEqual([('test-idx', ['key'])], self.db.list_indexes())
-        self.db.delete_index('test-idx')
-        self.assertEqual([], self.db.list_indexes())
 
     def test_sync_exchange_updates_indexes(self):
         doc = self.db.create_doc(simple_doc)
