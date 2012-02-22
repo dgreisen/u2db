@@ -16,7 +16,6 @@
 
 cdef extern from "Python.h":
     object PyString_FromStringAndSize(char *s, Py_ssize_t n)
-    object PyString_FromString(char *s)
     int PyString_AsStringAndSize(object o, char **buf, Py_ssize_t *length
                                  ) except -1
     char * PyString_AS_STRING(object)
@@ -155,7 +154,7 @@ cdef extern from "u1db/u1db_internal.h":
                             int from_db_rev, int last_known_rev,
                             u1db_record *from_records, u1db_record **new_records,
                             u1db_record **conflict_records)
-    int u1db__format_query(char **buf, int n_fields, ...)
+    int u1db__format_query(int n_fields, va_list argp, char **buf, int *wildcard)
 
 
 cdef extern from "u1db/u1db_vectorclock.h":
@@ -215,12 +214,12 @@ cdef int _append_index_definition_to_list(void *context,
     return 0
 
 
-cdef int _format_query_dotted(char **buf, int n_fields, ...):
+cdef int _format_query_dotted(char **buf, int *wildcard, int n_fields, ...):
     cdef va_list argp
     cdef int status
 
     va_start_int(argp, n_fields)
-    status = u1db__format_query(buf, n_fields, argp)
+    status = u1db__format_query(n_fields, argp, buf, wildcard)
     va_end(argp)
     return status
 
@@ -229,19 +228,20 @@ def _format_query(fields):
     """Wrapper around u1db__format_query for testing."""
     cdef int status
     cdef char *buf
+    cdef int wildcard[10]
 
     if len(fields) == 0:
-        status = _format_query_dotted(&buf, 0)
+        status = _format_query_dotted(&buf, wildcard, 0)
     elif len(fields) == 1:
-        status = _format_query_dotted(&buf, 1, <char*>fields[0])
+        status = _format_query_dotted(&buf, wildcard, 1, <char*>fields[0])
     elif len(fields) == 2:
-        status = _format_query_dotted(&buf, 2, <char*>fields[0],
+        status = _format_query_dotted(&buf, wildcard, 2, <char*>fields[0],
                 <char*>fields[1])
     elif len(fields) == 3:
-        status = _format_query_dotted(&buf, 3, <char*>fields[0], 
+        status = _format_query_dotted(&buf, wildcard, 3, <char*>fields[0], 
                 <char*>fields[1], <char*>fields[2])
     elif len(fields) == 4:
-        status = _format_query_dotted(&buf, 4, <char*>fields[0], 
+        status = _format_query_dotted(&buf, wildcard, 4, <char*>fields[0], 
                 <char*>fields[1], <char*>fields[2], <char *>fields[3])
     else:
         status = U1DB_NOT_IMPLEMENTED
@@ -249,9 +249,12 @@ def _format_query(fields):
     if buf == NULL:
         res = None
     else:
-        res = PyString_FromString(buf)
+        res = buf
         free(buf)
-    return res
+    w = []
+    for i in range(len(fields)):
+        w.append(wildcard[i])
+    return res, w
 
 
 def make_document(doc_id, rev, content, has_conflicts=False):

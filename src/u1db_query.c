@@ -141,9 +141,10 @@ u1db_get_from_index(u1database *db, u1query *query,
     char *doc_id = NULL;
     u1db_document *doc = NULL;
     char *query_str = NULL;
-    int i;
+    int i, bind_arg;
     va_list argp;
     char *valN = NULL;
+    int wildcard[20] = {0};
 
     if (db == NULL || query == NULL || cb == NULL || n_values < 0)
     {
@@ -152,28 +153,31 @@ u1db_get_from_index(u1database *db, u1query *query,
     if (query->num_fields != n_values) {
         return U1DB_INVALID_VALUE_FOR_INDEX;
     }
+    if (n_values > 20) {
+        return U1DB_NOT_IMPLEMENTED;
+    }
     va_start(argp, n_values);
-    status = u1db__format_query(&query_str, query->num_fields, argp);
+    status = u1db__format_query(query->num_fields, argp, &query_str, wildcard);
     va_end(argp);
     if (status != U1DB_OK) { goto finish; }
     status = sqlite3_prepare_v2(db->sql_handle, query_str, -1,
                                 &statement, NULL);
     if (status != SQLITE_OK) { goto finish; }
-    // Bind all of the 'field_name' parameters.
+    // Bind all of the 'field_name' parameters. sqlite_bind starts at 1
+    bind_arg = 1;
+    va_start(argp, n_values);
     for (i = 0; i < query->num_fields; ++i) {
-        // for some reason bind_text starts at 1
-        status = sqlite3_bind_text(statement, (i*2) + 1, query->fields[i], -1,
+        status = sqlite3_bind_text(statement, bind_arg, query->fields[i], -1,
                                    SQLITE_TRANSIENT);
+        bind_arg++;
         if (status != SQLITE_OK) { goto finish; }
-    }
-    // Bind all of the value parameters
-    status = sqlite3_bind_text(statement, 2, val0, -1, SQLITE_TRANSIENT);
-    if (status != SQLITE_OK) { goto finish; }
-    va_start(argp, val0);
-    for (i = 1; i < n_values; ++i) {
         valN = va_arg(argp, char *);
-        status = sqlite3_bind_text(statement, (i*2)+2, valN, -1,
-                                   SQLITE_TRANSIENT);
+        if (wildcard[i] == 0) {
+            // Not a wildcard, so add the argument
+            status = sqlite3_bind_text(statement, bind_arg, valN, -1,
+                                       SQLITE_TRANSIENT);
+            bind_arg++;
+        }
         if (status != SQLITE_OK) { goto finish; }
     }
     status = sqlite3_step(statement);
@@ -210,11 +214,13 @@ add_to_buf(char **buf, int *buf_size, const char *fmt, ...)
 
 
 int
-u1db__format_query(char **buf, int n_fields, va_list argp)
+u1db__format_query(int n_fields, va_list argp, char **buf, int *wildcard)
 {
     int status = U1DB_OK;
     int buf_size, i;
+    int have_wildcard = 0;
     char *cur;
+    char *val;
 
     if (n_fields < 1) {
         return U1DB_INVALID_PARAMETER;
@@ -223,18 +229,38 @@ u1db__format_query(char **buf, int n_fields, va_list argp)
     buf_size = (1 + n_fields) * 100;
     // The first field is treated specially
     cur = (char*)calloc(buf_size, 1);
+    if (cur == NULL) {
+        return U1DB_NOMEM;
+    }
     *buf = cur;
     add_to_buf(&cur, &buf_size, "SELECT d0.doc_id FROM document_fields d0");
     for (i = 1; i < n_fields; ++i) {
         add_to_buf(&cur, &buf_size, ", document_fields d%d", i);
     }
-    add_to_buf(&cur, &buf_size, " WHERE d0.field_name = ? AND d0.value = ?");
-    for (i = 1; i < n_fields; ++i) {
-        add_to_buf(&cur, &buf_size,
-            " AND d0.doc_id = d%d.doc_id"
-            " AND d%d.field_name = ?"
-            " AND d%d.value = ?",
-            i, i, i);
+    add_to_buf(&cur, &buf_size, " WHERE d0.field_name = ?");
+    for (i = 0; i < n_fields; ++i) {
+        if (i != 0) {
+            add_to_buf(&cur, &buf_size,
+                " AND d0.doc_id = d%d.doc_id"
+                " AND d%d.field_name = ?",
+                i, i);
+        }
+        val = va_arg(argp, char *);
+        if (val == NULL) {
+            status = U1DB_INVALID_VALUE_FOR_INDEX;
+            goto finish;
+        }
+        if (val[0] == '*') {
+            wildcard[i] = 1;
+            add_to_buf(&cur, &buf_size, " AND d%d.value NOT NULL", i);
+        } else {
+            wildcard[i] = 0;
+            add_to_buf(&cur, &buf_size, " AND d%d.value = ?", i);
+        }
+    }
+finish:
+    if (status != U1DB_OK && *buf != NULL) {
+        free(*buf);
     }
     return status;
 }
