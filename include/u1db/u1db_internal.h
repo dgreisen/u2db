@@ -119,7 +119,7 @@ int u1db__sync_get_machine_info(u1database *db, const char *other_replica_uid,
 int u1db__sync_record_machine_info(u1database *db, const char *replica_uid,
                                    int db_rev);
 
-const char *u1db__schema[];
+const char **u1db__schema;
 const int u1db__schema_len;
 
 typedef struct _u1db_record {
