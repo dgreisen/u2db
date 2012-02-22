@@ -278,6 +278,7 @@ u1db__format_query(int n_fields, va_list argp, char **buf, int *wildcard)
 finish:
     if (status != U1DB_OK && *buf != NULL) {
         free(*buf);
+        *buf = NULL;
     }
     return status;
 }
