@@ -254,12 +254,23 @@ u1db__format_query(int n_fields, va_list argp, char **buf, int *wildcard)
             wildcard[i] = 1;
             have_wildcard = 1;
             add_to_buf(&cur, &buf_size, " AND d%d.value NOT NULL", i);
+        } else if (val[0] != '\0' && val[strlen(val)-1] == '*') {
+            // glob
+            wildcard[i] = 2;
+            if (have_wildcard) {
+                //globs not allowed after another wildcard
+                status = U1DB_INVALID_VALUE_FOR_INDEX;
+                goto finish;
+            }
+            have_wildcard = 1;
+            status = U1DB_NOT_IMPLEMENTED;
+            goto finish;
         } else {
             wildcard[i] = 0;
             if (have_wildcard) {
                 // Can't have a non-wildcard after a wildcard
                 status = U1DB_INVALID_VALUE_FOR_INDEX;
-                continue;
+                goto finish;
             }
             add_to_buf(&cur, &buf_size, " AND d%d.value = ?", i);
         }

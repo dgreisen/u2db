@@ -617,6 +617,11 @@ class DatabaseIndexTests(tests.DatabaseBaseTests):
         self.assertRaises(errors.InvalidValueForIndex,
             self.db.get_from_index, 'test-idx', [('*', 'v2')])
 
+    def test_get_from_index_illegal_glob_after_wildcard(self):
+        self.db.create_index('test-idx', ['k1', 'k2'])
+        self.assertRaises(errors.InvalidValueForIndex,
+            self.db.get_from_index, 'test-idx', [('*', 'v*')])
+
     def test_get_all_from_index(self):
         self.db.create_index('test-idx', ['key'])
         doc1 = self.db.create_doc(simple_doc)
@@ -695,6 +700,11 @@ class PyDatabaseIndexTests(tests.DatabaseBaseTests):
         self.db.create_index('test-idx', ['k1', 'k2'])
         self.assertRaises(errors.InvalidValueForIndex,
             self.db.get_from_index, 'test-idx', [('v*', 'v2')])
+
+    def test_get_from_index_illegal_glob_after_glob(self):
+        self.db.create_index('test-idx', ['k1', 'k2'])
+        self.assertRaises(errors.InvalidValueForIndex,
+            self.db.get_from_index, 'test-idx', [('*', 'v*')])
 
     def test_get_from_index_with_sql_wildcards(self):
         self.db.create_index('test-idx', ['key'])

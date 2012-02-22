@@ -157,6 +157,11 @@ class TestCDatabase(BackendTests):
             " AND d1.field_name = ? AND d1.value NOT NULL",
             [0, 1], ["1", "*"])
 
+    def test__format_query_glob(self):
+        self.assertRaises(NotImplementedError,
+            c_backend_wrapper._format_query, ["1*"])
+
+
 
 class TestVectorClock(BackendTests):
 
