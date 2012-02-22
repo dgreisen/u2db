@@ -649,14 +649,15 @@ cdef class CDatabase(object):
         cdef int status
         query = self._query_init(index_name)
         res = []
+        status = U1DB_OK
         for entry in key_values:
             if len(entry) == 1:
-                u1db_get_from_index(self._db, query._query, <void*>res,
-                                    _append_doc_to_list, 1, <char*>entry[0])
+                status = u1db_get_from_index(self._db, query._query,
+                    <void*>res, _append_doc_to_list, 1, <char*>entry[0])
             elif len(entry) == 2:
-                u1db_get_from_index(self._db, query._query, <void*>res,
-                                    _append_doc_to_list, 2,
-                                    <char*>entry[0], <char*>entry[1])
+                status = u1db_get_from_index(self._db, query._query,
+                    <void*>res, _append_doc_to_list, 2,
+                    <char*>entry[0], <char*>entry[1])
             else:
                 status = U1DB_NOT_IMPLEMENTED;
             handle_status("get_from_index", status)
