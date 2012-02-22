@@ -150,7 +150,9 @@ u1db_get_from_index(u1database *db, u1query *query,
     {
         return U1DB_INVALID_PARAMETER;
     }
-    status = u1db__format_query(query, &query_str);
+    va_start(argp, n_values);
+    status = u1db__format_query(&query_str, query->num_fields, argp);
+    va_end(argp);
     if (status != U1DB_OK) { goto finish; }
     status = sqlite3_prepare_v2(db->sql_handle, query_str, -1,
                                 &statement, NULL);
@@ -206,26 +208,26 @@ add_to_buf(char **buf, int *buf_size, const char *fmt, ...)
 
 
 int
-u1db__format_query(u1query *query, char **buf)
+u1db__format_query(char **buf, int n_fields, va_list argp)
 {
     int status = U1DB_OK;
     int buf_size, i;
     char *cur;
 
-    if (query->num_fields == 0) {
+    if (n_fields < 1) {
         return U1DB_INVALID_PARAMETER;
     }
     // 81 for 1 doc, 166 for 2, 251 for 3
-    buf_size = (1 + query->num_fields) * 100;
+    buf_size = (1 + n_fields) * 100;
     // The first field is treated specially
     cur = (char*)calloc(buf_size, 1);
     *buf = cur;
     add_to_buf(&cur, &buf_size, "SELECT d0.doc_id FROM document_fields d0");
-    for (i = 1; i < query->num_fields; ++i) {
+    for (i = 1; i < n_fields; ++i) {
         add_to_buf(&cur, &buf_size, ", document_fields d%d", i);
     }
     add_to_buf(&cur, &buf_size, " WHERE d0.field_name = ? AND d0.value = ?");
-    for (i = 1; i < query->num_fields; ++i) {
+    for (i = 1; i < n_fields; ++i) {
         add_to_buf(&cur, &buf_size,
             " AND d0.doc_id = d%d.doc_id"
             " AND d%d.field_name = ?"

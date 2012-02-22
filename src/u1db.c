@@ -1558,7 +1558,7 @@ u1db_create_index(u1database *db, const char *index_name, int n_expressions,
     status = u1db__index_all_docs(db, n_unique, unique_expressions);
 finish:
     if (unique_expressions != NULL) {
-        free(unique_expressions);
+        free((void*)unique_expressions);
     }
     sqlite3_finalize(statement);
     if (status == SQLITE_OK) {

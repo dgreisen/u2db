@@ -16,12 +16,20 @@
 
 cdef extern from "Python.h":
     object PyString_FromStringAndSize(char *s, Py_ssize_t n)
+    object PyString_FromString(char *s)
     int PyString_AsStringAndSize(object o, char **buf, Py_ssize_t *length
                                  ) except -1
     char * PyString_AS_STRING(object)
     char *strdup(char *)
     void *calloc(size_t, size_t)
     void free(void *)
+
+cdef extern from "stdarg.h":
+    ctypedef struct va_list:
+        pass
+    void va_start(va_list, void*)
+    void va_start_int "va_start" (va_list, int)
+    void va_end(va_list)
 
 cdef extern from "u1db/u1db.h":
     ctypedef struct u1database:
@@ -145,7 +153,7 @@ cdef extern from "u1db/u1db_internal.h":
                             int from_db_rev, int last_known_rev,
                             u1db_record *from_records, u1db_record **new_records,
                             u1db_record **conflict_records)
-    int u1db__format_query(u1query *query, char **buf)
+    int u1db__format_query(char **buf, int n_fields, ...)
 
 
 cdef extern from "u1db/u1db_vectorclock.h":
@@ -205,26 +213,41 @@ cdef int _append_index_definition_to_list(void *context,
     return 0
 
 
+cdef int _format_query_dotted(char **buf, int n_fields, ...):
+    cdef va_list argp
+    cdef int status
+
+    va_start_int(argp, n_fields)
+    status = u1db__format_query(buf, n_fields, argp)
+    va_end(argp)
+    return status
+
+
 def _format_query(fields):
     """Wrapper around u1db__format_query for testing."""
-    cdef CQuery query
-    cdef int i
+    cdef int status
     cdef char *buf
 
-    # We use CQuery because we know it will safely dealloc when we exit
-    # Build up the query object so we can format the request.
-    query = CQuery()
-    query._query = <u1query*>calloc(1, sizeof(u1query))
-    query._query.num_fields = len(fields)
-    query._query.fields = <char**>calloc(query._query.num_fields, sizeof(char*))
-    for i from 0 <= i < query._query.num_fields:
-        query._query.fields[i] = strdup(fields[i])
-    handle_status("format_query",
-        u1db__format_query(query._query, &buf))
+    if len(fields) == 0:
+        status = _format_query_dotted(&buf, 0)
+    elif len(fields) == 1:
+        status = _format_query_dotted(&buf, 1, <char*>fields[0])
+    elif len(fields) == 2:
+        status = _format_query_dotted(&buf, 2, <char*>fields[0],
+                <char*>fields[1])
+    elif len(fields) == 3:
+        status = _format_query_dotted(&buf, 3, <char*>fields[0], 
+                <char*>fields[1], <char*>fields[2])
+    elif len(fields) == 4:
+        status = _format_query_dotted(&buf, 4, <char*>fields[0], 
+                <char*>fields[1], <char*>fields[2], <char *>fields[3])
+    else:
+        status = U1DB_NOT_IMPLEMENTED
+    handle_status("format_query", status)
     if buf == NULL:
         res = None
     else:
-        res = buf
+        res = PyString_FromString(buf)
         free(buf)
     return res
 

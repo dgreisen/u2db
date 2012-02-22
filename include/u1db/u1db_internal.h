@@ -19,6 +19,7 @@
 #ifndef U1DB_INTERNAL_H
 #define U1DB_INTERNAL_H
 
+#include <stdarg.h>
 #include "u1db/u1db.h"
 #include "u1db/compat.h"
 
@@ -168,7 +169,7 @@ int u1db__generate_hex_uuid(char *uuid);
 /**
  * Format a given query.
  */
-int u1db__format_query(u1query *query, char **buf);
+int u1db__format_query(char **buf, int n_fields, va_list argp);
 
 /**
  * Given this document content, update the indexed fields in the db.
