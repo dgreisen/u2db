@@ -52,6 +52,7 @@ typedef int (*u1db_doc_callback)(void *context, u1db_document *doc);
 #define U1DB_NOMEM -6
 #define U1DB_NOT_IMPLEMENTED -7
 #define U1DB_INVALID_JSON -8
+#define U1DB_INVALID_VALUE_FOR_INDEX -9
 
 // Used by put_doc_if_newer
 #define U1DB_INSERTED 1

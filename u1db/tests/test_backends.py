@@ -603,6 +603,27 @@ class DatabaseIndexTests(tests.DatabaseBaseTests):
         self.assertEqual([doc2],
             self.db.get_from_index('test-idx', [('value',)]))
 
+    def test_get_from_index_illegal_number_of_entries(self):
+        self.db.create_index('test-idx', ['k1', 'k2'])
+        self.assertRaises(errors.InvalidValueForIndex,
+            self.db.get_from_index, 'test-idx', [()])
+        self.assertRaises(errors.InvalidValueForIndex,
+            self.db.get_from_index, 'test-idx', [('v1',)])
+        self.assertRaises(errors.InvalidValueForIndex,
+            self.db.get_from_index, 'test-idx', [('v1', 'v2', 'v3')])
+
+    def test_get_all_from_index(self):
+        self.db.create_index('test-idx', ['key'])
+        doc1 = self.db.create_doc(simple_doc)
+        doc2 = self.db.create_doc(nested_doc)
+        # This one should not be in the index
+        doc3 = self.db.create_doc('{"no": "key"}')
+        diff_value_doc = '{"key": "diff value"}'
+        doc4 = self.db.create_doc(diff_value_doc)
+        # This is essentially a 'prefix' match, but we match every entry.
+        self.assertEqual(sorted([doc1, doc2, doc4]),
+            sorted(self.db.get_from_index('test-idx', [('*',)])))
+
 
 class PyDatabaseIndexTests(tests.DatabaseBaseTests):
 
@@ -626,18 +647,6 @@ class PyDatabaseIndexTests(tests.DatabaseBaseTests):
         self.assertEqual([doc],
             self.db.get_from_index('test-idx', [('*',)]))
 
-    def test_get_all_from_index(self):
-        self.db.create_index('test-idx', ['key'])
-        doc1 = self.db.create_doc(simple_doc)
-        doc2 = self.db.create_doc(nested_doc)
-        # This one should not be in the index
-        doc3 = self.db.create_doc('{"no": "key"}')
-        diff_value_doc = '{"key": "diff value"}'
-        doc4 = self.db.create_doc(diff_value_doc)
-        # This is essentially a 'prefix' match, but we match every entry.
-        self.assertEqual(sorted([doc1, doc2, doc4]),
-            sorted(self.db.get_from_index('test-idx', [('*',)])))
-
     def test_get_from_index_case_sensitive(self):
         self.db.create_index('test-idx', ['key'])
         doc1 = self.db.create_doc(simple_doc)
@@ -655,15 +664,6 @@ class PyDatabaseIndexTests(tests.DatabaseBaseTests):
         # Empty string matches the wildcard.
         self.assertEqual(sorted([doc1, doc2]),
             sorted(self.db.get_from_index('test-idx', [('*',)])))
-
-    def test_get_from_index_illegal_number_of_entries(self):
-        self.db.create_index('test-idx', ['k1', 'k2'])
-        self.assertRaises(errors.InvalidValueForIndex,
-            self.db.get_from_index, 'test-idx', [()])
-        self.assertRaises(errors.InvalidValueForIndex,
-            self.db.get_from_index, 'test-idx', [('v1',)])
-        self.assertRaises(errors.InvalidValueForIndex,
-            self.db.get_from_index, 'test-idx', [('v1', 'v2', 'v3')])
 
     def test_get_from_index_illegal_wildcards(self):
         self.db.create_index('test-idx', ['k1', 'k2'])

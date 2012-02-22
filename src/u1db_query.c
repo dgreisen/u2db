@@ -145,10 +145,12 @@ u1db_get_from_index(u1database *db, u1query *query,
     va_list argp;
     char *valN = NULL;
 
-    if (db == NULL || query == NULL || cb == NULL
-        || n_values < 1 || val0 == NULL)
+    if (db == NULL || query == NULL || cb == NULL || n_values < 0)
     {
         return U1DB_INVALID_PARAMETER;
+    }
+    if (query->num_fields != n_values) {
+        return U1DB_INVALID_VALUE_FOR_INDEX;
     }
     va_start(argp, n_values);
     status = u1db__format_query(&query_str, query->num_fields, argp);

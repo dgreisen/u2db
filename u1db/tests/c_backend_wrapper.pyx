@@ -101,6 +101,8 @@ cdef extern from "u1db/u1db.h":
     int U1DB_DOCUMENT_ALREADY_DELETED
     int U1DB_DOCUMENT_DOES_NOT_EXIST
     int U1DB_NOT_IMPLEMENTED
+    int U1DB_INVALID_JSON
+    int U1DB_INVALID_VALUE_FOR_INDEX
     int U1DB_INSERTED
     int U1DB_SUPERSEDED
     int U1DB_CONVERGED
@@ -408,6 +410,8 @@ cdef handle_status(context, int status):
     if status == U1DB_NOT_IMPLEMENTED:
         raise NotImplementedError("Functionality not implemented yet: %s"
                                   % (context,))
+    if status == U1DB_INVALID_VALUE_FOR_INDEX:
+        raise errors.InvalidValueForIndex()
     raise RuntimeError('%s (status: %s)' % (context, status))
 
 
@@ -674,13 +678,25 @@ cdef class CDatabase(object):
         res = []
         status = U1DB_OK
         for entry in key_values:
-            if len(entry) == 1:
+            if len(entry) == 0:
+                status = u1db_get_from_index(self._db, query._query,
+                    <void*>res, _append_doc_to_list, 0, NULL)
+            elif len(entry) == 1:
                 status = u1db_get_from_index(self._db, query._query,
                     <void*>res, _append_doc_to_list, 1, <char*>entry[0])
             elif len(entry) == 2:
                 status = u1db_get_from_index(self._db, query._query,
                     <void*>res, _append_doc_to_list, 2,
                     <char*>entry[0], <char*>entry[1])
+            elif len(entry) == 3:
+                status = u1db_get_from_index(self._db, query._query,
+                    <void*>res, _append_doc_to_list, 3,
+                    <char*>entry[0], <char*>entry[1], <char*>entry[2])
+            elif len(entry) == 4:
+                status = u1db_get_from_index(self._db, query._query,
+                    <void*>res, _append_doc_to_list, 4,
+                    <char*>entry[0], <char*>entry[1], <char*>entry[2],
+                    <char*>entry[3])
             else:
                 status = U1DB_NOT_IMPLEMENTED;
             handle_status("get_from_index", status)
