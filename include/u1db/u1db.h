@@ -35,9 +35,11 @@ typedef struct _u1db_document
     char *content;
     size_t content_len;
     int has_conflicts;
-    int _generation; // Used as part of sync api
 } u1db_document;
 
+
+typedef struct _u1query u1query;
+typedef int (*u1db_doc_callback)(void *context, u1db_document *doc);
 
 #define U1DB_OK 0
 #define U1DB_INVALID_PARAMETER -1
@@ -48,6 +50,7 @@ typedef struct _u1db_document
 #define U1DB_DOCUMENT_ALREADY_DELETED -4
 #define U1DB_DOCUMENT_DOES_NOT_EXIST -5
 #define U1DB_NOMEM -6
+#define U1DB_NOT_IMPLEMENTED -7
 
 // Used by put_doc_if_newer
 #define U1DB_INSERTED 1
@@ -268,10 +271,38 @@ int u1db_list_indexes(u1database *db, void *context,
 
 
 /**
- * Get documents which match a given index.
+ * Initialize a structure for querying an index.
+ *
+ * @param index_name The index that you want to query. We will use the database
+ *                   definition to determine how many columns need to be
+ *                   initialized.
+ * @param query (OUT) This will hold the query structure.
  */
-int u1db_get_from_index(u1database *db,
-                        const char *index_name, int n_key_values,
-                        const char **key_values, void *context,
-                        int (*cb)(void *context, u1db_document *doc));
+int u1db_query_init(u1database *db, const char *index_name, u1query **query);
+
+/**
+ * Free the memory pointed to by query and all associated buffers.
+ *
+ * query will be updated to point to NULL when finished.
+ */
+void u1db_free_query(u1query **query);
+
+/**
+ * Get documents which match a given index.
+ *
+ * @param query A u1query object, as created by u1db_query_init.
+ * @param context Will be returned via the document callback
+ * @param n_values The number of parameters being passed, must be >= 1
+ * @param val0... The values to match in the index, all of these should be char*
+ */
+int u1db_get_from_index(u1database *db, u1query *query,
+                        void *context, u1db_doc_callback cb,
+                        int n_values, const char *val0, ...);
+
+/**
+ * Get documents matching a single column index.
+ */
+int u1db_simple_lookup1(u1database *db, const char *index_name,
+                        const char *val1,
+                        void *context, u1db_doc_callback cb);
 #endif // _U1DB_H_

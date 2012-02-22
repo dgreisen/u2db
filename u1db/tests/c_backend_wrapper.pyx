@@ -19,6 +19,7 @@ cdef extern from "Python.h":
     int PyString_AsStringAndSize(object o, char **buf, Py_ssize_t *length
                                  ) except -1
     char * PyString_AS_STRING(object)
+    char *strdup(char *)
     void *calloc(size_t, size_t)
     void free(void *)
 
@@ -35,6 +36,8 @@ cdef extern from "u1db/u1db.h":
         int has_conflicts
 
     ctypedef char* const_char_ptr "const char*"
+    ctypedef int (*u1db_doc_callback)(void *context, u1db_document *doc)
+
     u1database * u1db_open(char *fname)
     void u1db_free(u1database **)
     int u1db_set_replica_uid(u1database *, char *replica_uid)
@@ -67,10 +70,13 @@ cdef extern from "u1db/u1db.h":
     int u1db_list_indexes(u1database *db, void *context,
                   int (*cb)(void *context, const_char_ptr index_name,
                             int n_expressions, const_char_ptr *expressions))
-    int u1db_get_from_index(u1database *db,
-                            char *index_name, int n_key_values,
-                            const_char_ptr *key_values, void *context,
-                            int (*cb)(void *context, u1db_document *doc))
+    int u1db_get_from_index(u1database *db, u1query *query, void *context,
+                            u1db_doc_callback cb, int n_values, char *val0, ...)
+    int u1db_simple_lookup1(u1database *db, char *index_name, char *val1,
+                            void *context, u1db_doc_callback cb)
+
+    int u1db_query_init(u1database *db, char *index_name, u1query **query)
+    void u1db_free_query(u1query **query)
 
     int U1DB_OK
     int U1DB_INVALID_PARAMETER
@@ -78,6 +84,7 @@ cdef extern from "u1db/u1db.h":
     int U1DB_INVALID_DOC_ID
     int U1DB_DOCUMENT_ALREADY_DELETED
     int U1DB_DOCUMENT_DOES_NOT_EXIST
+    int U1DB_NOT_IMPLEMENTED
     int U1DB_INSERTED
     int U1DB_SUPERSEDED
     int U1DB_CONVERGED
@@ -103,6 +110,11 @@ cdef extern from "u1db/u1db_internal.h":
         char *doc_id
         char *doc_rev
         char *doc
+
+    ctypedef struct u1query:
+        char *index_name
+        int num_fields
+        char **fields
 
     int u1db__get_db_rev(u1database *, int *db_rev)
     char *u1db__allocate_doc_id(u1database *)
@@ -130,6 +142,7 @@ cdef extern from "u1db/u1db_internal.h":
                             int from_db_rev, int last_known_rev,
                             u1db_record *from_records, u1db_record **new_records,
                             u1db_record **conflict_records)
+    int u1db__format_query(u1query *query, char **buf)
 
 
 cdef extern from "u1db/u1db_vectorclock.h":
@@ -187,6 +200,30 @@ cdef int _append_index_definition_to_list(void *context,
         exp_list.append(expressions[i])
     a_list.append((index_name, exp_list))
     return 0
+
+
+def _format_query(fields):
+    """Wrapper around u1db__format_query for testing."""
+    cdef CQuery query
+    cdef int i
+    cdef char *buf
+
+    # We use CQuery because we know it will safely dealloc when we exit
+    # Build up the query object so we can format the request.
+    query = CQuery()
+    query._query = <u1query*>calloc(1, sizeof(u1query))
+    query._query.num_fields = len(fields)
+    query._query.fields = <char**>calloc(query._query.num_fields, sizeof(char*))
+    for i from 0 <= i < query._query.num_fields:
+        query._query.fields[i] = strdup(fields[i])
+    handle_status("format_query",
+        u1db__format_query(query._query, &buf))
+    if buf == NULL:
+        res = None
+    else:
+        res = buf
+        free(buf)
+    return res
 
 
 def make_document(doc_id, rev, content, has_conflicts=False):
@@ -289,6 +326,46 @@ cdef class CDocument(object):
         return NotImplemented
 
 
+cdef object safe_str(const_char_ptr s):
+    if s == NULL:
+        return None
+    return s
+
+
+cdef class CQuery:
+    
+    cdef u1query *_query
+
+    def __init__(self):
+        self._query = NULL
+
+    def __dealloc__(self):
+        u1db_free_query(&self._query)
+
+    def _check(self):
+        if self._query == NULL:
+            raise RuntimeError("No valid _query.")
+
+    property index_name:
+        def __get__(self):
+            self._check()
+            return safe_str(self._query.index_name)
+
+    property num_fields:
+        def __get__(self):
+            self._check()
+            return self._query.num_fields
+
+    property fields:
+        def __get__(self):
+            cdef int i
+            self._check()
+            fields = []
+            for i from 0 <= i < self._query.num_fields:
+                fields.append(safe_str(self._query.fields[i]))
+            return fields
+
+
 cdef handle_status(context, int status):
     if status == U1DB_OK:
         return
@@ -302,6 +379,9 @@ cdef handle_status(context, int status):
         raise errors.DocumentDoesNotExist()
     if status == U1DB_INVALID_PARAMETER:
         raise RuntimeError('Bad parameters supplied')
+    if status == U1DB_NOT_IMPLEMENTED:
+        raise NotImplementedError("Functionality not implemented yet: %s"
+                                  % (context,))
     raise RuntimeError('%s (status: %s)' % (context, status))
 
 
@@ -560,6 +640,31 @@ cdef class CDatabase(object):
     def delete_index(self, index_name):
         handle_status("delete_index",
             u1db_delete_index(self._db, index_name))
+
+    def get_from_index(self, index_name, key_values):
+        cdef CQuery query
+        cdef int status
+        query = self._query_init(index_name)
+        res = []
+        for entry in key_values:
+            if len(entry) == 1:
+                u1db_get_from_index(self._db, query._query, <void*>res,
+                                    _append_doc_to_list, 1, <char*>entry[0])
+            elif len(entry) == 2:
+                u1db_get_from_index(self._db, query._query, <void*>res,
+                                    _append_doc_to_list, 2,
+                                    <char*>entry[0], <char*>entry[1])
+            else:
+                status = U1DB_NOT_IMPLEMENTED;
+            handle_status("get_from_index", status)
+        return res
+
+    def _query_init(self, index_name):
+        cdef CQuery query
+        query = CQuery()
+        handle_status("query_init",
+            u1db_query_init(self._db, index_name, &query._query))
+        return query
 
 
 cdef class VectorClockRev:

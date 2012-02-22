@@ -22,6 +22,20 @@
 #include "u1db/u1db.h"
 #include "u1db/compat.h"
 
+typedef struct sqlite3 sqlite3;
+
+struct _u1database
+{
+    sqlite3 *sql_handle;
+    char *replica_uid;
+};
+
+struct _u1query {
+    const char *index_name;
+    int num_fields;
+    char **fields;
+};
+
 /**
  * Internal API, Get the global database rev.
  */
@@ -149,5 +163,11 @@ u1db_document *u1db__allocate_document(const char *doc_id, const char *revision,
  * @param uuid A buffer to put the id, must be 32 bytes long.
  */
 int u1db__generate_hex_uuid(char *uuid);
+
+
+/**
+ * Format a given query.
+ */
+int u1db__format_query(u1query *query, char **buf);
 
 #endif // U1DB_INTERNAL_H

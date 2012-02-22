@@ -80,6 +80,72 @@ class TestCDatabase(BackendTests):
                          " VALUES ('doc-id', 'doc-rev', '{}')")
         self.assertRaises(Exception, self.db.get_doc_conflicts, 'doc-id')
 
+    def test_get_from_index(self):
+        # We manually poke data into the DB, so that we test just the "get_doc"
+        # code, rather than also testing the index management code.
+        self.db = c_backend_wrapper.CDatabase(':memory:')
+        doc = self.db.create_doc(tests.simple_doc)
+        self.db.create_index("key-idx", ["key"])
+        self.db._run_sql("INSERT INTO document_fields"
+                         " VALUES ('%s', 'key', 'value')" % (doc.doc_id,))
+        docs = self.db.get_from_index('key-idx', [('value',)])
+        self.assertEqual([doc], docs)
+
+    def test_get_from_index_2(self):
+        self.db = c_backend_wrapper.CDatabase(':memory:')
+        doc = self.db.create_doc(tests.nested_doc)
+        self.db.create_index("multi-idx", ["key", "sub.doc"])
+        self.db._run_sql("INSERT INTO document_fields"
+                         " VALUES ('%s', 'key', 'value')"
+                         % (doc.doc_id,))
+        self.db._run_sql("INSERT INTO document_fields"
+                         " VALUES ('%s', 'sub.doc', 'underneath')"
+                         % (doc.doc_id,))
+        docs = self.db.get_from_index('multi-idx', [('value', 'underneath')])
+        self.assertEqual([doc], docs)
+
+    def test__query_init_one_field(self):
+        self.db = c_backend_wrapper.CDatabase(':memory:')
+        self.db.create_index("key-idx", ["key"])
+        query = self.db._query_init("key-idx")
+        self.assertEqual("key-idx", query.index_name)
+        self.assertEqual(1, query.num_fields)
+        self.assertEqual(["key"], query.fields)
+
+    def test__query_init_two_fields(self):
+        self.db = c_backend_wrapper.CDatabase(':memory:')
+        self.db.create_index("two-idx", ["key", "key2"])
+        query = self.db._query_init("two-idx")
+        self.assertEqual("two-idx", query.index_name)
+        self.assertEqual(2, query.num_fields)
+        self.assertEqual(["key", "key2"], query.fields)
+
+    def assertFormatQueryEquals(self, expected, fields):
+        val = c_backend_wrapper._format_query(fields)
+        self.assertEqual(expected, val)
+
+    def test__format_query(self):
+        self.assertFormatQueryEquals(
+            "SELECT d0.doc_id FROM document_fields d0"
+            " WHERE d0.field_name = ? AND d0.value = ?",
+            ["1"])
+        self.assertFormatQueryEquals(
+            "SELECT d0.doc_id"
+            " FROM document_fields d0, document_fields d1"
+            " WHERE d0.field_name = ? AND d0.value = ?"
+            " AND d0.doc_id = d1.doc_id"
+            " AND d1.field_name = ? AND d1.value = ?",
+            ["1", "2"])
+        self.assertFormatQueryEquals(
+            "SELECT d0.doc_id"
+            " FROM document_fields d0, document_fields d1, document_fields d2"
+            " WHERE d0.field_name = ? AND d0.value = ?"
+            " AND d0.doc_id = d1.doc_id"
+            " AND d1.field_name = ? AND d1.value = ?"
+            " AND d0.doc_id = d2.doc_id"
+            " AND d2.field_name = ? AND d2.value = ?",
+                ["1", "2", "3"])
+
 
 class TestVectorClock(BackendTests):
 
