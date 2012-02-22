@@ -299,7 +299,7 @@ void u1db_free_query(u1query **query);
  */
 int u1db_get_from_index(u1database *db, u1query *query,
                         void *context, u1db_doc_callback cb,
-                        int n_values, const char *val0, ...);
+                        int n_values, ...);
 
 /**
  * Get documents matching a single column index.

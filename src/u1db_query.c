@@ -134,7 +134,7 @@ finish:
 int
 u1db_get_from_index(u1database *db, u1query *query,
                     void *context, u1db_doc_callback cb,
-                    int n_values, const char *val0, ...)
+                    int n_values, ...)
 {
     int status = U1DB_OK;
     sqlite3_stmt *statement;
@@ -143,7 +143,7 @@ u1db_get_from_index(u1database *db, u1query *query,
     char *query_str = NULL;
     int i, bind_arg;
     va_list argp;
-    char *valN = NULL;
+    const char *valN = NULL;
     int wildcard[20] = {0};
 
     if (db == NULL || query == NULL || cb == NULL || n_values < 0)
@@ -218,9 +218,8 @@ u1db__format_query(int n_fields, va_list argp, char **buf, int *wildcard)
 {
     int status = U1DB_OK;
     int buf_size, i;
-    int have_wildcard = 0;
     char *cur;
-    char *val;
+    const char *val;
 
     if (n_fields < 1) {
         return U1DB_INVALID_PARAMETER;
@@ -398,7 +397,7 @@ u1db__find_unique_expressions(u1database *db,
     int i, status, present = 0;
     const char **tmp;
 
-    tmp = (char **)calloc(n_expressions, sizeof(char*));
+    tmp = (const char **)calloc(n_expressions, sizeof(char*));
     if (tmp == NULL) {
         return U1DB_NOMEM;
     }
