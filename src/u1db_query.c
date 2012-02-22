@@ -19,6 +19,7 @@
 #include "u1db/u1db_internal.h"
 #include <sqlite3.h>
 #include <stdarg.h>
+#include <string.h>
 #include <json/json.h>
 
 
@@ -179,7 +180,9 @@ u1db_get_from_index(u1database *db, u1query *query,
         cb(context, doc);
         status = sqlite3_step(statement);
     }
-    if (status != SQLITE_DONE) { goto finish; }
+    if (status == SQLITE_DONE) {
+        status = U1DB_OK;
+    }
 finish:
     va_end(argp);
     if (query_str != NULL) {

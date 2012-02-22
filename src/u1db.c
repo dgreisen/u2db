@@ -1616,7 +1616,7 @@ u1db_list_indexes(u1database *db, void *context,
                   int (*cb)(void *context, const char *index_name,
                             int n_expressions, const char **expressions))
 {
-    int status = U1DB_OK, i = 0, n_expressions = -1;
+    int status = U1DB_OK, n_expressions = -1;
     int offset;
     char *last_index_name = NULL;
     const char *index_name, *expression;
@@ -1638,13 +1638,13 @@ u1db_list_indexes(u1database *db, void *context,
     }
     status = sqlite3_step(statement);
     while (status == SQLITE_ROW) {
-        index_name = sqlite3_column_text(statement, 0);
+        index_name = (const char *)sqlite3_column_text(statement, 0);
         if (index_name == NULL) {
             status = U1DB_INVALID_PARAMETER; // TODO: better error code
             goto finish;
         }
         offset = sqlite3_column_int(statement, 1);
-        expression = sqlite3_column_text(statement, 2);
+        expression = (const char *)sqlite3_column_text(statement, 2);
         if (expression == NULL) {
             status = U1DB_INVALID_PARAMETER; // TODO: better error code
             goto finish;
@@ -1653,7 +1653,8 @@ u1db_list_indexes(u1database *db, void *context,
             && strcmp(last_index_name, index_name) != 0)
         {
             // offset should be 0, we should be at the last item in the list
-            cb(context, last_index_name, n_expressions, expressions);
+            cb(context, last_index_name, n_expressions,
+                (const char**)expressions);
             free_expressions(n_expressions, expressions);
             expressions = NULL;
             free(last_index_name);
@@ -1673,7 +1674,8 @@ u1db_list_indexes(u1database *db, void *context,
     }
     if (last_index_name != NULL && expressions != NULL) {
         // offset should be 0, we should be at the last item in the list
-        cb(context, last_index_name, n_expressions, expressions);
+        cb(context, last_index_name, n_expressions,
+            (const char**)expressions);
     }
     if (status == SQLITE_DONE) {
         status = U1DB_OK;

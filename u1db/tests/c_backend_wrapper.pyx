@@ -34,6 +34,14 @@ cdef extern from "u1db/u1db.h":
         char *content
         size_t content_len
         int has_conflicts
+    # Note: u1query is actually defined in u1db_internal.h, and in u1db.h it is
+    #       just an opaque pointer. However, older versions of Cython don't let
+    #       you have a forward declaration and a full declaration, so we just
+    #       expose the whole thing here.
+    ctypedef struct u1query:
+        char *index_name
+        int num_fields
+        char **fields
 
     ctypedef char* const_char_ptr "const char*"
     ctypedef int (*u1db_doc_callback)(void *context, u1db_document *doc)
@@ -110,11 +118,6 @@ cdef extern from "u1db/u1db_internal.h":
         char *doc_id
         char *doc_rev
         char *doc
-
-    ctypedef struct u1query:
-        char *index_name
-        int num_fields
-        char **fields
 
     int u1db__get_db_rev(u1database *, int *db_rev)
     char *u1db__allocate_doc_id(u1database *)
@@ -646,14 +649,15 @@ cdef class CDatabase(object):
         cdef int status
         query = self._query_init(index_name)
         res = []
+        status = U1DB_OK
         for entry in key_values:
             if len(entry) == 1:
-                u1db_get_from_index(self._db, query._query, <void*>res,
-                                    _append_doc_to_list, 1, <char*>entry[0])
+                status = u1db_get_from_index(self._db, query._query,
+                    <void*>res, _append_doc_to_list, 1, <char*>entry[0])
             elif len(entry) == 2:
-                u1db_get_from_index(self._db, query._query, <void*>res,
-                                    _append_doc_to_list, 2,
-                                    <char*>entry[0], <char*>entry[1])
+                status = u1db_get_from_index(self._db, query._query,
+                    <void*>res, _append_doc_to_list, 2,
+                    <char*>entry[0], <char*>entry[1])
             else:
                 status = U1DB_NOT_IMPLEMENTED;
             handle_status("get_from_index", status)
