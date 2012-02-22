@@ -220,6 +220,7 @@ u1db__format_query(int n_fields, va_list argp, char **buf, int *wildcard)
     int buf_size, i;
     char *cur;
     const char *val;
+    int have_wildcard = 0;
 
     if (n_fields < 1) {
         return U1DB_INVALID_PARAMETER;
@@ -251,9 +252,15 @@ u1db__format_query(int n_fields, va_list argp, char **buf, int *wildcard)
         }
         if (val[0] == '*') {
             wildcard[i] = 1;
+            have_wildcard = 1;
             add_to_buf(&cur, &buf_size, " AND d%d.value NOT NULL", i);
         } else {
             wildcard[i] = 0;
+            if (have_wildcard) {
+                // Can't have a non-wildcard after a wildcard
+                status = U1DB_INVALID_VALUE_FOR_INDEX;
+                continue;
+            }
             add_to_buf(&cur, &buf_size, " AND d%d.value = ?", i);
         }
     }
