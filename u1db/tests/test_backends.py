@@ -533,20 +533,28 @@ class DatabaseIndexTests(tests.DatabaseBaseTests):
         self.assertEqual([('test-idx', ['name'])],
                          self.db.list_indexes())
 
+    def test_create_index_evaluates_it(self):
+        doc = self.db.create_doc(simple_doc)
+        self.db.create_index('test-idx', ['key'])
+        self.assertEqual([doc],
+                         self.db.get_from_index('test-idx', [('value',)]))
+
     def test_delete_index(self):
         self.db.create_index('test-idx', ['key'])
         self.assertEqual([('test-idx', ['key'])], self.db.list_indexes())
         self.db.delete_index('test-idx')
         self.assertEqual([], self.db.list_indexes())
 
+    def test_create_adds_to_index(self):
+        self.db.create_index('test-idx', ['key'])
+        doc = self.db.create_doc(simple_doc)
+        self.assertEqual([doc],
+            self.db.get_from_index('test-idx', [('value',)]))
 
-class PyDatabaseIndexTests(tests.DatabaseBaseTests):
-
-    def test_create_index_evaluates_it(self):
+    def test_get_from_index_unmatched(self):
         doc = self.db.create_doc(simple_doc)
         self.db.create_index('test-idx', ['key'])
-        self.assertEqual([doc],
-                         self.db.get_from_index('test-idx', [('value',)]))
+        self.assertEqual([], self.db.get_from_index('test-idx', [('novalue',)]))
 
     def test_create_index_multiple_exact_matches(self):
         doc = self.db.create_doc(simple_doc)
@@ -561,11 +569,6 @@ class PyDatabaseIndexTests(tests.DatabaseBaseTests):
         self.assertEqual([doc],
                          self.db.get_from_index('test-idx', [('value',)]))
 
-    def test_get_from_index_unmatched(self):
-        doc = self.db.create_doc(simple_doc)
-        self.db.create_index('test-idx', ['key'])
-        self.assertEqual([], self.db.get_from_index('test-idx', [('novalue',)]))
-
     def test_get_from_index_some_matches(self):
         doc = self.db.create_doc(simple_doc)
         self.db.create_index('test-idx', ['key'])
@@ -579,22 +582,6 @@ class PyDatabaseIndexTests(tests.DatabaseBaseTests):
         self.assertEqual([doc],
             self.db.get_from_index('test-idx', [('value', 'value2')]))
 
-    def test_nested_index(self):
-        doc = self.db.create_doc(nested_doc)
-        self.db.create_index('test-idx', ['sub.doc'])
-        self.assertEqual([doc],
-            self.db.get_from_index('test-idx', [('underneath',)]))
-        doc2 = self.db.create_doc(nested_doc)
-        self.assertEqual(
-            sorted([doc, doc2]),
-            sorted(self.db.get_from_index('test-idx', [('underneath',)])))
-
-    def test_create_adds_to_index(self):
-        self.db.create_index('test-idx', ['key'])
-        doc = self.db.create_doc(simple_doc)
-        self.assertEqual([doc],
-            self.db.get_from_index('test-idx', [('value',)]))
-
     def test_put_updates_index(self):
         doc = self.db.create_doc(simple_doc)
         self.db.create_index('test-idx', ['key'])
@@ -605,6 +592,29 @@ class PyDatabaseIndexTests(tests.DatabaseBaseTests):
             self.db.get_from_index('test-idx', [('value',)]))
         self.assertEqual([doc],
             self.db.get_from_index('test-idx', [('altval',)]))
+
+    def test_delete_updates_index(self):
+        doc = self.db.create_doc(simple_doc)
+        doc2 = self.db.create_doc(simple_doc)
+        self.db.create_index('test-idx', ['key'])
+        self.assertEqual(sorted([doc, doc2]),
+            sorted(self.db.get_from_index('test-idx', [('value',)])))
+        self.db.delete_doc(doc)
+        self.assertEqual([doc2],
+            self.db.get_from_index('test-idx', [('value',)]))
+
+
+class PyDatabaseIndexTests(tests.DatabaseBaseTests):
+
+    def test_nested_index(self):
+        doc = self.db.create_doc(nested_doc)
+        self.db.create_index('test-idx', ['sub.doc'])
+        self.assertEqual([doc],
+            self.db.get_from_index('test-idx', [('underneath',)]))
+        doc2 = self.db.create_doc(nested_doc)
+        self.assertEqual(
+            sorted([doc, doc2]),
+            sorted(self.db.get_from_index('test-idx', [('underneath',)])))
 
     def test_put_updates_when_adding_key(self):
         doc = self.db.create_doc("{}")
@@ -771,16 +781,6 @@ class PyDatabaseIndexTests(tests.DatabaseBaseTests):
         self.assertEqual(sorted([doc1, doc2, doc3]),
             sorted(self.db.get_from_index('test-idx', [("v1", "v*")])))
 
-    def test_delete_updates_index(self):
-        doc = self.db.create_doc(simple_doc)
-        doc2 = self.db.create_doc(simple_doc)
-        self.db.create_index('test-idx', ['key'])
-        self.assertEqual(sorted([doc, doc2]),
-            sorted(self.db.get_from_index('test-idx', [('value',)])))
-        self.db.delete_doc(doc)
-        self.assertEqual([doc2],
-            self.db.get_from_index('test-idx', [('value',)]))
-
     def test_sync_exchange_updates_indexes(self):
         doc = self.db.create_doc(simple_doc)
         self.db.create_index('test-idx', ['key'])
@@ -798,6 +798,7 @@ class PyDatabaseIndexTests(tests.DatabaseBaseTests):
         self.assertEqual([doc_other],
                          self.db.get_from_index('test-idx', [('altval',)]))
         self.assertEqual([], self.db.get_from_index('test-idx', [('value',)]))
+
 
 # Use a custom loader to apply the scenarios at load time.
 load_tests = tests.load_with_scenarios

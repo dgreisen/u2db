@@ -20,6 +20,7 @@
 #include <sqlite3.h>
 #include <stdarg.h>
 #include <string.h>
+#include <json/json.h>
 
 
 static int
@@ -231,5 +232,232 @@ u1db__format_query(u1query *query, char **buf)
             " AND d%d.value = ?",
             i, i, i);
     }
+    return status;
+}
+
+struct sqlcb_to_field_cb {
+    void *user_context;
+    int (*user_cb)(void *, const char*);
+};
+
+// Thunk from the SQL interface, to a nicer single value interface
+static int
+sqlite_cb_to_field_cb(void *context, int n_cols, char **cols, char **rows)
+{
+    struct sqlcb_to_field_cb *ctx;
+    ctx = (struct sqlcb_to_field_cb*)context;
+    if (n_cols != 1) {
+        return 1; // Error
+    }
+    return ctx->user_cb(ctx->user_context, cols[0]);
+}
+
+
+// Iterate over the fields that are indexed, and invoke cb for each one
+static int
+iter_field_definitions(u1database *db, void *context,
+                      int (*cb)(void *context, const char *expression))
+{
+    int status;
+    struct sqlcb_to_field_cb ctx;
+
+    ctx.user_context = context;
+    ctx.user_cb = cb;
+    status = sqlite3_exec(db->sql_handle,
+        "SELECT field FROM index_definitions",
+        sqlite_cb_to_field_cb, &ctx, NULL);
+    return status;
+}
+
+struct evaluate_index_context {
+    u1database *db;
+    const char *doc_id;
+    json_object *obj;
+    const char *content;
+};
+
+static int
+add_to_document_fields(u1database *db, const char *doc_id, 
+                       const char *expression, const char *val)
+{
+    int status;
+    sqlite3_stmt *statement;
+
+    status = sqlite3_prepare_v2(db->sql_handle,
+        "INSERT INTO document_fields (doc_id, field_name, value)"
+        " VALUES (?, ?, ?)", -1,
+        &statement, NULL);
+    if (status != SQLITE_OK) {
+        return status;
+    }
+    status = sqlite3_bind_text(statement, 1, doc_id, -1, SQLITE_TRANSIENT);
+    if (status != SQLITE_OK) { goto finish; }
+    status = sqlite3_bind_text(statement, 2, expression, -1, SQLITE_TRANSIENT);
+    if (status != SQLITE_OK) { goto finish; }
+    status = sqlite3_bind_text(statement, 3, val, -1, SQLITE_TRANSIENT);
+    if (status != SQLITE_OK) { goto finish; }
+    status = sqlite3_step(statement);
+    if (status == SQLITE_DONE) {
+        status = SQLITE_OK;
+    }
+finish:
+    sqlite3_finalize(statement);
+    return status;
+}
+
+static int
+evaluate_index_and_insert_into_db(void *context, const char *expression)
+{
+    struct evaluate_index_context *ctx;
+    json_object *val;
+    const char *str_val;
+    int status = U1DB_OK;
+
+    ctx = (struct evaluate_index_context *)context;
+    if (ctx->obj == NULL || !json_object_is_type(ctx->obj, json_type_object)) {
+        return U1DB_INVALID_JSON;
+    }
+    val = json_object_object_get(ctx->obj, expression);
+    if (val != NULL) {
+        str_val = json_object_get_string(val);
+        if (str_val != NULL) {
+            status = add_to_document_fields(ctx->db, ctx->doc_id, expression,
+                    str_val);
+        }
+        json_object_put(val);
+    }
+    return status;
+}
+
+// Is this expression field already in the indexed list?
+// We make an assumption that the number of new expressions is always small
+// relative to what is already indexed (which should be reasonably accurate). 
+static int
+is_present(u1database *db, const char *expression, int *present)
+{
+    sqlite3_stmt *statement;
+    int status;
+
+    status = sqlite3_prepare_v2(db->sql_handle,
+        "SELECT 1 FROM index_definitions WHERE field = ? LIMIT 1", -1,
+        &statement, NULL);
+    if (status != SQLITE_OK) {
+        return status;
+    }
+    status = sqlite3_bind_text(statement, 1, expression, -1, SQLITE_TRANSIENT);
+    if (status != SQLITE_OK) { goto finish; }
+    status = sqlite3_step(statement);
+    if (status == SQLITE_DONE) {
+        status = SQLITE_OK;
+        *present = 0;
+    } else if (status == SQLITE_ROW) {
+        status = SQLITE_OK;
+        *present = 1;
+    }
+finish:
+    sqlite3_finalize(statement);
+    return status;
+}
+
+
+int
+u1db__find_unique_expressions(u1database *db,
+                              int n_expressions, const char **expressions,
+                              int *n_unique, const char ***unique_expressions)
+{
+    int i, status, present = 0;
+    const char **tmp;
+
+    tmp = (const char **)calloc(n_expressions, sizeof(char*));
+    if (tmp == NULL) {
+        return U1DB_NOMEM;
+    }
+    status = U1DB_OK;
+    *n_unique = 0;
+    for (i = 0; i < n_expressions; ++i) {
+        if (expressions[i] == NULL) {
+            status = U1DB_INVALID_PARAMETER;
+            goto finish;
+        }
+        status = is_present(db, expressions[i], &present);
+        if (status != SQLITE_OK) { goto finish; }
+        if (!present) {
+            tmp[*n_unique] = expressions[i];
+            (*n_unique)++;
+        }
+    }
+finish:
+    if (status == U1DB_OK) {
+        *unique_expressions = tmp;
+    } else {
+        free(tmp);
+    }
+    return status;
+}
+
+
+int
+u1db__update_indexes(u1database *db, const char *doc_id, const char *content)
+{
+    struct evaluate_index_context context;
+    int status;
+
+    if (content == NULL) {
+        // No new fields to add to the database.
+        return U1DB_OK;
+    }
+    context.db = db;
+    context.doc_id = doc_id;
+    context.content = content;
+    context.obj = json_tokener_parse(content);
+    if (context.obj == NULL
+            || !json_object_is_type(context.obj, json_type_object))
+    {
+        return U1DB_INVALID_JSON;
+    }
+    status = iter_field_definitions(db, &context,
+            evaluate_index_and_insert_into_db);
+    json_object_put(context.obj);
+    return status;
+}
+
+
+int
+u1db__index_all_docs(u1database *db, int n_expressions,
+                     const char **expressions)
+{
+    int status, i;
+    sqlite3_stmt *statement;
+    struct evaluate_index_context context;
+
+    status = sqlite3_prepare_v2(db->sql_handle,
+        "SELECT doc_id, content FROM document", -1,
+        &statement, NULL);
+    if (status != SQLITE_OK) {
+        return status;
+    }
+    context.db = db;
+    status = sqlite3_step(statement);
+    while (status == SQLITE_ROW) {
+        context.doc_id = (const char*)sqlite3_column_text(statement, 0);
+        context.content = (const char*)sqlite3_column_text(statement, 1);
+        context.obj = json_tokener_parse(context.content);
+        if (context.obj == NULL
+                || !json_object_is_type(context.obj, json_type_object))
+        {
+            // Invalid JSON in the database, for now we just continue?
+            continue;
+        }
+        for (i = 0; i < n_expressions; ++i) {
+            status = evaluate_index_and_insert_into_db(&context, expressions[i]);
+            if (status != U1DB_OK) { goto finish; }
+        }
+        status = sqlite3_step(statement);
+    }
+    if (status == SQLITE_DONE) {
+        status = U1DB_OK;
+    }
+finish:
+    sqlite3_finalize(statement);
     return status;
 }

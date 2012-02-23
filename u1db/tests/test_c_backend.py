@@ -86,8 +86,6 @@ class TestCDatabase(BackendTests):
         self.db = c_backend_wrapper.CDatabase(':memory:')
         doc = self.db.create_doc(tests.simple_doc)
         self.db.create_index("key-idx", ["key"])
-        self.db._run_sql("INSERT INTO document_fields"
-                         " VALUES ('%s', 'key', 'value')" % (doc.doc_id,))
         docs = self.db.get_from_index('key-idx', [('value',)])
         self.assertEqual([doc], docs)
 
@@ -95,9 +93,8 @@ class TestCDatabase(BackendTests):
         self.db = c_backend_wrapper.CDatabase(':memory:')
         doc = self.db.create_doc(tests.nested_doc)
         self.db.create_index("multi-idx", ["key", "sub.doc"])
-        self.db._run_sql("INSERT INTO document_fields"
-                         " VALUES ('%s', 'key', 'value')"
-                         % (doc.doc_id,))
+        # TODO: The current backend doesn't support nested fields, so we push
+        #       that data in manually.
         self.db._run_sql("INSERT INTO document_fields"
                          " VALUES ('%s', 'sub.doc', 'underneath')"
                          % (doc.doc_id,))

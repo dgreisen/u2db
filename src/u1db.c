@@ -22,6 +22,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <sqlite3.h>
+
 #include "u1db/u1db_internal.h"
 #include "u1db/u1db_vectorclock.h"
 
@@ -320,6 +321,31 @@ lookup_doc(u1database *db, const char *doc_id, const char **doc_rev,
     return status;
 }
 
+
+static int
+delete_old_fields(u1database *db, const char *doc_id)
+{
+    sqlite3_stmt *statement;
+    int status;
+
+    status = sqlite3_prepare_v2(db->sql_handle,
+        "DELETE FROM document_fields WHERE doc_id = ?", -1,
+        &statement, NULL);
+    if (status != SQLITE_OK) {
+        return status;
+    }
+    status = sqlite3_bind_text(statement, 1, doc_id, -1, SQLITE_TRANSIENT);
+    if (status != SQLITE_OK) { goto finish; }
+    status = sqlite3_step(statement);
+    if (status == SQLITE_DONE) {
+        status = SQLITE_OK;
+    }
+finish:
+    sqlite3_finalize(statement);
+    return status;
+}
+
+
 // Insert the document into the table, we've already done the safety checks
 static int
 write_doc(u1database *db, const char *doc_id, const char *doc_rev,
@@ -332,6 +358,8 @@ write_doc(u1database *db, const char *doc_id, const char *doc_rev,
         status = sqlite3_prepare_v2(db->sql_handle, 
             "UPDATE document SET doc_rev = ?, content = ? WHERE doc_id = ?", -1,
             &statement, NULL); 
+        if (status != SQLITE_OK) { goto finish; }
+        status = delete_old_fields(db, doc_id);
     } else {
         status = sqlite3_prepare_v2(db->sql_handle, 
             "INSERT INTO document (doc_rev, content, doc_id) VALUES (?, ?, ?)", -1,
@@ -341,33 +369,23 @@ write_doc(u1database *db, const char *doc_id, const char *doc_rev,
         return status;
     }
     status = sqlite3_bind_text(statement, 1, doc_rev, -1, SQLITE_TRANSIENT);
-    if (status != SQLITE_OK) {
-        sqlite3_finalize(statement);
-        return status;
-    }
+    if (status != SQLITE_OK) { goto finish; }
     if (content == NULL) {
         status = sqlite3_bind_null(statement, 2);
     } else {
         status = sqlite3_bind_text(statement, 2, content, content_len,
                                    SQLITE_TRANSIENT);
     }
-    if (status != SQLITE_OK) {
-        sqlite3_finalize(statement);
-        return status;
-    }
+    if (status != SQLITE_OK) { goto finish; }
     status = sqlite3_bind_text(statement, 3, doc_id, -1, SQLITE_TRANSIENT);
-    if (status != SQLITE_OK) {
-        sqlite3_finalize(statement);
-        return status;
-    }
+    if (status != SQLITE_OK) { goto finish; }
     status = sqlite3_step(statement);
     if (status == SQLITE_DONE) {
         status = SQLITE_OK;
     }
     sqlite3_finalize(statement);
-    if (status != SQLITE_OK) {
-        return status;
-    }
+    if (status != SQLITE_OK) { goto finish; }
+    status = u1db__update_indexes(db, doc_id, content);
     status = sqlite3_prepare_v2(db->sql_handle, 
         "INSERT INTO transaction_log(doc_id) VALUES (?)", -1,
         &statement, NULL);
@@ -383,6 +401,7 @@ write_doc(u1database *db, const char *doc_id, const char *doc_rev,
     if (status == SQLITE_DONE) {
         status = SQLITE_OK;
     }
+finish:
     sqlite3_finalize(statement);
     return status;
 }
@@ -1493,13 +1512,14 @@ u1db__is_doc_id_valid(const char *doc_id)
     return U1DB_OK;
 }
 
-
 int
 u1db_create_index(u1database *db, const char *index_name, int n_expressions,
                   const char **expressions)
 {
     int status = U1DB_OK, i = 0;
     sqlite3_stmt *statement;
+    const char **unique_expressions;
+    int n_unique;
 
     if (db == NULL || index_name == NULL || expressions == NULL) {
         return U1DB_INVALID_PARAMETER;
@@ -1513,6 +1533,9 @@ u1db_create_index(u1database *db, const char *index_name, int n_expressions,
     if (status != SQLITE_OK) {
         return status;
     }
+    status = u1db__find_unique_expressions(db, n_expressions, expressions,
+            &n_unique, &unique_expressions);
+    if (status != U1DB_OK) { goto finish; }
     status = sqlite3_prepare_v2(db->sql_handle,
         "INSERT INTO index_definitions VALUES (?, ?, ?)", -1,
         &statement, NULL);
@@ -1532,7 +1555,11 @@ u1db_create_index(u1database *db, const char *index_name, int n_expressions,
         status = sqlite3_reset(statement);
         if (status != SQLITE_OK) { goto finish; }
     }
+    status = u1db__index_all_docs(db, n_unique, unique_expressions);
 finish:
+    if (unique_expressions != NULL) {
+        free(unique_expressions);
+    }
     sqlite3_finalize(statement);
     if (status == SQLITE_OK) {
         status = sqlite3_exec(db->sql_handle, "COMMIT", NULL, NULL, NULL);
