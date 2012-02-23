@@ -42,10 +42,11 @@ _template = """\
  *
  */
 
-const char *%(variable)s[] = {
+static const char *tmp[] = {
 %(lines)s
 };
-const int %(variable)s_len = sizeof(%(variable)s) / sizeof(char*);
+const char **%(variable)s = tmp;
+const int %(variable)s_len = sizeof(tmp) / sizeof(char*);
 """
 
 def main(args):
