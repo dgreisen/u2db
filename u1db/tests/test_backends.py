@@ -603,28 +603,24 @@ class DatabaseIndexTests(tests.DatabaseBaseTests):
         self.assertEqual([doc2],
             self.db.get_from_index('test-idx', [('value',)]))
 
+    def test_get_from_index_illegal_number_of_entries(self):
+        self.db.create_index('test-idx', ['k1', 'k2'])
+        self.assertRaises(errors.InvalidValueForIndex,
+            self.db.get_from_index, 'test-idx', [()])
+        self.assertRaises(errors.InvalidValueForIndex,
+            self.db.get_from_index, 'test-idx', [('v1',)])
+        self.assertRaises(errors.InvalidValueForIndex,
+            self.db.get_from_index, 'test-idx', [('v1', 'v2', 'v3')])
 
-class PyDatabaseIndexTests(tests.DatabaseBaseTests):
+    def test_get_from_index_illegal_wildcard_order(self):
+        self.db.create_index('test-idx', ['k1', 'k2'])
+        self.assertRaises(errors.InvalidValueForIndex,
+            self.db.get_from_index, 'test-idx', [('*', 'v2')])
 
-    def test_nested_index(self):
-        doc = self.db.create_doc(nested_doc)
-        self.db.create_index('test-idx', ['sub.doc'])
-        self.assertEqual([doc],
-            self.db.get_from_index('test-idx', [('underneath',)]))
-        doc2 = self.db.create_doc(nested_doc)
-        self.assertEqual(
-            sorted([doc, doc2]),
-            sorted(self.db.get_from_index('test-idx', [('underneath',)])))
-
-    def test_put_updates_when_adding_key(self):
-        doc = self.db.create_doc("{}")
-        self.db.create_index('test-idx', ['key'])
-        self.assertEqual([],
-            self.db.get_from_index('test-idx', [('*',)]))
-        doc.content = simple_doc
-        self.db.put_doc(doc)
-        self.assertEqual([doc],
-            self.db.get_from_index('test-idx', [('*',)]))
+    def test_get_from_index_illegal_glob_after_wildcard(self):
+        self.db.create_index('test-idx', ['k1', 'k2'])
+        self.assertRaises(errors.InvalidValueForIndex,
+            self.db.get_from_index, 'test-idx', [('*', 'v*')])
 
     def test_get_all_from_index(self):
         self.db.create_index('test-idx', ['key'])
@@ -638,12 +634,15 @@ class PyDatabaseIndexTests(tests.DatabaseBaseTests):
         self.assertEqual(sorted([doc1, doc2, doc4]),
             sorted(self.db.get_from_index('test-idx', [('*',)])))
 
-    def test_get_from_index_case_sensitive(self):
+    def test_put_updates_when_adding_key(self):
+        doc = self.db.create_doc("{}")
         self.db.create_index('test-idx', ['key'])
-        doc1 = self.db.create_doc(simple_doc)
-        self.assertEqual([], self.db.get_from_index('test-idx', [('V*',)]))
-        self.assertEqual([doc1],
-                         self.db.get_from_index('test-idx', [('v*',)]))
+        self.assertEqual([],
+            self.db.get_from_index('test-idx', [('*',)]))
+        doc.content = simple_doc
+        self.db.put_doc(doc)
+        self.assertEqual([doc],
+            self.db.get_from_index('test-idx', [('*',)]))
 
     def test_get_from_index_empty_string(self):
         self.db.create_index('test-idx', ['key'])
@@ -656,21 +655,56 @@ class PyDatabaseIndexTests(tests.DatabaseBaseTests):
         self.assertEqual(sorted([doc1, doc2]),
             sorted(self.db.get_from_index('test-idx', [('*',)])))
 
-    def test_get_from_index_illegal_number_of_entries(self):
-        self.db.create_index('test-idx', ['k1', 'k2'])
-        self.assertRaises(errors.InvalidValueForIndex,
-            self.db.get_from_index, 'test-idx', [()])
-        self.assertRaises(errors.InvalidValueForIndex,
-            self.db.get_from_index, 'test-idx', [('v1',)])
-        self.assertRaises(errors.InvalidValueForIndex,
-            self.db.get_from_index, 'test-idx', [('v1', 'v2', 'v3')])
+    def test_get_from_index_not_null(self):
+        self.db.create_index('test-idx', ['key'])
+        doc1 = self.db.create_doc(simple_doc)
+        doc2 = self.db.create_doc('{"key": null}')
+        self.assertEqual([doc1],
+            self.db.get_from_index('test-idx', [('*',)]))
 
-    def test_get_from_index_illegal_wildcards(self):
+    def test_get_partial_from_index(self):
+        content1 = '{"k1": "v1", "k2": "v2"}'
+        content2 = '{"k1": "v1", "k2": "x2"}'
+        content3 = '{"k1": "v1", "k2": "y2"}'
+        # doc4 has a different k1 value, so it doesn't match the prefix.
+        content4 = '{"k1": "NN", "k2": "v2"}'
+        doc1 = self.db.create_doc(content1)
+        doc2 = self.db.create_doc(content2)
+        doc3 = self.db.create_doc(content3)
+        doc4 = self.db.create_doc(content4)
+        self.db.create_index('test-idx', ['k1', 'k2'])
+        self.assertEqual(sorted([doc1, doc2, doc3]),
+            sorted(self.db.get_from_index('test-idx', [("v1", "*")])))
+
+
+class PyDatabaseIndexTests(tests.DatabaseBaseTests):
+
+    def test_nested_index(self):
+        doc = self.db.create_doc(nested_doc)
+        self.db.create_index('test-idx', ['sub.doc'])
+        self.assertEqual([doc],
+            self.db.get_from_index('test-idx', [('underneath',)]))
+        doc2 = self.db.create_doc(nested_doc)
+        self.assertEqual(
+            sorted([doc, doc2]),
+            sorted(self.db.get_from_index('test-idx', [('underneath',)])))
+
+    def test_get_from_index_case_sensitive(self):
+        self.db.create_index('test-idx', ['key'])
+        doc1 = self.db.create_doc(simple_doc)
+        self.assertEqual([], self.db.get_from_index('test-idx', [('V*',)]))
+        self.assertEqual([doc1],
+                         self.db.get_from_index('test-idx', [('v*',)]))
+
+    def test_get_from_index_illegal_glob_before_value(self):
         self.db.create_index('test-idx', ['k1', 'k2'])
         self.assertRaises(errors.InvalidValueForIndex,
             self.db.get_from_index, 'test-idx', [('v*', 'v2')])
+
+    def test_get_from_index_illegal_glob_after_glob(self):
+        self.db.create_index('test-idx', ['k1', 'k2'])
         self.assertRaises(errors.InvalidValueForIndex,
-            self.db.get_from_index, 'test-idx', [('*', 'v2')])
+            self.db.get_from_index, 'test-idx', [('*', 'v*')])
 
     def test_get_from_index_with_sql_wildcards(self):
         self.db.create_index('test-idx', ['key'])
@@ -687,13 +721,6 @@ class PyDatabaseIndexTests(tests.DatabaseBaseTests):
         # Same for '_'
         self.assertEqual([doc3],
             self.db.get_from_index('test-idx', [('va_*',)]))
-
-    def test_get_from_index_not_null(self):
-        self.db.create_index('test-idx', ['key'])
-        doc1 = self.db.create_doc(simple_doc)
-        doc2 = self.db.create_doc('{"key": null}')
-        self.assertEqual([doc1],
-            self.db.get_from_index('test-idx', [('*',)]))
 
     def test_get_from_index_with_lower(self):
         self.db.create_index("index", ["lower(name)"])
@@ -751,20 +778,6 @@ class PyDatabaseIndexTests(tests.DatabaseBaseTests):
         doc = self.db.create_doc(content)
         rows = self.db.get_from_index("index", [("foo", )])
         self.assertEqual([doc], rows)
-
-    def test_get_partial_from_index(self):
-        content1 = '{"k1": "v1", "k2": "v2"}'
-        content2 = '{"k1": "v1", "k2": "x2"}'
-        content3 = '{"k1": "v1", "k2": "y2"}'
-        # doc4 has a different k1 value, so it doesn't match the prefix.
-        content4 = '{"k1": "NN", "k2": "v2"}'
-        doc1 = self.db.create_doc(content1)
-        doc2 = self.db.create_doc(content2)
-        doc3 = self.db.create_doc(content3)
-        doc4 = self.db.create_doc(content4)
-        self.db.create_index('test-idx', ['k1', 'k2'])
-        self.assertEqual(sorted([doc1, doc2, doc3]),
-            sorted(self.db.get_from_index('test-idx', [("v1", "*")])))
 
     def test_get_glob_match(self):
         # Note: the exact glob syntax is probably subject to change

@@ -19,6 +19,7 @@
 #ifndef U1DB_INTERNAL_H
 #define U1DB_INTERNAL_H
 
+#include <stdarg.h>
 #include "u1db/u1db.h"
 #include "u1db/compat.h"
 
@@ -167,8 +168,20 @@ int u1db__generate_hex_uuid(char *uuid);
 
 /**
  * Format a given query.
+ *
+ * @param n_fields  The number of fields being passed in, (the number of args
+ * 		    in argp)
+ * @param argp	    Arguments being passed. It is assumed that all arguments
+ * 		    will be of type "char*".
+ * @param buf (OUT) The character array. This will be dynamically allocated,
+ * 		    and callers must free() it.
+ * @param wildcard (IN/OUT) Any array indicating a wildcard type for this
+ * 			 argument. A 0 indicates this is an exact match, a 1
+ * 			 indicates this is a pure wildcard (eg, "*") and a 2
+ * 			 indicates this is a glob (eg "f*").
+ * 			 This must point to an array at least n_fields wide.
  */
-int u1db__format_query(u1query *query, char **buf);
+int u1db__format_query(int n_fields, va_list argp, char **buf, int *wildcard);
 
 /**
  * Given this document content, update the indexed fields in the db.

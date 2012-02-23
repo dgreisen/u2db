@@ -23,6 +23,13 @@ cdef extern from "Python.h":
     void *calloc(size_t, size_t)
     void free(void *)
 
+cdef extern from "stdarg.h":
+    ctypedef struct va_list:
+        pass
+    void va_start(va_list, void*)
+    void va_start_int "va_start" (va_list, int)
+    void va_end(va_list)
+
 cdef extern from "u1db/u1db.h":
     ctypedef struct u1database:
         pass
@@ -93,6 +100,8 @@ cdef extern from "u1db/u1db.h":
     int U1DB_DOCUMENT_ALREADY_DELETED
     int U1DB_DOCUMENT_DOES_NOT_EXIST
     int U1DB_NOT_IMPLEMENTED
+    int U1DB_INVALID_JSON
+    int U1DB_INVALID_VALUE_FOR_INDEX
     int U1DB_INSERTED
     int U1DB_SUPERSEDED
     int U1DB_CONVERGED
@@ -145,7 +154,7 @@ cdef extern from "u1db/u1db_internal.h":
                             int from_db_rev, int last_known_rev,
                             u1db_record *from_records, u1db_record **new_records,
                             u1db_record **conflict_records)
-    int u1db__format_query(u1query *query, char **buf)
+    int u1db__format_query(int n_fields, va_list argp, char **buf, int *wildcard)
 
 
 cdef extern from "u1db/u1db_vectorclock.h":
@@ -205,28 +214,47 @@ cdef int _append_index_definition_to_list(void *context,
     return 0
 
 
+cdef int _format_query_dotted(char **buf, int *wildcard, int n_fields, ...):
+    cdef va_list argp
+    cdef int status
+
+    va_start_int(argp, n_fields)
+    status = u1db__format_query(n_fields, argp, buf, wildcard)
+    va_end(argp)
+    return status
+
+
 def _format_query(fields):
     """Wrapper around u1db__format_query for testing."""
-    cdef CQuery query
-    cdef int i
+    cdef int status
     cdef char *buf
+    cdef int wildcard[10]
 
-    # We use CQuery because we know it will safely dealloc when we exit
-    # Build up the query object so we can format the request.
-    query = CQuery()
-    query._query = <u1query*>calloc(1, sizeof(u1query))
-    query._query.num_fields = len(fields)
-    query._query.fields = <char**>calloc(query._query.num_fields, sizeof(char*))
-    for i from 0 <= i < query._query.num_fields:
-        query._query.fields[i] = strdup(fields[i])
-    handle_status("format_query",
-        u1db__format_query(query._query, &buf))
+    if len(fields) == 0:
+        status = _format_query_dotted(&buf, wildcard, 0)
+    elif len(fields) == 1:
+        status = _format_query_dotted(&buf, wildcard, 1, <char*>fields[0])
+    elif len(fields) == 2:
+        status = _format_query_dotted(&buf, wildcard, 2, <char*>fields[0],
+                <char*>fields[1])
+    elif len(fields) == 3:
+        status = _format_query_dotted(&buf, wildcard, 3, <char*>fields[0], 
+                <char*>fields[1], <char*>fields[2])
+    elif len(fields) == 4:
+        status = _format_query_dotted(&buf, wildcard, 4, <char*>fields[0], 
+                <char*>fields[1], <char*>fields[2], <char *>fields[3])
+    else:
+        status = U1DB_NOT_IMPLEMENTED
+    handle_status("format_query", status)
     if buf == NULL:
         res = None
     else:
         res = buf
         free(buf)
-    return res
+    w = []
+    for i in range(len(fields)):
+        w.append(wildcard[i])
+    return res, w
 
 
 def make_document(doc_id, rev, content, has_conflicts=False):
@@ -385,6 +413,8 @@ cdef handle_status(context, int status):
     if status == U1DB_NOT_IMPLEMENTED:
         raise NotImplementedError("Functionality not implemented yet: %s"
                                   % (context,))
+    if status == U1DB_INVALID_VALUE_FOR_INDEX:
+        raise errors.InvalidValueForIndex()
     raise RuntimeError('%s (status: %s)' % (context, status))
 
 
@@ -651,13 +681,25 @@ cdef class CDatabase(object):
         res = []
         status = U1DB_OK
         for entry in key_values:
-            if len(entry) == 1:
+            if len(entry) == 0:
+                status = u1db_get_from_index(self._db, query._query,
+                    <void*>res, _append_doc_to_list, 0, NULL)
+            elif len(entry) == 1:
                 status = u1db_get_from_index(self._db, query._query,
                     <void*>res, _append_doc_to_list, 1, <char*>entry[0])
             elif len(entry) == 2:
                 status = u1db_get_from_index(self._db, query._query,
                     <void*>res, _append_doc_to_list, 2,
                     <char*>entry[0], <char*>entry[1])
+            elif len(entry) == 3:
+                status = u1db_get_from_index(self._db, query._query,
+                    <void*>res, _append_doc_to_list, 3,
+                    <char*>entry[0], <char*>entry[1], <char*>entry[2])
+            elif len(entry) == 4:
+                status = u1db_get_from_index(self._db, query._query,
+                    <void*>res, _append_doc_to_list, 4,
+                    <char*>entry[0], <char*>entry[1], <char*>entry[2],
+                    <char*>entry[3])
             else:
                 status = U1DB_NOT_IMPLEMENTED;
             handle_status("get_from_index", status)

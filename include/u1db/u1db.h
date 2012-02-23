@@ -52,6 +52,7 @@ typedef int (*u1db_doc_callback)(void *context, u1db_document *doc);
 #define U1DB_NOMEM -6
 #define U1DB_NOT_IMPLEMENTED -7
 #define U1DB_INVALID_JSON -8
+#define U1DB_INVALID_VALUE_FOR_INDEX -9
 
 // Used by put_doc_if_newer
 #define U1DB_INSERTED 1
@@ -298,7 +299,7 @@ void u1db_free_query(u1query **query);
  */
 int u1db_get_from_index(u1database *db, u1query *query,
                         void *context, u1db_doc_callback cb,
-                        int n_values, const char *val0, ...);
+                        int n_values, ...);
 
 /**
  * Get documents matching a single column index.
