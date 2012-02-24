@@ -162,7 +162,6 @@ class TestCDatabase(BackendTests):
             c_backend_wrapper._format_query, ["1*"])
 
 
-
 class TestVectorClock(BackendTests):
 
     def create_vcr(self, rev):
