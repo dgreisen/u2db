@@ -205,8 +205,6 @@ class AllDatabaseTests(tests.DatabaseBaseTests, tests.TestCaseWithServer):
 
 
 class LocalDatabaseTests(tests.DatabaseBaseTests):
-    support_save_conflict = True  # reference impls all support storing
-                                  # conflicts, but others may not
 
     scenarios = tests.LOCAL_DATABASES_SCENARIOS + tests.C_DATABASE_SCENARIOS
 
@@ -233,8 +231,7 @@ class LocalDatabaseTests(tests.DatabaseBaseTests):
 
     def test_simple_put_doc_if_newer(self):
         doc = self.make_document('my-doc-id', 'test:1', simple_doc)
-        state = self.db.put_doc_if_newer(doc,
-                                      save_conflict=self.support_save_conflict)
+        state = self.db.put_doc_if_newer(doc, save_conflict=False)
         self.assertEqual('inserted', state)
         self.assertGetDoc(self.db, 'my-doc-id', 'test:1', simple_doc, False)
 
@@ -247,16 +244,14 @@ class LocalDatabaseTests(tests.DatabaseBaseTests):
         doc1_rev2 = doc1.rev
         # Nothing is inserted, because the document is already superseded
         doc = self.make_document(doc1.doc_id, doc1_rev1, orig_doc)
-        state = self.db.put_doc_if_newer(doc,
-                                      save_conflict=self.support_save_conflict)
+        state = self.db.put_doc_if_newer(doc, save_conflict=False)
         self.assertEqual('superseded', state)
         self.assertGetDoc(self.db, doc1.doc_id, doc1_rev2, simple_doc, False)
 
     def test_put_doc_if_newer_already_converged(self):
         orig_doc = '{"new": "doc"}'
         doc1 = self.db.create_doc(orig_doc)
-        state = self.db.put_doc_if_newer(doc1,
-                                      save_conflict=self.support_save_conflict)
+        state = self.db.put_doc_if_newer(doc1, save_conflict=False)
         self.assertEqual('converged', state)
 
     def test_put_doc_if_newer_conflicted(self):
@@ -274,16 +269,14 @@ class LocalDatabaseTests(tests.DatabaseBaseTests):
         doc2 = self.make_document(doc1.doc_id, doc1.rev + '|other:1',
                                   nested_doc)
         self.assertEqual('inserted',
-            self.db.put_doc_if_newer(doc2,
-                save_conflict=self.support_save_conflict,
-                replica_uid='other', replica_gen=2))
+            self.db.put_doc_if_newer(doc2, save_conflict=False,
+                                     replica_uid='other', replica_gen=2))
         self.assertEqual(2, self.db.get_sync_generation('other'))
         # Compare to the old rev, should be superseded
         doc2 = self.make_document(doc1.doc_id, doc1.rev, nested_doc)
         self.assertEqual('superseded',
-            self.db.put_doc_if_newer(doc2,
-                save_conflict=self.support_save_conflict,
-                replica_uid='other', replica_gen=3))
+            self.db.put_doc_if_newer(doc2, save_conflict=False,
+                                     replica_uid='other', replica_gen=3))
         self.assertEqual(3, self.db.get_sync_generation('other'))
         # A conflict that isn't saved still records the sync gen, because we
         # don't need to see it again
@@ -291,7 +284,7 @@ class LocalDatabaseTests(tests.DatabaseBaseTests):
                                   nested_doc)
         self.assertEqual('conflicted',
             self.db.put_doc_if_newer(doc2, save_conflict=False,
-                replica_uid='other', replica_gen=4))
+                                     replica_uid='other', replica_gen=4))
         self.assertEqual(4, self.db.get_sync_generation('other'))
 
     def test_get_sync_generation(self):
