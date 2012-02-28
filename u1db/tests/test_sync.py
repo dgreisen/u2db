@@ -61,14 +61,11 @@ def _make_local_db_and_oauth_http_target(test):
 
 
 target_scenarios = [
-    ('local', {'create_db_and_target': _make_local_db_and_target,
-               'make_document': tests.create_doc}),
+    ('local', {'create_db_and_target': _make_local_db_and_target}),
     ('http', {'create_db_and_target': _make_local_db_and_http_target,
-              'make_document': tests.create_doc,
               'server_def': http_server_def}),
     ('oauth_http', {'create_db_and_target':
                     _make_local_db_and_oauth_http_target,
-                    'make_document': tests.create_doc,
                     'server_def': oauth_http_server_def}),
     ]
 
@@ -147,7 +144,7 @@ class DatabaseSyncTargetTests(object):
 class CDatabaseSyncTargetTests(SyncTargetTestSetup, DatabaseSyncTargetTests):
 
     scenarios = tests.multiply_scenarios(tests.C_DATABASE_SCENARIOS,
-        target_scenarios[:1]) # We don't yet test http or oauth_http
+            target_scenarios[:1]) # We don't yet test http or oauth_http
 
 
 
