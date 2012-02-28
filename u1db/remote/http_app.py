@@ -27,9 +27,10 @@ import routes.mapper
 
 from u1db import (
     __version__ as _u1db_version,
+    DBNAME_CONSTRAINTS,
     Document,
     errors,
-    DBNAME_CONSTRAINTS,
+    sync,
     )
 from u1db.remote import (
     http_errors,
@@ -267,7 +268,8 @@ class SyncResource(object):
     def __init__(self, dbname, source_replica_uid, state, responder):
         self.source_replica_uid = source_replica_uid
         self.responder = responder
-        self.target = state.open_database(dbname).get_sync_target()
+        self.db = state.open_database(dbname)
+        self.target = self.db.get_sync_target()
 
     @http_method()
     def get(self):
@@ -289,7 +291,7 @@ class SyncResource(object):
                  content_as_args=True)
     def post_args(self, last_known_generation):
         self.last_known_generation = last_known_generation
-        self.sync_exch = self.target._get_sync_exchange(self.source_replica_uid)
+        self.sync_exch = sync.SyncExchange(self.db, self.source_replica_uid)
 
     @http_method(content_as_args=True)
     def post_stream_entry(self, id, rev, content, gen):

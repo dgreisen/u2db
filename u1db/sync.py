@@ -224,18 +224,9 @@ class LocalSyncTarget(u1db.SyncTarget):
     def __init__(self, db):
         self._db = db
 
-    def _get_sync_exchange(self, source_replica_uid):
-        """Return a SyncExchange object to carry through directly
-        the steps for a sync exchange.
-
-        :param source_replica_uid: The source replica's identifier
-        :return: An instance of SyncExchange
-        """
-        return SyncExchange(self._db, source_replica_uid)
-
     def sync_exchange(self, docs_by_generations, source_replica_uid,
                       last_known_generation, return_doc_cb):
-        sync_exch = self._get_sync_exchange(source_replica_uid)
+        sync_exch = SyncExchange(self._db, source_replica_uid)
         # 1st step: try to insert incoming docs and record progress
         for doc, doc_gen in docs_by_generations:
             sync_exch.insert_doc_from_source(doc, doc_gen)
