@@ -100,6 +100,3 @@ class HTTPSyncTarget(http_client.HTTPClientBase, SyncTarget):
         res = self._parse_sync_stream(data, return_doc_cb)
         data = None
         return res['new_generation']
-
-    def get_sync_exchange(self, source_replica_uid):
-        return None  # not a local target
