@@ -110,20 +110,20 @@ class SyncTargetTestSetup(tests.DatabaseBaseTests, tests.TestCaseWithServer):
         super(SyncTargetTestSetup, self).tearDown()
 
 
-class DatabaseSyncTargetTests(object):
+class AllDatabaseSyncTargetTests(object):
 
     def test_get_sync_target(self):
         self.assertIsNot(None, self.st)
 
 
-class CDatabaseSyncTargetTests(SyncTargetTestSetup, DatabaseSyncTargetTests):
+class CDatabaseSyncTargetTests(SyncTargetTestSetup, AllDatabaseSyncTargetTests):
 
     scenarios = tests.multiply_scenarios(tests.C_DATABASE_SCENARIOS,
         target_scenarios[:1]) # We don't yet test http or oauth_http
 
 
 
-class PyDatabaseSyncTargetTests(SyncTargetTestSetup, DatabaseSyncTargetTests):
+class DatabaseSyncTargetTests(SyncTargetTestSetup, AllDatabaseSyncTargetTests):
 
     scenarios = tests.multiply_scenarios(tests.DatabaseBaseTests.scenarios,
                                          target_scenarios)
