@@ -37,8 +37,11 @@ struct _u1query {
     char **fields;
 };
 
+typedef struct _u1db_sync_exchange u1db_sync_exchange;
 
-typedef struct _u1db_sync_target {
+typedef struct _u1db_sync_target u1db_sync_target;
+
+struct _u1db_sync_target {
     u1database *db;
     /**
      * Get the information for synchronization about another replica.
@@ -57,7 +60,7 @@ typedef struct _u1db_sync_target {
      * @param source_gen        (OUT) The last generation of source_replica_uid
      *                          that st has synchronized with.
      */
-    int (*get_sync_info)(struct _u1db_sync_target *st,
+    int (*get_sync_info)(u1db_sync_target *st,
         const char *source_replica_uid,
         const char **st_replica_uid, int *st_gen, int *source_gen);
     /**
@@ -70,9 +73,23 @@ typedef struct _u1db_sync_target {
      * @param source_gen        The last generation of source_replica_uid
      *                          that st has synchronized with.
      */
-    int (*record_sync_info)(struct _u1db_sync_target *st,
+    int (*record_sync_info)(u1db_sync_target *st,
         const char *source_replica_uid, int source_gen);
-} u1db_sync_target;
+
+    /**
+     * Create a sync_exchange state object.
+     *
+     * This encapsulates the state during a single document exchange.
+     * The returned u1db_sync_exchange object should be freed with
+     * finalize_sync_exchange.
+     */
+    int (*get_sync_exchange)(u1db_sync_target *st,
+                             const char *source_replica_uid,
+                             u1db_sync_exchange **exchange);
+
+    void (*finalize_sync_exchange)(u1db_sync_target *st,
+                                   u1db_sync_exchange **exchange);
+};
 
 
 /**

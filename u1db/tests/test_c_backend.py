@@ -169,11 +169,12 @@ class TestCSyncTarget(BackendTests):
         self.db = c_backend_wrapper.CDatabase(':memory:')
         self.st = self.db.get_sync_target()
 
-    def test_create(self):
-        self.assertIsNot(None, self.st)
-
     def test_attached_to_db(self):
-        self.assertEqual(self.db._replica_uid, self.st._get_replica_uid())
+        self.assertEqual(self.db._replica_uid, self.st.get_sync_info("misc")[0])
+
+    def test_get_sync_exchange(self):
+        exc = self.st._get_sync_exchange("source-uid")
+        self.assertIsNot(None, exc)
 
 
 class TestVectorClock(BackendTests):

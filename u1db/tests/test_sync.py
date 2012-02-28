@@ -112,6 +112,9 @@ class SyncTargetTestSetup(tests.DatabaseBaseTests, tests.TestCaseWithServer):
 
 class DatabaseSyncTargetTests(object):
 
+    def receive_doc(self, doc, gen):
+        self.other_changes.append((doc.doc_id, doc.rev, doc.content, gen))
+
     def test_get_sync_target(self):
         self.assertIsNot(None, self.st)
 
@@ -127,6 +130,17 @@ class DatabaseSyncTargetTests(object):
         self.assertEqual(('test', 0, 0), self.st.get_sync_info('replica'))
         self.st.record_sync_info('replica', 10)
         self.assertEqual(('test', 0, 10), self.st.get_sync_info('replica'))
+
+    def test_sync_exchange(self):
+        docs_by_gen = [
+            (self.make_document('doc-id', 'replica:1', simple_doc), 10)]
+        new_gen = self.st.sync_exchange(docs_by_gen, 'replica',
+                                        last_known_generation=0,
+                                        return_doc_cb=self.receive_doc)
+        self.assertGetDoc(self.db, 'doc-id', 'replica:1', simple_doc, False)
+        self.assertEqual(['doc-id'], self.db._get_transaction_log())
+        self.assertEqual(([], 1), (self.other_changes, new_gen))
+        self.assertEqual(10, self.st.get_sync_info('replica')[-1])
 
 
 
@@ -145,20 +159,6 @@ class PyDatabaseSyncTargetTests(SyncTargetTestSetup, DatabaseSyncTargetTests):
     # whitebox true means self.db is the actual local db object
     # against which the sync is performed
     whitebox = True
-
-    def receive_doc(self, doc, gen):
-        self.other_changes.append((doc.doc_id, doc.rev, doc.content, gen))
-
-    def test_sync_exchange(self):
-        docs_by_gen = [
-            (self.make_document('doc-id', 'replica:1', simple_doc), 10)]
-        new_gen = self.st.sync_exchange(docs_by_gen, 'replica',
-                                        last_known_generation=0,
-                                        return_doc_cb=self.receive_doc)
-        self.assertGetDoc(self.db, 'doc-id', 'replica:1', simple_doc, False)
-        self.assertEqual(['doc-id'], self.db._get_transaction_log())
-        self.assertEqual(([], 1), (self.other_changes, new_gen))
-        self.assertEqual(10, self.st.get_sync_info('replica')[-1])
 
     def test_sync_exchange_push_many(self):
         docs_by_gen = [

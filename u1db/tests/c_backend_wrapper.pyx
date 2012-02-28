@@ -128,6 +128,8 @@ cdef extern from "u1db/u1db_internal.h":
         char *doc_rev
         char *doc
 
+    ctypedef struct u1db_sync_exchange
+
     ctypedef struct u1db_sync_target:
         u1database *db
         int (*get_sync_info)(u1db_sync_target *st,
@@ -135,6 +137,11 @@ cdef extern from "u1db/u1db_internal.h":
             const_char_ptr *st_replica_uid, int *st_gen, int *source_gen)
         int (*record_sync_info)(u1db_sync_target *st,
             char *source_replica_uid, int source_gen)
+        int (*get_sync_exchange)(u1db_sync_target *st,
+                                 char *source_replica_uid,
+                                 u1db_sync_exchange **exchange)
+        int (*finalize_sync_exchange)(u1db_sync_target *st,
+                                      u1db_sync_exchange **exchange)
 
     int u1db__get_db_generation(u1database *, int *db_rev)
     char *u1db__allocate_doc_id(u1database *)
@@ -428,12 +435,22 @@ cdef handle_status(context, int status):
     raise RuntimeError('%s (status: %s)' % (context, status))
 
 
+cdef class CSyncExchange(object):
+
+    cdef u1db_sync_exchange *exchange
+
+    def __init__(self):
+        pass
+
+
 cdef class CSyncTarget(object):
 
     cdef u1db_sync_target *_st
+    cdef CDatabase _db
 
     def __init__(self, CDatabase db):
         self._st = NULL
+        self._db = db
         handle_status("get_sync_target",
             u1db__get_sync_target(db._db, &self._st))
 
@@ -469,6 +486,28 @@ cdef class CSyncTarget(object):
         assert self._st.record_sync_info != NULL, "record_sync_info is NULL?"
         handle_status("record_sync_info",
             self._st.record_sync_info(self._st, source_replica_uid, source_gen))
+
+    def _get_sync_exchange(self, source_replica_uid):
+        self._check()
+        assert self._st.get_sync_exchange != NULL, "get_sync_exchange is NULL?"
+
+    # TODO: This is just a copy & paste of LocalSyncTarget, as an attempt to
+    #       bootstrap us.
+    def get_sync_exchange(self, source_replica_uid):
+        from u1db.sync import SyncExchange
+        return SyncExchange(self._db, source_replica_uid)
+
+    def sync_exchange(self, docs_by_generations, source_replica_uid,
+                      last_known_generation, return_doc_cb):
+        sync_exch = self.get_sync_exchange(source_replica_uid)
+        # 1st step: try to insert incoming docs and record progress
+        for doc, doc_gen in docs_by_generations:
+            sync_exch.insert_doc_from_source(doc, doc_gen)
+        # 2nd step: find changed documents (including conflicts) to return
+        new_gen = sync_exch.find_changes_to_return(last_known_generation)
+        # final step: return docs and record source replica sync point
+        sync_exch.return_docs(return_doc_cb)
+        return new_gen
 
 
 cdef class CDatabase(object):
