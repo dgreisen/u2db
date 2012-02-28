@@ -133,6 +133,8 @@ cdef extern from "u1db/u1db_internal.h":
         int (*get_sync_info)(u1db_sync_target *st,
             char *source_replica_uid,
             const_char_ptr *st_replica_uid, int *st_gen, int *source_gen)
+        int (*record_sync_info)(u1db_sync_target *st,
+            char *source_replica_uid, int source_gen)
 
     int u1db__get_db_generation(u1database *, int *db_rev)
     char *u1db__allocate_doc_id(u1database *)
@@ -461,6 +463,12 @@ cdef class CSyncTarget(object):
             self._st.get_sync_info(self._st, source_replica_uid,
                 &st_replica_uid, &st_gen, &source_gen))
         return (safe_str(st_replica_uid), st_gen, source_gen)
+
+    def record_sync_info(self, source_replica_uid, source_gen):
+        self._check()
+        assert self._st.record_sync_info != NULL, "record_sync_info is NULL?"
+        handle_status("record_sync_info",
+            self._st.record_sync_info(self._st, source_replica_uid, source_gen))
 
 
 cdef class CDatabase(object):

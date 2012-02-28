@@ -60,6 +60,18 @@ typedef struct _u1db_sync_target {
     int (*get_sync_info)(struct _u1db_sync_target *st,
         const char *source_replica_uid,
         const char **st_replica_uid, int *st_gen, int *source_gen);
+    /**
+     * Set the synchronization information about another replica.
+     *
+     * @param st    Pass this sync_target to the function,
+     *              eg st->get_sync_info(st, ...)
+     * @param source_replica_uid    The unique identifier for the source we
+     *                              want to synchronize from.
+     * @param source_gen        The last generation of source_replica_uid
+     *                          that st has synchronized with.
+     */
+    int (*record_sync_info)(struct _u1db_sync_target *st,
+        const char *source_replica_uid, int source_gen);
 } u1db_sync_target;
 
 

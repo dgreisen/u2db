@@ -23,6 +23,8 @@ static int st_get_sync_info (u1db_sync_target *st,
         const char *source_replica_uid,
         const char **st_replica_uid, int *st_gen, int *source_gen);
 
+static int st_record_sync_info(u1db_sync_target *st,
+        const char *source_replica_uid, int source_gen);
 
 int
 u1db__get_sync_target(u1database *db, u1db_sync_target **sync_target)
@@ -35,6 +37,7 @@ u1db__get_sync_target(u1database *db, u1db_sync_target **sync_target)
     *sync_target = (u1db_sync_target *)calloc(1, sizeof(u1db_sync_target));
     (*sync_target)->db = db;
     (*sync_target)->get_sync_info = st_get_sync_info;
+    (*sync_target)->record_sync_info = st_record_sync_info;
     return status;
 }
 
@@ -74,4 +77,14 @@ st_get_sync_info(u1db_sync_target *st, const char *source_replica_uid,
     status = u1db__get_db_generation(st->db, st_gen);
 finish:
     return status;
+}
+
+static int
+st_record_sync_info(u1db_sync_target *st, const char *source_replica_uid,
+                    int source_gen)
+{
+    if (st == NULL || source_replica_uid == NULL) {
+        return U1DB_INVALID_PARAMETER;
+    }
+    return u1db__set_sync_generation(st->db, source_replica_uid, source_gen);
 }
