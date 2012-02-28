@@ -493,13 +493,10 @@ cdef class CSyncTarget(object):
 
     # TODO: This is just a copy & paste of LocalSyncTarget, as an attempt to
     #       bootstrap us.
-    def get_sync_exchange(self, source_replica_uid):
-        from u1db.sync import SyncExchange
-        return SyncExchange(self._db, source_replica_uid)
-
     def sync_exchange(self, docs_by_generations, source_replica_uid,
                       last_known_generation, return_doc_cb):
-        sync_exch = self.get_sync_exchange(source_replica_uid)
+        from u1db.sync import SyncExchange
+        sync_exch = SyncExchange(self._db, source_replica_uid)
         # 1st step: try to insert incoming docs and record progress
         for doc, doc_gen in docs_by_generations:
             sync_exch.insert_doc_from_source(doc, doc_gen)
