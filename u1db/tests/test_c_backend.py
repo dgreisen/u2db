@@ -162,6 +162,20 @@ class TestCDatabase(BackendTests):
             c_backend_wrapper._format_query, ["1*"])
 
 
+class TestCSyncTarget(BackendTests):
+
+    def setUp(self):
+        super(TestCSyncTarget, self).setUp()
+        self.db = c_backend_wrapper.CDatabase(':memory:')
+        self.st = self.db.get_sync_target()
+
+    def test_create(self):
+        self.assertIsNot(None, self.st)
+
+    def test_attached_to_db(self):
+        self.assertEqual(self.db._replica_uid, self.st._get_replica_uid())
+
+
 class TestVectorClock(BackendTests):
 
     def create_vcr(self, rev):

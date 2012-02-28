@@ -81,6 +81,7 @@ synchronize them with other stores.
              "src/u1db.c",
              "src/u1db_query.c",
              "src/u1db_schema.c",
+             "src/u1db_sync_target.c",
              "src/u1db_uuid.c",
              "src/u1db_vectorclock.c",
              ],

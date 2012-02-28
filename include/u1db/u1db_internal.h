@@ -37,6 +37,12 @@ struct _u1query {
     char **fields;
 };
 
+
+typedef struct _u1db_sync_target {
+    u1database *db;
+} u1db_sync_target;
+
+
 /**
  * Internal API, Get the global database rev.
  */
@@ -208,5 +214,18 @@ int u1db__find_unique_expressions(u1database *db,
  */
 int u1db__index_all_docs(u1database *db, int n_expressions,
                          const char **expressions);
+
+
+/**
+ * Create an object for synchronizing.
+ *
+ * The object created should be freed using u1db__free_sync_target. It holds a
+ * pointer to the database that created it, so you must keep the database
+ * object alive as long as the synchronization object is alive.
+ */
+int u1db__get_sync_target(u1database *db, u1db_sync_target **sync_target);
+
+
+void u1db__free_sync_target(u1db_sync_target **sync_target);
 
 #endif // U1DB_INTERNAL_H
