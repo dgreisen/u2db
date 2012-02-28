@@ -19,6 +19,11 @@
 #include "u1db/u1db_internal.h"
 
 
+static int st_get_sync_info (u1db_sync_target *st,
+        const char *source_replica_uid,
+        const char **st_replica_uid, int *st_gen, int *source_gen);
+
+
 int
 u1db__get_sync_target(u1database *db, u1db_sync_target **sync_target)
 {
@@ -29,6 +34,7 @@ u1db__get_sync_target(u1database *db, u1db_sync_target **sync_target)
     }
     *sync_target = (u1db_sync_target *)calloc(1, sizeof(u1db_sync_target));
     (*sync_target)->db = db;
+    (*sync_target)->get_sync_info = st_get_sync_info;
     return status;
 }
 
@@ -41,4 +47,31 @@ u1db__free_sync_target(u1db_sync_target **sync_target)
     }
     free(*sync_target);
     *sync_target = NULL;
+}
+
+
+static int
+st_get_sync_info(u1db_sync_target *st, const char *source_replica_uid,
+        const char **st_replica_uid, int *st_gen, int *source_gen)
+{
+    int status = U1DB_OK;
+    if (st == NULL || source_replica_uid == NULL || st_replica_uid == NULL
+            || st_gen == NULL || source_gen == NULL)
+    {
+        return U1DB_INVALID_PARAMETER;
+    }
+    // TODO: This really feels like it should be done inside some sort of
+    //       transaction, so that the sync information is consistent with the
+    //       current db generation. (at local generation X we are synchronized
+    //       with remote generation Y.)
+    //       At the very least, though, we check the sync generation *first*,
+    //       so that we should only be getting the same data again, if for some
+    //       reason we are currently synchronizing with the remote object.
+    status = u1db_get_replica_uid(st->db, st_replica_uid);
+    if (status != U1DB_OK) { goto finish; }
+    status = u1db__get_sync_generation(st->db, source_replica_uid, source_gen);
+    if (status != U1DB_OK) { goto finish; }
+    status = u1db__get_db_generation(st->db, st_gen);
+finish:
+    return status;
 }

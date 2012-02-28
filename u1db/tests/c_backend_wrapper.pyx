@@ -130,8 +130,11 @@ cdef extern from "u1db/u1db_internal.h":
 
     ctypedef struct u1db_sync_target:
         u1database *db
+        int (*get_sync_info)(u1db_sync_target *st,
+            char *source_replica_uid,
+            const_char_ptr *st_replica_uid, int *st_gen, int *source_gen)
 
-    int u1db__get_db_rev(u1database *, int *db_rev)
+    int u1db__get_db_generation(u1database *, int *db_rev)
     char *u1db__allocate_doc_id(u1database *)
     int u1db__sql_close(u1database *)
     int u1db__sql_is_open(u1database *)
@@ -435,12 +438,29 @@ cdef class CSyncTarget(object):
     def __dealloc__(self):
         u1db__free_sync_target(&self._st)
 
+    def _check(self):
+        if self._st == NULL:
+            raise RuntimeError("self._st is NULL")
+
     def _get_replica_uid(self):
         cdef const_char_ptr val
         cdef int status
+
+        self._check()
         handle_status("get_replica_uid",
             u1db_get_replica_uid(self._st.db, &val))
         return str(val)
+
+    def get_sync_info(self, source_replica_uid):
+        cdef const_char_ptr st_replica_uid = NULL
+        cdef int st_gen = 0, source_gen = 0
+
+        self._check()
+        assert self._st.get_sync_info != NULL, "get_sync_info is NULL?"
+        handle_status("get_sync_info",
+            self._st.get_sync_info(self._st, source_replica_uid,
+                &st_replica_uid, &st_gen, &source_gen))
+        return (safe_str(st_replica_uid), st_gen, source_gen)
 
 
 cdef class CDatabase(object):
@@ -502,14 +522,6 @@ cdef class CDatabase(object):
         s = str(val)
         free(val)
         return s
-
-    def _get_db_rev(self):
-        cdef int db_rev, status
-
-        status = u1db__get_db_rev(self._db, &db_rev)
-        if status != 0:
-            raise RuntimeError('Failed to _get_db_rev: %d' % (status,))
-        return db_rev
 
     def _run_sql(self, sql):
         cdef u1db_table *tbl

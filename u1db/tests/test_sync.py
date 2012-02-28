@@ -115,6 +115,14 @@ class DatabaseSyncTargetTests(object):
     def test_get_sync_target(self):
         self.assertIsNot(None, self.st)
 
+    def test_get_sync_info(self):
+        self.assertEqual(('test', 0, 0), self.st.get_sync_info('other'))
+
+    def test_create_doc_updates_sync_info(self):
+        self.assertEqual(('test', 0, 0), self.st.get_sync_info('other'))
+        doc = self.db.create_doc(simple_doc)
+        self.assertEqual(('test', 1, 0), self.st.get_sync_info('other'))
+
 
 class CDatabaseSyncTargetTests(SyncTargetTestSetup, DatabaseSyncTargetTests):
 
@@ -134,14 +142,6 @@ class PyDatabaseSyncTargetTests(SyncTargetTestSetup, DatabaseSyncTargetTests):
 
     def receive_doc(self, doc, gen):
         self.other_changes.append((doc.doc_id, doc.rev, doc.content, gen))
-
-    def test_get_sync_info(self):
-        self.assertEqual(('test', 0, 0), self.st.get_sync_info('other'))
-
-    def test_create_doc_updates_sync_info(self):
-        self.assertEqual(('test', 0, 0), self.st.get_sync_info('other'))
-        doc = self.db.create_doc(simple_doc)
-        self.assertEqual(('test', 1, 0), self.st.get_sync_info('other'))
 
     def test_record_sync_info(self):
         self.assertEqual(('test', 0, 0), self.st.get_sync_info('replica'))
