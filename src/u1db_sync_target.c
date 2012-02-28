@@ -18,6 +18,7 @@
 
 #include "u1db/u1db_internal.h"
 
+
 int
 u1db__get_sync_target(u1database *db, u1db_sync_target **sync_target)
 {
@@ -30,6 +31,7 @@ u1db__get_sync_target(u1database *db, u1db_sync_target **sync_target)
     (*sync_target)->db = db;
     return status;
 }
+
 
 void
 u1db__free_sync_target(u1db_sync_target **sync_target)

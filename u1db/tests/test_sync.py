@@ -73,8 +73,57 @@ target_scenarios = [
     ]
 
 
-class DatabaseSyncTargetTests(tests.DatabaseBaseTests,
-                              tests.TestCaseWithServer):
+# An explanation of the transitional setup for the following classes
+# We want to be running all tests against all back ends. However, until all
+# backends pass the tests, we need a way to allow them to run against some of
+# them.
+# 1) We want to pull out the common logic for how to set up the database and
+#    server we will be testing against, and how it integrates with the unittest
+#    framework. However, our test loader will automatically run any 'test_foo'
+#    functions, even though we haven't permutated the class for a given
+#    scenario.
+# 2) We permute every backend against every server. However, the C backend
+#    cannot talk HTTP or HTTP+OAuth yet. So we need to restrict its
+#    parameterization, as well as its tests.
+# 3) So we end up with 1 class that encapsulates the unittest infrastructure,
+#    but does not contain any test_* functions (SyncTargetTestSetup). And
+#    another class that holds common tests that are run against everything
+#    (DatabaseSyncTargetTests), a class for the C backend and a class for all
+#    the python backends.
+# 4) Eventually, all this will be pull back into a single class that holds
+#    everything (DatabaseSyncTargetTests) with every backend permuted against
+#    every server.
+class SyncTargetTestSetup(tests.DatabaseBaseTests, tests.TestCaseWithServer):
+
+    whitebox = True
+
+    def setUp(self):
+        super(SyncTargetTestSetup, self).setUp()
+        self.db, self.st = self.create_db_and_target(self)
+        self.other_changes = []
+
+    def tearDown(self):
+        # We delete them explicitly, so that connections are cleanly closed
+        del self.st
+        self.db.close()
+        del self.db
+        super(SyncTargetTestSetup, self).tearDown()
+
+
+class DatabaseSyncTargetTests(object):
+
+    def test_get_sync_target(self):
+        self.assertIsNot(None, self.st)
+
+
+class CDatabaseSyncTargetTests(SyncTargetTestSetup, DatabaseSyncTargetTests):
+
+    scenarios = tests.multiply_scenarios(tests.C_DATABASE_SCENARIOS,
+        target_scenarios[:1]) # We don't yet test http or oauth_http
+
+
+
+class PyDatabaseSyncTargetTests(SyncTargetTestSetup, DatabaseSyncTargetTests):
 
     scenarios = tests.multiply_scenarios(tests.DatabaseBaseTests.scenarios,
                                          target_scenarios)
@@ -83,22 +132,8 @@ class DatabaseSyncTargetTests(tests.DatabaseBaseTests,
     # against which the sync is performed
     whitebox = True
 
-    def setUp(self):
-        super(DatabaseSyncTargetTests, self).setUp()
-        self.db, self.st = self.create_db_and_target(self)
-        self.other_changes = []
-
-    def tearDown(self):
-        # We delete them explicitly, so that connections are cleanly closed
-        del self.db
-        del self.st
-        super(DatabaseSyncTargetTests, self).tearDown()
-
     def receive_doc(self, doc, gen):
         self.other_changes.append((doc.doc_id, doc.rev, doc.content, gen))
-
-    def test_get_sync_target(self):
-        self.assertIsNot(None, self.st)
 
     def test_get_sync_info(self):
         self.assertEqual(('test', 0, 0), self.st.get_sync_info('other'))
