@@ -91,6 +91,19 @@ struct _u1db_sync_target {
                                    u1db_sync_exchange **exchange);
 };
 
+struct _u1db_sync_exchange {
+    u1database *db;
+    const char *source_replica_uid;
+    int new_gen;
+    //     self.seen_ids = set()  # incoming ids not superseded
+    //     self.changes_to_return = None
+    //     # for tests
+    //     self._incoming_trace = []
+    //     self._db._last_exchange_log = {
+    //         'receive': {'docs': self._incoming_trace},
+    //         'return': None
+    //         }
+};
 
 /**
  * Internal API, Get the global database rev.

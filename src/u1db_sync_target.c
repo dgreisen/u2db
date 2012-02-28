@@ -26,6 +26,13 @@ static int st_get_sync_info (u1db_sync_target *st,
 static int st_record_sync_info(u1db_sync_target *st,
         const char *source_replica_uid, int source_gen);
 
+static int st_get_sync_exchange(u1db_sync_target *st,
+                         const char *source_replica_uid,
+                         u1db_sync_exchange **exchange);
+
+static void st_finalize_sync_exchange(u1db_sync_target *st,
+                               u1db_sync_exchange **exchange);
+
 int
 u1db__get_sync_target(u1database *db, u1db_sync_target **sync_target)
 {
@@ -35,9 +42,14 @@ u1db__get_sync_target(u1database *db, u1db_sync_target **sync_target)
         return U1DB_INVALID_PARAMETER;
     }
     *sync_target = (u1db_sync_target *)calloc(1, sizeof(u1db_sync_target));
+    if (*sync_target == NULL) {
+        return U1DB_NOMEM;
+    }
     (*sync_target)->db = db;
     (*sync_target)->get_sync_info = st_get_sync_info;
     (*sync_target)->record_sync_info = st_record_sync_info;
+    (*sync_target)->get_sync_exchange = st_get_sync_exchange;
+    (*sync_target)->finalize_sync_exchange = st_finalize_sync_exchange;
     return status;
 }
 
@@ -79,6 +91,7 @@ finish:
     return status;
 }
 
+
 static int
 st_record_sync_info(u1db_sync_target *st, const char *source_replica_uid,
                     int source_gen)
@@ -87,4 +100,31 @@ st_record_sync_info(u1db_sync_target *st, const char *source_replica_uid,
         return U1DB_INVALID_PARAMETER;
     }
     return u1db__set_sync_generation(st->db, source_replica_uid, source_gen);
+}
+
+
+static int
+st_get_sync_exchange(u1db_sync_target *st, const char *source_replica_uid,
+                     u1db_sync_exchange **exchange)
+{
+    if (st == NULL || source_replica_uid == NULL || exchange == NULL) {
+        return U1DB_INVALID_PARAMETER;
+    }
+    *exchange = (u1db_sync_exchange *)calloc(1, sizeof(u1db_sync_exchange));
+    if (*exchange == NULL) {
+        return U1DB_NOMEM;
+    }
+    (*exchange)->db = st->db;
+    return U1DB_OK;
+}
+
+
+static void
+st_finalize_sync_exchange(u1db_sync_target *st, u1db_sync_exchange **exchange)
+{
+    if (exchange == NULL || *exchange == NULL) {
+        return;
+    }
+    free(*exchange);
+    *exchange = NULL;
 }

@@ -140,8 +140,8 @@ cdef extern from "u1db/u1db_internal.h":
         int (*get_sync_exchange)(u1db_sync_target *st,
                                  char *source_replica_uid,
                                  u1db_sync_exchange **exchange)
-        int (*finalize_sync_exchange)(u1db_sync_target *st,
-                                      u1db_sync_exchange **exchange)
+        void (*finalize_sync_exchange)(u1db_sync_target *st,
+                                       u1db_sync_exchange **exchange)
 
     int u1db__get_db_generation(u1database *, int *db_rev)
     char *u1db__allocate_doc_id(u1database *)
@@ -435,12 +435,25 @@ cdef handle_status(context, int status):
     raise RuntimeError('%s (status: %s)' % (context, status))
 
 
+cdef class CSyncTarget
+
 cdef class CSyncExchange(object):
 
-    cdef u1db_sync_exchange *exchange
+    cdef u1db_sync_exchange *_exchange
+    cdef CSyncTarget _target
 
-    def __init__(self):
-        pass
+    def __init__(self, CSyncTarget target, source_replica_uid):
+        self._target = target
+        assert self._target._st.get_sync_exchange != NULL, \
+                "get_sync_exchange is NULL?"
+        handle_status("get_sync_exchange",
+            self._target._st.get_sync_exchange(self._target._st,
+                source_replica_uid, &self._exchange))
+
+    def __dealloc__(self):
+        if self._target is not None and self._target._st != NULL:
+            self._target._st.finalize_sync_exchange(self._target._st,
+                    &self._exchange)
 
 
 cdef class CSyncTarget(object):
@@ -489,7 +502,7 @@ cdef class CSyncTarget(object):
 
     def _get_sync_exchange(self, source_replica_uid):
         self._check()
-        assert self._st.get_sync_exchange != NULL, "get_sync_exchange is NULL?"
+        return CSyncExchange(self, source_replica_uid)
 
     # TODO: This is just a copy & paste of LocalSyncTarget, as an attempt to
     #       bootstrap us.
