@@ -289,7 +289,7 @@ class SyncResource(object):
                  content_as_args=True)
     def post_args(self, last_known_generation):
         self.last_known_generation = last_known_generation
-        self.sync_exch = self.target.get_sync_exchange(self.source_replica_uid)
+        self.sync_exch = self.target._get_sync_exchange(self.source_replica_uid)
 
     @http_method(content_as_args=True)
     def post_stream_entry(self, id, rev, content, gen):

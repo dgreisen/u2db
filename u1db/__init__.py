@@ -386,13 +386,3 @@ class SyncTarget(object):
             the current generation for this replica
         """
         raise NotImplementedError(self.sync_exchange)
-
-    def get_sync_exchange(self, source_replica_uid):
-        """Return a sync.SyncExchange object to carry through directly
-        the steps for a sync exchange.
-
-        :param source_replica_uid: The source replica's identifier
-        :return: An instance of sync.SyncExchange or
-            None if this is not a local target
-        """
-        raise NotImplementedError(self.get_sync_exchange)
