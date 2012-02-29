@@ -107,7 +107,7 @@ class SyncTargetTestSetup(tests.DatabaseBaseTests, tests.TestCaseWithServer):
         super(SyncTargetTestSetup, self).tearDown()
 
 
-class DatabaseSyncTargetTests(object):
+class AllDatabaseSyncTargetTests(object):
 
     def receive_doc(self, doc, gen):
         self.other_changes.append((doc.doc_id, doc.rev, doc.content, gen))
@@ -141,14 +141,14 @@ class DatabaseSyncTargetTests(object):
 
 
 
-class CDatabaseSyncTargetTests(SyncTargetTestSetup, DatabaseSyncTargetTests):
+class CDatabaseSyncTargetTests(SyncTargetTestSetup, AllDatabaseSyncTargetTests):
 
     scenarios = tests.multiply_scenarios(tests.C_DATABASE_SCENARIOS,
             target_scenarios[:1]) # We don't yet test http or oauth_http
 
 
 
-class PyDatabaseSyncTargetTests(SyncTargetTestSetup, DatabaseSyncTargetTests):
+class DatabaseSyncTargetTests(SyncTargetTestSetup, AllDatabaseSyncTargetTests):
 
     scenarios = tests.multiply_scenarios(tests.DatabaseBaseTests.scenarios,
                                          target_scenarios)
