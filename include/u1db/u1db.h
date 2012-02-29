@@ -307,4 +307,5 @@ int u1db_get_from_index(u1database *db, u1query *query,
 int u1db_simple_lookup1(u1database *db, const char *index_name,
                         const char *val1,
                         void *context, u1db_doc_callback cb);
+
 #endif // _U1DB_H_

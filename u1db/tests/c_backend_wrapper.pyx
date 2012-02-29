@@ -128,6 +128,9 @@ cdef extern from "u1db/u1db_internal.h":
         char *doc_rev
         char *doc
 
+    ctypedef struct u1db_sync_target:
+        u1database *db
+
     int u1db__get_db_rev(u1database *, int *db_rev)
     char *u1db__allocate_doc_id(u1database *)
     int u1db__sql_close(u1database *)
@@ -155,6 +158,8 @@ cdef extern from "u1db/u1db_internal.h":
                             u1db_record *from_records, u1db_record **new_records,
                             u1db_record **conflict_records)
     int u1db__format_query(int n_fields, va_list argp, char **buf, int *wildcard)
+    int u1db__get_sync_target(u1database *db, u1db_sync_target **sync_target)
+    int u1db__free_sync_target(u1db_sync_target **sync_target)
 
 
 cdef extern from "u1db/u1db_vectorclock.h":
@@ -416,6 +421,26 @@ cdef handle_status(context, int status):
     if status == U1DB_INVALID_VALUE_FOR_INDEX:
         raise errors.InvalidValueForIndex()
     raise RuntimeError('%s (status: %s)' % (context, status))
+
+
+cdef class CSyncTarget(object):
+
+    cdef u1db_sync_target *_st
+
+    def __init__(self, CDatabase db):
+        self._st = NULL
+        handle_status("get_sync_target",
+            u1db__get_sync_target(db._db, &self._st))
+
+    def __dealloc__(self):
+        u1db__free_sync_target(&self._st)
+
+    def _get_replica_uid(self):
+        cdef const_char_ptr val
+        cdef int status
+        handle_status("get_replica_uid",
+            u1db_get_replica_uid(self._st.db, &val))
+        return str(val)
 
 
 cdef class CDatabase(object):
@@ -711,6 +736,9 @@ cdef class CDatabase(object):
         handle_status("query_init",
             u1db_query_init(self._db, index_name, &query._query))
         return query
+    
+    def get_sync_target(self):
+        return CSyncTarget(self)
 
 
 cdef class VectorClockRev:
