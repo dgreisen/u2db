@@ -290,8 +290,8 @@ class SyncResource(object):
     @http_method(last_known_generation=int,
                  content_as_args=True)
     def post_args(self, last_known_generation):
-        self.last_known_generation = last_known_generation
-        self.sync_exch = sync.SyncExchange(self.db, self.source_replica_uid)
+        self.sync_exch = sync.SyncExchange(self.db, self.source_replica_uid,
+                last_known_generation)
 
     @http_method(content_as_args=True)
     def post_stream_entry(self, id, rev, content, gen):
@@ -303,8 +303,7 @@ class SyncResource(object):
             entry = dict(id=doc.doc_id, rev=doc.rev, content=doc.content,
                          gen=gen)
             self.responder.stream_entry(entry)
-        new_gen = self.sync_exch.find_changes_to_return(
-                                                    self.last_known_generation)
+        new_gen = self.sync_exch.find_changes_to_return()
         self.responder.content_type = 'application/x-u1db-sync-stream'
         self.responder.start_response(200)
         self.responder.start_stream(),

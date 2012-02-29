@@ -121,9 +121,10 @@ class Synchronizer(object):
 class SyncExchange(object):
     """Steps and state for carrying through a sync exchange on a target."""
 
-    def __init__(self, db, source_replica_uid):
+    def __init__(self, db, source_replica_uid, last_known_generation):
         self._db = db
         self.source_replica_uid = source_replica_uid
+        self.source_last_known_generation = last_known_generation
         self.seen_ids = set()  # incoming ids not superseded
         self.changes_to_return = None
         self.new_gen = None
@@ -170,7 +171,7 @@ class SyncExchange(object):
             'source_gen': source_gen
             })
 
-    def find_changes_to_return(self, last_known_generation):
+    def find_changes_to_return(self):
         """Find changes to return.
 
         Find changes since last_known_generation in db generation
@@ -182,9 +183,9 @@ class SyncExchange(object):
             processing the returned documents.
         """
         self._db._last_exchange_log['receive'].update({  # for tests
-            'last_known_gen': last_known_generation
+            'last_known_gen': self.source_last_known_generation
             })
-        gen, changes = self._db.whats_changed(last_known_generation)
+        gen, changes = self._db.whats_changed(self.source_last_known_generation)
         self.new_gen = gen
         seen_ids = self.seen_ids
         # changed docs that weren't superseded by or converged with
@@ -226,12 +227,13 @@ class LocalSyncTarget(u1db.SyncTarget):
 
     def sync_exchange(self, docs_by_generations, source_replica_uid,
                       last_known_generation, return_doc_cb):
-        sync_exch = SyncExchange(self._db, source_replica_uid)
+        sync_exch = SyncExchange(self._db, source_replica_uid,
+                                 last_known_generation)
         # 1st step: try to insert incoming docs and record progress
         for doc, doc_gen in docs_by_generations:
             sync_exch.insert_doc_from_source(doc, doc_gen)
         # 2nd step: find changed documents (including conflicts) to return
-        new_gen = sync_exch.find_changes_to_return(last_known_generation)
+        new_gen = sync_exch.find_changes_to_return()
         # final step: return docs and record source replica sync point
         sync_exch.return_docs(return_doc_cb)
         return new_gen
