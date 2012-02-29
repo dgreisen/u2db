@@ -290,4 +290,7 @@ int u1db__get_sync_target(u1database *db, u1db_sync_target **sync_target);
 
 void u1db__free_sync_target(u1db_sync_target **sync_target);
 
+
+int u1db__sync_exchange_insert_doc_from_source(u1db_sync_exchange *se,
+        u1db_document *doc, int source_gen);
 #endif // U1DB_INTERNAL_H

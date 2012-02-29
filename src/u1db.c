@@ -708,7 +708,7 @@ finish:
 
 int
 u1db_put_doc_if_newer(u1database *db, u1db_document *doc, int save_conflict,
-                      char *replica_uid, int replica_gen, int *state)
+                      const char *replica_uid, int replica_gen, int *state)
 {
     const char *stored_content = NULL, *stored_doc_rev = NULL;
     int status = U1DB_INVALID_PARAMETER, store = 0;

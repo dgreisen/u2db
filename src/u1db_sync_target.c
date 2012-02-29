@@ -115,6 +115,7 @@ st_get_sync_exchange(u1db_sync_target *st, const char *source_replica_uid,
         return U1DB_NOMEM;
     }
     (*exchange)->db = st->db;
+    (*exchange)->source_replica_uid = source_replica_uid;
     return U1DB_OK;
 }
 
@@ -127,4 +128,20 @@ st_finalize_sync_exchange(u1db_sync_target *st, u1db_sync_exchange **exchange)
     }
     free(*exchange);
     *exchange = NULL;
+}
+
+
+int
+u1db__sync_exchange_insert_doc_from_source(u1db_sync_exchange *se,
+        u1db_document *doc, int source_gen)
+{
+    int status = U1DB_OK;
+    int state;
+    if (se == NULL || se->db == NULL || doc == NULL) {
+        return U1DB_INVALID_PARAMETER;
+    }
+    status = u1db_put_doc_if_newer(se->db, doc, 0, se->source_replica_uid,
+                                   source_gen, &state);
+    // TODO: Update u1db_sync_exchange.seen_ids
+    return status;
 }

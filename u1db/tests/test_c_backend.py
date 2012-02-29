@@ -176,6 +176,15 @@ class TestCSyncTarget(BackendTests):
         exc = self.st._get_sync_exchange("source-uid")
         self.assertIsNot(None, exc)
 
+    def test_sync_exchange_insert_doc_from_source(self):
+        exc = self.st._get_sync_exchange("source-uid")
+        doc = c_backend_wrapper.make_document('doc-id', 'replica:1',
+                tests.simple_doc)
+        exc.insert_doc_from_source(doc, 10)
+        self.assertGetDoc(self.db, 'doc-id', 'replica:1', tests.simple_doc,
+                          False)
+        self.assertEqual(10, self.db.get_sync_generation('source-uid'))
+
 
 class TestVectorClock(BackendTests):
 

@@ -172,6 +172,8 @@ cdef extern from "u1db/u1db_internal.h":
     int u1db__format_query(int n_fields, va_list argp, char **buf, int *wildcard)
     int u1db__get_sync_target(u1database *db, u1db_sync_target **sync_target)
     int u1db__free_sync_target(u1db_sync_target **sync_target)
+    int u1db__sync_exchange_insert_doc_from_source(u1db_sync_exchange *se,
+            u1db_document *doc, int source_gen)
 
 
 cdef extern from "u1db/u1db_vectorclock.h":
@@ -454,6 +456,16 @@ cdef class CSyncExchange(object):
         if self._target is not None and self._target._st != NULL:
             self._target._st.finalize_sync_exchange(self._target._st,
                     &self._exchange)
+
+    def _check(self):
+        if self._exchange == NULL:
+            raise RuntimeError("self._exchange is NULL")
+
+    def insert_doc_from_source(self, CDocument doc, source_gen):
+        self._check()
+        handle_status("sync_exchange",
+            u1db__sync_exchange_insert_doc_from_source(self._exchange,
+                doc._doc, source_gen))
 
 
 cdef class CSyncTarget(object):

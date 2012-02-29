@@ -132,7 +132,7 @@ int u1db_put_doc(u1database *db, u1db_document *doc);
  *                  save_conflict is false, then we will ignore the document.
  */
 int u1db_put_doc_if_newer(u1database *db, u1db_document *doc, int save_conflict,
-                          char *replica_uid, int replica_gen,
+                          const char *replica_uid, int replica_gen,
                           int *state);
 
 
