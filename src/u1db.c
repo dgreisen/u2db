@@ -1157,11 +1157,11 @@ u1db__get_transaction_log(u1database *db, void *context,
 
 
 int
-u1db__get_db_rev(u1database *db, int *db_rev)
+u1db__get_db_generation(u1database *db, int *generation)
 {
     int status;
     sqlite3_stmt *statement;
-    if (db == NULL || db_rev == NULL) {
+    if (db == NULL || generation == NULL) {
         return U1DB_INVALID_PARAMETER;
     }
     status = sqlite3_prepare_v2(db->sql_handle,
@@ -1174,10 +1174,10 @@ u1db__get_db_rev(u1database *db, int *db_rev)
     if (status == SQLITE_DONE) {
         // No records, we are at rev 0
         status = SQLITE_OK;
-        *db_rev = 0;
+        *generation = 0;
     } else if (status == SQLITE_ROW) {
         status = SQLITE_OK;
-        *db_rev = sqlite3_column_int(statement, 0);
+        *generation = sqlite3_column_int(statement, 0);
     }
     sqlite3_finalize(statement);
     return status;
@@ -1186,15 +1186,15 @@ u1db__get_db_rev(u1database *db, int *db_rev)
 char *
 u1db__allocate_doc_id(u1database *db)
 {
-    int db_rev, status;
+    int generation, status;
     char *buf;
-    status = u1db__get_db_rev(db, &db_rev);
+    status = u1db__get_db_generation(db, &generation);
     if(status != U1DB_OK) {
         // There was an error.
         return NULL;
     }
     buf = (char *)calloc(1, 128);
-    snprintf(buf, 128, "doc-%d", db_rev);
+    snprintf(buf, 128, "doc-%d", generation);
     return buf;
 }
 

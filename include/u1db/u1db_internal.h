@@ -40,13 +40,45 @@ struct _u1query {
 
 typedef struct _u1db_sync_target {
     u1database *db;
+    /**
+     * Get the information for synchronization about another replica.
+     *
+     * @param st    Pass this sync_target to the function,
+     *              eg st->get_sync_info(st, ...)
+     * @param source_replica_uid    The unique identifier for the source we
+     *                              want to synchronize from.
+     * @param st_replica_uid    (OUT) The replica uid for the database this
+     *                          SyncTarget is attached to.
+     *                          Note that this is const char and memory will be
+     *                          managed by the sync_target, so it should *not*
+     *                          be freed.
+     * @param st_get            (OUT) The database generation for this sync
+     *                          target, matches st_replica_uid
+     * @param source_gen        (OUT) The last generation of source_replica_uid
+     *                          that st has synchronized with.
+     */
+    int (*get_sync_info)(struct _u1db_sync_target *st,
+        const char *source_replica_uid,
+        const char **st_replica_uid, int *st_gen, int *source_gen);
+    /**
+     * Set the synchronization information about another replica.
+     *
+     * @param st    Pass this sync_target to the function,
+     *              eg st->get_sync_info(st, ...)
+     * @param source_replica_uid    The unique identifier for the source we
+     *                              want to synchronize from.
+     * @param source_gen        The last generation of source_replica_uid
+     *                          that st has synchronized with.
+     */
+    int (*record_sync_info)(struct _u1db_sync_target *st,
+        const char *source_replica_uid, int source_gen);
 } u1db_sync_target;
 
 
 /**
  * Internal API, Get the global database rev.
  */
-int u1db__get_db_rev(u1database *db, int *db_rev);
+int u1db__get_db_generation(u1database *db, int *generation);
 
 /**
  * Internal API, Allocate a new document id, for cases when callers do not
