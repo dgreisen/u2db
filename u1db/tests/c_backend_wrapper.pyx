@@ -139,6 +139,7 @@ cdef extern from "u1db/u1db_internal.h":
             char *source_replica_uid, int source_gen)
         int (*get_sync_exchange)(u1db_sync_target *st,
                                  char *source_replica_uid,
+                                 int last_known_source_gen,
                                  u1db_sync_exchange **exchange)
         void (*finalize_sync_exchange)(u1db_sync_target *st,
                                        u1db_sync_exchange **exchange)
@@ -444,13 +445,13 @@ cdef class CSyncExchange(object):
     cdef u1db_sync_exchange *_exchange
     cdef CSyncTarget _target
 
-    def __init__(self, CSyncTarget target, source_replica_uid):
+    def __init__(self, CSyncTarget target, source_replica_uid, source_gen):
         self._target = target
         assert self._target._st.get_sync_exchange != NULL, \
                 "get_sync_exchange is NULL?"
         handle_status("get_sync_exchange",
             self._target._st.get_sync_exchange(self._target._st,
-                source_replica_uid, &self._exchange))
+                source_replica_uid, source_gen, &self._exchange))
 
     def __dealloc__(self):
         if self._target is not None and self._target._st != NULL:
@@ -512,21 +513,22 @@ cdef class CSyncTarget(object):
         handle_status("record_sync_info",
             self._st.record_sync_info(self._st, source_replica_uid, source_gen))
 
-    def _get_sync_exchange(self, source_replica_uid):
+    def _get_sync_exchange(self, source_replica_uid, source_gen):
         self._check()
-        return CSyncExchange(self, source_replica_uid)
+        return CSyncExchange(self, source_replica_uid, source_gen)
 
     # TODO: This is just a copy & paste of LocalSyncTarget, as an attempt to
     #       bootstrap us.
     def sync_exchange(self, docs_by_generations, source_replica_uid,
                       last_known_generation, return_doc_cb):
         from u1db.sync import SyncExchange
-        sync_exch = SyncExchange(self._db, source_replica_uid)
+        sync_exch = SyncExchange(self._db, source_replica_uid,
+                                 last_known_generation)
         # 1st step: try to insert incoming docs and record progress
         for doc, doc_gen in docs_by_generations:
             sync_exch.insert_doc_from_source(doc, doc_gen)
         # 2nd step: find changed documents (including conflicts) to return
-        new_gen = sync_exch.find_changes_to_return(last_known_generation)
+        new_gen = sync_exch.find_changes_to_return()
         # final step: return docs and record source replica sync point
         sync_exch.return_docs(return_doc_cb)
         return new_gen

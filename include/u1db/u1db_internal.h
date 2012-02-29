@@ -85,6 +85,7 @@ struct _u1db_sync_target {
      */
     int (*get_sync_exchange)(u1db_sync_target *st,
                              const char *source_replica_uid,
+                             int last_known_source_gen,
                              u1db_sync_exchange **exchange);
 
     void (*finalize_sync_exchange)(u1db_sync_target *st,
@@ -94,6 +95,7 @@ struct _u1db_sync_target {
 struct _u1db_sync_exchange {
     u1database *db;
     const char *source_replica_uid;
+    int last_known_source_gen;
     int new_gen;
     //     self.seen_ids = set()  # incoming ids not superseded
     //     self.changes_to_return = None

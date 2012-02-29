@@ -173,11 +173,11 @@ class TestCSyncTarget(BackendTests):
         self.assertEqual(self.db._replica_uid, self.st.get_sync_info("misc")[0])
 
     def test_get_sync_exchange(self):
-        exc = self.st._get_sync_exchange("source-uid")
+        exc = self.st._get_sync_exchange("source-uid", 10)
         self.assertIsNot(None, exc)
 
     def test_sync_exchange_insert_doc_from_source(self):
-        exc = self.st._get_sync_exchange("source-uid")
+        exc = self.st._get_sync_exchange("source-uid", 5)
         doc = c_backend_wrapper.make_document('doc-id', 'replica:1',
                 tests.simple_doc)
         exc.insert_doc_from_source(doc, 10)

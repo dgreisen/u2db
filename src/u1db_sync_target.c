@@ -28,6 +28,7 @@ static int st_record_sync_info(u1db_sync_target *st,
 
 static int st_get_sync_exchange(u1db_sync_target *st,
                          const char *source_replica_uid,
+                         int source_gen,
                          u1db_sync_exchange **exchange);
 
 static void st_finalize_sync_exchange(u1db_sync_target *st,
@@ -105,7 +106,7 @@ st_record_sync_info(u1db_sync_target *st, const char *source_replica_uid,
 
 static int
 st_get_sync_exchange(u1db_sync_target *st, const char *source_replica_uid,
-                     u1db_sync_exchange **exchange)
+                     int source_gen, u1db_sync_exchange **exchange)
 {
     if (st == NULL || source_replica_uid == NULL || exchange == NULL) {
         return U1DB_INVALID_PARAMETER;
@@ -116,6 +117,7 @@ st_get_sync_exchange(u1db_sync_target *st, const char *source_replica_uid,
     }
     (*exchange)->db = st->db;
     (*exchange)->source_replica_uid = source_replica_uid;
+    (*exchange)->last_known_source_gen = source_gen;
     return U1DB_OK;
 }
 
@@ -142,6 +144,20 @@ u1db__sync_exchange_insert_doc_from_source(u1db_sync_exchange *se,
     }
     status = u1db_put_doc_if_newer(se->db, doc, 0, se->source_replica_uid,
                                    source_gen, &state);
-    // TODO: Update u1db_sync_exchange.seen_ids
+    if (state == U1DB_INSERTED || state == U1DB_CONVERGED) {
+        // TODO: Update u1db_sync_exchange.seen_ids
+        //       One option is to use sqlite TEMP TABLE as a set...
+    } else {
+        // state should be either U1DB_SUPERSEDED or U1DB_CONFLICTED, in either
+        // case, we don't count this as a 'seen_id' because we will want to be
+        // returning a document with this identifier back to the user.
+    }
     return status;
+}
+
+
+int
+u1db__sync_exchange_find_and_return_docs(u1db_sync_exchange *se)
+{
+    return U1DB_NOT_IMPLEMENTED;
 }
