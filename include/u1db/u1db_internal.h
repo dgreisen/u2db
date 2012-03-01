@@ -24,6 +24,7 @@
 #include "u1db/compat.h"
 
 typedef struct sqlite3 sqlite3;
+typedef struct sqlite3_stmt sqlite3_stmt;
 
 struct _u1database
 {
@@ -92,19 +93,22 @@ struct _u1db_sync_target {
                                    u1db_sync_exchange **exchange);
 };
 
+
+typedef struct _u1db_sync_doc_ids_gen {
+    int gen;
+    char *doc_id;
+} u1db_sync_doc_ids_gen;
+
+
 struct _u1db_sync_exchange {
     u1database *db;
     const char *source_replica_uid;
     int last_known_source_gen;
     int new_gen;
-    //     self.seen_ids = set()  # incoming ids not superseded
-    //     self.changes_to_return = None
-    //     # for tests
-    //     self._incoming_trace = []
-    //     self._db._last_exchange_log = {
-    //         'receive': {'docs': self._incoming_trace},
-    //         'return': None
-    //         }
+    struct lh_table *seen_ids;
+    int max_doc_ids;
+    int num_doc_ids;
+    u1db_sync_doc_ids_gen *doc_ids_to_return;
 };
 
 /**
@@ -306,7 +310,32 @@ int u1db__random_bytes(void *buf, size_t count);
  */
 void u1db__bin_to_hex(unsigned char *bin_in, int bin_len, char *hex_out);
 
+/**
+ * Ask the sync_exchange object what doc_ids we have seen.
+ *
+ * This is only meant for testing.
+ *
+ * @param n_ids (OUT) The number of ids present
+ * @param doc_ids (OUT) Will return a heap allocated list of doc_ids. The
+ *                      strings should not be mutated, and the array needs to
+ *                      be freed.
+ */
+int u1db__sync_exchange_seen_ids(u1db_sync_exchange *se, int *n_ids,
+                                 const char ***doc_ids);
+
+
+/**
+ * We have received a doc from source, record it.
+ */
 int u1db__sync_exchange_insert_doc_from_source(u1db_sync_exchange *se,
         u1db_document *doc, int source_gen);
+
+/**
+ * We are done receiving docs, find what we want to return.
+ *
+ * @post se->doc_ids_to_return will be updated with doc_ids to send.
+ */
+int u1db__sync_exchange_find_doc_ids_to_return(u1db_sync_exchange *se);
+
 
 #endif // U1DB_INTERNAL_H

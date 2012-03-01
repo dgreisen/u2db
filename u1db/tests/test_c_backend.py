@@ -180,10 +180,32 @@ class TestCSyncTarget(BackendTests):
         exc = self.st._get_sync_exchange("source-uid", 5)
         doc = c_backend_wrapper.make_document('doc-id', 'replica:1',
                 tests.simple_doc)
+        self.assertEqual([], exc.get_seen_ids())
         exc.insert_doc_from_source(doc, 10)
         self.assertGetDoc(self.db, 'doc-id', 'replica:1', tests.simple_doc,
                           False)
         self.assertEqual(10, self.db.get_sync_generation('source-uid'))
+        self.assertEqual(['doc-id'], exc.get_seen_ids())
+
+    def test_sync_exchange_conflicted_doc(self):
+        doc = self.db.create_doc(tests.simple_doc)
+        exc = self.st._get_sync_exchange("source-uid", 5)
+        doc2 = c_backend_wrapper.make_document(doc.doc_id, 'replica:1',
+                tests.nested_doc)
+        self.assertEqual([], exc.get_seen_ids())
+        # The insert should be rejected and the doc_id not considered 'seen'
+        exc.insert_doc_from_source(doc2, 10)
+        self.assertGetDoc(self.db, doc.doc_id, doc.rev, tests.simple_doc, False)
+        self.assertEqual([], exc.get_seen_ids())
+
+    def test_sync_exchange_find_doc_ids(self):
+        doc = self.db.create_doc(tests.simple_doc)
+        exc = self.st._get_sync_exchange("source-uid", 5)
+        exc.find_doc_ids_to_return()
+        self.assertEqual([(doc.doc_id, 1)], exc.get_doc_ids_to_return())
+
+    def test_sync_exchange_find_doc_ids_not_including_recently_inserted(self):
+        pass
 
 
 class TestVectorClock(BackendTests):

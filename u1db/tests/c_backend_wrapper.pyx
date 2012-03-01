@@ -128,7 +128,14 @@ cdef extern from "u1db/u1db_internal.h":
         char *doc_rev
         char *doc
 
-    ctypedef struct u1db_sync_exchange
+    ctypedef struct u1db_sync_exchange_doc_ids_gen:
+        int gen
+        char *doc_id
+
+    ctypedef struct u1db_sync_exchange:
+        int num_doc_ids
+        u1db_sync_exchange_doc_ids_gen *doc_ids_to_return
+
 
     ctypedef struct u1db_sync_target:
         u1database *db
@@ -170,11 +177,14 @@ cdef extern from "u1db/u1db_internal.h":
                             int from_db_rev, int last_known_rev,
                             u1db_record *from_records, u1db_record **new_records,
                             u1db_record **conflict_records)
+    int u1db__sync_exchange_seen_ids(u1db_sync_exchange *se, int *n_ids,
+                                     const_char_ptr **doc_ids)
     int u1db__format_query(int n_fields, va_list argp, char **buf, int *wildcard)
     int u1db__get_sync_target(u1database *db, u1db_sync_target **sync_target)
     int u1db__free_sync_target(u1db_sync_target **sync_target)
     int u1db__sync_exchange_insert_doc_from_source(u1db_sync_exchange *se,
             u1db_document *doc, int source_gen)
+    int u1db__sync_exchange_find_doc_ids_to_return(u1db_sync_exchange *se)
 
 
 cdef extern from "u1db/u1db_vectorclock.h":
@@ -196,6 +206,7 @@ cdef extern from "u1db/u1db_vectorclock.h":
                                    u1db_vectorclock *older)
 
 from u1db import errors
+from sqlite3 import dbapi2
 
 
 cdef int _append_doc_gen_to_list(void *context, char *doc_id, int generation):
@@ -467,6 +478,34 @@ cdef class CSyncExchange(object):
         handle_status("sync_exchange",
             u1db__sync_exchange_insert_doc_from_source(self._exchange,
                 doc._doc, source_gen))
+
+    def find_doc_ids_to_return(self):
+        self._check()
+        handle_status("find_doc_ids_to_return",
+            u1db__sync_exchange_find_doc_ids_to_return(self._exchange))
+
+    def get_seen_ids(self):
+        cdef const_char_ptr *seen_ids
+        cdef int i, n_ids
+        self._check()
+        handle_status("sync_exchange_seen_ids",
+            u1db__sync_exchange_seen_ids(self._exchange, &n_ids, &seen_ids));
+        res = []
+        for i from 0 <= i < n_ids:
+            res.append(seen_ids[i])
+        if (seen_ids != NULL):
+            free(<void*>seen_ids)
+        return res
+
+    def get_doc_ids_to_return(self):
+        self._check()
+        res = []
+        if (self._exchange.num_doc_ids > 0
+                and self._exchange.doc_ids_to_return != NULL):
+            for i from 0 <= i < self._exchange.num_doc_ids:
+                res.append((self._exchange.doc_ids_to_return[i].doc_id,
+                            self._exchange.doc_ids_to_return[i].gen))
+        return res
 
 
 cdef class CSyncTarget(object):
