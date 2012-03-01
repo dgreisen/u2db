@@ -99,4 +99,6 @@ class HTTPDatabase(http_client.HTTPClientBase, Database):
         doc.rev = res['rev']
 
     def get_sync_target(self):
-        return http_target.HTTPSyncTarget(self._url.geturl())
+        st = http_target.HTTPSyncTarget(self._url.geturl())
+        st._oauth_creds = self._oauth_creds
+        return st

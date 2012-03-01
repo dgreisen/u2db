@@ -155,6 +155,13 @@ class TestHTTPDatabaseSimpleOperations(tests.TestCase):
         self.assertIsInstance(st, http_target.HTTPSyncTarget)
         self.assertEqual(st._url, self.db._url)
 
+    def test_get_sync_target_inherits_oauth_credentials(self):
+        self.db.set_oauth_credentials(tests.consumer1.key,
+                                      tests.consumer1.secret,
+                                      tests.token1.key, tests.token1.secret)
+        st = self.db.get_sync_target()
+        self.assertEqual(self.db._oauth_creds, st._oauth_creds)
+
 
 class TestHTTPDatabaseIntegration(tests.TestCaseWithServer):
 
