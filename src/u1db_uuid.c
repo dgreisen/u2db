@@ -20,9 +20,6 @@
 #include "u1db/u1db_internal.h"
 
 
-static void uuid_to_hex(char *hex_out, unsigned char *bin_in);
-static int random_bytes(void *buf, size_t count);
-
 #if defined(_WIN32) || defined(WIN32)
 #include "Wincrypt.h"
 
@@ -42,8 +39,8 @@ static HCRYPTPROV get_provider()
     return crypt_provider;
 }
 
-static int
-random_bytes(void *buf, size_t count)
+int
+u1db__random_bytes(void *buf, size_t count)
 {
     HCRYPTPROV provider;
 
@@ -79,8 +76,8 @@ get_urandom_fd(void)
     return urandom_fd;
 }
 
-static int
-random_bytes(void *buf, size_t count)
+int
+u1db__random_bytes(void *buf, size_t count)
 {
     int fd, n;
     fd = get_urandom_fd();
@@ -101,24 +98,24 @@ int
 u1db__generate_hex_uuid(char *uuid)
 {
     unsigned char buf[16] = {0};
-    random_bytes(buf, 16);
+    u1db__random_bytes(buf, 16);
     // We set the version number to 4
     buf[6] = (buf[6] & 0x0F) | 0x40;
     // And for the clock bits, bit 6 is 0, bit 7 is 1
     buf[8] = (buf[8] & 0x3F) | 0x80;
-    uuid_to_hex(uuid, buf);
+    u1db__bin_to_hex(buf, 16, uuid);
     return U1DB_OK;
 }
 
-static void
-uuid_to_hex(char *hex_out, unsigned char *bin_in)
+void
+u1db__bin_to_hex(unsigned char *bin_in, int bin_count, char *hex_out)
 {
     int i;
-    for (i = 0; i < 16; ++i) {
+    for (i = 0; i < bin_count; ++i) {
         hex_out[i*2] = (bin_in[i] >> 4);
         hex_out[i*2+1] = (bin_in[i] & 0x0F);
     }
-    for (i = 0; i < 32; ++i) {
+    for (i = 0; i < bin_count*2; ++i) {
         if (hex_out[i] < 10) {
             hex_out[i] += '0';
         } else {
@@ -126,4 +123,3 @@ uuid_to_hex(char *hex_out, unsigned char *bin_in)
         }
     }
 }
-

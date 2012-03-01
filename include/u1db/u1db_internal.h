@@ -292,7 +292,21 @@ int u1db__get_sync_target(u1database *db, u1db_sync_target **sync_target);
 
 void u1db__free_sync_target(u1db_sync_target **sync_target);
 
+/**
+ * Generate count random bytes and put them in buf.
+ */
+int u1db__random_bytes(void *buf, size_t count);
+
+/**
+ * Convert a sequence of binary bytes to hex data.
+ *
+ * @param bin_in    A string of binary bytes, bin_len long.
+ * @param bin_len   Number of bytes of bin_in to convert.
+ * @param hex_out   This must be a buffer of length 2*bin_len
+ */
+void u1db__bin_to_hex(unsigned char *bin_in, int bin_len, char *hex_out);
 
 int u1db__sync_exchange_insert_doc_from_source(u1db_sync_exchange *se,
         u1db_document *doc, int source_gen);
+
 #endif // U1DB_INTERNAL_H
