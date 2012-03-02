@@ -201,11 +201,21 @@ class TestCSyncTarget(BackendTests):
     def test_sync_exchange_find_doc_ids(self):
         doc = self.db.create_doc(tests.simple_doc)
         exc = self.st._get_sync_exchange("source-uid", 5)
+        self.assertEqual(0, exc.new_gen)
         exc.find_doc_ids_to_return()
         self.assertEqual([(doc.doc_id, 1)], exc.get_doc_ids_to_return())
+        self.assertEqual(1, exc.new_gen)
 
     def test_sync_exchange_find_doc_ids_not_including_recently_inserted(self):
-        pass
+        doc1 = self.db.create_doc(tests.simple_doc)
+        doc2 = self.db.create_doc(tests.nested_doc)
+        exc = self.st._get_sync_exchange("source-uid", 5)
+        doc3 = c_backend_wrapper.make_document(doc1.doc_id,
+                doc1.rev + "|zreplica:2", tests.simple_doc)
+        exc.insert_doc_from_source(doc3, 10)
+        exc.find_doc_ids_to_return()
+        self.assertEqual([(doc2.doc_id, 2)], exc.get_doc_ids_to_return())
+        self.assertEqual(3, exc.new_gen)
 
 
 class TestVectorClock(BackendTests):

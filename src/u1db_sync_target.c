@@ -234,7 +234,11 @@ whats_changed_to_doc_ids(void *context, const char *doc_id, int gen)
 {
     u1db_sync_exchange *state;
     state = (u1db_sync_exchange *)context;
-    // TODO: Check if doc_id is in self.seen_ids
+    if (lh_table_lookup(state->seen_ids, doc_id) != NULL) {
+        // This document was already seen, so we don't need to return it
+        // TODO: See bug #944049
+        return 0;
+    }
     if (state->num_doc_ids >= state->max_doc_ids) {
         state->max_doc_ids = (state->max_doc_ids * 2) + 10;
         if (state->doc_ids_to_return == NULL) {

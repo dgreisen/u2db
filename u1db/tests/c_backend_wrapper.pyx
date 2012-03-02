@@ -133,6 +133,7 @@ cdef extern from "u1db/u1db_internal.h":
         char *doc_id
 
     ctypedef struct u1db_sync_exchange:
+        int new_gen
         int num_doc_ids
         u1db_sync_exchange_doc_ids_gen *doc_ids_to_return
 
@@ -473,6 +474,11 @@ cdef class CSyncExchange(object):
     def _check(self):
         if self._exchange == NULL:
             raise RuntimeError("self._exchange is NULL")
+
+    property new_gen:
+        def __get__(self):
+            self._check()
+            return self._exchange.new_gen
 
     def insert_doc_from_source(self, CDocument doc, source_gen):
         self._check()
