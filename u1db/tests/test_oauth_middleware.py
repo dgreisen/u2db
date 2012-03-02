@@ -18,6 +18,7 @@
 import paste.fixture
 from oauth import oauth
 import simplejson
+import time
 
 from u1db import tests
 
@@ -44,8 +45,8 @@ class TestAuthMiddleware(tests.TestCase):
                 consumer, token = super(MyOAuthMiddleware, self).verify(
                     environ, oauth_req)
                 environ['token_key'] = token.key
-        application = MyOAuthMiddleware(witness_app, BASE_URL)
-        self.app = paste.fixture.TestApp(application)
+        self.oauth_midw = MyOAuthMiddleware(witness_app, BASE_URL)
+        self.app = paste.fixture.TestApp(self.oauth_midw)
 
     def test_expect_tilde(self):
         url = BASE_URL + '/foo/doc/doc-id'
@@ -136,3 +137,24 @@ class TestAuthMiddleware(tests.TestCase):
         self.assertEqual(200, resp.status)
         self.assertEqual([(tests.token1.key,
                            '/foo/doc/doc-id', 'old_rev=old-rev')], self.got)
+
+    def test_oauth_timestamp_threshold(self):
+        url = BASE_URL + '/~/foo/doc/doc-id'
+        params = {'old_rev': 'old-rev'}
+        oauth_req = oauth.OAuthRequest.from_consumer_and_token(
+            tests.consumer1,
+            tests.token1,
+            parameters=params,
+            http_url=url,
+            http_method='DELETE'
+            )
+        oauth_req.set_parameter('oauth_timestamp', int(time.time())-5)
+        oauth_req.sign_request(tests.sign_meth_PLAINTEXT,
+                               tests.consumer1, tests.token1)
+        # tweak threshold
+        self.oauth_midw.timestamp_threshold = 1
+        resp = self.app.delete(oauth_req.to_url(), expect_errors=True)
+        self.assertEqual(401, resp.status)
+        err = simplejson.loads(resp.body)
+        self.assertIn('Expired timestamp', err['message'])
+        self.assertIn('threshold 1', err['message'])

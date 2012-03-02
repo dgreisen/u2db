@@ -230,7 +230,7 @@ u1db__sync_exchange_insert_doc_from_source(u1db_sync_exchange *se,
 // Callback for whats_changed to map the callback into the sync_exchange
 // doc_ids_to_return array.
 static int
-whats_changed_to_doc_ids(void *context, char *doc_id, int gen)
+whats_changed_to_doc_ids(void *context, const char *doc_id, int gen)
 {
     u1db_sync_exchange *state;
     state = (u1db_sync_exchange *)context;
@@ -249,6 +249,7 @@ whats_changed_to_doc_ids(void *context, char *doc_id, int gen)
     state->doc_ids_to_return[state->num_doc_ids].doc_id = strdup(doc_id);
     state->doc_ids_to_return[state->num_doc_ids].gen = gen;
     state->num_doc_ids++;
+    return 0;
 }
 
 

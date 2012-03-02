@@ -33,7 +33,11 @@ from u1db.remote import (
 class HTTPClientBase(object):
     """Base class to make requests to a remote HTTP server."""
 
-    # by default use HMAC-SHA1 OAuth signature method
+    # by default use HMAC-SHA1 OAuth signature method to not disclose
+    # tokens
+    # NB: given that the content bodies are not covered by the
+    # signatures though, to achieve security (against man-in-the-middle
+    # attacks for example) one would need HTTPS
     oauth_signature_method = oauth.OAuthSignatureMethod_HMAC_SHA1()
 
     def __init__(self, url):

@@ -1083,7 +1083,7 @@ finish:
 
 int
 u1db_whats_changed(u1database *db, int *gen, void *context,
-                   int (*cb)(void *, char *doc_id, int gen))
+                   int (*cb)(void *, const char *doc_id, int gen))
 {
     int status;
     sqlite3_stmt *statement;
