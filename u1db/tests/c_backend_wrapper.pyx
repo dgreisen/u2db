@@ -72,7 +72,7 @@ cdef extern from "u1db/u1db.h":
                          int n_revs, const_char_ptr *revs)
     int u1db_delete_doc(u1database *db, u1db_document *doc)
     int u1db_whats_changed(u1database *db, int *gen, void *context,
-                           int (*cb)(void *context, char *doc_id, int gen))
+                       int (*cb)(void *context, const_char_ptr doc_id, int gen))
     int u1db__get_transaction_log(u1database *db, void *context,
                               int (*cb)(void *context, char *doc_id, int gen))
     int u1db_get_doc_conflicts(u1database *db, char *doc_id, void *context,
@@ -188,7 +188,8 @@ cdef extern from "u1db/u1db_vectorclock.h":
 from u1db import errors
 
 
-cdef int _append_doc_gen_to_list(void *context, char *doc_id, int generation):
+cdef int _append_doc_gen_to_list(void *context, const_char_ptr doc_id,
+                                 int generation):
     a_list = <object>(context)
     doc = doc_id
     a_list.append((doc, generation))
