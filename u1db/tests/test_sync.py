@@ -139,6 +139,19 @@ class AllDatabaseSyncTargetTests(object):
         self.assertEqual(([], 1), (self.other_changes, new_gen))
         self.assertEqual(10, self.st.get_sync_info('replica')[-1])
 
+    def test_sync_exchange_push_many(self):
+        docs_by_gen = [
+            (self.make_document('doc-id', 'replica:1', simple_doc), 10),
+            (self.make_document('doc-id2', 'replica:1', nested_doc), 11)]
+        new_gen = self.st.sync_exchange(docs_by_gen, 'replica',
+                                        last_known_generation=0,
+                                        return_doc_cb=self.receive_doc)
+        self.assertGetDoc(self.db, 'doc-id', 'replica:1', simple_doc, False)
+        self.assertGetDoc(self.db, 'doc-id2', 'replica:1', nested_doc, False)
+        self.assertEqual(['doc-id', 'doc-id2'], self.db._get_transaction_log())
+        self.assertEqual(([], 2), (self.other_changes, new_gen))
+        self.assertEqual(11, self.st.get_sync_info('replica')[-1])
+
 
 
 class CDatabaseSyncTargetTests(SyncTargetTestSetup, AllDatabaseSyncTargetTests):
@@ -156,19 +169,6 @@ class DatabaseSyncTargetTests(SyncTargetTestSetup, AllDatabaseSyncTargetTests):
     # whitebox true means self.db is the actual local db object
     # against which the sync is performed
     whitebox = True
-
-    def test_sync_exchange_push_many(self):
-        docs_by_gen = [
-            (self.make_document('doc-id', 'replica:1', simple_doc), 10),
-            (self.make_document('doc-id2', 'replica:1', nested_doc), 11)]
-        new_gen = self.st.sync_exchange(docs_by_gen, 'replica',
-                                        last_known_generation=0,
-                                        return_doc_cb=self.receive_doc)
-        self.assertGetDoc(self.db, 'doc-id', 'replica:1', simple_doc, False)
-        self.assertGetDoc(self.db, 'doc-id2', 'replica:1', nested_doc, False)
-        self.assertEqual(['doc-id', 'doc-id2'], self.db._get_transaction_log())
-        self.assertEqual(([], 2), (self.other_changes, new_gen))
-        self.assertEqual(11, self.st.get_sync_info('replica')[-1])
 
     def test_sync_exchange_refuses_conflicts(self):
         doc = self.db.create_doc(simple_doc)
