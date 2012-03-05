@@ -249,6 +249,9 @@ whats_changed_to_doc_ids(void *context, const char *doc_id, int gen)
                     state->doc_ids_to_return,
                     state->max_doc_ids * sizeof(u1db_sync_doc_ids_gen));
         }
+        if (state->doc_ids_to_return == NULL) {
+            return U1DB_NOMEM;
+        }
     }
     state->doc_ids_to_return[state->num_doc_ids].doc_id = strdup(doc_id);
     state->doc_ids_to_return[state->num_doc_ids].gen = gen;
