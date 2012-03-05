@@ -271,3 +271,54 @@ u1db__sync_exchange_find_doc_ids_to_return(u1db_sync_exchange *se)
             whats_changed_to_doc_ids);
     return status;
 }
+
+
+struct _get_docs_to_return_docs_context {
+    u1db_sync_exchange *se;
+    int doc_offset;
+    void *orig_context;
+    int (*user_cb)(void *context, u1db_document *doc, int gen);
+};
+
+
+static int
+get_docs_to_return_docs(void *context, u1db_document *doc)
+{
+    struct _get_docs_to_return_docs_context *ctx;
+    int status;
+    ctx = (struct _get_docs_to_return_docs_context *)context;
+    // Note: using doc_offset in this way assumes that u1db_get_docs will
+    //       always return them in exactly the order we requested. This is
+    //       probably true, though.
+    // TODO: We could check to make sure ctx->se...[].doc_id matches doc.doc_id
+    status = ctx->user_cb(ctx->orig_context, doc,
+            ctx->se->doc_ids_to_return[ctx->doc_offset].gen);
+    ctx->doc_offset++;
+    return status;
+}
+
+
+int
+u1db__sync_exchange_return_docs(u1db_sync_exchange *se, void *context,
+        int (*cb)(void *context, u1db_document *doc, int gen))
+{
+    int status;
+    int i;
+    const char **docs_to_return;
+    struct _get_docs_to_return_docs_context local_ctx;
+    if (se == NULL || cb == NULL) {
+        return U1DB_INVALID_PARAMETER;
+    }
+    docs_to_return = (char **)calloc(se->num_doc_ids, sizeof(char*));
+    for (i = 0; i < se->num_doc_ids; ++i) {
+        docs_to_return[i] = se->doc_ids_to_return[i].doc_id;
+    }
+    local_ctx.se = se;
+    local_ctx.orig_context = context;
+    local_ctx.user_cb = cb;
+    local_ctx.doc_offset = 0;
+    status = u1db_get_docs(se->db, se->num_doc_ids, docs_to_return,
+            0, &local_ctx, get_docs_to_return_docs);
+    free((void *)docs_to_return);
+    return status;
+}

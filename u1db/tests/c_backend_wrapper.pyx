@@ -186,6 +186,8 @@ cdef extern from "u1db/u1db_internal.h":
     int u1db__sync_exchange_insert_doc_from_source(u1db_sync_exchange *se,
             u1db_document *doc, int source_gen)
     int u1db__sync_exchange_find_doc_ids_to_return(u1db_sync_exchange *se)
+    int u1db__sync_exchange_return_docs(u1db_sync_exchange *se, void *context,
+            int (*cb)(void *context, u1db_document *doc, int gen))
 
 
 cdef extern from "u1db/u1db_vectorclock.h":
@@ -255,6 +257,20 @@ cdef int _format_query_dotted(char **buf, int *wildcard, int n_fields, ...):
     status = u1db__format_query(n_fields, argp, buf, wildcard)
     va_end(argp)
     return status
+
+
+cdef int return_doc_cb_wrapper(void *context, u1db_document *doc, int gen):
+    cdef CDocument pydoc
+    user_cb = <object>context
+    pydoc = CDocument()
+    pydoc._doc = doc
+    try:
+        user_cb(pydoc, gen)
+    except Exception, e:
+        # We suppress the exception here, because intermediating through the C
+        # layer gets a bit crazy
+        return U1DB_INVALID_PARAMETER
+    return U1DB_OK
 
 
 def _format_query(fields):
@@ -378,14 +394,18 @@ cdef class CDocument(object):
         raise NotImplementedError(self.__hash__)
 
     def __richcmp__(self, other, int t):
-        if t == 0: # Py_LT <
-            return ((self.doc_id, self.rev, self.content)
-                < (other.doc_id, other.rev, other.content))
-        elif t == 2: # Py_EQ ==
-            return (self.doc_id == other.doc_id
-                    and self.rev == other.rev
-                    and self.content == other.content
-                    and self.has_conflicts == other.has_conflicts)
+        try:
+            if t == 0: # Py_LT <
+                return ((self.doc_id, self.rev, self.content)
+                    < (other.doc_id, other.rev, other.content))
+            elif t == 2: # Py_EQ ==
+                return (self.doc_id == other.doc_id
+                        and self.rev == other.rev
+                        and self.content == other.content
+                        and self.has_conflicts == other.has_conflicts)
+        except AttributeError:
+            # Fall through to NotImplemented
+            pass
 
         return NotImplemented
 
@@ -490,6 +510,12 @@ cdef class CSyncExchange(object):
         self._check()
         handle_status("find_doc_ids_to_return",
             u1db__sync_exchange_find_doc_ids_to_return(self._exchange))
+
+    def return_docs(self, return_doc_cb):
+        self._check()
+        handle_status("return_docs",
+            u1db__sync_exchange_return_docs(self._exchange,
+                <void *>return_doc_cb, return_doc_cb_wrapper))
 
     def get_seen_ids(self):
         cdef const_char_ptr *seen_ids

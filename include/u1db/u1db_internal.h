@@ -337,5 +337,15 @@ int u1db__sync_exchange_insert_doc_from_source(u1db_sync_exchange *se,
  */
 int u1db__sync_exchange_find_doc_ids_to_return(u1db_sync_exchange *se);
 
+/**
+ * Invoke the callback for documents identified by find_doc_ids_to_return.
+ *
+ * @param context   Will be passed as the first parameter to callback
+ * @param cb        A callback, will be called for each document. The document
+ *                  will be allocated on the heap, and should be freed by
+ *                  u1db_free_doc().
+ */
+int u1db__sync_exchange_return_docs(u1db_sync_exchange *se, void *context,
+        int (*cb)(void *context, u1db_document *doc, int gen));
 
 #endif // U1DB_INTERNAL_H
