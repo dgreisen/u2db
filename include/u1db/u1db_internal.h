@@ -94,12 +94,6 @@ struct _u1db_sync_target {
 };
 
 
-typedef struct _u1db_sync_doc_ids_gen {
-    int gen;
-    char *doc_id;
-} u1db_sync_doc_ids_gen;
-
-
 struct _u1db_sync_exchange {
     u1database *db;
     const char *source_replica_uid;
@@ -108,7 +102,8 @@ struct _u1db_sync_exchange {
     struct lh_table *seen_ids;
     int max_doc_ids;
     int num_doc_ids;
-    u1db_sync_doc_ids_gen *doc_ids_to_return;
+    int *gen_for_doc_ids;
+    char **doc_ids_to_return;
 };
 
 /**

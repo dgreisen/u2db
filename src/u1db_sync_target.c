@@ -145,11 +145,15 @@ st_finalize_sync_exchange(u1db_sync_target *st, u1db_sync_exchange **exchange)
     }
     if ((*exchange)->doc_ids_to_return != NULL) {
         for (i = 0; i < (*exchange)->num_doc_ids; ++i) {
-            free((*exchange)->doc_ids_to_return[i].doc_id);
+            free((*exchange)->doc_ids_to_return[i]);
         }
         free((*exchange)->doc_ids_to_return);
         (*exchange)->doc_ids_to_return = NULL;
         (*exchange)->num_doc_ids = 0;
+    }
+    if ((*exchange)->gen_for_doc_ids != NULL) {
+        free((*exchange)->gen_for_doc_ids);
+        (*exchange)->gen_for_doc_ids = NULL;
     }
     free(*exchange);
     *exchange = NULL;
@@ -242,19 +246,25 @@ whats_changed_to_doc_ids(void *context, const char *doc_id, int gen)
     if (state->num_doc_ids >= state->max_doc_ids) {
         state->max_doc_ids = (state->max_doc_ids * 2) + 10;
         if (state->doc_ids_to_return == NULL) {
-            state->doc_ids_to_return = (u1db_sync_doc_ids_gen *)calloc(
-                    state->max_doc_ids, sizeof(u1db_sync_doc_ids_gen));
+            state->doc_ids_to_return = (char **)calloc(state->max_doc_ids,
+                                                       sizeof(char*));
+            state->gen_for_doc_ids = (int *)calloc(state->max_doc_ids,
+                                                   sizeof(int));
         } else {
-            state->doc_ids_to_return = (u1db_sync_doc_ids_gen *)realloc(
+            state->doc_ids_to_return = (char **)realloc(
                     state->doc_ids_to_return,
-                    state->max_doc_ids * sizeof(u1db_sync_doc_ids_gen));
+                    state->max_doc_ids * sizeof(char*));
+            state->gen_for_doc_ids = (int *)realloc(state->gen_for_doc_ids,
+                    state->max_doc_ids * sizeof(int));
         }
-        if (state->doc_ids_to_return == NULL) {
+        if (state->doc_ids_to_return == NULL
+                || state->gen_for_doc_ids == NULL)
+        {
             return U1DB_NOMEM;
         }
     }
-    state->doc_ids_to_return[state->num_doc_ids].doc_id = strdup(doc_id);
-    state->doc_ids_to_return[state->num_doc_ids].gen = gen;
+    state->doc_ids_to_return[state->num_doc_ids] = strdup(doc_id);
+    state->gen_for_doc_ids[state->num_doc_ids] = gen;
     state->num_doc_ids++;
     return 0;
 }
@@ -292,7 +302,7 @@ get_docs_to_return_docs(void *context, u1db_document *doc)
     //       probably true, though.
     // TODO: We could check to make sure ctx->se...[].doc_id matches doc.doc_id
     status = ctx->user_cb(ctx->orig_context, doc,
-            ctx->se->doc_ids_to_return[ctx->doc_offset].gen);
+            ctx->se->gen_for_doc_ids[ctx->doc_offset]);
     ctx->doc_offset++;
     return status;
 }
@@ -303,22 +313,15 @@ u1db__sync_exchange_return_docs(u1db_sync_exchange *se, void *context,
         int (*cb)(void *context, u1db_document *doc, int gen))
 {
     int status;
-    int i;
-    const char **docs_to_return;
     struct _get_docs_to_return_docs_context local_ctx;
     if (se == NULL || cb == NULL) {
         return U1DB_INVALID_PARAMETER;
-    }
-    docs_to_return = (char **)calloc(se->num_doc_ids, sizeof(char*));
-    for (i = 0; i < se->num_doc_ids; ++i) {
-        docs_to_return[i] = se->doc_ids_to_return[i].doc_id;
     }
     local_ctx.se = se;
     local_ctx.orig_context = context;
     local_ctx.user_cb = cb;
     local_ctx.doc_offset = 0;
-    status = u1db_get_docs(se->db, se->num_doc_ids, docs_to_return,
+    status = u1db_get_docs(se->db, se->num_doc_ids, se->doc_ids_to_return,
             0, &local_ctx, get_docs_to_return_docs);
-    free((void *)docs_to_return);
     return status;
 }

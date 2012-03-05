@@ -128,14 +128,11 @@ cdef extern from "u1db/u1db_internal.h":
         char *doc_rev
         char *doc
 
-    ctypedef struct u1db_sync_exchange_doc_ids_gen:
-        int gen
-        char *doc_id
-
     ctypedef struct u1db_sync_exchange:
         int new_gen
         int num_doc_ids
-        u1db_sync_exchange_doc_ids_gen *doc_ids_to_return
+        char **doc_ids_to_return
+        int *gen_for_doc_ids
 
 
     ctypedef struct u1db_sync_target:
@@ -536,8 +533,8 @@ cdef class CSyncExchange(object):
         if (self._exchange.num_doc_ids > 0
                 and self._exchange.doc_ids_to_return != NULL):
             for i from 0 <= i < self._exchange.num_doc_ids:
-                res.append((self._exchange.doc_ids_to_return[i].doc_id,
-                            self._exchange.doc_ids_to_return[i].gen))
+                res.append((self._exchange.doc_ids_to_return[i],
+                            self._exchange.gen_for_doc_ids[i]))
         return res
 
 
