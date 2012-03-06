@@ -362,6 +362,7 @@ evaluate_index_and_insert_into_db(void *context, const char *expression)
     int status = U1DB_OK;
     char *result = NULL;
     char *tmp_expression = NULL;
+    char *progress = NULL;
     const char *DOT = ".";
 
     ctx = (struct evaluate_index_context *)context;
@@ -369,11 +370,11 @@ evaluate_index_and_insert_into_db(void *context, const char *expression)
         return U1DB_INVALID_JSON;
     }
     tmp_expression = strdup(expression); // XXX: need to test for out of mem?
-    result = strtok(tmp_expression, DOT); // XXX: strtok thread safety?
+    result = strtok_r(tmp_expression, DOT, &progress);
     val = ctx->obj;
     while (result != NULL) {
         val = json_object_object_get(val, result);
-        result = strtok(NULL, DOT);
+        result = strtok_r(NULL, DOT, &progress);
     }
     free(tmp_expression);
     if (val != NULL) {
