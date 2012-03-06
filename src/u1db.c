@@ -479,7 +479,8 @@ u1db_put_doc(u1database *db, u1db_document *doc)
     const char *old_content = NULL, *old_doc_rev = NULL;
     int status;
     int old_content_len;
-    sqlite3_stmt *statement;
+    int conflicted;
+    sqlite3_stmt *statement = NULL;
 
     if (db == NULL || doc == NULL) {
         // Bad parameter
@@ -492,6 +493,12 @@ u1db_put_doc(u1database *db, u1db_document *doc)
     status = sqlite3_exec(db->sql_handle, "BEGIN", NULL, NULL, NULL);
     if (status != SQLITE_OK) {
         return status;
+    }
+    status = lookup_conflict(db, doc->doc_id, &conflicted);
+    if (status != SQLITE_OK) { goto finish; }
+    if (conflicted) {
+        status = U1DB_CONFLICTED;
+        goto finish;
     }
     old_content = NULL;
     status = lookup_doc(db, doc->doc_id, &old_doc_rev, &old_content,
