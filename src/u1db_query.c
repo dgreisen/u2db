@@ -361,7 +361,7 @@ evaluate_index_and_insert_into_db(void *context, const char *expression)
     const char *str_val;
     int status = U1DB_OK;
     char *result = NULL;
-    char *tmp_expression;
+    char *tmp_expression = NULL;
     const char *DOT = ".";
 
     ctx = (struct evaluate_index_context *)context;
