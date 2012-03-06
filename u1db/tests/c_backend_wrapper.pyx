@@ -429,14 +429,18 @@ cdef handle_status(context, int status):
     raise RuntimeError('%s (status: %s)' % (context, status))
 
 
+cdef class CDatabase(object)
+
 cdef class CSyncTarget(object):
 
     cdef u1db_sync_target *_st
+    cdef CDatabase _db
 
-    def __init__(self, CDatabase db):
+    def __init__(self, db):
+        self._db = db 
         self._st = NULL
         handle_status("get_sync_target",
-            u1db__get_sync_target(db._db, &self._st))
+            u1db__get_sync_target(self._db._db, &self._st))
 
     def __dealloc__(self):
         u1db__free_sync_target(&self._st)
