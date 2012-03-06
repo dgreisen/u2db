@@ -35,7 +35,8 @@ static int st_get_sync_exchange(u1db_sync_target *st,
 
 static void st_finalize_sync_exchange(u1db_sync_target *st,
                                u1db_sync_exchange **exchange);
-
+static int st_set_trace_hook(u1db_sync_target *st,
+                             void *context, u1db__trace_callback cb);
 static void se_free_seen_id(struct lh_entry *e);
 
 
@@ -56,6 +57,7 @@ u1db__get_sync_target(u1database *db, u1db_sync_target **sync_target)
     (*sync_target)->record_sync_info = st_record_sync_info;
     (*sync_target)->get_sync_exchange = st_get_sync_exchange;
     (*sync_target)->finalize_sync_exchange = st_finalize_sync_exchange;
+    (*sync_target)->_set_trace_hook = st_set_trace_hook;
     return status;
 }
 
@@ -113,22 +115,26 @@ static int
 st_get_sync_exchange(u1db_sync_target *st, const char *source_replica_uid,
                      int source_gen, u1db_sync_exchange **exchange)
 {
+    u1db_sync_exchange *tmp;
     if (st == NULL || source_replica_uid == NULL || exchange == NULL) {
         return U1DB_INVALID_PARAMETER;
     }
-    *exchange = (u1db_sync_exchange *)calloc(1, sizeof(u1db_sync_exchange));
-    if (*exchange == NULL) {
+    tmp = (u1db_sync_exchange *)calloc(1, sizeof(u1db_sync_exchange));
+    if (tmp == NULL) {
         return U1DB_NOMEM;
     }
-    (*exchange)->db = st->db;
-    (*exchange)->source_replica_uid = source_replica_uid;
-    (*exchange)->last_known_source_gen = source_gen;
+    tmp->db = st->db;
+    tmp->source_replica_uid = source_replica_uid;
+    tmp->last_known_source_gen = source_gen;
     // Note: lh_table is overkill for what we need. We only need a set, not a
     //       mapping, and we don't need the prev/next pointers. But it is
     //       already available, and doesn't require us to implement and debug
     //       another set() implementation.
-    (*exchange)->seen_ids = lh_kchar_table_new(100, "seen_ids",
+    tmp->seen_ids = lh_kchar_table_new(100, "seen_ids",
             se_free_seen_id);
+    tmp->trace_context = st->trace_context;
+    tmp->trace_cb = st->trace_cb;
+    *exchange = tmp;
     return U1DB_OK;
 }
 
@@ -158,6 +164,15 @@ st_finalize_sync_exchange(u1db_sync_target *st, u1db_sync_exchange **exchange)
     }
     free(*exchange);
     *exchange = NULL;
+}
+
+
+static int
+st_set_trace_hook(u1db_sync_target *st, void *context, u1db__trace_callback cb)
+{
+    st->trace_context = context;
+    st->trace_cb = cb;
+    return U1DB_OK;
 }
 
 
@@ -278,8 +293,17 @@ u1db__sync_exchange_find_doc_ids_to_return(u1db_sync_exchange *se)
     if (se == NULL) {
         return U1DB_INVALID_PARAMETER;
     }
+    if (se->trace_cb) {
+        status = se->trace_cb(se->trace_context, "before whats_changed");
+        if (status != U1DB_OK) { goto finish; }
+    }
     status = u1db_whats_changed(se->db, &se->new_gen, (void*)se,
             whats_changed_to_doc_ids);
+    if (se->trace_cb) {
+        status = se->trace_cb(se->trace_context, "after whats_changed");
+        if (status != U1DB_OK) { goto finish; }
+    }
+finish:
     return status;
 }
 
@@ -322,6 +346,10 @@ u1db__sync_exchange_return_docs(u1db_sync_exchange *se, void *context,
     local_ctx.orig_context = context;
     local_ctx.user_cb = cb;
     local_ctx.doc_offset = 0;
+    if (se->trace_cb) {
+        status = se->trace_cb(se->trace_context, "before get_docs");
+        if (status != U1DB_OK) { goto finish; }
+    }
     if (se->num_doc_ids > 0) {
         // For some reason, gcc doesn't like to auto-cast "char **" to "const
         // char **".
@@ -329,5 +357,6 @@ u1db__sync_exchange_return_docs(u1db_sync_exchange *se, void *context,
                 (const char **)se->doc_ids_to_return,
                 0, &local_ctx, get_docs_to_return_docs);
     }
+finish:
     return status;
 }
