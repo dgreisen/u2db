@@ -322,7 +322,9 @@ u1db__sync_exchange_return_docs(u1db_sync_exchange *se, void *context,
     local_ctx.orig_context = context;
     local_ctx.user_cb = cb;
     local_ctx.doc_offset = 0;
-    status = u1db_get_docs(se->db, se->num_doc_ids, se->doc_ids_to_return,
+    // For some reason, gcc doesn't like to auto-cast "char **" to "const char **".
+    status = u1db_get_docs(se->db, se->num_doc_ids,
+            (const char **)se->doc_ids_to_return,
             0, &local_ctx, get_docs_to_return_docs);
     return status;
 }

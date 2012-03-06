@@ -40,6 +40,7 @@ typedef struct _u1db_document
 
 typedef struct _u1query u1query;
 typedef int (*u1db_doc_callback)(void *context, u1db_document *doc);
+typedef int (*u1db_doc_id_gen_callback)(void *context, const char *doc_id, int gen);
 
 #define U1DB_OK 0
 #define U1DB_INVALID_PARAMETER -1
@@ -173,7 +174,7 @@ int u1db_get_doc(u1database *db, const char *doc_id, u1db_document **doc);
  */
 int u1db_get_docs(u1database *db, int n_doc_ids, const char **doc_ids,
                   int check_for_conflicts, void *context,
-                  int (*cb)(void *context, u1db_document *doc));
+                  u1db_doc_callback cb);
 
 /**
  * Get all of the contents associated with a conflicted document.
@@ -189,7 +190,7 @@ int u1db_get_docs(u1database *db, int n_doc_ids, const char **doc_ids,
  *      freeing the memory (or saving it somewhere).
  */
 int u1db_get_doc_conflicts(u1database *db, const char *doc_id, void *context,
-                           int (*cb)(void *context, u1db_document *doc));
+                           u1db_doc_callback cb);
 
 /**
  * Mark a document as deleted.
@@ -217,8 +218,7 @@ int u1db_delete_doc(u1database *db, u1db_document *doc);
  *               once per doc_id.
  * @param context Opaque context, passed back to the caller.
  */
-int u1db_whats_changed(u1database *db, int *gen, void *context,
-                       int (*cb)(void *context, const char *doc_id, int gen));
+int u1db_whats_changed(u1database *db, int *gen, void *context, u1db_doc_id_gen_callback cb);
 
 
 /**
