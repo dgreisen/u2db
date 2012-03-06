@@ -69,33 +69,26 @@ target_scenarios = [
                     'server_def': oauth_http_server_def}),
     ]
 
+c_db_scenarios = [
+    ('local,c', {'create_db_and_target': _make_local_db_and_target,
+                 'do_create_database': tests.create_c_database,
+                 'make_document': tests.create_c_document,
+                 'whitebox': False})
+    ]
 
-# An explanation of the transitional setup for the following classes
-# We want to be running all tests against all back ends. However, until all
-# backends pass the tests, we need a way to allow them to run against some of
-# them.
-# 1) We want to pull out the common logic for how to set up the database and
-#    server we will be testing against, and how it integrates with the unittest
-#    framework. However, our test loader will automatically run any 'test_foo'
-#    functions, even though we haven't permutated the class for a given
-#    scenario.
-# 2) We permute every backend against every server. However, the C backend
-#    cannot talk HTTP or HTTP+OAuth yet. So we need to restrict its
-#    parameterization, as well as its tests.
-# 3) So we end up with 1 class that encapsulates the unittest infrastructure,
-#    but does not contain any test_* functions (SyncTargetTestSetup). And
-#    another class that holds common tests that are run against everything
-#    (DatabaseSyncTargetTests), a class for the C backend and a class for all
-#    the python backends.
-# 4) Eventually, all this will be pull back into a single class that holds
-#    everything (DatabaseSyncTargetTests) with every backend permuted against
-#    every server.
-class SyncTargetTestSetup(tests.DatabaseBaseTests, tests.TestCaseWithServer):
 
+class DatabaseSyncTargetTests(tests.DatabaseBaseTests,
+                              tests.TestCaseWithServer):
+
+    # whitebox true means self.db is the actual local db object
+    # against which the sync is performed
     whitebox = True
+    scenarios = (tests.multiply_scenarios(tests.DatabaseBaseTests.scenarios,
+                                          target_scenarios) 
+                 + c_db_scenarios)
 
     def setUp(self):
-        super(SyncTargetTestSetup, self).setUp()
+        super(DatabaseSyncTargetTests, self).setUp()
         self.db, self.st = self.create_db_and_target(self)
         self.other_changes = []
 
@@ -104,10 +97,7 @@ class SyncTargetTestSetup(tests.DatabaseBaseTests, tests.TestCaseWithServer):
         del self.st
         self.db.close()
         del self.db
-        super(SyncTargetTestSetup, self).tearDown()
-
-
-class AllDatabaseSyncTargetTests(object):
+        super(DatabaseSyncTargetTests, self).tearDown()
 
     def receive_doc(self, doc, gen):
         self.other_changes.append((doc.doc_id, doc.rev, doc.content, gen))
@@ -151,24 +141,6 @@ class AllDatabaseSyncTargetTests(object):
         self.assertEqual(['doc-id', 'doc-id2'], self.db._get_transaction_log())
         self.assertEqual(([], 2), (self.other_changes, new_gen))
         self.assertEqual(11, self.st.get_sync_info('replica')[-1])
-
-
-
-class CDatabaseSyncTargetTests(SyncTargetTestSetup, AllDatabaseSyncTargetTests):
-
-    scenarios = tests.multiply_scenarios(tests.C_DATABASE_SCENARIOS,
-            target_scenarios[:1]) # We don't yet test http or oauth_http
-
-
-
-class DatabaseSyncTargetTests(SyncTargetTestSetup, AllDatabaseSyncTargetTests):
-
-    scenarios = tests.multiply_scenarios(tests.DatabaseBaseTests.scenarios,
-                                         target_scenarios)
-
-    # whitebox true means self.db is the actual local db object
-    # against which the sync is performed
-    whitebox = True
 
     def test_sync_exchange_refuses_conflicts(self):
         doc = self.db.create_doc(simple_doc)
@@ -240,6 +212,8 @@ class DatabaseSyncTargetTests(SyncTargetTestSetup, AllDatabaseSyncTargetTests):
         self.assertEqual([doc.doc_id, doc.doc_id],
                          self.db._get_transaction_log())
         self.assertEqual(([], 2), (self.other_changes, new_gen))
+
+
 
     def test_sync_exchange_with_concurrent_updates(self):
         if not self.whitebox:
