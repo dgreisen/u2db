@@ -355,6 +355,13 @@ class LocalDatabaseWithConflictsTests(tests.DatabaseBaseTests):
         self.assertEqual([alt_doc, doc],
                          self.db.get_doc_conflicts(doc.doc_id))
 
+    def test_get_doc_conflicts_unconflicted(self):
+        doc = self.db.create_doc(simple_doc)
+        self.assertEqual([], self.db.get_doc_conflicts(doc.doc_id))
+
+    def test_get_doc_conflicts_no_such_id(self):
+        self.assertEqual([], self.db.get_doc_conflicts('doc-id'))
+
     def test_resolve_doc(self):
         doc = self.db.create_doc(simple_doc)
         alt_doc = self.make_document(doc.doc_id, 'alternate:1', nested_doc)
@@ -548,26 +555,10 @@ class LocalDatabaseWithConflictsTests(tests.DatabaseBaseTests):
 
     def test_delete_refuses_for_conflicted(self):
         doc1 = self.db.create_doc(simple_doc)
-        doc2 = self.db2.create_doc(nested_doc, doc_id=doc1.doc_id)
-        self.sync(self.db1, self.db2)
-        self.assertGetDoc(self.db1, doc2.doc_id, doc2.rev, nested_doc, True)
-        self.assertRaises(errors.ConflictedDoc, self.db1.delete_doc, doc2)
-
-    def test_get_doc_conflicts_unconflicted(self):
-        doc = self.db.create_doc(simple_doc)
-        self.assertEqual([], self.db1.get_doc_conflicts(doc.doc_id))
-
-    def test_get_doc_conflicts_no_such_id(self):
-        self.assertEqual([], self.db.get_doc_conflicts('doc-id'))
-
-    def test_get_doc_conflicts(self):
-        doc1 = self.db.create_doc(simple_doc)
-        content1 = '{"key": "altval"}'
-        doc2 = self.db2.create_doc(content1, doc_id=doc1.doc_id)
-        self.sync(self.db1, self.db2)
-        self.assertGetDocConflicts(self.db1, doc1.doc_id,
-            [(doc2.rev, content1), (doc1.rev, simple_doc)])
-
+        doc2 = self.make_document(doc1.doc_id, 'altrev:1', nested_doc)
+        self.db.put_doc_if_newer(doc2, save_conflict=True)
+        self.assertGetDoc(self.db, doc2.doc_id, doc2.rev, nested_doc, True)
+        self.assertRaises(errors.ConflictedDoc, self.db.delete_doc, doc2)
 
 
 class DatabaseIndexTests(tests.DatabaseBaseTests):

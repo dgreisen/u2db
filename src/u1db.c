@@ -1041,6 +1041,7 @@ u1db_delete_doc(u1database *db, u1db_document *doc)
     sqlite3_stmt *statement;
     const char *cur_doc_rev, *content;
     char *doc_rev = NULL;
+    int conflicted;
 
     if (db == NULL || doc == NULL) {
         return U1DB_INVALID_PARAMETER;
@@ -1065,6 +1066,12 @@ u1db_delete_doc(u1database *db, u1db_document *doc)
     if (strcmp((const char *)cur_doc_rev, doc->doc_rev) != 0) {
         // The saved document revision doesn't match
         status = U1DB_REVISION_CONFLICT;
+        goto finish;
+    }
+    status = lookup_conflict(db, doc->doc_id, &conflicted);
+    if (status != SQLITE_OK) { goto finish; }
+    if (doc->has_conflicts) {
+        status = U1DB_CONFLICTED;
         goto finish;
     }
     // TODO: Handle deleting a document with conflicts
