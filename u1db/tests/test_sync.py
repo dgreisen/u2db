@@ -80,12 +80,12 @@ c_db_scenarios = [
 class DatabaseSyncTargetTests(tests.DatabaseBaseTests,
                               tests.TestCaseWithServer):
 
-    # whitebox true means self.db is the actual local db object
-    # against which the sync is performed
-    whitebox = True
     scenarios = (tests.multiply_scenarios(tests.DatabaseBaseTests.scenarios,
                                           target_scenarios) 
                  + c_db_scenarios)
+    # whitebox true means self.db is the actual local db object
+    # against which the sync is performed
+    whitebox = True
 
     def setUp(self):
         super(DatabaseSyncTargetTests, self).setUp()
@@ -212,8 +212,6 @@ class DatabaseSyncTargetTests(tests.DatabaseBaseTests,
         self.assertEqual([doc.doc_id, doc.doc_id],
                          self.db._get_transaction_log())
         self.assertEqual(([], 2), (self.other_changes, new_gen))
-
-
 
     def test_sync_exchange_with_concurrent_updates(self):
         if not self.whitebox:
