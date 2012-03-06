@@ -109,7 +109,7 @@ struct _u1db_sync_exchange {
 /**
  * Internal API, Get the global database rev.
  */
-int u1db__get_db_generation(u1database *db, int *generation);
+int u1db__get_generation(u1database *db, int *generation);
 
 /**
  * Internal API, Allocate a new document id, for cases when callers do not

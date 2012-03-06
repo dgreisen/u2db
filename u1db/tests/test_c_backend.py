@@ -59,6 +59,12 @@ class TestCDatabase(BackendTests):
         self.assertEqual([], db._run_sql('INSERT INTO test VALUES (1)'))
         self.assertEqual([('1',)], db._run_sql('SELECT * FROM test'))
 
+    def test__get_generation(self):
+        db = c_backend_wrapper.CDatabase(':memory:')
+        self.assertEqual(0, db._get_generation())
+        db.create_doc(tests.simple_doc)
+        self.assertEqual(1, db._get_generation())
+
     def test__set_replica_uid(self):
         db = c_backend_wrapper.CDatabase(':memory:')
         self.assertIsNot(None, db._replica_uid)

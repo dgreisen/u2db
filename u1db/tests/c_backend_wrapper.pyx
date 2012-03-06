@@ -151,7 +151,7 @@ cdef extern from "u1db/u1db_internal.h":
         void (*finalize_sync_exchange)(u1db_sync_target *st,
                                        u1db_sync_exchange **exchange)
 
-    int u1db__get_db_generation(u1database *, int *db_rev)
+    int u1db__get_generation(u1database *, int *db_rev)
     char *u1db__allocate_doc_id(u1database *)
     int u1db__sql_close(u1database *)
     int u1db__sql_is_open(u1database *)
@@ -804,6 +804,12 @@ cdef class CDatabase(object):
             u1db__get_transaction_log(self._db, <void*>a_list,
                                       _append_doc_gen_to_list))
         return [doc_id for doc_id, gen in a_list]
+
+    def _get_generation(self):
+        cdef int generation
+        handle_status("get_generation",
+            u1db__get_generation(self._db, &generation))
+        return generation
 
     def get_sync_generation(self, replica_uid):
         cdef int generation
