@@ -74,7 +74,7 @@ st_get_sync_info(u1db_sync_target *st, const char *source_replica_uid,
     if (status != U1DB_OK) { goto finish; }
     status = u1db__get_sync_generation(st->db, source_replica_uid, source_gen);
     if (status != U1DB_OK) { goto finish; }
-    status = u1db__get_db_generation(st->db, st_gen);
+    status = u1db__get_generation(st->db, st_gen);
 finish:
     return status;
 }

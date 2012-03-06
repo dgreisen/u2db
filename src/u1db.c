@@ -1157,7 +1157,7 @@ u1db__get_transaction_log(u1database *db, void *context,
 
 
 int
-u1db__get_db_generation(u1database *db, int *generation)
+u1db__get_generation(u1database *db, int *generation)
 {
     int status;
     sqlite3_stmt *statement;
@@ -1188,7 +1188,7 @@ u1db__allocate_doc_id(u1database *db)
 {
     int generation, status;
     char *buf;
-    status = u1db__get_db_generation(db, &generation);
+    status = u1db__get_generation(db, &generation);
     if(status != U1DB_OK) {
         // There was an error.
         return NULL;
