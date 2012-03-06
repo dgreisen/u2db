@@ -102,6 +102,8 @@ cdef extern from "u1db/u1db.h":
     int U1DB_NOT_IMPLEMENTED
     int U1DB_INVALID_JSON
     int U1DB_INVALID_VALUE_FOR_INDEX
+    int U1DB_INTERNAL_ERROR
+
     int U1DB_INSERTED
     int U1DB_SUPERSEDED
     int U1DB_CONVERGED
@@ -134,7 +136,7 @@ cdef extern from "u1db/u1db_internal.h":
         char **doc_ids_to_return
         int *gen_for_doc_ids
 
-
+    ctypedef int (*u1db__trace_callback)(void *context, const_char_ptr state)
     ctypedef struct u1db_sync_target:
         u1database *db
         int (*get_sync_info)(u1db_sync_target *st,
@@ -148,6 +150,9 @@ cdef extern from "u1db/u1db_internal.h":
                                  u1db_sync_exchange **exchange)
         void (*finalize_sync_exchange)(u1db_sync_target *st,
                                        u1db_sync_exchange **exchange)
+        int (*_set_trace_hook)(u1db_sync_target *st,
+                               void *context, u1db__trace_callback cb)
+
 
     int u1db__get_db_generation(u1database *, int *db_rev)
     char *u1db__allocate_doc_id(u1database *)
@@ -267,6 +272,18 @@ cdef int return_doc_cb_wrapper(void *context, u1db_document *doc, int gen):
         # We suppress the exception here, because intermediating through the C
         # layer gets a bit crazy
         return U1DB_INVALID_PARAMETER
+    return U1DB_OK
+
+
+cdef int _trace_hook(void *context, const_char_ptr state):
+    if context == NULL:
+        return U1DB_INVALID_PARAMETER
+    ctx = <object>context
+    try:
+        ctx(state)
+    except Exception:
+        # TODO: I'd really like a generic "something went wrong" error.
+        return U1DB_INTERNAL_ERROR
     return U1DB_OK
 
 
@@ -465,6 +482,8 @@ cdef handle_status(context, int status):
                                   % (context,))
     if status == U1DB_INVALID_VALUE_FOR_INDEX:
         raise errors.InvalidValueForIndex()
+    if status == U1DB_INTERNAL_ERROR:
+        raise errors.U1DBError("internal error")
     raise RuntimeError('%s (status: %s)' % (context, status))
 
 
@@ -599,6 +618,12 @@ cdef class CSyncTarget(object):
         se.find_doc_ids_to_return()
         se.return_docs(return_doc_cb)
         return se._exchange.new_gen
+
+    def _set_trace_hook(self, cb):
+        self._check()
+        assert self._st._set_trace_hook != NULL, "_set_trace_hook is NULL?"
+        handle_status("_set_trace_hook",
+            self._st._set_trace_hook(self._st, <void*>cb, _trace_hook));
 
 
 cdef class CDatabase(object):

@@ -102,6 +102,13 @@ class DatabaseSyncTargetTests(tests.DatabaseBaseTests,
     def receive_doc(self, doc, gen):
         self.other_changes.append((doc.doc_id, doc.rev, doc.content, gen))
 
+    def set_trace_hook(self, callback):
+        try:
+            self.st._set_trace_hook(callback)
+        except NotImplementedError, e:
+            self.skipTest("%s does not implement _set_trace_hook"
+                          % (self.st.__class__.__name__,))
+
     def test_get_sync_target(self):
         self.assertIsNot(None, self.st)
 
@@ -214,16 +221,13 @@ class DatabaseSyncTargetTests(tests.DatabaseBaseTests,
         self.assertEqual(([], 2), (self.other_changes, new_gen))
 
     def test_sync_exchange_with_concurrent_updates(self):
-        if not self.whitebox:
-            self.skipTest("requires to be able to monkeypatch the target db")
+        def after_whatschanged_cb(state):
+            if state != 'after whats_changed':
+                return
+            self.db.create_doc('{"new": "doc"}')
+        self.set_trace_hook(after_whatschanged_cb)
         doc = self.db.create_doc(simple_doc)
         self.assertEqual([doc.doc_id], self.db._get_transaction_log())
-        orig_wc = self.db.whats_changed
-        def after_whatschanged(*args, **kwargs):
-            val = orig_wc(*args, **kwargs)
-            self.db.create_doc('{"new": "doc"}')
-            return val
-        self.db.whats_changed = after_whatschanged
         new_doc = '{"key": "altval"}'
         docs_by_gen = [
             (self.make_document(doc.doc_id, 'test:1|z:2', new_doc), 10)]
@@ -233,22 +237,31 @@ class DatabaseSyncTargetTests(tests.DatabaseBaseTests,
         self.assertEqual(([], 2), (self.other_changes, new_gen))
 
     def test_sync_exchange_detect_incomplete_exchange(self):
-        if not self.whitebox:
-            self.skipTest("requires to be able to monkeypatch the target db")
+        def before_get_docs_explode(state):
+            if state != 'before get_docs':
+                return
+            raise errors.U1DBError("fail")
+        self.set_trace_hook(before_get_docs_explode)
         # suppress traceback printing in the wsgiref server
         self.patch(simple_server.ServerHandler,
                    'log_exception', lambda h, exc_info: None)
         doc = self.db.create_doc(simple_doc)
         self.assertEqual([doc.doc_id], self.db._get_transaction_log())
-        class Fail(Exception):
-            pass
-        def exploding_get_docs(doc_ids, check_for_conflicts):
-            raise Fail
-        self.db.get_docs = exploding_get_docs
-        self.assertRaises((Fail, errors.BrokenSyncStream),
+        self.assertRaises((errors.U1DBError, errors.BrokenSyncStream),
                           self.st.sync_exchange, [], 'other-replica',
                           last_known_generation=0,
                           return_doc_cb=self.receive_doc)
+
+    def test__set_trace_hook(self):
+        called = []
+        def cb(state):
+            called.append(state)
+        self.set_trace_hook(cb)
+        self.st.sync_exchange([], 'replica', 0, self.receive_doc)
+        self.assertEqual(['before whats_changed',
+                          'after whats_changed',
+                          'before get_docs'],
+                         called)
 
 
 class DatabaseSyncTests(tests.DatabaseBaseTests):

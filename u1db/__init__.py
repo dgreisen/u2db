@@ -386,3 +386,14 @@ class SyncTarget(object):
             the current generation for this replica
         """
         raise NotImplementedError(self.sync_exchange)
+
+    def _set_trace_hook(self, cb):
+        """Set a callback that will be invoked to trace database actions.
+
+        The callback will be passed a string indicating the current state, and
+        the sync target object.  Implementations do not have to implement this
+        api, it is used by the test suite.
+
+        :param cb: A callable that takes cb(state)
+        """
+        raise NotImplementedError(self._set_trace_hook)

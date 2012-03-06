@@ -130,10 +130,19 @@ class SyncExchange(object):
         self.new_gen = None
         # for tests
         self._incoming_trace = []
+        self._trace_hook = None
         self._db._last_exchange_log = {
             'receive': {'docs': self._incoming_trace},
             'return': None
             }
+
+    def _set_trace_hook(self, cb):
+        self._trace_hook = cb
+
+    def _trace(self, state):
+        if not self._trace_hook:
+            return
+        self._trace_hook(state)
 
     def insert_doc_from_source(self, doc, source_gen):
         """Try to insert synced document from source.
@@ -185,7 +194,9 @@ class SyncExchange(object):
         self._db._last_exchange_log['receive'].update({  # for tests
             'last_known_gen': self.source_last_known_generation
             })
+        self._trace('before whats_changed')
         gen, changes = self._db.whats_changed(self.source_last_known_generation)
+        self._trace('after whats_changed')
         self.new_gen = gen
         seen_ids = self.seen_ids
         # changed docs that weren't superseded by or converged with
@@ -207,6 +218,7 @@ class SyncExchange(object):
         changes_to_return = self.changes_to_return
         # return docs, including conflicts
         changed_doc_ids = [doc_id for doc_id, _ in changes_to_return]
+        self._trace('before get_docs')
         docs = self._db.get_docs(changed_doc_ids, check_for_conflicts=False)
 
         docs_by_gen = zip(docs, (gen for _, gen in changes_to_return))
@@ -224,11 +236,14 @@ class LocalSyncTarget(u1db.SyncTarget):
 
     def __init__(self, db):
         self._db = db
+        self._trace_hook = None
 
     def sync_exchange(self, docs_by_generations, source_replica_uid,
                       last_known_generation, return_doc_cb):
         sync_exch = SyncExchange(self._db, source_replica_uid,
                                  last_known_generation)
+        if self._trace_hook:
+            sync_exch._set_trace_hook(self._trace_hook)
         # 1st step: try to insert incoming docs and record progress
         for doc, doc_gen in docs_by_generations:
             sync_exch.insert_doc_from_source(doc, doc_gen)
@@ -237,3 +252,6 @@ class LocalSyncTarget(u1db.SyncTarget):
         # final step: return docs and record source replica sync point
         sync_exch.return_docs(return_doc_cb)
         return new_gen
+
+    def _set_trace_hook(self, cb):
+        self._trace_hook = cb

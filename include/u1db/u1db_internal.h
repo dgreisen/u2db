@@ -42,8 +42,13 @@ typedef struct _u1db_sync_exchange u1db_sync_exchange;
 
 typedef struct _u1db_sync_target u1db_sync_target;
 
+typedef int (*u1db__trace_callback)(void *context, const char *state);
+
 struct _u1db_sync_target {
     u1database *db;
+    void *trace_context;
+    u1db__trace_callback trace_cb;
+
     /**
      * Get the information for synchronization about another replica.
      *
@@ -91,6 +96,22 @@ struct _u1db_sync_target {
 
     void (*finalize_sync_exchange)(u1db_sync_target *st,
                                    u1db_sync_exchange **exchange);
+    /**
+     * Set a trace hook.
+     *
+     * At various points during sync, the callback will be invoked indicating
+     * the current state of the sync. This is used during the test suite to
+     * allow concurrency, etc, testing.
+     *
+     * @param context   Will be passed to the callback along with the current
+     *                  state.
+     * @param cb        If the callback returns anything other that U1DB_OK, it
+     *                  will be considered an error, and the sync functionality
+     *                  will return.
+     * @return U1DB_OK if the hook was set, might return U1DB_NOT_IMPLEMENTED
+     */
+    int (*_set_trace_hook)(u1db_sync_target *st,
+                           void *context, u1db__trace_callback cb);
 };
 
 
@@ -104,6 +125,8 @@ struct _u1db_sync_exchange {
     int num_doc_ids;
     int *gen_for_doc_ids;
     char **doc_ids_to_return;
+    void *trace_context;
+    u1db__trace_callback trace_cb;
 };
 
 /**
