@@ -52,6 +52,8 @@ cdef extern from "u1db/u1db.h":
 
     ctypedef char* const_char_ptr "const char*"
     ctypedef int (*u1db_doc_callback)(void *context, u1db_document *doc)
+    ctypedef int (*u1db_doc_id_gen_callback)(void *context,
+        const_char_ptr doc_id, int gen)
 
     u1database * u1db_open(char *fname)
     void u1db_free(u1database **)
@@ -63,7 +65,7 @@ cdef extern from "u1db/u1db.h":
     int u1db_get_doc(u1database *db, char *doc_id, u1db_document **doc)
     int u1db_get_docs(u1database *db, int n_doc_ids, const_char_ptr *doc_ids,
                       int check_for_conflicts, void *context,
-                      int (*cb)(void *context, u1db_document *doc))
+                      u1db_doc_callback cb)
     int u1db_put_doc(u1database *db, u1db_document *doc)
     int u1db_put_doc_if_newer(u1database *db, u1db_document *doc,
                               int save_conflict, char *replica_uid,
@@ -72,11 +74,11 @@ cdef extern from "u1db/u1db.h":
                          int n_revs, const_char_ptr *revs)
     int u1db_delete_doc(u1database *db, u1db_document *doc)
     int u1db_whats_changed(u1database *db, int *gen, void *context,
-                       int (*cb)(void *context, const_char_ptr doc_id, int gen))
+                           u1db_doc_id_gen_callback cb)
     int u1db__get_transaction_log(u1database *db, void *context,
-                              int (*cb)(void *context, char *doc_id, int gen))
+                                  u1db_doc_id_gen_callback cb)
     int u1db_get_doc_conflicts(u1database *db, char *doc_id, void *context,
-                               int (*cb)(void *context, u1db_document *doc))
+                               u1db_doc_callback cb)
 
     int u1db_create_index(u1database *db, char *index_name,
                           int n_expressions, const_char_ptr *expressions)

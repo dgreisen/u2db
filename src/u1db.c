@@ -581,7 +581,7 @@ finish:
 
 int
 u1db_get_doc_conflicts(u1database *db, const char *doc_id, void *context,
-                       int (*cb)(void *context, u1db_document *doc))
+                       u1db_doc_callback cb)
 {
     int status = U1DB_OK;
     sqlite3_stmt *statement;
@@ -591,7 +591,7 @@ u1db_get_doc_conflicts(u1database *db, const char *doc_id, void *context,
     if (db == NULL || doc_id == NULL || cb == NULL) {
         return U1DB_INVALID_PARAMETER;
     }
-    status = sqlite3_prepare_v2(db->sql_handle, 
+    status = sqlite3_prepare_v2(db->sql_handle,
         "SELECT doc_rev, content FROM conflicts WHERE doc_id = ?", -1,
         &statement, NULL);
     if (status != SQLITE_OK) { goto finish; }
@@ -948,8 +948,7 @@ finish:
 
 int
 u1db_get_docs(u1database *db, int n_doc_ids, const char **doc_ids,
-              int check_for_conflicts, void *context,
-              int (*cb)(void *context, u1db_document *doc))
+              int check_for_conflicts, void *context, u1db_doc_callback cb)
 {
     int status, i;
     sqlite3_stmt *statement;
@@ -1125,7 +1124,7 @@ u1db_whats_changed(u1database *db, int *gen, void *context,
 
 int
 u1db__get_transaction_log(u1database *db, void *context,
-                          int (*cb)(void *, char *doc_id, int gen))
+                          u1db_doc_id_gen_callback cb)
 {
     int status;
     sqlite3_stmt *statement;
@@ -1142,9 +1141,9 @@ u1db__get_transaction_log(u1database *db, void *context,
     status = sqlite3_step(statement);
     while (status == SQLITE_ROW) {
         int local_gen;
-        char *doc_id;
+        const char *doc_id;
         local_gen = sqlite3_column_int(statement, 0);
-        doc_id = (char *)sqlite3_column_text(statement, 1);
+        doc_id = (const char *)sqlite3_column_text(statement, 1);
         cb(context, doc_id, local_gen);
         status = sqlite3_step(statement);
     }
