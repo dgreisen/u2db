@@ -128,6 +128,16 @@ cdef extern from "u1db/u1db_internal.h":
         char *doc_rev
         char *doc
 
+    ctypedef struct u1db_sync_exchange_doc_ids_gen:
+        int gen
+        char *doc_id
+
+    ctypedef struct u1db_sync_exchange:
+        int new_gen
+        int num_doc_ids
+        u1db_sync_exchange_doc_ids_gen *doc_ids_to_return
+
+
     ctypedef struct u1db_sync_target:
         u1database *db
         int (*get_sync_info)(u1db_sync_target *st,
@@ -135,6 +145,12 @@ cdef extern from "u1db/u1db_internal.h":
             const_char_ptr *st_replica_uid, int *st_gen, int *source_gen)
         int (*record_sync_info)(u1db_sync_target *st,
             char *source_replica_uid, int source_gen)
+        int (*get_sync_exchange)(u1db_sync_target *st,
+                                 char *source_replica_uid,
+                                 int last_known_source_gen,
+                                 u1db_sync_exchange **exchange)
+        void (*finalize_sync_exchange)(u1db_sync_target *st,
+                                       u1db_sync_exchange **exchange)
 
     int u1db__get_db_generation(u1database *, int *db_rev)
     char *u1db__allocate_doc_id(u1database *)
@@ -162,9 +178,14 @@ cdef extern from "u1db/u1db_internal.h":
                             int from_db_rev, int last_known_rev,
                             u1db_record *from_records, u1db_record **new_records,
                             u1db_record **conflict_records)
+    int u1db__sync_exchange_seen_ids(u1db_sync_exchange *se, int *n_ids,
+                                     const_char_ptr **doc_ids)
     int u1db__format_query(int n_fields, va_list argp, char **buf, int *wildcard)
     int u1db__get_sync_target(u1database *db, u1db_sync_target **sync_target)
     int u1db__free_sync_target(u1db_sync_target **sync_target)
+    int u1db__sync_exchange_insert_doc_from_source(u1db_sync_exchange *se,
+            u1db_document *doc, int source_gen)
+    int u1db__sync_exchange_find_doc_ids_to_return(u1db_sync_exchange *se)
 
 
 cdef extern from "u1db/u1db_vectorclock.h":
@@ -186,6 +207,7 @@ cdef extern from "u1db/u1db_vectorclock.h":
                                    u1db_vectorclock *older)
 
 from u1db import errors
+from sqlite3 import dbapi2
 
 
 cdef int _append_doc_gen_to_list(void *context, const_char_ptr doc_id,
@@ -429,7 +451,70 @@ cdef handle_status(context, int status):
     raise RuntimeError('%s (status: %s)' % (context, status))
 
 
-cdef class CDatabase(object)
+cdef class CDatabase
+cdef class CSyncTarget
+
+cdef class CSyncExchange(object):
+
+    cdef u1db_sync_exchange *_exchange
+    cdef CSyncTarget _target
+
+    def __init__(self, CSyncTarget target, source_replica_uid, source_gen):
+        self._target = target
+        assert self._target._st.get_sync_exchange != NULL, \
+                "get_sync_exchange is NULL?"
+        handle_status("get_sync_exchange",
+            self._target._st.get_sync_exchange(self._target._st,
+                source_replica_uid, source_gen, &self._exchange))
+
+    def __dealloc__(self):
+        if self._target is not None and self._target._st != NULL:
+            self._target._st.finalize_sync_exchange(self._target._st,
+                    &self._exchange)
+
+    def _check(self):
+        if self._exchange == NULL:
+            raise RuntimeError("self._exchange is NULL")
+
+    property new_gen:
+        def __get__(self):
+            self._check()
+            return self._exchange.new_gen
+
+    def insert_doc_from_source(self, CDocument doc, source_gen):
+        self._check()
+        handle_status("sync_exchange",
+            u1db__sync_exchange_insert_doc_from_source(self._exchange,
+                doc._doc, source_gen))
+
+    def find_doc_ids_to_return(self):
+        self._check()
+        handle_status("find_doc_ids_to_return",
+            u1db__sync_exchange_find_doc_ids_to_return(self._exchange))
+
+    def get_seen_ids(self):
+        cdef const_char_ptr *seen_ids
+        cdef int i, n_ids
+        self._check()
+        handle_status("sync_exchange_seen_ids",
+            u1db__sync_exchange_seen_ids(self._exchange, &n_ids, &seen_ids));
+        res = []
+        for i from 0 <= i < n_ids:
+            res.append(seen_ids[i])
+        if (seen_ids != NULL):
+            free(<void*>seen_ids)
+        return res
+
+    def get_doc_ids_to_return(self):
+        self._check()
+        res = []
+        if (self._exchange.num_doc_ids > 0
+                and self._exchange.doc_ids_to_return != NULL):
+            for i from 0 <= i < self._exchange.num_doc_ids:
+                res.append((self._exchange.doc_ids_to_return[i].doc_id,
+                            self._exchange.doc_ids_to_return[i].gen))
+        return res
+
 
 cdef class CSyncTarget(object):
 
@@ -439,6 +524,7 @@ cdef class CSyncTarget(object):
     def __init__(self, db):
         self._db = db 
         self._st = NULL
+        self._db = db
         handle_status("get_sync_target",
             u1db__get_sync_target(self._db._db, &self._st))
 
@@ -474,6 +560,26 @@ cdef class CSyncTarget(object):
         assert self._st.record_sync_info != NULL, "record_sync_info is NULL?"
         handle_status("record_sync_info",
             self._st.record_sync_info(self._st, source_replica_uid, source_gen))
+
+    def _get_sync_exchange(self, source_replica_uid, source_gen):
+        self._check()
+        return CSyncExchange(self, source_replica_uid, source_gen)
+
+    # TODO: This is just a copy & paste of LocalSyncTarget, as an attempt to
+    #       bootstrap us.
+    def sync_exchange(self, docs_by_generations, source_replica_uid,
+                      last_known_generation, return_doc_cb):
+        from u1db.sync import SyncExchange
+        sync_exch = SyncExchange(self._db, source_replica_uid,
+                                 last_known_generation)
+        # 1st step: try to insert incoming docs and record progress
+        for doc, doc_gen in docs_by_generations:
+            sync_exch.insert_doc_from_source(doc, doc_gen)
+        # 2nd step: find changed documents (including conflicts) to return
+        new_gen = sync_exch.find_changes_to_return()
+        # final step: return docs and record source replica sync point
+        sync_exch.return_docs(return_doc_cb)
+        return new_gen
 
 
 cdef class CDatabase(object):

@@ -61,14 +61,11 @@ def _make_local_db_and_oauth_http_target(test):
 
 
 target_scenarios = [
-    ('local', {'create_db_and_target': _make_local_db_and_target,
-               'make_document': tests.create_doc}),
+    ('local', {'create_db_and_target': _make_local_db_and_target}),
     ('http', {'create_db_and_target': _make_local_db_and_http_target,
-              'make_document': tests.create_doc,
               'server_def': http_server_def}),
     ('oauth_http', {'create_db_and_target':
                     _make_local_db_and_oauth_http_target,
-                    'make_document': tests.create_doc,
                     'server_def': oauth_http_server_def}),
     ]
 
@@ -112,6 +109,9 @@ class SyncTargetTestSetup(tests.DatabaseBaseTests, tests.TestCaseWithServer):
 
 class AllDatabaseSyncTargetTests(object):
 
+    def receive_doc(self, doc, gen):
+        self.other_changes.append((doc.doc_id, doc.rev, doc.content, gen))
+
     def test_get_sync_target(self):
         self.assertIsNot(None, self.st)
 
@@ -128,12 +128,23 @@ class AllDatabaseSyncTargetTests(object):
         self.st.record_sync_info('replica', 10)
         self.assertEqual(('test', 0, 10), self.st.get_sync_info('replica'))
 
+    def test_sync_exchange(self):
+        docs_by_gen = [
+            (self.make_document('doc-id', 'replica:1', simple_doc), 10)]
+        new_gen = self.st.sync_exchange(docs_by_gen, 'replica',
+                                        last_known_generation=0,
+                                        return_doc_cb=self.receive_doc)
+        self.assertGetDoc(self.db, 'doc-id', 'replica:1', simple_doc, False)
+        self.assertEqual(['doc-id'], self.db._get_transaction_log())
+        self.assertEqual(([], 1), (self.other_changes, new_gen))
+        self.assertEqual(10, self.st.get_sync_info('replica')[-1])
+
 
 
 class CDatabaseSyncTargetTests(SyncTargetTestSetup, AllDatabaseSyncTargetTests):
 
     scenarios = tests.multiply_scenarios(tests.C_DATABASE_SCENARIOS,
-        target_scenarios[:1]) # We don't yet test http or oauth_http
+            target_scenarios[:1]) # We don't yet test http or oauth_http
 
 
 
@@ -145,20 +156,6 @@ class DatabaseSyncTargetTests(SyncTargetTestSetup, AllDatabaseSyncTargetTests):
     # whitebox true means self.db is the actual local db object
     # against which the sync is performed
     whitebox = True
-
-    def receive_doc(self, doc, gen):
-        self.other_changes.append((doc.doc_id, doc.rev, doc.content, gen))
-
-    def test_sync_exchange(self):
-        docs_by_gen = [
-            (self.make_document('doc-id', 'replica:1', simple_doc), 10)]
-        new_gen = self.st.sync_exchange(docs_by_gen, 'replica',
-                                        last_known_generation=0,
-                                        return_doc_cb=self.receive_doc)
-        self.assertGetDoc(self.db, 'doc-id', 'replica:1', simple_doc, False)
-        self.assertEqual(['doc-id'], self.db._get_transaction_log())
-        self.assertEqual(([], 1), (self.other_changes, new_gen))
-        self.assertEqual(10, self.st.get_sync_info('replica')[-1])
 
     def test_sync_exchange_push_many(self):
         docs_by_gen = [

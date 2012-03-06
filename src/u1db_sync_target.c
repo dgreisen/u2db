@@ -17,6 +17,8 @@
  */
 
 #include "u1db/u1db_internal.h"
+#include <string.h>
+#include <json/linkhash.h>
 
 
 static int st_get_sync_info (u1db_sync_target *st,
@@ -25,6 +27,17 @@ static int st_get_sync_info (u1db_sync_target *st,
 
 static int st_record_sync_info(u1db_sync_target *st,
         const char *source_replica_uid, int source_gen);
+
+static int st_get_sync_exchange(u1db_sync_target *st,
+                         const char *source_replica_uid,
+                         int source_gen,
+                         u1db_sync_exchange **exchange);
+
+static void st_finalize_sync_exchange(u1db_sync_target *st,
+                               u1db_sync_exchange **exchange);
+
+static void se_free_seen_id(struct lh_entry *e);
+
 
 int
 u1db__get_sync_target(u1database *db, u1db_sync_target **sync_target)
@@ -35,9 +48,14 @@ u1db__get_sync_target(u1database *db, u1db_sync_target **sync_target)
         return U1DB_INVALID_PARAMETER;
     }
     *sync_target = (u1db_sync_target *)calloc(1, sizeof(u1db_sync_target));
+    if (*sync_target == NULL) {
+        return U1DB_NOMEM;
+    }
     (*sync_target)->db = db;
     (*sync_target)->get_sync_info = st_get_sync_info;
     (*sync_target)->record_sync_info = st_record_sync_info;
+    (*sync_target)->get_sync_exchange = st_get_sync_exchange;
+    (*sync_target)->finalize_sync_exchange = st_finalize_sync_exchange;
     return status;
 }
 
@@ -79,6 +97,7 @@ finish:
     return status;
 }
 
+
 static int
 st_record_sync_info(u1db_sync_target *st, const char *source_replica_uid,
                     int source_gen)
@@ -87,4 +106,169 @@ st_record_sync_info(u1db_sync_target *st, const char *source_replica_uid,
         return U1DB_INVALID_PARAMETER;
     }
     return u1db__set_sync_generation(st->db, source_replica_uid, source_gen);
+}
+
+
+static int
+st_get_sync_exchange(u1db_sync_target *st, const char *source_replica_uid,
+                     int source_gen, u1db_sync_exchange **exchange)
+{
+    if (st == NULL || source_replica_uid == NULL || exchange == NULL) {
+        return U1DB_INVALID_PARAMETER;
+    }
+    *exchange = (u1db_sync_exchange *)calloc(1, sizeof(u1db_sync_exchange));
+    if (*exchange == NULL) {
+        return U1DB_NOMEM;
+    }
+    (*exchange)->db = st->db;
+    (*exchange)->source_replica_uid = source_replica_uid;
+    (*exchange)->last_known_source_gen = source_gen;
+    // Note: lh_table is overkill for what we need. We only need a set, not a
+    //       mapping, and we don't need the prev/next pointers. But it is
+    //       already available, and doesn't require us to implement and debug
+    //       another set() implementation.
+    (*exchange)->seen_ids = lh_kchar_table_new(100, "seen_ids",
+            se_free_seen_id);
+    return U1DB_OK;
+}
+
+
+static void
+st_finalize_sync_exchange(u1db_sync_target *st, u1db_sync_exchange **exchange)
+{
+    int i;
+    if (exchange == NULL || *exchange == NULL) {
+        return;
+    }
+    if ((*exchange)->seen_ids != NULL) {
+        lh_table_free((*exchange)->seen_ids);
+        (*exchange)->seen_ids = NULL;
+    }
+    if ((*exchange)->doc_ids_to_return != NULL) {
+        for (i = 0; i < (*exchange)->num_doc_ids; ++i) {
+            free((*exchange)->doc_ids_to_return[i].doc_id);
+        }
+        free((*exchange)->doc_ids_to_return);
+        (*exchange)->doc_ids_to_return = NULL;
+        (*exchange)->num_doc_ids = 0;
+    }
+    free(*exchange);
+    *exchange = NULL;
+}
+
+
+static void
+se_free_seen_id(struct lh_entry *e)
+{
+    if (e == NULL) {
+        return;
+    }
+    if (e->k != NULL) {
+        free((void *)e->k);
+        e->k = NULL;
+    }
+    if (e->v != NULL) {
+        free((void *)e->v);
+        e->v = NULL;
+    }
+}
+
+
+int
+u1db__sync_exchange_seen_ids(u1db_sync_exchange *se, int *n_ids,
+                             const char ***doc_ids)
+{
+    int i;
+    struct lh_entry *entry;
+    if (se == NULL || n_ids == NULL || doc_ids == NULL) {
+        return U1DB_INVALID_PARAMETER;
+    }
+    if (se->seen_ids == NULL || se->seen_ids->count == 0) {
+        *n_ids = 0;
+        *doc_ids = NULL;
+        return U1DB_OK;
+    }
+    *n_ids = se->seen_ids->count;
+    (*doc_ids) = (const char **)calloc(*n_ids, sizeof(char *));
+    i = 0;
+    lh_foreach(se->seen_ids, entry) {
+        if (entry->k != NULL) {
+            if (i >= (*n_ids)) {
+                // TODO: Better error? For some reason we found more than
+                //       'count' valid entries
+                return U1DB_INVALID_PARAMETER;
+            }
+            (*doc_ids)[i] = entry->k;
+            i++;
+        }
+    }
+    return U1DB_OK;
+}
+
+int
+u1db__sync_exchange_insert_doc_from_source(u1db_sync_exchange *se,
+        u1db_document *doc, int source_gen)
+{
+    int status = U1DB_OK;
+    int state;
+    if (se == NULL || se->db == NULL || doc == NULL) {
+        return U1DB_INVALID_PARAMETER;
+    }
+    status = u1db_put_doc_if_newer(se->db, doc, 0, se->source_replica_uid,
+                                   source_gen, &state);
+    if (state == U1DB_INSERTED || state == U1DB_CONVERGED) {
+        lh_table_insert(se->seen_ids, strdup(doc->doc_id),
+                        strdup(doc->doc_rev));
+    } else {
+        // state should be either U1DB_SUPERSEDED or U1DB_CONFLICTED, in either
+        // case, we don't count this as a 'seen_id' because we will want to be
+        // returning a document with this identifier back to the user.
+    }
+    return status;
+}
+
+
+// Callback for whats_changed to map the callback into the sync_exchange
+// doc_ids_to_return array.
+static int
+whats_changed_to_doc_ids(void *context, const char *doc_id, int gen)
+{
+    u1db_sync_exchange *state;
+    state = (u1db_sync_exchange *)context;
+    if (lh_table_lookup(state->seen_ids, doc_id) != NULL) {
+        // This document was already seen, so we don't need to return it
+        // TODO: See bug #944049
+        return 0;
+    }
+    if (state->num_doc_ids >= state->max_doc_ids) {
+        state->max_doc_ids = (state->max_doc_ids * 2) + 10;
+        if (state->doc_ids_to_return == NULL) {
+            state->doc_ids_to_return = (u1db_sync_doc_ids_gen *)calloc(
+                    state->max_doc_ids, sizeof(u1db_sync_doc_ids_gen));
+        } else {
+            state->doc_ids_to_return = (u1db_sync_doc_ids_gen *)realloc(
+                    state->doc_ids_to_return,
+                    state->max_doc_ids * sizeof(u1db_sync_doc_ids_gen));
+        }
+        if (state->doc_ids_to_return == NULL) {
+            return U1DB_NOMEM;
+        }
+    }
+    state->doc_ids_to_return[state->num_doc_ids].doc_id = strdup(doc_id);
+    state->doc_ids_to_return[state->num_doc_ids].gen = gen;
+    state->num_doc_ids++;
+    return 0;
+}
+
+
+int
+u1db__sync_exchange_find_doc_ids_to_return(u1db_sync_exchange *se)
+{
+    int status;
+    if (se == NULL) {
+        return U1DB_INVALID_PARAMETER;
+    }
+    status = u1db_whats_changed(se->db, &se->new_gen, (void*)se,
+            whats_changed_to_doc_ids);
+    return status;
 }
