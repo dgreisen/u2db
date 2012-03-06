@@ -586,10 +586,12 @@ cdef class CSyncTarget(object):
         self._check()
         return CSyncExchange(self, source_replica_uid, source_gen)
 
-    # TODO: This is just a copy & paste of LocalSyncTarget, as an attempt to
-    #       bootstrap us.
     def sync_exchange(self, docs_by_generations, source_replica_uid,
                       last_known_generation, return_doc_cb):
+        # Note: This contains more logic than we would normally put in the C
+        #       wrapper. Specifically, it contains functionality rather than
+        #       just handing off to C code. This is done because of how we are
+        #       unit-testing sync-target functionality ATM.
         cdef CSyncExchange se
         se = self._get_sync_exchange(source_replica_uid, last_known_generation)
         for doc, gen in docs_by_generations:
