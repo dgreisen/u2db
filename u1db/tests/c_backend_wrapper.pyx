@@ -515,7 +515,7 @@ cdef class CSyncExchange(object):
         self._check()
         handle_status("return_docs",
             u1db__sync_exchange_return_docs(self._exchange,
-                <void *>return_doc_cb, return_doc_cb_wrapper))
+                <void *>return_doc_cb, &return_doc_cb_wrapper))
 
     def get_seen_ids(self):
         cdef const_char_ptr *seen_ids
@@ -590,21 +590,19 @@ cdef class CSyncTarget(object):
         self._check()
         return CSyncExchange(self, source_replica_uid, source_gen)
 
-    # TODO: This is just a copy & paste of LocalSyncTarget, as an attempt to
-    #       bootstrap us.
     def sync_exchange(self, docs_by_generations, source_replica_uid,
                       last_known_generation, return_doc_cb):
-        from u1db.sync import SyncExchange
-        sync_exch = SyncExchange(self._db, source_replica_uid,
-                                 last_known_generation)
-        # 1st step: try to insert incoming docs and record progress
-        for doc, doc_gen in docs_by_generations:
-            sync_exch.insert_doc_from_source(doc, doc_gen)
-        # 2nd step: find changed documents (including conflicts) to return
-        new_gen = sync_exch.find_changes_to_return()
-        # final step: return docs and record source replica sync point
-        sync_exch.return_docs(return_doc_cb)
-        return new_gen
+        # Note: This contains more logic than we would normally put in the C
+        #       wrapper. Specifically, it contains functionality rather than
+        #       just handing off to C code. This is done because of how we are
+        #       unit-testing sync-target functionality ATM.
+        cdef CSyncExchange se
+        se = self._get_sync_exchange(source_replica_uid, last_known_generation)
+        for doc, gen in docs_by_generations:
+            se.insert_doc_from_source(doc, gen)
+        se.find_doc_ids_to_return()
+        se.return_docs(return_doc_cb)
+        return se._exchange.new_gen
 
 
 cdef class CDatabase(object):
