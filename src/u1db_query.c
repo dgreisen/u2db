@@ -362,14 +362,14 @@ evaluate_index_and_insert_into_db(void *context, const char *expression)
     const char *str_val;
     int status = U1DB_OK;
     char *result = NULL;
-    char *tmp_expression;
+    char tmp_expression[strlen(expression)];
     const char *DOT = ".";
 
     ctx = (struct evaluate_index_context *)context;
     if (ctx->obj == NULL || !json_object_is_type(ctx->obj, json_type_object)) {
         return U1DB_INVALID_JSON;
     }
-    tmp_expression = (char *)expression; // XXX: is there an easier way?
+    strcpy(tmp_expression, expression); // XXX: not doing what I think it does
     result = strtok(tmp_expression, DOT); // XXX: strtok thread safety?
     printf("RESULT: %s\n", result);
     val = ctx->obj;
@@ -380,6 +380,7 @@ evaluate_index_and_insert_into_db(void *context, const char *expression)
     }
     if (val != NULL) {
         str_val = json_object_get_string(val);
+        printf("expression: %s value: %s\n", expression, str_val);
         if (str_val != NULL) {
             status = add_to_document_fields(ctx->db, ctx->doc_id, expression,
                     str_val);
