@@ -21,7 +21,6 @@
 #include <stdarg.h>
 #include <string.h>
 #include <json/json.h>
-#include <stdio.h> // XXX remove
 
 
 static int
@@ -362,25 +361,23 @@ evaluate_index_and_insert_into_db(void *context, const char *expression)
     const char *str_val;
     int status = U1DB_OK;
     char *result = NULL;
-    char tmp_expression[strlen(expression)];
+    char *tmp_expression;
     const char *DOT = ".";
 
     ctx = (struct evaluate_index_context *)context;
     if (ctx->obj == NULL || !json_object_is_type(ctx->obj, json_type_object)) {
         return U1DB_INVALID_JSON;
     }
-    strcpy(tmp_expression, expression); // XXX: not doing what I think it does
+    tmp_expression = strdup(expression); // XXX: need to test for out of mem?
     result = strtok(tmp_expression, DOT); // XXX: strtok thread safety?
-    printf("RESULT: %s\n", result);
     val = ctx->obj;
     while (result != NULL) {
         val = json_object_object_get(val, result);
-        printf("VAL %s\n", json_object_get_string(val));
         result = strtok(NULL, DOT);
     }
+    free(tmp_expression);
     if (val != NULL) {
         str_val = json_object_get_string(val);
-        printf("expression: %s value: %s\n", expression, str_val);
         if (str_val != NULL) {
             status = add_to_document_fields(ctx->db, ctx->doc_id, expression,
                     str_val);
