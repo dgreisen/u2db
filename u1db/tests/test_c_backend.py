@@ -217,6 +217,16 @@ class TestCSyncTarget(BackendTests):
         self.assertEqual([(doc2.doc_id, 2)], exc.get_doc_ids_to_return())
         self.assertEqual(3, exc.new_gen)
 
+    def test_sync_exchange_return_docs(self):
+        returned = []
+        def return_doc_cb(doc, gen):
+            returned.append((doc, gen))
+        doc1 = self.db.create_doc(tests.simple_doc)
+        exc = self.st._get_sync_exchange("source-uid", 5)
+        exc.find_doc_ids_to_return()
+        exc.return_docs(return_doc_cb)
+        self.assertEqual([(doc1, 1)], returned)
+
 
 class TestVectorClock(BackendTests):
 

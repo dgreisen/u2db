@@ -94,12 +94,6 @@ struct _u1db_sync_target {
 };
 
 
-typedef struct _u1db_sync_doc_ids_gen {
-    int gen;
-    char *doc_id;
-} u1db_sync_doc_ids_gen;
-
-
 struct _u1db_sync_exchange {
     u1database *db;
     const char *source_replica_uid;
@@ -108,7 +102,8 @@ struct _u1db_sync_exchange {
     struct lh_table *seen_ids;
     int max_doc_ids;
     int num_doc_ids;
-    u1db_sync_doc_ids_gen *doc_ids_to_return;
+    int *gen_for_doc_ids;
+    char **doc_ids_to_return;
 };
 
 /**
@@ -337,5 +332,15 @@ int u1db__sync_exchange_insert_doc_from_source(u1db_sync_exchange *se,
  */
 int u1db__sync_exchange_find_doc_ids_to_return(u1db_sync_exchange *se);
 
+/**
+ * Invoke the callback for documents identified by find_doc_ids_to_return.
+ *
+ * @param context   Will be passed as the first parameter to callback
+ * @param cb        A callback, will be called for each document. The document
+ *                  will be allocated on the heap, and should be freed by
+ *                  u1db_free_doc().
+ */
+int u1db__sync_exchange_return_docs(u1db_sync_exchange *se, void *context,
+        int (*cb)(void *context, u1db_document *doc, int gen));
 
 #endif // U1DB_INTERNAL_H
