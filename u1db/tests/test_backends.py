@@ -348,6 +348,7 @@ class LocalDatabaseWithConflictsTests(tests.DatabaseBaseTests):
         self.assertEqual([no_conflict_doc, doc2],
                          self.db.get_docs([doc1.doc_id, doc2.doc_id],
                                           check_for_conflicts=False))
+
     def test_get_doc_conflicts(self):
         doc = self.db.create_doc(simple_doc)
         alt_doc = self.make_document(doc.doc_id, 'alternate:1', nested_doc)
@@ -689,9 +690,6 @@ class DatabaseIndexTests(tests.DatabaseBaseTests):
         self.assertEqual(sorted([doc1, doc2, doc3]),
             sorted(self.db.get_from_index('test-idx', [("v1", "*")])))
 
-
-class PyDatabaseIndexTests(tests.DatabaseBaseTests):
-
     def test_nested_index(self):
         doc = self.db.create_doc(nested_doc)
         self.db.create_index('test-idx', ['sub.doc'])
@@ -701,6 +699,9 @@ class PyDatabaseIndexTests(tests.DatabaseBaseTests):
         self.assertEqual(
             sorted([doc, doc2]),
             sorted(self.db.get_from_index('test-idx', [('underneath',)])))
+
+
+class PyDatabaseIndexTests(tests.DatabaseBaseTests):
 
     def test_get_from_index_case_sensitive(self):
         self.db.create_index('test-idx', ['key'])
@@ -813,8 +814,10 @@ class PyDatabaseIndexTests(tests.DatabaseBaseTests):
         new_content = '{"key": "altval"}'
         other_rev = 'test:1|z:2'
         st = self.db.get_sync_target()
+
         def ignore(doc_id, doc_rev, doc):
             pass
+
         doc_other = self.make_document(doc.doc_id, other_rev, new_content)
         docs_by_gen = [(doc_other, 10)]
         result = st.sync_exchange(docs_by_gen, 'other-replica',

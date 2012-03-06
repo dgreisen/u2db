@@ -355,15 +355,15 @@ write_doc(u1database *db, const char *doc_id, const char *doc_rev,
     int status;
 
     if (is_update) {
-        status = sqlite3_prepare_v2(db->sql_handle, 
+        status = sqlite3_prepare_v2(db->sql_handle,
             "UPDATE document SET doc_rev = ?, content = ? WHERE doc_id = ?", -1,
-            &statement, NULL); 
+            &statement, NULL);
         if (status != SQLITE_OK) { goto finish; }
         status = delete_old_fields(db, doc_id);
     } else {
-        status = sqlite3_prepare_v2(db->sql_handle, 
+        status = sqlite3_prepare_v2(db->sql_handle,
             "INSERT INTO document (doc_rev, content, doc_id) VALUES (?, ?, ?)", -1,
-            &statement, NULL); 
+            &statement, NULL);
     }
     if (status != SQLITE_OK) {
         return status;
@@ -386,7 +386,7 @@ write_doc(u1database *db, const char *doc_id, const char *doc_rev,
     sqlite3_finalize(statement);
     if (status != SQLITE_OK) { goto finish; }
     status = u1db__update_indexes(db, doc_id, content);
-    status = sqlite3_prepare_v2(db->sql_handle, 
+    status = sqlite3_prepare_v2(db->sql_handle,
         "INSERT INTO transaction_log(doc_id) VALUES (?)", -1,
         &statement, NULL);
     if (status != SQLITE_OK) {
@@ -414,9 +414,9 @@ lookup_conflict(u1database *db, const char *doc_id, int *has_conflict)
     sqlite3_stmt *statement;
     int status;
 
-    status = sqlite3_prepare_v2(db->sql_handle, 
+    status = sqlite3_prepare_v2(db->sql_handle,
         "SELECT 1 FROM conflicts WHERE doc_id = ? LIMIT 1", -1,
-        &statement, NULL); 
+        &statement, NULL);
     if (status != SQLITE_OK) {
         return status;
     }
@@ -446,9 +446,9 @@ write_conflict(u1database *db, const char *doc_id, const char *doc_rev,
     sqlite3_stmt *statement;
     int status;
 
-    status = sqlite3_prepare_v2(db->sql_handle, 
+    status = sqlite3_prepare_v2(db->sql_handle,
         "INSERT INTO conflicts VALUES (?, ?, ?)", -1,
-        &statement, NULL); 
+        &statement, NULL);
     if (status != SQLITE_OK) {
         return status;
     }
@@ -591,7 +591,7 @@ u1db_get_doc_conflicts(u1database *db, const char *doc_id, void *context,
     if (db == NULL || doc_id == NULL || cb == NULL) {
         return U1DB_INVALID_PARAMETER;
     }
-    status = sqlite3_prepare_v2(db->sql_handle, 
+    status = sqlite3_prepare_v2(db->sql_handle,
         "SELECT doc_rev, content FROM conflicts WHERE doc_id = ?", -1,
         &statement, NULL);
     if (status != SQLITE_OK) { goto finish; }
@@ -1210,7 +1210,7 @@ u1db__sql_run(u1database *db, const char *sql, size_t n)
     if (result == NULL) {
         return NULL;
     }
-    status = sqlite3_prepare_v2(db->sql_handle, sql, n, &statement, NULL); 
+    status = sqlite3_prepare_v2(db->sql_handle, sql, n, &statement, NULL);
     if (status != SQLITE_OK) {
         result->status = status;
         return result;
@@ -1579,9 +1579,9 @@ u1db_delete_index(u1database *db, const char *index_name)
     if (db == NULL || index_name == NULL) {
         return U1DB_INVALID_PARAMETER;
     }
-    status = sqlite3_prepare_v2(db->sql_handle, 
+    status = sqlite3_prepare_v2(db->sql_handle,
         "DELETE FROM index_definitions WHERE name = ?", -1,
-        &statement, NULL); 
+        &statement, NULL);
     if (status != SQLITE_OK) { goto finish; }
     status = sqlite3_bind_text(statement, 1, index_name, -1, SQLITE_TRANSIENT);
     if (status != SQLITE_OK) { goto finish; }
