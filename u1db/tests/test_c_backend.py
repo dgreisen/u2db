@@ -15,7 +15,10 @@
 # along with u1db.  If not, see <http://www.gnu.org/licenses/>.
 
 
-from u1db import tests
+from u1db import (
+    Document,
+    tests,
+    )
 from u1db.tests import c_backend_wrapper, c_backend_error
 
 
@@ -289,6 +292,44 @@ class TestCDocument(BackendTests):
 
     def test_create(self):
         doc = self.make_document('doc-id', 'uid:1', tests.simple_doc)
+
+    def assertPyDocEqualCDoc(self, *args, **kwargs):
+        cdoc = self.make_document(*args, **kwargs)
+        pydoc = Document(*args, **kwargs)
+        self.assertEqual(pydoc, cdoc)
+        self.assertEqual(cdoc, pydoc)
+
+    def test_cmp_to_pydoc_equal(self):
+        self.assertPyDocEqualCDoc('doc-id', 'uid:1', tests.simple_doc)
+        self.assertPyDocEqualCDoc('doc-id', 'uid:1', tests.simple_doc,
+                                  has_conflicts=False)
+        self.assertPyDocEqualCDoc('doc-id', 'uid:1', tests.simple_doc,
+                                  has_conflicts=True)
+
+    def test_cmp_to_pydoc_not_equal_conflicts(self):
+        cdoc = self.make_document('doc-id', 'uid:1', tests.simple_doc)
+        pydoc = Document('doc-id', 'uid:1', tests.simple_doc,
+                         has_conflicts=True)
+        self.assertNotEqual(cdoc, pydoc)
+        self.assertNotEqual(pydoc, cdoc)
+
+    def test_cmp_to_pydoc_not_equal_doc_id(self):
+        cdoc = self.make_document('doc-id', 'uid:1', tests.simple_doc)
+        pydoc = Document('doc2-id', 'uid:1', tests.simple_doc)
+        self.assertNotEqual(cdoc, pydoc)
+        self.assertNotEqual(pydoc, cdoc)
+
+    def test_cmp_to_pydoc_not_equal_doc_rev(self):
+        cdoc = self.make_document('doc-id', 'uid:1', tests.simple_doc)
+        pydoc = Document('doc-id', 'uid:2', tests.simple_doc)
+        self.assertNotEqual(cdoc, pydoc)
+        self.assertNotEqual(pydoc, cdoc)
+
+    def test_cmp_to_pydoc_not_equal_content(self):
+        cdoc = self.make_document('doc-id', 'uid:1', tests.simple_doc)
+        pydoc = Document('doc-id', 'uid:1', tests.nested_doc)
+        self.assertNotEqual(cdoc, pydoc)
+        self.assertNotEqual(pydoc, cdoc)
 
 
 class TestUUID(BackendTests):

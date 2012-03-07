@@ -143,7 +143,6 @@ class DatabaseSyncTargetTests(tests.DatabaseBaseTests,
         new_gen = self.st.sync_exchange(docs_by_gen, 'replica',
                                         last_known_generation=0,
                                         return_doc_cb=self.receive_doc)
-        import pdb; pdb.set_trace()
         self.assertGetDoc(self.db, 'doc-id', 'replica:1', simple_doc, False)
         self.assertGetDoc(self.db, 'doc-id2', 'replica:1', nested_doc, False)
         self.assertEqual(['doc-id', 'doc-id2'], self.db._get_transaction_log())
@@ -265,7 +264,26 @@ class DatabaseSyncTargetTests(tests.DatabaseBaseTests,
                          called)
 
 
+def sync_via_synchronizer(db_source, db_target, trace_hook=None):
+    target = db_target.get_sync_target()
+    if trace_hook:
+        target._set_trace_hook(trace_hook)
+    return sync.Synchronizer(db_source, target).sync()
+
+
+sync_scenarios = []
+for name, scenario in (tests.LOCAL_DATABASES_SCENARIOS
+                       + tests.C_DATABASE_SCENARIOS):
+    scenario = dict(scenario)
+    scenario['sync'] = sync_via_synchronizer
+    sync_scenarios.append((name, scenario))
+
+# TODO: Add a scenario that uses u1db__sync_db_to_target
+
+
 class DatabaseSyncTests(tests.DatabaseBaseTests):
+
+    scenarios = sync_scenarios
 
     def setUp(self):
         super(DatabaseSyncTests, self).setUp()
@@ -314,20 +332,17 @@ class DatabaseSyncTests(tests.DatabaseBaseTests):
 
     def test_sync_pulling_doesnt_update_other_if_changed(self):
         doc = self.db2.create_doc(simple_doc)
-        # Right after we call c2._sync_exchange, we update our local database
-        # with a new record. When we finish synchronizing, we can notice that
-        # something locally was updated, and we cannot tell c2 our new updated
-        # generation
-        orig = self.db1.put_doc_if_newer
-        once = [None]
-        def after_put_doc_if_newer(*args, **kwargs):
-            result = orig(*args, **kwargs)
-            if once:
-                self.db1.create_doc(simple_doc)
-                once.pop()
-            return result
-        self.db1.put_doc_if_newer = after_put_doc_if_newer
-        self.assertEqual(0, self.sync(self.db1, self.db2))
+        # After the local side has sent its list of docs, before we start
+        # receiving the "targets" response, we update the local database with a
+        # new record.
+        # When we finish synchronizing, we can notice that something locally
+        # was updated, and we cannot tell c2 our new updated generation
+        def before_get_docs(state):
+            if state != 'before get_docs':
+                return
+            self.db1.create_doc(simple_doc)
+        self.assertEqual(0, self.sync(self.db1, self.db2,
+                                      trace_hook=before_get_docs))
         self.assertLastExchangeLog(self.db2,
             {'receive': {'docs': [], 'last_known_gen': 0},
              'return': {'docs': [(doc.doc_id, doc.rev)],
@@ -427,16 +442,12 @@ class DatabaseSyncTests(tests.DatabaseBaseTests):
         doc.content = content2
         self.db2.put_doc(doc)
         doc2_rev2 = doc.rev
-        # Monkey patch so that after the local client has determined recent
-        # changes, we get another one, before sync finishes.
-        orig_wc = self.db1.whats_changed
-        def after_whatschanged(*args, **kwargs):
-            val = orig_wc(*args, **kwargs)
+        def after_whatschanged(state):
+            if state != 'after whats_changed':
+                return
             doc = self.make_document(doc_id, doc1_rev, content1)
             self.db1.put_doc(doc)
-            return val
-        self.db1.whats_changed = after_whatschanged
-        self.sync(self.db1, self.db2)
+        self.sync(self.db1, self.db2, trace_hook=after_whatschanged)
         self.assertGetDoc(self.db1, doc_id, doc2_rev2, content2, True)
         self.assertEqual([doc],
                          self.db1.get_from_index('test-idx', [('altval',)]))

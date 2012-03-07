@@ -299,7 +299,7 @@ class Document(object):
 
     def __eq__(self, other):
         if not isinstance(other, Document):
-            return False
+            return NotImplemented
         return self.__dict__ == other.__dict__
 
     def __lt__(self, other):

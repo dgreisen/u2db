@@ -132,29 +132,22 @@ def create_c_document(doc_id, rev, content, has_conflicts=False):
                                            has_conflicts=has_conflicts)
 
 
-def sync_via_synchronizer(db_source, db_target):
-    return sync.Synchronizer(db_source, db_target.get_sync_target()).sync()
-
-
 LOCAL_DATABASES_SCENARIOS = [
         ('mem', {'do_create_database': create_memory_database,
-                 'make_document': create_doc,
-                 'sync': sync_via_synchronizer}),
+                 'make_document': create_doc}),
         ('sql', {'do_create_database': create_sqlite_partial_expanded,
-                 'make_document': create_doc,
-                 'sync': sync_via_synchronizer}),
+                 'make_document': create_doc}),
         ]
 
 
 C_DATABASE_SCENARIOS = [
         ('c', {'do_create_database': create_c_database,
-               'make_document': create_c_document,
-               'sync': sync_via_synchronizer})]
+               'make_document': create_c_document})]
 
 
 class DatabaseBaseTests(TestCase):
 
-    scenarios = LOCAL_DATABASES_SCENARIOS + C_DATABASE_SCENARIOS
+    scenarios = LOCAL_DATABASES_SCENARIOS
 
     def create_database(self, replica_uid):
         return self.do_create_database(self, replica_uid)
