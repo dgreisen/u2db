@@ -145,6 +145,7 @@ u1db_get_from_index(u1database *db, u1query *query,
     va_list argp;
     const char *valN = NULL;
     int wildcard[20] = {0};
+    char *dupval = NULL;
 
     if (db == NULL || query == NULL || cb == NULL || n_values < 0)
     {
@@ -176,6 +177,14 @@ u1db_get_from_index(u1database *db, u1query *query,
             // Not a wildcard, so add the argument
             status = sqlite3_bind_text(statement, bind_arg, valN, -1,
                                        SQLITE_TRANSIENT);
+            bind_arg++;
+        } else if (wildcard[i] == 2) {
+            // Globbing, so argument needs to be added TODO: with s/\*^/%^/
+            dupval = strdup(valN);
+            dupval[strlen(dupval) - 1] = '%';
+            status = sqlite3_bind_text(statement, bind_arg, dupval, -1,
+                                       SQLITE_TRANSIENT);
+            free(dupval);
             bind_arg++;
         }
         if (status != SQLITE_OK) { goto finish; }
@@ -263,8 +272,7 @@ u1db__format_query(int n_fields, va_list argp, char **buf, int *wildcard)
                 goto finish;
             }
             have_wildcard = 1;
-            status = U1DB_NOT_IMPLEMENTED;
-            goto finish;
+            add_to_buf(&cur, &buf_size, " AND d%d.value LIKE ?", i);
         } else {
             wildcard[i] = 0;
             if (have_wildcard) {

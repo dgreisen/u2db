@@ -164,8 +164,10 @@ class TestCDatabase(BackendTests):
             [0, 1], ["1", "*"])
 
     def test__format_query_glob(self):
-        self.assertRaises(NotImplementedError,
-            c_backend_wrapper._format_query, ["1*"])
+        self.assertFormatQueryEquals(
+            "SELECT d0.doc_id FROM document_fields d0"
+            " WHERE d0.field_name = ? AND d0.value LIKE ?",
+            [2], ["1%"])
 
 
 class TestCSyncTarget(BackendTests):
