@@ -306,13 +306,30 @@ class TestCDocument(BackendTests):
         self.assertPyDocEqualCDoc('doc-id', 'uid:1', tests.simple_doc,
                                   has_conflicts=True)
 
-    def test_cmp_to_pydoc_not_equal(self):
+    def test_cmp_to_pydoc_not_equal_conflicts(self):
         cdoc = self.make_document('doc-id', 'uid:1', tests.simple_doc)
-        pydoc = Document('doc-id', 'uid:1', tests.simple_doc, has_conflicts=True)
+        pydoc = Document('doc-id', 'uid:1', tests.simple_doc,
+                         has_conflicts=True)
         self.assertNotEqual(cdoc, pydoc)
         self.assertNotEqual(pydoc, cdoc)
-                                    
 
+    def test_cmp_to_pydoc_not_equal_doc_id(self):
+        cdoc = self.make_document('doc-id', 'uid:1', tests.simple_doc)
+        pydoc = Document('doc2-id', 'uid:1', tests.simple_doc)
+        self.assertNotEqual(cdoc, pydoc)
+        self.assertNotEqual(pydoc, cdoc)
+
+    def test_cmp_to_pydoc_not_equal_doc_rev(self):
+        cdoc = self.make_document('doc-id', 'uid:1', tests.simple_doc)
+        pydoc = Document('doc-id', 'uid:2', tests.simple_doc)
+        self.assertNotEqual(cdoc, pydoc)
+        self.assertNotEqual(pydoc, cdoc)
+
+    def test_cmp_to_pydoc_not_equal_content(self):
+        cdoc = self.make_document('doc-id', 'uid:1', tests.simple_doc)
+        pydoc = Document('doc-id', 'uid:1', tests.nested_doc)
+        self.assertNotEqual(cdoc, pydoc)
+        self.assertNotEqual(pydoc, cdoc)
 
 
 class TestUUID(BackendTests):
