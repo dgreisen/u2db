@@ -486,6 +486,8 @@ cdef handle_status(context, int status):
         raise errors.InvalidValueForIndex()
     if status == U1DB_INTERNAL_ERROR:
         raise errors.U1DBError("internal error")
+    if status == U1DB_CONFLICTED:
+        raise errors.ConflictedDoc()
     raise RuntimeError('%s (status: %s)' % (context, status))
 
 
@@ -640,7 +642,6 @@ cdef class CDatabase(object):
     cdef public object _filename
     cdef u1database *_db
     cdef public object _supports_indexes
-    cdef public object _last_exchange_log
 
     def __init__(self, filename):
         self._supports_indexes = False

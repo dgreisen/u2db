@@ -479,7 +479,8 @@ u1db_put_doc(u1database *db, u1db_document *doc)
     const char *old_content = NULL, *old_doc_rev = NULL;
     int status;
     int old_content_len;
-    sqlite3_stmt *statement;
+    int conflicted;
+    sqlite3_stmt *statement = NULL;
 
     if (db == NULL || doc == NULL) {
         // Bad parameter
@@ -492,6 +493,12 @@ u1db_put_doc(u1database *db, u1db_document *doc)
     status = sqlite3_exec(db->sql_handle, "BEGIN", NULL, NULL, NULL);
     if (status != SQLITE_OK) {
         return status;
+    }
+    status = lookup_conflict(db, doc->doc_id, &conflicted);
+    if (status != SQLITE_OK) { goto finish; }
+    if (conflicted) {
+        status = U1DB_CONFLICTED;
+        goto finish;
     }
     old_content = NULL;
     status = lookup_doc(db, doc->doc_id, &old_doc_rev, &old_content,
@@ -1033,6 +1040,7 @@ u1db_delete_doc(u1database *db, u1db_document *doc)
     sqlite3_stmt *statement;
     const char *cur_doc_rev, *content;
     char *doc_rev = NULL;
+    int conflicted;
 
     if (db == NULL || doc == NULL) {
         return U1DB_INVALID_PARAMETER;
@@ -1057,6 +1065,12 @@ u1db_delete_doc(u1database *db, u1db_document *doc)
     if (strcmp((const char *)cur_doc_rev, doc->doc_rev) != 0) {
         // The saved document revision doesn't match
         status = U1DB_REVISION_CONFLICT;
+        goto finish;
+    }
+    status = lookup_conflict(db, doc->doc_id, &conflicted);
+    if (status != SQLITE_OK) { goto finish; }
+    if (doc->has_conflicts) {
+        status = U1DB_CONFLICTED;
         goto finish;
     }
     // TODO: Handle deleting a document with conflicts

@@ -355,6 +355,13 @@ class LocalDatabaseWithConflictsTests(tests.DatabaseBaseTests):
         self.assertEqual([alt_doc, doc],
                          self.db.get_doc_conflicts(doc.doc_id))
 
+    def test_get_doc_conflicts_unconflicted(self):
+        doc = self.db.create_doc(simple_doc)
+        self.assertEqual([], self.db.get_doc_conflicts(doc.doc_id))
+
+    def test_get_doc_conflicts_no_such_id(self):
+        self.assertEqual([], self.db.get_doc_conflicts('doc-id'))
+
     def test_resolve_doc(self):
         doc = self.db.create_doc(simple_doc)
         alt_doc = self.make_document(doc.doc_id, 'alternate:1', nested_doc)
@@ -535,6 +542,23 @@ class LocalDatabaseWithConflictsTests(tests.DatabaseBaseTests):
             self.db.put_doc_if_newer(doc2, save_conflict=True,
                 replica_uid='other', replica_gen=3))
         self.assertEqual(3, self.db.get_sync_generation('other'))
+
+    def test_put_refuses_to_update_conflicted(self):
+        doc1 = self.db.create_doc(simple_doc)
+        content2 = '{"key": "altval"}'
+        doc2 = self.make_document(doc1.doc_id, 'altrev:1', content2)
+        self.db.put_doc_if_newer(doc2, save_conflict=True)
+        self.assertGetDoc(self.db, doc1.doc_id, doc2.rev, content2, True)
+        content3 = '{"key": "local"}'
+        doc2.content = content3
+        self.assertRaises(errors.ConflictedDoc, self.db.put_doc, doc2)
+
+    def test_delete_refuses_for_conflicted(self):
+        doc1 = self.db.create_doc(simple_doc)
+        doc2 = self.make_document(doc1.doc_id, 'altrev:1', nested_doc)
+        self.db.put_doc_if_newer(doc2, save_conflict=True)
+        self.assertGetDoc(self.db, doc2.doc_id, doc2.rev, nested_doc, True)
+        self.assertRaises(errors.ConflictedDoc, self.db.delete_doc, doc2)
 
 
 class DatabaseIndexTests(tests.DatabaseBaseTests):

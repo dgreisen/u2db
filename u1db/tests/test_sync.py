@@ -514,39 +514,6 @@ class DatabaseSyncTests(tests.DatabaseBaseTests):
         # original doc1 should have been removed from conflicts
         self.assertEqual(3, len(db3.get_doc_conflicts('the-doc')))
 
-    def test_put_refuses_to_update_conflicted(self):
-        doc1 = self.db1.create_doc(simple_doc)
-        doc_id = doc1.doc_id
-        content1 = '{"key": "altval"}'
-        doc2 = self.db2.create_doc(content1, doc_id=doc_id)
-        self.sync(self.db1, self.db2)
-        self.assertGetDoc(self.db1, doc_id, doc2.rev, content1, True)
-        content2 = '{"key": "local"}'
-        doc2.content = content2
-        self.assertRaises(errors.ConflictedDoc, self.db1.put_doc, doc2)
-
-    def test_delete_refuses_for_conflicted(self):
-        doc1 = self.db1.create_doc(simple_doc)
-        doc2 = self.db2.create_doc(nested_doc, doc_id=doc1.doc_id)
-        self.sync(self.db1, self.db2)
-        self.assertGetDoc(self.db1, doc2.doc_id, doc2.rev, nested_doc, True)
-        self.assertRaises(errors.ConflictedDoc, self.db1.delete_doc, doc2)
-
-    def test_get_doc_conflicts_unconflicted(self):
-        doc = self.db1.create_doc(simple_doc)
-        self.assertEqual([], self.db1.get_doc_conflicts(doc.doc_id))
-
-    def test_get_doc_conflicts_no_such_id(self):
-        self.assertEqual([], self.db1.get_doc_conflicts('doc-id'))
-
-    def test_get_doc_conflicts(self):
-        doc1 = self.db1.create_doc(simple_doc)
-        content1 = '{"key": "altval"}'
-        doc2 = self.db2.create_doc(content1, doc_id=doc1.doc_id)
-        self.sync(self.db1, self.db2)
-        self.assertGetDocConflicts(self.db1, doc1.doc_id,
-            [(doc2.rev, content1), (doc1.rev, simple_doc)])
-
 
 class TestDbSync(tests.TestCaseWithServer):
     """Test db.sync remote sync shortcut"""
