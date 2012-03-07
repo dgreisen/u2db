@@ -139,7 +139,6 @@ u1db_get_from_index(u1database *db, u1query *query,
     int status = U1DB_OK;
     sqlite3_stmt *statement;
     char *doc_id = NULL;
-    u1db_document *doc = NULL;
     char *query_str = NULL;
     int i, bind_arg;
     va_list argp;
@@ -183,9 +182,10 @@ u1db_get_from_index(u1database *db, u1query *query,
     status = sqlite3_step(statement);
     while (status == SQLITE_ROW) {
         doc_id = (char*)sqlite3_column_text(statement, 0);
-        status = u1db_get_doc(db, doc_id, &doc);
+        // We use u1db_get_docs so we can pass check_for_conflicts=0, which is
+        // currently expected by the test suite.
+        status = u1db_get_docs(db, 1, &doc_id, 0, context, cb);
         if (status != U1DB_OK) { goto finish; }
-        cb(context, doc);
         status = sqlite3_step(statement);
     }
     if (status == SQLITE_DONE) {
