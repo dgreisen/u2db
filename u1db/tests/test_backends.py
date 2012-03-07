@@ -700,6 +700,18 @@ class DatabaseIndexTests(tests.DatabaseBaseTests):
             sorted([doc, doc2]),
             sorted(self.db.get_from_index('test-idx', [('underneath',)])))
 
+    def tested_nested_nonexistent(self):
+        doc = self.db.create_doc(nested_doc)
+        # sub exists, but sub.foo does not:
+        self.db.create_index('test-idx', ['sub.foo'])
+        self.assertEqual([], self.db.get_from_index('test-idx', [('*',)]))
+
+    def tested_nested_nonexistent(self):
+        doc = self.db.create_doc(nested_doc)
+        # sub exists, but sub.foo does not:
+        self.db.create_index('test-idx', ['sub.foo.bar.baz.qux.fnord'])
+        self.assertEqual([], self.db.get_from_index('test-idx', [('*',)]))
+
 
 class PyDatabaseIndexTests(tests.DatabaseBaseTests):
 

@@ -363,18 +363,23 @@ evaluate_index_and_insert_into_db(void *context, const char *expression)
     char *result = NULL;
     char *tmp_expression = NULL;
     char *progress = NULL;
-    const char *DOT = ".";
+    char *dot_chr = NULL;
 
     ctx = (struct evaluate_index_context *)context;
     if (ctx->obj == NULL || !json_object_is_type(ctx->obj, json_type_object)) {
         return U1DB_INVALID_JSON;
     }
-    tmp_expression = strdup(expression); // XXX: need to test for out of mem?
-    result = strtok_r(tmp_expression, DOT, &progress);
+    tmp_expression = strdup(expression);
+    result = tmp_expression;
     val = ctx->obj;
-    while (result != NULL) {
+    while (result != NULL && val != NULL) {
+        dot_chr = strchr(result, '.');
+        if (dot_chr != NULL) {
+            *dot_chr = '\0';
+            dot_chr++;
+        }
         val = json_object_object_get(val, result);
-        result = strtok_r(NULL, DOT, &progress);
+        result = dot_chr;
     }
     free(tmp_expression);
     if (val != NULL) {

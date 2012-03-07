@@ -70,7 +70,8 @@ class TestCDatabase(BackendTests):
         self.db = c_backend_wrapper.CDatabase(':memory:')
         self.assertIsNot(None, self.db._replica_uid)
         self.assertEqual(32, len(self.db._replica_uid))
-        val = int(self.db._replica_uid, 16) # XXX missing assert?
+        # casting to an int from the uid *is* the check for correct behavior.
+        val = int(self.db._replica_uid, 16)
 
     def test_get_conflicts_with_borked_data(self):
         self.db = c_backend_wrapper.CDatabase(':memory:')
