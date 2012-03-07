@@ -360,3 +360,9 @@ u1db__sync_exchange_return_docs(u1db_sync_exchange *se, void *context,
 finish:
     return status;
 }
+
+int
+u1db__sync_db_to_target(u1database *db, u1db_sync_target *target)
+{
+    return U1DB_NOT_IMPLEMENTED;
+}

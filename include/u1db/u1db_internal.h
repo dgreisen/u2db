@@ -366,4 +366,9 @@ int u1db__sync_exchange_find_doc_ids_to_return(u1db_sync_exchange *se);
 int u1db__sync_exchange_return_docs(u1db_sync_exchange *se, void *context,
         int (*cb)(void *context, u1db_document *doc, int gen));
 
+
+/**
+ * Sync a database with a sync target.
+ */
+int u1db__sync_db_to_target(u1database *db, u1db_sync_target *target);
 #endif // U1DB_INTERNAL_H
