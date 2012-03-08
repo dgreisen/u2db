@@ -402,7 +402,6 @@ evaluate_index_and_insert_into_db(void *context, const char *expression)
         } else if (json_object_is_type(val, json_type_array)) {
             list_val = json_object_get_array(val);
             for (i = 0; i < list_val->length; i++) {
-
                 status = add_to_document_fields(ctx->db, ctx->doc_id,
                         expression, json_object_get_string(
                             array_list_get_idx(list_val, i)));
