@@ -165,7 +165,7 @@ class TestCDatabase(BackendTests):
     def test__format_query_glob(self):
         self.assertFormatQueryEquals(
             "SELECT d0.doc_id FROM document_fields d0"
-            " WHERE d0.field_name = ? AND d0.value LIKE ?",
+            " WHERE d0.field_name = ? AND d0.value GLOB ?",
             [2], ["1*"])
 
 
