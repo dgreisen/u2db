@@ -367,11 +367,13 @@ evaluate_index_and_insert_into_db(void *context, const char *expression)
     struct evaluate_index_context *ctx;
     json_object *val;
     const char *str_val;
+    struct array_list *list_val;
     int status = U1DB_OK;
     char *result = NULL;
     char *tmp_expression = NULL;
     char *progress = NULL;
     char *dot_chr = NULL;
+    int i;
 
     ctx = (struct evaluate_index_context *)context;
     if (ctx->obj == NULL || !json_object_is_type(ctx->obj, json_type_object)) {
@@ -391,10 +393,20 @@ evaluate_index_and_insert_into_db(void *context, const char *expression)
     }
     free(tmp_expression);
     if (val != NULL) {
-        str_val = json_object_get_string(val);
-        if (str_val != NULL) {
-            status = add_to_document_fields(ctx->db, ctx->doc_id, expression,
-                    str_val);
+        if (json_object_is_type(val, json_type_string)) {
+            str_val = json_object_get_string(val);
+            if (str_val != NULL) {
+                status = add_to_document_fields(ctx->db, ctx->doc_id,
+                        expression, str_val);
+            }
+        } else if (json_object_is_type(val, json_type_array)) {
+            list_val = json_object_get_array(val);
+            for (i = 0; i < list_val->length; i++) {
+
+                status = add_to_document_fields(ctx->db, ctx->doc_id,
+                        expression, json_object_get_string(
+                            array_list_get_idx(list_val, i)));
+            }
         }
         json_object_put(val);
     }
