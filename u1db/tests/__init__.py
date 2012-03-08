@@ -29,6 +29,7 @@ import testtools
 from u1db import (
     errors,
     Document,
+    sync,
     )
 from u1db.backends import (
     inmemory,
