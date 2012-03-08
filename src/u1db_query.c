@@ -333,7 +333,7 @@ struct evaluate_index_context {
 };
 
 static int
-add_to_document_fields(u1database *db, const char *doc_id, 
+add_to_document_fields(u1database *db, const char *doc_id,
                        const char *expression, const char *val)
 {
     int status;
@@ -414,7 +414,7 @@ evaluate_index_and_insert_into_db(void *context, const char *expression)
 
 // Is this expression field already in the indexed list?
 // We make an assumption that the number of new expressions is always small
-// relative to what is already indexed (which should be reasonably accurate). 
+// relative to what is already indexed (which should be reasonably accurate).
 static int
 is_present(u1database *db, const char *expression, int *present)
 {
