@@ -729,9 +729,6 @@ class DatabaseIndexTests(tests.DatabaseBaseTests):
         self.assertEqual(sorted([doc1, doc2, doc3]),
             sorted(self.db.get_from_index('test-idx', [("v1", "v*")])))
 
-
-class PyDatabaseIndexTests(tests.DatabaseBaseTests):
-
     def test_nested_index(self):
         doc = self.db.create_doc(nested_doc)
         self.db.create_index('test-idx', ['sub.doc'])
