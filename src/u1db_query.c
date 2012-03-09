@@ -178,12 +178,8 @@ u1db_get_from_index(u1database *db, u1query *query,
                                        SQLITE_TRANSIENT);
             bind_arg++;
         } else if (wildcard[i] == 2) {
-            // Globbing, so argument needs to be added TODO: with s/\*^/%^/
-            dupval = strdup(valN);
-            dupval[strlen(dupval) - 1] = '%';
-            status = sqlite3_bind_text(statement, bind_arg, dupval, -1,
+            status = sqlite3_bind_text(statement, bind_arg, valN, -1,
                                        SQLITE_TRANSIENT);
-            free(dupval);
             bind_arg++;
         }
         if (status != SQLITE_OK) { goto finish; }
@@ -272,7 +268,7 @@ u1db__format_query(int n_fields, va_list argp, char **buf, int *wildcard)
                 goto finish;
             }
             have_wildcard = 1;
-            add_to_buf(&cur, &buf_size, " AND d%d.value LIKE ?", i);
+            add_to_buf(&cur, &buf_size, " AND d%d.value GLOB ?", i);
         } else {
             wildcard[i] = 0;
             if (have_wildcard) {

@@ -758,9 +758,6 @@ class DatabaseIndexTests(tests.DatabaseBaseTests):
         rows = self.db.get_from_index("index", [("bar", )])
         self.assertEqual([doc], rows)
 
-
-class PyDatabaseIndexTests(tests.DatabaseBaseTests):
-
     def test_get_from_index_case_sensitive(self):
         self.db.create_index('test-idx', ['key'])
         doc1 = self.db.create_doc(simple_doc)
@@ -793,6 +790,9 @@ class PyDatabaseIndexTests(tests.DatabaseBaseTests):
         # Same for '_'
         self.assertEqual([doc3],
             self.db.get_from_index('test-idx', [('va_*',)]))
+
+
+class PyDatabaseIndexTests(tests.DatabaseBaseTests):
 
     def test_get_from_index_with_lower(self):
         self.db.create_index("index", ["lower(name)"])
