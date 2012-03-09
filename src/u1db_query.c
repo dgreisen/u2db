@@ -178,12 +178,8 @@ u1db_get_from_index(u1database *db, u1query *query,
                                        SQLITE_TRANSIENT);
             bind_arg++;
         } else if (wildcard[i] == 2) {
-            // Globbing, so argument needs to be added TODO: with s/\*^/%^/
-            dupval = strdup(valN);
-            dupval[strlen(dupval) - 1] = '%';
-            status = sqlite3_bind_text(statement, bind_arg, dupval, -1,
+            status = sqlite3_bind_text(statement, bind_arg, valN, -1,
                                        SQLITE_TRANSIENT);
-            free(dupval);
             bind_arg++;
         }
         if (status != SQLITE_OK) { goto finish; }
@@ -272,7 +268,7 @@ u1db__format_query(int n_fields, va_list argp, char **buf, int *wildcard)
                 goto finish;
             }
             have_wildcard = 1;
-            add_to_buf(&cur, &buf_size, " AND d%d.value LIKE ?", i);
+            add_to_buf(&cur, &buf_size, " AND d%d.value GLOB ?", i);
         } else {
             wildcard[i] = 0;
             if (have_wildcard) {
@@ -333,7 +329,7 @@ struct evaluate_index_context {
 };
 
 static int
-add_to_document_fields(u1database *db, const char *doc_id, 
+add_to_document_fields(u1database *db, const char *doc_id,
                        const char *expression, const char *val)
 {
     int status;
@@ -403,7 +399,7 @@ evaluate_index_and_insert_into_db(void *context, const char *expression)
 
 // Is this expression field already in the indexed list?
 // We make an assumption that the number of new expressions is always small
-// relative to what is already indexed (which should be reasonably accurate). 
+// relative to what is already indexed (which should be reasonably accurate).
 static int
 is_present(u1database *db, const char *expression, int *present)
 {
