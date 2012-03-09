@@ -311,11 +311,15 @@ u1db__sync_exchange_find_doc_ids_to_return(u1db_sync_exchange *se)
     state.exclude_ids = se->seen_ids;
     status = u1db_whats_changed(se->db, &se->new_gen, (void*)&state,
             whats_changed_to_doc_ids);
+    if (status != U1DB_OK) {
+        free(state.doc_ids_to_return);
+        free(state.gen_for_doc_ids);
+        goto finish;
+    }
     if (se->trace_cb) {
         status = se->trace_cb(se->trace_context, "after whats_changed");
         if (status != U1DB_OK) { goto finish; }
     }
-    if (status != U1DB_OK) { goto finish; }
     se->num_doc_ids = state.num_doc_ids;
     se->doc_ids_to_return = state.doc_ids_to_return;
     se->gen_for_doc_ids = state.gen_for_doc_ids;
@@ -324,26 +328,25 @@ finish:
 }
 
 
-struct _get_docs_to_return_docs_context {
-    u1db_sync_exchange *se;
+struct _get_docs_to_doc_gen_context {
     int doc_offset;
     void *orig_context;
     int (*user_cb)(void *context, u1db_document *doc, int gen);
+    int *gen_for_doc_ids;
 };
 
 
 static int
-get_docs_to_return_docs(void *context, u1db_document *doc)
+get_docs_to_gen_docs(void *context, u1db_document *doc)
 {
-    struct _get_docs_to_return_docs_context *ctx;
+    struct _get_docs_to_doc_gen_context *ctx;
     int status;
-    ctx = (struct _get_docs_to_return_docs_context *)context;
+    ctx = (struct _get_docs_to_doc_gen_context *)context;
     // Note: using doc_offset in this way assumes that u1db_get_docs will
     //       always return them in exactly the order we requested. This is
     //       probably true, though.
-    // TODO: We could check to make sure ctx->se...[].doc_id matches doc.doc_id
     status = ctx->user_cb(ctx->orig_context, doc,
-            ctx->se->gen_for_doc_ids[ctx->doc_offset]);
+            ctx->gen_for_doc_ids[ctx->doc_offset]);
     ctx->doc_offset++;
     return status;
 }
@@ -354,14 +357,14 @@ u1db__sync_exchange_return_docs(u1db_sync_exchange *se, void *context,
         int (*cb)(void *context, u1db_document *doc, int gen))
 {
     int status = U1DB_OK;
-    struct _get_docs_to_return_docs_context local_ctx;
+    struct _get_docs_to_doc_gen_context local_ctx = {0};
     if (se == NULL || cb == NULL) {
         return U1DB_INVALID_PARAMETER;
     }
-    local_ctx.se = se;
     local_ctx.orig_context = context;
     local_ctx.user_cb = cb;
     local_ctx.doc_offset = 0;
+    local_ctx.gen_for_doc_ids = se->gen_for_doc_ids;
     if (se->trace_cb) {
         status = se->trace_cb(se->trace_context, "before get_docs");
         if (status != U1DB_OK) { goto finish; }
@@ -371,17 +374,20 @@ u1db__sync_exchange_return_docs(u1db_sync_exchange *se, void *context,
         // char **".
         status = u1db_get_docs(se->db, se->num_doc_ids,
                 (const char **)se->doc_ids_to_return,
-                0, &local_ctx, get_docs_to_return_docs);
+                0, &local_ctx, get_docs_to_gen_docs);
     }
 finish:
     return status;
 }
+
 
 int
 u1db__sync_db_to_target(u1database *db, u1db_sync_target *target,
                         int *local_gen_before_sync)
 {
     int status;
+    struct _whats_changed_doc_ids_state state = {0};
+    struct _get_docs_to_doc_gen_context get_doc_state = {0};
     const char *target_uid, *local_uid;
     int target_gen, local_gen;
     int local_gen_known_by_target, target_gen_known_by_local;
@@ -402,11 +408,31 @@ u1db__sync_db_to_target(u1database *db, u1db_sync_target *target,
     if (status != U1DB_OK) { goto finish; }
     local_gen = local_gen_known_by_target;
 
-    //exchange = target->get_sync_exchange(target, local_uid, local_gen);
-    //status = u1db_whats_changed(db, &local_gen, NULL, NULL);
+    // Before we start the sync exchange, get the list of doc_ids that we want
+    // to send. We have to do this first, so that local_gen_before_sync will
+    // match exactly the list of doc_ids we send
+    status = u1db_whats_changed(db, &local_gen, (void*)&state,
+                                whats_changed_to_doc_ids);
     if (status != U1DB_OK) { goto finish; }
-    status = u1db__get_generation(db, &local_gen);
+    *local_gen_before_sync = local_gen;
+    status = target->get_sync_exchange(target, local_uid, local_gen, &exchange);
     if (status != U1DB_OK) { goto finish; }
+    get_doc_state.orig_context = exchange;
+    get_doc_state.user_cb = u1db__sync_exchange_insert_doc_from_source;
+    get_doc_state.gen_for_doc_ids = state.gen_for_doc_ids;
+    status = u1db_get_docs(db, state.num_doc_ids,
+            (const char **)state.doc_ids_to_return,
+            0, (void*)&get_doc_state, get_docs_to_gen_docs);
+    if (status != U1DB_OK) { goto finish; }
+    status = u1db__sync_exchange_find_doc_ids_to_return(exchange);
+    if (status != U1DB_OK) { goto finish; }
+    status = u1db__sync_exchange_return_docs(exchange);
 finish:
+    if (state.doc_ids_to_return != NULL) {
+        free(state.doc_ids_to_return);
+    }
+    if (state.gen_for_doc_ids != NULL) {
+        free(state.gen_for_doc_ids);
+    }
     return status;
 }
