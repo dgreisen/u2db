@@ -751,6 +751,13 @@ class DatabaseIndexTests(tests.DatabaseBaseTests):
         self.db.create_index('test-idx', ['sub.foo.bar.baz.qux.fnord'])
         self.assertEqual([], self.db.get_from_index('test-idx', [('*',)]))
 
+    def test_index_list(self):
+        self.db.create_index("index", ["name"])
+        content = '{"name": ["foo", "bar"]}'
+        doc = self.db.create_doc(content)
+        rows = self.db.get_from_index("index", [("bar", )])
+        self.assertEqual([doc], rows)
+
     def test_get_from_index_case_sensitive(self):
         self.db.create_index('test-idx', ['key'])
         doc1 = self.db.create_doc(simple_doc)
@@ -815,13 +822,6 @@ class PyDatabaseIndexTests(tests.DatabaseBaseTests):
         doc = self.db.create_doc(content)
         rows = self.db.get_from_index("index", [("Foo", )])
         self.assertEqual(0, len(rows))
-
-    def test_index_list(self):
-        self.db.create_index("index", ["name"])
-        content = '{"name": ["foo", "bar"]}'
-        doc = self.db.create_doc(content)
-        rows = self.db.get_from_index("index", [("bar", )])
-        self.assertEqual([doc], rows)
 
     def test_index_split_words_match_first(self):
         self.db.create_index("index", ["split_words(name)"])
