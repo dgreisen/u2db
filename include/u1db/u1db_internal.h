@@ -121,7 +121,6 @@ struct _u1db_sync_exchange {
     int last_known_source_gen;
     int new_gen;
     struct lh_table *seen_ids;
-    int max_doc_ids;
     int num_doc_ids;
     int *gen_for_doc_ids;
     char **doc_ids_to_return;
@@ -370,5 +369,6 @@ int u1db__sync_exchange_return_docs(u1db_sync_exchange *se, void *context,
 /**
  * Sync a database with a sync target.
  */
-int u1db__sync_db_to_target(u1database *db, u1db_sync_target *target);
+int u1db__sync_db_to_target(u1database *db, u1db_sync_target *target,
+                            int *local_gen_before_sync);
 #endif // U1DB_INTERNAL_H

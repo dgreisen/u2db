@@ -187,6 +187,9 @@ cdef extern from "u1db/u1db_internal.h":
     int u1db__format_query(int n_fields, va_list argp, char **buf, int *wildcard)
     int u1db__get_sync_target(u1database *db, u1db_sync_target **sync_target)
     int u1db__free_sync_target(u1db_sync_target **sync_target)
+    int u1db__sync_db_to_target(u1database *db, u1db_sync_target *target,
+                                int *local_gen_before_sync)
+
     int u1db__sync_exchange_insert_doc_from_source(u1db_sync_exchange *se,
             u1db_document *doc, int source_gen)
     int u1db__sync_exchange_find_doc_ids_to_return(u1db_sync_exchange *se)
@@ -1004,3 +1007,16 @@ cdef class VectorClockRev:
             return True
         else:
             raise RuntimeError("Failed to is_newer: %d" % (is_newer,))
+
+
+def sync_db_to_target(db, target):
+    """Sync the data between a CDatabase and a CSyncTarget"""
+    cdef CDatabase cdb
+    cdef CSyncTarget ctarget
+    cdef int local_gen = 0
+
+    cdb = db
+    ctarget = target
+    handle_status("sync_db_to_target",
+        u1db__sync_db_to_target(cdb._db, ctarget._st, &local_gen))
+    return local_gen

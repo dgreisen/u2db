@@ -247,14 +247,24 @@ u1db__sync_exchange_insert_doc_from_source(u1db_sync_exchange *se,
 }
 
 
+static struct _whats_changed_doc_ids_state {
+    int num_doc_ids;
+    int max_doc_ids;
+    struct lh_table *exclude_ids;
+    char **doc_ids_to_return;
+    int *gen_for_doc_ids;
+};
+
 // Callback for whats_changed to map the callback into the sync_exchange
 // doc_ids_to_return array.
 static int
 whats_changed_to_doc_ids(void *context, const char *doc_id, int gen)
 {
-    u1db_sync_exchange *state;
-    state = (u1db_sync_exchange *)context;
-    if (lh_table_lookup(state->seen_ids, doc_id) != NULL) {
+    struct _whats_changed_doc_ids_state *state;
+    state = (struct _whats_changed_doc_ids_state *)context;
+    if (state->exclude_ids != NULL
+            && lh_table_lookup(state->exclude_ids, doc_id) != NULL)
+    {
         // This document was already seen, so we don't need to return it
         // TODO: See bug #944049
         return 0;
@@ -290,6 +300,7 @@ int
 u1db__sync_exchange_find_doc_ids_to_return(u1db_sync_exchange *se)
 {
     int status;
+    struct _whats_changed_doc_ids_state state = {0};
     if (se == NULL) {
         return U1DB_INVALID_PARAMETER;
     }
@@ -297,12 +308,17 @@ u1db__sync_exchange_find_doc_ids_to_return(u1db_sync_exchange *se)
         status = se->trace_cb(se->trace_context, "before whats_changed");
         if (status != U1DB_OK) { goto finish; }
     }
-    status = u1db_whats_changed(se->db, &se->new_gen, (void*)se,
+    state.exclude_ids = se->seen_ids;
+    status = u1db_whats_changed(se->db, &se->new_gen, (void*)&state,
             whats_changed_to_doc_ids);
     if (se->trace_cb) {
         status = se->trace_cb(se->trace_context, "after whats_changed");
         if (status != U1DB_OK) { goto finish; }
     }
+    if (status != U1DB_OK) { goto finish; }
+    se->num_doc_ids = state.num_doc_ids;
+    se->doc_ids_to_return = state.doc_ids_to_return;
+    se->gen_for_doc_ids = state.gen_for_doc_ids;
 finish:
     return status;
 }
@@ -362,7 +378,35 @@ finish:
 }
 
 int
-u1db__sync_db_to_target(u1database *db, u1db_sync_target *target)
+u1db__sync_db_to_target(u1database *db, u1db_sync_target *target,
+                        int *local_gen_before_sync)
 {
-    return U1DB_NOT_IMPLEMENTED;
+    int status;
+    const char *target_uid, *local_uid;
+    int target_gen, local_gen;
+    int local_gen_known_by_target, target_gen_known_by_local;
+    u1db_sync_exchange *exchange;
+
+    if (db == NULL || target == NULL || local_gen_before_sync == NULL) {
+        return U1DB_INVALID_PARAMETER;
+    }
+
+    status = u1db_get_replica_uid(db, &local_uid);
+    if (status != U1DB_OK) { goto finish; }
+    *local_gen_before_sync = local_gen;
+    status = target->get_sync_info(target, local_uid, &target_uid, &target_gen,
+                                   &local_gen_known_by_target);
+    if (status != U1DB_OK) { goto finish; }
+    status = u1db__get_sync_generation(db, target_uid,
+                                       &target_gen_known_by_local);
+    if (status != U1DB_OK) { goto finish; }
+    local_gen = local_gen_known_by_target;
+
+    //exchange = target->get_sync_exchange(target, local_uid, local_gen);
+    //status = u1db_whats_changed(db, &local_gen, NULL, NULL);
+    if (status != U1DB_OK) { goto finish; }
+    status = u1db__get_generation(db, &local_gen);
+    if (status != U1DB_OK) { goto finish; }
+finish:
+    return status;
 }

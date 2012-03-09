@@ -272,13 +272,26 @@ def sync_via_synchronizer(db_source, db_target, trace_hook=None):
 
 
 sync_scenarios = []
-for name, scenario in (tests.LOCAL_DATABASES_SCENARIOS
-                       + tests.C_DATABASE_SCENARIOS):
+for name, scenario in tests.LOCAL_DATABASES_SCENARIOS:
     scenario = dict(scenario)
     scenario['sync'] = sync_via_synchronizer
     sync_scenarios.append((name, scenario))
 
-# TODO: Add a scenario that uses u1db__sync_db_to_target
+
+if tests.c_backend_wrapper is not None:
+    def sync_via_c_sync(db_source, db_target, trace_hook=None):
+        target = db_target.get_sync_target()
+        if trace_hook:
+            target._set_trace_hook(trace_hook)
+        return tests.c_backend_wrapper.sync_db_to_target(db_source, target)
+
+    for name, scenario in tests.C_DATABASE_SCENARIOS:
+        scenario = dict(scenario)
+        scenario['sync'] = sync_via_synchronizer
+        sync_scenarios.append((name + ',pysync', scenario))
+        scenario = dict(scenario)
+        scenario['sync'] = sync_via_c_sync
+        sync_scenarios.append((name + ',csync', scenario))
 
 
 class DatabaseSyncTests(tests.DatabaseBaseTests):
