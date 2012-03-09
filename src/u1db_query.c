@@ -156,11 +156,6 @@ u1db_get_from_index(u1database *db, u1query *query,
     if (n_values > 20) {
         return U1DB_NOT_IMPLEMENTED;
     }
-    // XXX: do we really need to do this for every query?
-    status = sqlite3_prepare_v2(db->sql_handle,
-                                "PRAGMA case_sensitive_like = 1", -1,
-                                &statement, NULL);
-    if (status != SQLITE_OK) { goto finish; }
     va_start(argp, n_values);
     status = u1db__format_query(query->num_fields, argp, &query_str, wildcard);
     va_end(argp);
