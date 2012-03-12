@@ -229,13 +229,14 @@ u1db__sync_exchange_insert_doc_from_source(u1db_sync_exchange *se,
         u1db_document *doc, int source_gen)
 {
     int status = U1DB_OK;
-    int state;
+    int insert_state;
     if (se == NULL || se->db == NULL || doc == NULL) {
         return U1DB_INVALID_PARAMETER;
     }
+    // fprintf(stderr, "Inserting %s from source\n", doc->doc_id);
     status = u1db_put_doc_if_newer(se->db, doc, 0, se->source_replica_uid,
-                                   source_gen, &state);
-    if (state == U1DB_INSERTED || state == U1DB_CONVERGED) {
+                                   source_gen, &insert_state);
+    if (insert_state == U1DB_INSERTED || insert_state == U1DB_CONVERGED) {
         lh_table_insert(se->seen_ids, strdup(doc->doc_id),
                         strdup(doc->doc_rev));
     } else {
@@ -357,14 +358,14 @@ u1db__sync_exchange_return_docs(u1db_sync_exchange *se, void *context,
         int (*cb)(void *context, u1db_document *doc, int gen))
 {
     int status = U1DB_OK;
-    struct _get_docs_to_doc_gen_context local_ctx = {0};
+    struct _get_docs_to_doc_gen_context state = {0};
     if (se == NULL || cb == NULL) {
         return U1DB_INVALID_PARAMETER;
     }
-    local_ctx.orig_context = context;
-    local_ctx.user_cb = cb;
-    local_ctx.doc_offset = 0;
-    local_ctx.gen_for_doc_ids = se->gen_for_doc_ids;
+    state.orig_context = context;
+    state.user_cb = cb;
+    state.doc_offset = 0;
+    state.gen_for_doc_ids = se->gen_for_doc_ids;
     if (se->trace_cb) {
         status = se->trace_cb(se->trace_context, "before get_docs");
         if (status != U1DB_OK) { goto finish; }
@@ -374,9 +375,39 @@ u1db__sync_exchange_return_docs(u1db_sync_exchange *se, void *context,
         // char **".
         status = u1db_get_docs(se->db, se->num_doc_ids,
                 (const char **)se->doc_ids_to_return,
-                0, &local_ctx, get_docs_to_gen_docs);
+                0, &state, get_docs_to_gen_docs);
     }
 finish:
+    return status;
+}
+
+static struct _return_doc_state {
+    u1database *db;
+    const char *target_uid;
+    int num_inserted;
+};
+
+static int
+return_doc_to_insert_from_target(void *context, u1db_document *doc, int gen)
+{
+    int status, insert_state;
+    struct _return_doc_state *state;
+    state = (struct _return_doc_state *)context;
+
+    // fprintf(stderr, "returning %s,%s to insert from %s:%d\n",
+    //         doc->doc_id, doc->doc_rev, state->target_uid, gen);
+    status = u1db_put_doc_if_newer(state->db, doc, 1, state->target_uid, gen,
+                                   &insert_state);
+    u1db_free_doc(&doc);
+    if (status == U1DB_OK) {
+        // fprintf(stderr, "put_doc_if_newer insert_state: %d\n", insert_state);
+        if (insert_state == U1DB_INSERTED || insert_state == U1DB_CONFLICTED) {
+            // Either it was directly inserted, or it was saved as a conflict
+            state->num_inserted++;
+        }
+    } else {
+        // fprintf(stderr, "put_doc_if_newer not ok: %d\n", status);
+    }
     return status;
 }
 
@@ -386,53 +417,89 @@ u1db__sync_db_to_target(u1database *db, u1db_sync_target *target,
                         int *local_gen_before_sync)
 {
     int status;
-    struct _whats_changed_doc_ids_state state = {0};
+    struct _whats_changed_doc_ids_state to_send_state = {0};
     struct _get_docs_to_doc_gen_context get_doc_state = {0};
+    struct _return_doc_state return_doc_state = {0};
     const char *target_uid, *local_uid;
     int target_gen, local_gen;
     int local_gen_known_by_target, target_gen_known_by_local;
     u1db_sync_exchange *exchange;
 
+    // fprintf(stderr, "Starting\n");
     if (db == NULL || target == NULL || local_gen_before_sync == NULL) {
+        // fprintf(stderr, "DB, target, or local are NULL\n");
         return U1DB_INVALID_PARAMETER;
     }
 
     status = u1db_get_replica_uid(db, &local_uid);
     if (status != U1DB_OK) { goto finish; }
-    *local_gen_before_sync = local_gen;
+    // fprintf(stderr, "Local uid: %s\n", local_uid);
     status = target->get_sync_info(target, local_uid, &target_uid, &target_gen,
                                    &local_gen_known_by_target);
+    // fprintf(stderr, "Sync info: target %s %d, source: %s targets_source_gen: %d\n",
+    //         target_uid, target_gen, local_uid, local_gen_known_by_target);
     if (status != U1DB_OK) { goto finish; }
     status = u1db__get_sync_generation(db, target_uid,
                                        &target_gen_known_by_local);
+    // fprintf(stderr, "Sources_target_gen: %d\n", target_gen_known_by_local);
     if (status != U1DB_OK) { goto finish; }
     local_gen = local_gen_known_by_target;
 
     // Before we start the sync exchange, get the list of doc_ids that we want
     // to send. We have to do this first, so that local_gen_before_sync will
     // match exactly the list of doc_ids we send
-    status = u1db_whats_changed(db, &local_gen, (void*)&state,
+    status = u1db_whats_changed(db, &local_gen, (void*)&to_send_state,
                                 whats_changed_to_doc_ids);
     if (status != U1DB_OK) { goto finish; }
     *local_gen_before_sync = local_gen;
+    // fprintf(stderr, "Whats_changed %d docs, %d cur local gen\n",
+    //         to_send_state.num_doc_ids, local_gen);
     status = target->get_sync_exchange(target, local_uid, local_gen, &exchange);
     if (status != U1DB_OK) { goto finish; }
-    get_doc_state.orig_context = exchange;
-    get_doc_state.user_cb = u1db__sync_exchange_insert_doc_from_source;
-    get_doc_state.gen_for_doc_ids = state.gen_for_doc_ids;
-    status = u1db_get_docs(db, state.num_doc_ids,
-            (const char **)state.doc_ids_to_return,
-            0, (void*)&get_doc_state, get_docs_to_gen_docs);
-    if (status != U1DB_OK) { goto finish; }
+    // fprintf(stderr, "got a sync_exchange\n");
+    if (to_send_state.num_doc_ids > 0) {
+        // fprintf(stderr, "get_docs %d docs to send\n",
+        //         to_send_state.num_doc_ids);
+        get_doc_state.orig_context = exchange;
+        get_doc_state.user_cb = u1db__sync_exchange_insert_doc_from_source;
+        get_doc_state.gen_for_doc_ids = to_send_state.gen_for_doc_ids;
+        status = u1db_get_docs(db, to_send_state.num_doc_ids,
+                (const char **)to_send_state.doc_ids_to_return,
+                0, (void*)&get_doc_state, get_docs_to_gen_docs);
+        if (status != U1DB_OK) { goto finish; }
+    } else {
+        // fprintf(stderr, "get_docs %d docs, skipping\n", to_send_state.num_doc_ids);
+    }
     status = u1db__sync_exchange_find_doc_ids_to_return(exchange);
     if (status != U1DB_OK) { goto finish; }
-    status = u1db__sync_exchange_return_docs(exchange);
-finish:
-    if (state.doc_ids_to_return != NULL) {
-        free(state.doc_ids_to_return);
+    return_doc_state.db = db;
+    return_doc_state.target_uid = target_uid;
+    return_doc_state.num_inserted = 0;
+    // fprintf(stderr, "Found %d docs to return\n", exchange->num_doc_ids);
+    status = u1db__sync_exchange_return_docs(exchange,
+            (void*)&return_doc_state, return_doc_to_insert_from_target);
+    if (status != U1DB_OK) { goto finish; }
+    // fprintf(stderr, "Inserted %d docs\n", return_doc_state.num_inserted);
+    status = u1db__get_generation(db, &local_gen);
+    if (status != U1DB_OK) { goto finish; }
+    // Now we successfully sent and received docs, make sure we record the
+    // current remote generation
+    status = u1db__set_sync_generation(db, target_uid, exchange->new_gen);
+    if (status != U1DB_OK) { goto finish; }
+    if (return_doc_state.num_inserted > 0 &&
+            ((*local_gen_before_sync + return_doc_state.num_inserted)
+              == local_gen))
+    {
+        // fprintf(stderr, "Informing target of local_gen\n", local_gen);
+        status = target->record_sync_info(target, local_uid, local_gen);
+        if (status != U1DB_OK) { goto finish; }
     }
-    if (state.gen_for_doc_ids != NULL) {
-        free(state.gen_for_doc_ids);
+finish:
+    if (to_send_state.doc_ids_to_return != NULL) {
+        free(to_send_state.doc_ids_to_return);
+    }
+    if (to_send_state.gen_for_doc_ids != NULL) {
+        free(to_send_state.gen_for_doc_ids);
     }
     return status;
 }
