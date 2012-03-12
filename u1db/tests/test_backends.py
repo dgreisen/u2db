@@ -348,6 +348,7 @@ class LocalDatabaseWithConflictsTests(tests.DatabaseBaseTests):
         self.assertEqual([no_conflict_doc, doc2],
                          self.db.get_docs([doc1.doc_id, doc2.doc_id],
                                           check_for_conflicts=False))
+
     def test_get_doc_conflicts(self):
         doc = self.db.create_doc(simple_doc)
         alt_doc = self.make_document(doc.doc_id, 'alternate:1', nested_doc)
@@ -713,8 +714,20 @@ class DatabaseIndexTests(tests.DatabaseBaseTests):
         self.assertEqual(sorted([doc1, doc2, doc3]),
             sorted(self.db.get_from_index('test-idx', [("v1", "*")])))
 
-
-class PyDatabaseIndexTests(tests.DatabaseBaseTests):
+    def test_get_glob_match(self):
+        # Note: the exact glob syntax is probably subject to change
+        content1 = '{"k1": "v1", "k2": "v1"}'
+        content2 = '{"k1": "v1", "k2": "v2"}'
+        content3 = '{"k1": "v1", "k2": "v3"}'
+        # doc4 has a different k2 prefix value, so it doesn't match
+        content4 = '{"k1": "v1", "k2": "ZZ"}'
+        self.db.create_index('test-idx', ['k1', 'k2'])
+        doc1 = self.db.create_doc(content1)
+        doc2 = self.db.create_doc(content2)
+        doc3 = self.db.create_doc(content3)
+        doc4 = self.db.create_doc(content4)
+        self.assertEqual(sorted([doc1, doc2, doc3]),
+            sorted(self.db.get_from_index('test-idx', [("v1", "v*")])))
 
     def test_nested_index(self):
         doc = self.db.create_doc(nested_doc)
@@ -725,6 +738,25 @@ class PyDatabaseIndexTests(tests.DatabaseBaseTests):
         self.assertEqual(
             sorted([doc, doc2]),
             sorted(self.db.get_from_index('test-idx', [('underneath',)])))
+
+    def test_nested_nonexistent(self):
+        doc = self.db.create_doc(nested_doc)
+        # sub exists, but sub.foo does not:
+        self.db.create_index('test-idx', ['sub.foo'])
+        self.assertEqual([], self.db.get_from_index('test-idx', [('*',)]))
+
+    def test_nested_nonexistent2(self):
+        doc = self.db.create_doc(nested_doc)
+        # sub exists, but sub.foo does not:
+        self.db.create_index('test-idx', ['sub.foo.bar.baz.qux.fnord'])
+        self.assertEqual([], self.db.get_from_index('test-idx', [('*',)]))
+
+    def test_index_list(self):
+        self.db.create_index("index", ["name"])
+        content = '{"name": ["foo", "bar"]}'
+        doc = self.db.create_doc(content)
+        rows = self.db.get_from_index("index", [("bar", )])
+        self.assertEqual([doc], rows)
 
     def test_get_from_index_case_sensitive(self):
         self.db.create_index('test-idx', ['key'])
@@ -759,6 +791,9 @@ class PyDatabaseIndexTests(tests.DatabaseBaseTests):
         self.assertEqual([doc3],
             self.db.get_from_index('test-idx', [('va_*',)]))
 
+
+class PyDatabaseIndexTests(tests.DatabaseBaseTests):
+
     def test_get_from_index_with_lower(self):
         self.db.create_index("index", ["lower(name)"])
         content = '{"name": "Foo"}'
@@ -788,13 +823,6 @@ class PyDatabaseIndexTests(tests.DatabaseBaseTests):
         rows = self.db.get_from_index("index", [("Foo", )])
         self.assertEqual(0, len(rows))
 
-    def test_index_list(self):
-        self.db.create_index("index", ["name"])
-        content = '{"name": ["foo", "bar"]}'
-        doc = self.db.create_doc(content)
-        rows = self.db.get_from_index("index", [("bar", )])
-        self.assertEqual([doc], rows)
-
     def test_index_split_words_match_first(self):
         self.db.create_index("index", ["split_words(name)"])
         content = '{"name": "foo bar"}'
@@ -816,29 +844,16 @@ class PyDatabaseIndexTests(tests.DatabaseBaseTests):
         rows = self.db.get_from_index("index", [("foo", )])
         self.assertEqual([doc], rows)
 
-    def test_get_glob_match(self):
-        # Note: the exact glob syntax is probably subject to change
-        content1 = '{"k1": "v1", "k2": "v1"}'
-        content2 = '{"k1": "v1", "k2": "v2"}'
-        content3 = '{"k1": "v1", "k2": "v3"}'
-        # doc4 has a different k2 prefix value, so it doesn't match
-        content4 = '{"k1": "v1", "k2": "ZZ"}'
-        self.db.create_index('test-idx', ['k1', 'k2'])
-        doc1 = self.db.create_doc(content1)
-        doc2 = self.db.create_doc(content2)
-        doc3 = self.db.create_doc(content3)
-        doc4 = self.db.create_doc(content4)
-        self.assertEqual(sorted([doc1, doc2, doc3]),
-            sorted(self.db.get_from_index('test-idx', [("v1", "v*")])))
-
     def test_sync_exchange_updates_indexes(self):
         doc = self.db.create_doc(simple_doc)
         self.db.create_index('test-idx', ['key'])
         new_content = '{"key": "altval"}'
         other_rev = 'test:1|z:2'
         st = self.db.get_sync_target()
+
         def ignore(doc_id, doc_rev, doc):
             pass
+
         doc_other = self.make_document(doc.doc_id, other_rev, new_content)
         docs_by_gen = [(doc_other, 10)]
         result = st.sync_exchange(docs_by_gen, 'other-replica',

@@ -144,6 +144,7 @@ u1db_get_from_index(u1database *db, u1query *query,
     va_list argp;
     const char *valN = NULL;
     int wildcard[20] = {0};
+    char *dupval = NULL;
 
     if (db == NULL || query == NULL || cb == NULL || n_values < 0)
     {
@@ -176,6 +177,10 @@ u1db_get_from_index(u1database *db, u1query *query,
             status = sqlite3_bind_text(statement, bind_arg, valN, -1,
                                        SQLITE_TRANSIENT);
             bind_arg++;
+        } else if (wildcard[i] == 2) {
+            status = sqlite3_bind_text(statement, bind_arg, valN, -1,
+                                       SQLITE_TRANSIENT);
+            bind_arg++;
         }
         if (status != SQLITE_OK) { goto finish; }
     }
@@ -184,7 +189,7 @@ u1db_get_from_index(u1database *db, u1query *query,
         doc_id = (char*)sqlite3_column_text(statement, 0);
         // We use u1db_get_docs so we can pass check_for_conflicts=0, which is
         // currently expected by the test suite.
-        status = u1db_get_docs(db, 1, &doc_id, 0, context, cb);
+        status = u1db_get_docs(db, 1, (const char**)&doc_id, 0, context, cb);
         if (status != U1DB_OK) { goto finish; }
         status = sqlite3_step(statement);
     }
@@ -263,8 +268,7 @@ u1db__format_query(int n_fields, va_list argp, char **buf, int *wildcard)
                 goto finish;
             }
             have_wildcard = 1;
-            status = U1DB_NOT_IMPLEMENTED;
-            goto finish;
+            add_to_buf(&cur, &buf_size, " AND d%d.value GLOB ?", i);
         } else {
             wildcard[i] = 0;
             if (have_wildcard) {
@@ -325,7 +329,7 @@ struct evaluate_index_context {
 };
 
 static int
-add_to_document_fields(u1database *db, const char *doc_id, 
+add_to_document_fields(u1database *db, const char *doc_id,
                        const char *expression, const char *val)
 {
     int status;
@@ -359,18 +363,45 @@ evaluate_index_and_insert_into_db(void *context, const char *expression)
     struct evaluate_index_context *ctx;
     json_object *val;
     const char *str_val;
+    struct array_list *list_val;
     int status = U1DB_OK;
+    char *result = NULL;
+    char *tmp_expression = NULL;
+    char *progress = NULL;
+    char *dot_chr = NULL;
+    int i;
 
     ctx = (struct evaluate_index_context *)context;
     if (ctx->obj == NULL || !json_object_is_type(ctx->obj, json_type_object)) {
         return U1DB_INVALID_JSON;
     }
-    val = json_object_object_get(ctx->obj, expression);
+    tmp_expression = strdup(expression);
+    result = tmp_expression;
+    val = ctx->obj;
+    while (result != NULL && val != NULL) {
+        dot_chr = strchr(result, '.');
+        if (dot_chr != NULL) {
+            *dot_chr = '\0';
+            dot_chr++;
+        }
+        val = json_object_object_get(val, result);
+        result = dot_chr;
+    }
+    free(tmp_expression);
     if (val != NULL) {
-        str_val = json_object_get_string(val);
-        if (str_val != NULL) {
-            status = add_to_document_fields(ctx->db, ctx->doc_id, expression,
-                    str_val);
+        if (json_object_is_type(val, json_type_string)) {
+            str_val = json_object_get_string(val);
+            if (str_val != NULL) {
+                status = add_to_document_fields(ctx->db, ctx->doc_id,
+                        expression, str_val);
+            }
+        } else if (json_object_is_type(val, json_type_array)) {
+            list_val = json_object_get_array(val);
+            for (i = 0; i < list_val->length; i++) {
+                status = add_to_document_fields(ctx->db, ctx->doc_id,
+                        expression, json_object_get_string(
+                            array_list_get_idx(list_val, i)));
+            }
         }
         json_object_put(val);
     }
@@ -379,7 +410,7 @@ evaluate_index_and_insert_into_db(void *context, const char *expression)
 
 // Is this expression field already in the indexed list?
 // We make an assumption that the number of new expressions is always small
-// relative to what is already indexed (which should be reasonably accurate). 
+// relative to what is already indexed (which should be reasonably accurate).
 static int
 is_present(u1database *db, const char *expression, int *present)
 {

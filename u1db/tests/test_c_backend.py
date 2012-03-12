@@ -79,6 +79,7 @@ class TestCDatabase(BackendTests):
         self.db = c_backend_wrapper.CDatabase(':memory:')
         self.assertIsNot(None, self.db._replica_uid)
         self.assertEqual(32, len(self.db._replica_uid))
+        # casting to an int from the uid *is* the check for correct behavior.
         val = int(self.db._replica_uid, 16)
 
     def test_get_conflicts_with_borked_data(self):
@@ -102,11 +103,6 @@ class TestCDatabase(BackendTests):
         self.db = c_backend_wrapper.CDatabase(':memory:')
         doc = self.db.create_doc(tests.nested_doc)
         self.db.create_index("multi-idx", ["key", "sub.doc"])
-        # TODO: The current backend doesn't support nested fields, so we push
-        #       that data in manually.
-        self.db._run_sql("INSERT INTO document_fields"
-                         " VALUES ('%s', 'sub.doc', 'underneath')"
-                         % (doc.doc_id,))
         docs = self.db.get_from_index('multi-idx', [('value', 'underneath')])
         self.assertEqual([doc], docs)
 
@@ -167,8 +163,10 @@ class TestCDatabase(BackendTests):
             [0, 1], ["1", "*"])
 
     def test__format_query_glob(self):
-        self.assertRaises(NotImplementedError,
-            c_backend_wrapper._format_query, ["1*"])
+        self.assertFormatQueryEquals(
+            "SELECT d0.doc_id FROM document_fields d0"
+            " WHERE d0.field_name = ? AND d0.value GLOB ?",
+            [2], ["1*"])
 
 
 class TestCSyncTarget(BackendTests):
