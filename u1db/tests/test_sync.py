@@ -455,12 +455,15 @@ class DatabaseSyncTests(tests.DatabaseBaseTests):
         doc.content = content2
         self.db2.put_doc(doc)
         doc2_rev2 = doc.rev
+        triggered = []
         def after_whatschanged(state):
             if state != 'after whats_changed':
                 return
+            triggered.append(True)
             doc = self.make_document(doc_id, doc1_rev, content1)
             self.db1.put_doc(doc)
         self.sync(self.db1, self.db2, trace_hook=after_whatschanged)
+        self.assertEqual([True], triggered)
         self.assertGetDoc(self.db1, doc_id, doc2_rev2, content2, True)
         self.assertEqual([doc],
                          self.db1.get_from_index('test-idx', [('altval',)]))
