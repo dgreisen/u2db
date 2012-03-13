@@ -75,6 +75,11 @@ class AllDatabaseTests(tests.DatabaseBaseTests, tests.TestCaseWithServer):
         self.assertNotEqual(None, doc.rev)
         self.assertGetDoc(self.db, doc.doc_id, doc.rev, simple_doc, False)
 
+    def test_create_doc_different_ids_same_db(self):
+        doc1 = self.db.create_doc(simple_doc)
+        doc2 = self.db.create_doc(nested_doc)
+        self.assertNotEqual(doc1.doc_id, doc2.doc_id)
+
     def test_create_doc_with_id(self):
         doc = self.db.create_doc(simple_doc, doc_id='my-id')
         self.assertEqual('my-id', doc.doc_id)
@@ -207,6 +212,12 @@ class AllDatabaseTests(tests.DatabaseBaseTests, tests.TestCaseWithServer):
 class LocalDatabaseTests(tests.DatabaseBaseTests):
 
     scenarios = tests.LOCAL_DATABASES_SCENARIOS + tests.C_DATABASE_SCENARIOS
+
+    def test_create_doc_different_ids_diff_db(self):
+        doc1 = self.db.create_doc(simple_doc)
+        db2 = self.create_database('other-uid')
+        doc2 = db2.create_doc(simple_doc)
+        self.assertNotEqual(doc1.doc_id, doc2.doc_id)
 
     def test_put_doc_refuses_slashes_picky(self):
         doc = self.make_document('/a', None, simple_doc)
