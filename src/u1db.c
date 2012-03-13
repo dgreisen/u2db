@@ -1206,6 +1206,7 @@ u1db__allocate_doc_id(u1database *db)
         // There was an error.
         return NULL;
     }
+    // TODO: Use the uuid code instead of doc-X.
     buf = (char *)calloc(1, 128);
     snprintf(buf, 128, "doc-%d", generation);
     return buf;

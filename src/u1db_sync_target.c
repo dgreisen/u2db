@@ -28,6 +28,9 @@ static int st_get_sync_info (u1db_sync_target *st,
 static int st_record_sync_info(u1db_sync_target *st,
         const char *source_replica_uid, int source_gen);
 
+static int st_sync_exchange(u1db_sync_target *st, u1database *source_db,
+        int n_doc_ids, const char **doc_ids, int *generations,
+        int *target_gen, void *context, u1db_doc_gen_callback cb);
 static int st_get_sync_exchange(u1db_sync_target *st,
                          const char *source_replica_uid,
                          int source_gen,
@@ -39,6 +42,16 @@ static int st_set_trace_hook(u1db_sync_target *st,
                              void *context, u1db__trace_callback cb);
 static void se_free_seen_id(struct lh_entry *e);
 
+
+struct _get_docs_to_doc_gen_context {
+    int doc_offset;
+    void *orig_context;
+    int (*user_cb)(void *context, u1db_document *doc, int gen);
+    int *gen_for_doc_ids;
+};
+
+// A wrapper to change a 'u1db_doc_callback' into a 'u1db_doc_gen_callback'.
+static int get_docs_to_gen_docs(void *context, u1db_document *doc);
 
 int
 u1db__get_sync_target(u1database *db, u1db_sync_target **sync_target)
@@ -55,6 +68,7 @@ u1db__get_sync_target(u1database *db, u1db_sync_target **sync_target)
     (*sync_target)->db = db;
     (*sync_target)->get_sync_info = st_get_sync_info;
     (*sync_target)->record_sync_info = st_record_sync_info;
+    (*sync_target)->sync_exchange = st_sync_exchange;
     (*sync_target)->get_sync_exchange = st_get_sync_exchange;
     (*sync_target)->finalize_sync_exchange = st_finalize_sync_exchange;
     (*sync_target)->_set_trace_hook = st_set_trace_hook;
@@ -113,7 +127,8 @@ st_record_sync_info(u1db_sync_target *st, const char *source_replica_uid,
 
 static int
 st_get_sync_exchange(u1db_sync_target *st, const char *source_replica_uid,
-                     int source_gen, u1db_sync_exchange **exchange)
+                     int target_gen_known_by_source,
+                     u1db_sync_exchange **exchange)
 {
     u1db_sync_exchange *tmp;
     if (st == NULL || source_replica_uid == NULL || exchange == NULL) {
@@ -125,7 +140,7 @@ st_get_sync_exchange(u1db_sync_target *st, const char *source_replica_uid,
     }
     tmp->db = st->db;
     tmp->source_replica_uid = source_replica_uid;
-    tmp->last_known_source_gen = source_gen;
+    tmp->target_gen = target_gen_known_by_source;
     // Note: lh_table is overkill for what we need. We only need a set, not a
     //       mapping, and we don't need the prev/next pointers. But it is
     //       already available, and doesn't require us to implement and debug
@@ -243,6 +258,7 @@ u1db__sync_exchange_insert_doc_from_source(u1db_sync_exchange *se,
         // state should be either U1DB_SUPERSEDED or U1DB_CONFLICTED, in either
         // case, we don't count this as a 'seen_id' because we will want to be
         // returning a document with this identifier back to the user.
+        // fprintf(stderr, "Not inserting %s, %d\n", doc->doc_id, insert_state);
     }
     return status;
 }
@@ -310,7 +326,7 @@ u1db__sync_exchange_find_doc_ids_to_return(u1db_sync_exchange *se)
         if (status != U1DB_OK) { goto finish; }
     }
     state.exclude_ids = se->seen_ids;
-    status = u1db_whats_changed(se->db, &se->new_gen, (void*)&state,
+    status = u1db_whats_changed(se->db, &se->target_gen, (void*)&state,
             whats_changed_to_doc_ids);
     if (status != U1DB_OK) {
         free(state.doc_ids_to_return);
@@ -329,14 +345,7 @@ finish:
 }
 
 
-struct _get_docs_to_doc_gen_context {
-    int doc_offset;
-    void *orig_context;
-    int (*user_cb)(void *context, u1db_document *doc, int gen);
-    int *gen_for_doc_ids;
-};
-
-
+// A wrapper to change a 'u1db_doc_callback' into a 'u1db_doc_gen_callback'.
 static int
 get_docs_to_gen_docs(void *context, u1db_document *doc)
 {
@@ -371,8 +380,6 @@ u1db__sync_exchange_return_docs(u1db_sync_exchange *se, void *context,
         if (status != U1DB_OK) { goto finish; }
     }
     if (se->num_doc_ids > 0) {
-        // For some reason, gcc doesn't like to auto-cast "char **" to "const
-        // char **".
         status = u1db_get_docs(se->db, se->num_doc_ids,
                 (const char **)se->doc_ids_to_return,
                 0, &state, get_docs_to_gen_docs);
@@ -412,6 +419,54 @@ return_doc_to_insert_from_target(void *context, u1db_document *doc, int gen)
 }
 
 
+static int
+get_and_insert_docs(u1database *source_db, u1db_sync_exchange *se,
+                    int n_doc_ids, const char **doc_ids, int *generations)
+{
+    struct _get_docs_to_doc_gen_context get_doc_state = {0};
+
+    get_doc_state.orig_context = se;
+    get_doc_state.user_cb = u1db__sync_exchange_insert_doc_from_source;
+    get_doc_state.gen_for_doc_ids = generations;
+    return u1db_get_docs(source_db, n_doc_ids, doc_ids,
+            0, &get_doc_state, get_docs_to_gen_docs);
+}
+
+
+static int
+st_sync_exchange(u1db_sync_target *st, u1database *source_db,
+        int n_doc_ids, const char **doc_ids, int *generations,
+        int *target_gen, void *context, u1db_doc_gen_callback cb)
+{
+    int status;
+    const char *source_replica_uid = NULL, *target_replica_uid = NULL;
+    u1db_sync_exchange *exchange = NULL;
+    if (st == NULL || source_db == NULL || doc_ids == NULL
+        || generations == NULL || target_gen == NULL || cb == NULL)
+    {
+        return U1DB_INVALID_PARAMETER;
+    }
+    status = u1db_get_replica_uid(source_db, &source_replica_uid);
+    if (status != U1DB_OK) { goto finish; }
+    status = st->get_sync_exchange(st, source_replica_uid,
+                                   *target_gen, &exchange);
+    if (status != U1DB_OK) { goto finish; }
+    if (n_doc_ids > 0) {
+        status = get_and_insert_docs(source_db, exchange,
+            n_doc_ids, doc_ids, generations);
+        if (status != U1DB_OK) { goto finish; }
+    }
+    status = u1db__sync_exchange_find_doc_ids_to_return(exchange);
+    if (status != U1DB_OK) { goto finish; }
+    status = u1db__sync_exchange_return_docs(exchange, context, cb);
+    if (status != U1DB_OK) { goto finish; }
+    *target_gen = exchange->target_gen;
+finish:
+    st->finalize_sync_exchange(st, &exchange);
+    return status;
+}
+
+
 int
 u1db__sync_db_to_target(u1database *db, u1db_sync_target *target,
                         int *local_gen_before_sync)
@@ -423,7 +478,7 @@ u1db__sync_db_to_target(u1database *db, u1db_sync_target *target,
     const char *target_uid, *local_uid;
     int target_gen, local_gen;
     int local_gen_known_by_target, target_gen_known_by_local;
-    u1db_sync_exchange *exchange;
+    u1db_sync_exchange *exchange = NULL;
 
     // fprintf(stderr, "Starting\n");
     if (db == NULL || target == NULL || local_gen_before_sync == NULL) {
@@ -454,7 +509,8 @@ u1db__sync_db_to_target(u1database *db, u1db_sync_target *target,
     *local_gen_before_sync = local_gen;
     // fprintf(stderr, "Whats_changed %d docs, %d cur local gen\n",
     //         to_send_state.num_doc_ids, local_gen);
-    status = target->get_sync_exchange(target, local_uid, local_gen, &exchange);
+    status = target->get_sync_exchange(target, local_uid,
+            target_gen_known_by_local, &exchange);
     if (status != U1DB_OK) { goto finish; }
     // fprintf(stderr, "got a sync_exchange\n");
     if (to_send_state.num_doc_ids > 0) {
@@ -484,7 +540,7 @@ u1db__sync_db_to_target(u1database *db, u1db_sync_target *target,
     if (status != U1DB_OK) { goto finish; }
     // Now we successfully sent and received docs, make sure we record the
     // current remote generation
-    status = u1db__set_sync_generation(db, target_uid, exchange->new_gen);
+    status = u1db__set_sync_generation(db, target_uid, exchange->target_gen);
     if (status != U1DB_OK) { goto finish; }
     if (return_doc_state.num_inserted > 0 &&
             ((*local_gen_before_sync + return_doc_state.num_inserted)
@@ -501,5 +557,6 @@ finish:
     if (to_send_state.gen_for_doc_ids != NULL) {
         free(to_send_state.gen_for_doc_ids);
     }
+    target->finalize_sync_exchange(target, &exchange);
     return status;
 }
