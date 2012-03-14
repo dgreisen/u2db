@@ -79,6 +79,7 @@ synchronize them with other stores.
             "u1db.tests.c_backend_wrapper",
             ["u1db/tests/c_backend_wrapper.pyx",
              "src/u1db.c",
+             "src/u1db_http_sync_target.c",
              "src/u1db_query.c",
              "src/u1db_schema.c",
              "src/u1db_sync_target.c",
@@ -86,7 +87,7 @@ synchronize them with other stores.
              "src/u1db_vectorclock.c",
              ],
             include_dirs=["include"],
-            libraries=['sqlite3'] + extra_libs,
+            libraries=['libcurl', 'sqlite3'] + extra_libs,
             ))
 
 

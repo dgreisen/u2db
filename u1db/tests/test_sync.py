@@ -53,6 +53,19 @@ def _make_local_db_and_http_target(test, path='test'):
     return db, st
 
 
+def _make_c_db_and_c_http_target(test, path='test'):
+    # We create a python HTTP server, and back it with a CDatabase, and hook up
+    # the CHTTPSyncTarget to it 
+    test.startServer()
+    db = tests.c_backend_wrapper.CDatabase(":memory:")
+    # Note: This is a bit of an api violation to poke our DB into the server
+    #       state
+    test.request_state._dbs[path] = db
+    url = test.getURL(path)
+    st = tests.c_backend_wrapper.CHTTPSyncTarget(url)
+    return db, st
+
+
 def _make_local_db_and_oauth_http_target(test):
     db, st = _make_local_db_and_http_target(test, '~/test')
     st.set_oauth_credentials(tests.consumer1.key, tests.consumer1.secret,
@@ -73,7 +86,12 @@ c_db_scenarios = [
     ('local,c', {'create_db_and_target': _make_local_db_and_target,
                  'do_create_database': tests.create_c_database,
                  'make_document': tests.create_c_document,
-                 'whitebox': False})
+                 'whitebox': False}),
+    ('http,c', {'create_db_and_target': _make_c_db_and_c_http_target,
+                'do_create_database': tests.create_c_database,
+                'make_document': tests.create_c_document,
+                'server_def': http_server_def,
+                'whitebox': False})
     ]
 
 

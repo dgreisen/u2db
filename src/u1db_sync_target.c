@@ -21,7 +21,7 @@
 #include <json/linkhash.h>
 
 
-static int st_get_sync_info (u1db_sync_target *st,
+static int st_get_sync_info(u1db_sync_target *st,
         const char *source_replica_uid,
         const char **st_replica_uid, int *st_gen, int *source_gen);
 
@@ -65,7 +65,7 @@ u1db__get_sync_target(u1database *db, u1db_sync_target **sync_target)
     if (*sync_target == NULL) {
         return U1DB_NOMEM;
     }
-    (*sync_target)->db = db;
+    (*sync_target)->implementation = db;
     (*sync_target)->get_sync_info = st_get_sync_info;
     (*sync_target)->record_sync_info = st_record_sync_info;
     (*sync_target)->sync_exchange = st_sync_exchange;
@@ -92,6 +92,7 @@ st_get_sync_info(u1db_sync_target *st, const char *source_replica_uid,
         const char **st_replica_uid, int *st_gen, int *source_gen)
 {
     int status = U1DB_OK;
+    u1database *db;
     if (st == NULL || source_replica_uid == NULL || st_replica_uid == NULL
             || st_gen == NULL || source_gen == NULL)
     {
@@ -104,11 +105,12 @@ st_get_sync_info(u1db_sync_target *st, const char *source_replica_uid,
     //       At the very least, though, we check the sync generation *first*,
     //       so that we should only be getting the same data again, if for some
     //       reason we are currently synchronizing with the remote object.
-    status = u1db_get_replica_uid(st->db, st_replica_uid);
+    db = (u1database *)st->implementation;
+    status = u1db_get_replica_uid(db, st_replica_uid);
     if (status != U1DB_OK) { goto finish; }
-    status = u1db__get_sync_generation(st->db, source_replica_uid, source_gen);
+    status = u1db__get_sync_generation(db, source_replica_uid, source_gen);
     if (status != U1DB_OK) { goto finish; }
-    status = u1db__get_generation(st->db, st_gen);
+    status = u1db__get_generation(db, st_gen);
 finish:
     return status;
 }
@@ -118,10 +120,12 @@ static int
 st_record_sync_info(u1db_sync_target *st, const char *source_replica_uid,
                     int source_gen)
 {
+    u1database *db;
     if (st == NULL || source_replica_uid == NULL) {
         return U1DB_INVALID_PARAMETER;
     }
-    return u1db__set_sync_generation(st->db, source_replica_uid, source_gen);
+    db = (u1database *)st->implementation;
+    return u1db__set_sync_generation(db, source_replica_uid, source_gen);
 }
 
 
@@ -138,7 +142,7 @@ st_get_sync_exchange(u1db_sync_target *st, const char *source_replica_uid,
     if (tmp == NULL) {
         return U1DB_NOMEM;
     }
-    tmp->db = st->db;
+    tmp->db = (u1database *)st->implementation;
     tmp->source_replica_uid = source_replica_uid;
     tmp->target_gen = target_gen_known_by_source;
     // Note: lh_table is overkill for what we need. We only need a set, not a

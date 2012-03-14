@@ -45,9 +45,9 @@ typedef struct _u1db_sync_target u1db_sync_target;
 typedef int (*u1db__trace_callback)(void *context, const char *state);
 
 struct _u1db_sync_target {
-    u1database *db;
     void *trace_context;
     u1db__trace_callback trace_cb;
+    void *implementation;
 
     /**
      * Get the information for synchronization about another replica.
@@ -390,8 +390,14 @@ int u1db__sync_exchange_return_docs(u1db_sync_exchange *se, void *context,
 
 
 /**
+ * Create a sync target pointing at a given URL.
+ */
+int u1db__create_http_sync_target(const char *url, u1db_sync_target **target);
+
+/**
  * Sync a database with a sync target.
  */
 int u1db__sync_db_to_target(u1database *db, u1db_sync_target *target,
                             int *local_gen_before_sync);
+
 #endif // U1DB_INTERNAL_H

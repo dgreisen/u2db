@@ -143,7 +143,6 @@ cdef extern from "u1db/u1db_internal.h":
 
     ctypedef int (*u1db__trace_callback)(void *context, const_char_ptr state)
     ctypedef struct u1db_sync_target:
-        u1database *db
         int (*get_sync_info)(u1db_sync_target *st,
             char *source_replica_uid,
             const_char_ptr *st_replica_uid, int *st_gen, int *source_gen)
@@ -590,15 +589,6 @@ cdef class CSyncTarget(object):
         if self._st == NULL:
             raise RuntimeError("self._st is NULL")
 
-    def _get_replica_uid(self):
-        cdef const_char_ptr val
-        cdef int status
-
-        self._check()
-        handle_status("get_replica_uid",
-            u1db_get_replica_uid(self._st.db, &val))
-        return str(val)
-
     def get_sync_info(self, source_replica_uid):
         cdef const_char_ptr st_replica_uid = NULL
         cdef int st_gen = 0, source_gen = 0
@@ -673,6 +663,11 @@ cdef class CSyncTarget(object):
         assert self._st._set_trace_hook != NULL, "_set_trace_hook is NULL?"
         handle_status("_set_trace_hook",
             self._st._set_trace_hook(self._st, <void*>cb, _trace_hook));
+
+
+cdef class CHTTPSyncTarget(object):
+
+    cdef u1db_sync_target *_st
 
 
 cdef class CDatabase(object):
