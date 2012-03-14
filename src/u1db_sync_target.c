@@ -40,6 +40,7 @@ static void st_finalize_sync_exchange(u1db_sync_target *st,
                                u1db_sync_exchange **exchange);
 static int st_set_trace_hook(u1db_sync_target *st,
                              void *context, u1db__trace_callback cb);
+static void st_finalize(u1db_sync_target *st);
 static void se_free_seen_id(struct lh_entry *e);
 
 
@@ -72,6 +73,7 @@ u1db__get_sync_target(u1database *db, u1db_sync_target **sync_target)
     (*sync_target)->get_sync_exchange = st_get_sync_exchange;
     (*sync_target)->finalize_sync_exchange = st_finalize_sync_exchange;
     (*sync_target)->_set_trace_hook = st_set_trace_hook;
+    (*sync_target)->finalize = st_finalize;
     return status;
 }
 
@@ -82,6 +84,7 @@ u1db__free_sync_target(u1db_sync_target **sync_target)
     if (sync_target == NULL || *sync_target == NULL) {
         return;
     }
+    (*sync_target)->finalize(*sync_target);
     free(*sync_target);
     *sync_target = NULL;
 }
@@ -192,6 +195,13 @@ st_set_trace_hook(u1db_sync_target *st, void *context, u1db__trace_callback cb)
     st->trace_context = context;
     st->trace_cb = cb;
     return U1DB_OK;
+}
+
+
+static void
+st_finalize(u1db_sync_target *st)
+{
+    return;
 }
 
 

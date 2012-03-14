@@ -54,15 +54,10 @@ def _make_local_db_and_http_target(test, path='test'):
 
 
 def _make_c_db_and_c_http_target(test, path='test'):
-    # We create a python HTTP server, and back it with a CDatabase, and hook up
-    # the CHTTPSyncTarget to it 
     test.startServer()
-    db = tests.c_backend_wrapper.CDatabase(":memory:")
-    # Note: This is a bit of an api violation to poke our DB into the server
-    #       state
-    test.request_state._dbs[path] = db
+    db = test.request_state._create_database(os.path.basename(path))
     url = test.getURL(path)
-    st = tests.c_backend_wrapper.CHTTPSyncTarget(url)
+    st = tests.c_backend_wrapper.create_http_sync_target(url)
     return db, st
 
 

@@ -136,6 +136,10 @@ struct _u1db_sync_target {
      */
     int (*_set_trace_hook)(u1db_sync_target *st,
                            void *context, u1db__trace_callback cb);
+    /**
+     * The sync target is being cleaned up. Release resources.
+     */
+    void (*finalize)(u1db_sync_target *st);
 };
 
 

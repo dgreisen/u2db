@@ -250,6 +250,14 @@ class TestCSyncTarget(BackendTests):
         self.assertEqual([(doc1, 1)], returned)
 
 
+class TestCHTTPSyncTarget(BackendTests):
+
+    def test_format_get_sync_info_url(self):
+        target = c_backend_wrapper.create_http_sync_target("http://base_url")
+        self.assertEqual("http://base_url/sync-from/replica-uid",
+            c_backend_wrapper._format_sync_info_url(target, "replica-uid"))
+
+
 class TestVectorClock(BackendTests):
 
     def create_vcr(self, rev):

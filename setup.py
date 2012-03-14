@@ -74,6 +74,9 @@ synchronize them with other stores.
         if sys.platform == 'win32':
             # Used for the random number generator
             extra_libs.append('advapi32')
+            extra_libs.append('libcurl_imp')
+        else:
+            extra_libs.append('curl')
         extra_libs.append('json')
         ext.append(Extension(
             "u1db.tests.c_backend_wrapper",
@@ -87,7 +90,8 @@ synchronize them with other stores.
              "src/u1db_vectorclock.c",
              ],
             include_dirs=["include"],
-            libraries=['libcurl', 'sqlite3'] + extra_libs,
+            libraries=['sqlite3'] + extra_libs,
+            define_macros=[],
             ))
 
 

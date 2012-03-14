@@ -23,6 +23,11 @@ cdef extern from "Python.h":
     char *strdup(char *)
     void *calloc(size_t, size_t)
     void free(void *)
+    ctypedef struct FILE:
+        pass
+    fprintf(FILE *, char *, ...)
+    FILE *stderr
+    size_t strlen(char *)
 
 cdef extern from "stdarg.h":
     ctypedef struct va_list:
@@ -203,6 +208,9 @@ cdef extern from "u1db/u1db_internal.h":
             int (*cb)(void *context, u1db_document *doc, int gen))
     int u1db__create_http_sync_target(char *url, u1db_sync_target **target)
 
+cdef extern from "u1db/u1db_http_internal.h":
+    int u1db__format_get_sync_info_url(u1db_sync_target *st,
+            const_char_ptr source_replica_uid, char **sync_url)
 
 cdef extern from "u1db/u1db_vectorclock.h":
     ctypedef struct u1db_vectorclock_item:
@@ -1057,4 +1065,24 @@ def sync_db_to_target(db, target):
 
 
 def create_http_sync_target(url):
-    cdef CSyncTarget ctarget
+    cdef CSyncTarget target
+
+    target = CSyncTarget()
+    handle_status("create_http_sync_target",
+        u1db__create_http_sync_target(url, &target._st))
+    return target
+
+
+def _format_sync_info_url(target, source_replica_uid):
+    cdef CSyncTarget st
+    cdef char *sync_url = NULL
+    cdef object res
+    st = target
+    handle_status("format_get_sync_info_url",
+        u1db__format_get_sync_info_url(st._st, source_replica_uid, &sync_url))
+    if sync_url == NULL:
+        res = None
+    else:
+        res = sync_url
+        free(sync_url)
+    return res
