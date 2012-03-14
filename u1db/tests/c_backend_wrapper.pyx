@@ -201,6 +201,7 @@ cdef extern from "u1db/u1db_internal.h":
     int u1db__sync_exchange_find_doc_ids_to_return(u1db_sync_exchange *se)
     int u1db__sync_exchange_return_docs(u1db_sync_exchange *se, void *context,
             int (*cb)(void *context, u1db_document *doc, int gen))
+    int u1db__create_http_sync_target(char *url, u1db_sync_target **target)
 
 
 cdef extern from "u1db/u1db_vectorclock.h":
@@ -576,11 +577,9 @@ cdef class CSyncTarget(object):
     cdef u1db_sync_target *_st
     cdef CDatabase _db
 
-    def __init__(self, db):
-        self._db = db 
+    def __init__(self):
+        self._db = None
         self._st = NULL
-        handle_status("get_sync_target",
-            u1db__get_sync_target(self._db._db, &self._st))
 
     def __dealloc__(self):
         u1db__free_sync_target(&self._st)
@@ -663,11 +662,6 @@ cdef class CSyncTarget(object):
         assert self._st._set_trace_hook != NULL, "_set_trace_hook is NULL?"
         handle_status("_set_trace_hook",
             self._st._set_trace_hook(self._st, <void*>cb, _trace_hook));
-
-
-cdef class CHTTPSyncTarget(object):
-
-    cdef u1db_sync_target *_st
 
 
 cdef class CDatabase(object):
@@ -962,7 +956,12 @@ cdef class CDatabase(object):
         return query
     
     def get_sync_target(self):
-        return CSyncTarget(self)
+        cdef CSyncTarget target
+        target = CSyncTarget()
+        target._db = self
+        handle_status("get_sync_target",
+            u1db__get_sync_target(target._db._db, &target._st))
+        return target
 
 
 cdef class VectorClockRev:
@@ -1055,3 +1054,7 @@ def sync_db_to_target(db, target):
     handle_status("sync_db_to_target",
         u1db__sync_db_to_target(cdb._db, ctarget._st, &local_gen))
     return local_gen
+
+
+def create_http_sync_target(url):
+    cdef CSyncTarget ctarget
