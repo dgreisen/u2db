@@ -272,13 +272,26 @@ def sync_via_synchronizer(db_source, db_target, trace_hook=None):
 
 
 sync_scenarios = []
-for name, scenario in (tests.LOCAL_DATABASES_SCENARIOS
-                       + tests.C_DATABASE_SCENARIOS):
+for name, scenario in tests.LOCAL_DATABASES_SCENARIOS:
     scenario = dict(scenario)
     scenario['sync'] = sync_via_synchronizer
     sync_scenarios.append((name, scenario))
 
-# TODO: Add a scenario that uses u1db__sync_db_to_target
+
+if tests.c_backend_wrapper is not None:
+    def sync_via_c_sync(db_source, db_target, trace_hook=None):
+        target = db_target.get_sync_target()
+        if trace_hook:
+            target._set_trace_hook(trace_hook)
+        return tests.c_backend_wrapper.sync_db_to_target(db_source, target)
+
+    for name, scenario in tests.C_DATABASE_SCENARIOS:
+        scenario = dict(scenario)
+        scenario['sync'] = sync_via_synchronizer
+        sync_scenarios.append((name + ',pysync', scenario))
+        scenario = dict(scenario)
+        scenario['sync'] = sync_via_c_sync
+        sync_scenarios.append((name + ',csync', scenario))
 
 
 class DatabaseSyncTests(tests.DatabaseBaseTests):
@@ -442,12 +455,15 @@ class DatabaseSyncTests(tests.DatabaseBaseTests):
         doc.content = content2
         self.db2.put_doc(doc)
         doc2_rev2 = doc.rev
+        triggered = []
         def after_whatschanged(state):
             if state != 'after whats_changed':
                 return
+            triggered.append(True)
             doc = self.make_document(doc_id, doc1_rev, content1)
             self.db1.put_doc(doc)
         self.sync(self.db1, self.db2, trace_hook=after_whatschanged)
+        self.assertEqual([True], triggered)
         self.assertGetDoc(self.db1, doc_id, doc2_rev2, content2, True)
         self.assertEqual([doc],
                          self.db1.get_from_index('test-idx', [('altval',)]))

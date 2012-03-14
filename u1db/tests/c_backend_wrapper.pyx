@@ -18,7 +18,8 @@ cdef extern from "Python.h":
     object PyString_FromStringAndSize(char *s, Py_ssize_t n)
     int PyString_AsStringAndSize(object o, char **buf, Py_ssize_t *length
                                  ) except -1
-    char * PyString_AS_STRING(object)
+    char *PyString_AsString(object) except NULL
+    char *PyString_AS_STRING(object)
     char *strdup(char *)
     void *calloc(size_t, size_t)
     void free(void *)
@@ -52,6 +53,8 @@ cdef extern from "u1db/u1db.h":
 
     ctypedef char* const_char_ptr "const char*"
     ctypedef int (*u1db_doc_callback)(void *context, u1db_document *doc)
+    ctypedef int (*u1db_doc_gen_callback)(void *context,
+        u1db_document *doc, int gen)
     ctypedef int (*u1db_doc_id_gen_callback)(void *context,
         const_char_ptr doc_id, int gen)
 
@@ -133,7 +136,7 @@ cdef extern from "u1db/u1db_internal.h":
         char *doc
 
     ctypedef struct u1db_sync_exchange:
-        int new_gen
+        int target_gen
         int num_doc_ids
         char **doc_ids_to_return
         int *gen_for_doc_ids
@@ -146,6 +149,10 @@ cdef extern from "u1db/u1db_internal.h":
             const_char_ptr *st_replica_uid, int *st_gen, int *source_gen)
         int (*record_sync_info)(u1db_sync_target *st,
             char *source_replica_uid, int source_gen)
+        int (*sync_exchange)(u1db_sync_target *st, u1database *source_db,
+                int n_doc_ids, const_char_ptr *doc_ids, int *generations,
+                int *target_gen,
+                void *context, u1db_doc_gen_callback cb)
         int (*get_sync_exchange)(u1db_sync_target *st,
                                  char *source_replica_uid,
                                  int last_known_source_gen,
@@ -187,6 +194,9 @@ cdef extern from "u1db/u1db_internal.h":
     int u1db__format_query(int n_fields, va_list argp, char **buf, int *wildcard)
     int u1db__get_sync_target(u1database *db, u1db_sync_target **sync_target)
     int u1db__free_sync_target(u1db_sync_target **sync_target)
+    int u1db__sync_db_to_target(u1database *db, u1db_sync_target *target,
+                                int *local_gen_before_sync)
+
     int u1db__sync_exchange_insert_doc_from_source(u1db_sync_exchange *se,
             u1db_document *doc, int source_gen)
     int u1db__sync_exchange_find_doc_ids_to_return(u1db_sync_exchange *se)
@@ -516,10 +526,10 @@ cdef class CSyncExchange(object):
         if self._exchange == NULL:
             raise RuntimeError("self._exchange is NULL")
 
-    property new_gen:
+    property target_gen:
         def __get__(self):
             self._check()
-            return self._exchange.new_gen
+            return self._exchange.target_gen
 
     def insert_doc_from_source(self, CDocument doc, source_gen):
         self._check()
@@ -570,7 +580,6 @@ cdef class CSyncTarget(object):
     def __init__(self, db):
         self._db = db 
         self._st = NULL
-        self._db = db
         handle_status("get_sync_target",
             u1db__get_sync_target(self._db._db, &self._st))
 
@@ -611,6 +620,40 @@ cdef class CSyncTarget(object):
         self._check()
         return CSyncExchange(self, source_replica_uid, source_gen)
 
+    def sync_exchange_doc_ids(self, source_db, doc_id_generations,
+                              last_known_generation, return_doc_cb):
+        cdef const_char_ptr *doc_ids
+        cdef int *generations
+        cdef int num_doc_ids
+        cdef int target_gen
+        cdef CDatabase sdb
+
+        self._check()
+        assert self._st.sync_exchange != NULL, "sync_exchange is NULL?"
+        sdb = source_db
+        num_doc_ids = len(doc_id_generations)
+        doc_ids = <const_char_ptr *>calloc(num_doc_ids, sizeof(char *))
+        if doc_ids == NULL:
+            raise MemoryError
+        generations = <int *>calloc(num_doc_ids, sizeof(int))
+        if generations == NULL:
+            free(<void *>doc_ids)
+            raise MemoryError
+        try:
+            for i, (doc_id, gen) in enumerate(doc_id_generations):
+                doc_ids[i] = PyString_AsString(doc_id)
+                generations[i] = gen
+            target_gen = last_known_generation
+            handle_status("sync_exchange",
+                self._st.sync_exchange(self._st, sdb._db,
+                    num_doc_ids, doc_ids, generations, &target_gen,
+                    <void*>return_doc_cb, return_doc_cb_wrapper))
+        finally:
+            free(<void *>doc_ids)
+            free(generations)
+
+        return target_gen
+
     def sync_exchange(self, docs_by_generations, source_replica_uid,
                       last_known_generation, return_doc_cb):
         # Note: This contains more logic than we would normally put in the C
@@ -623,7 +666,7 @@ cdef class CSyncTarget(object):
             se.insert_doc_from_source(doc, gen)
         se.find_doc_ids_to_return()
         se.return_docs(return_doc_cb)
-        return se._exchange.new_gen
+        return se._exchange.target_gen
 
     def _set_trace_hook(self, cb):
         self._check()
@@ -1004,3 +1047,16 @@ cdef class VectorClockRev:
             return True
         else:
             raise RuntimeError("Failed to is_newer: %d" % (is_newer,))
+
+
+def sync_db_to_target(db, target):
+    """Sync the data between a CDatabase and a CSyncTarget"""
+    cdef CDatabase cdb
+    cdef CSyncTarget ctarget
+    cdef int local_gen = 0
+
+    cdb = db
+    ctarget = target
+    handle_status("sync_db_to_target",
+        u1db__sync_db_to_target(cdb._db, ctarget._st, &local_gen))
+    return local_gen

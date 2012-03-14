@@ -207,31 +207,46 @@ class TestCSyncTarget(BackendTests):
 
     def test_sync_exchange_find_doc_ids(self):
         doc = self.db.create_doc(tests.simple_doc)
-        exc = self.st._get_sync_exchange("source-uid", 5)
-        self.assertEqual(0, exc.new_gen)
+        exc = self.st._get_sync_exchange("source-uid", 0)
+        self.assertEqual(0, exc.target_gen)
         exc.find_doc_ids_to_return()
         self.assertEqual([(doc.doc_id, 1)], exc.get_doc_ids_to_return())
-        self.assertEqual(1, exc.new_gen)
+        self.assertEqual(1, exc.target_gen)
 
     def test_sync_exchange_find_doc_ids_not_including_recently_inserted(self):
         doc1 = self.db.create_doc(tests.simple_doc)
         doc2 = self.db.create_doc(tests.nested_doc)
-        exc = self.st._get_sync_exchange("source-uid", 5)
+        exc = self.st._get_sync_exchange("source-uid", 0)
         doc3 = c_backend_wrapper.make_document(doc1.doc_id,
                 doc1.rev + "|zreplica:2", tests.simple_doc)
         exc.insert_doc_from_source(doc3, 10)
         exc.find_doc_ids_to_return()
         self.assertEqual([(doc2.doc_id, 2)], exc.get_doc_ids_to_return())
-        self.assertEqual(3, exc.new_gen)
+        self.assertEqual(3, exc.target_gen)
 
     def test_sync_exchange_return_docs(self):
         returned = []
         def return_doc_cb(doc, gen):
             returned.append((doc, gen))
         doc1 = self.db.create_doc(tests.simple_doc)
-        exc = self.st._get_sync_exchange("source-uid", 5)
+        exc = self.st._get_sync_exchange("source-uid", 0)
         exc.find_doc_ids_to_return()
         exc.return_docs(return_doc_cb)
+        self.assertEqual([(doc1, 1)], returned)
+
+    def test_sync_exchange_doc_ids(self):
+        doc1 = self.db.create_doc(tests.simple_doc, doc_id='doc-1')
+        db2 = c_backend_wrapper.CDatabase(':memory:')
+        doc2 = db2.create_doc(tests.nested_doc, doc_id='doc-2')
+        returned = []
+        def return_doc_cb(doc, gen):
+            returned.append((doc, gen))
+        target_gen = self.st.sync_exchange_doc_ids(db2, [(doc2.doc_id, 1)], 0,
+                                                   return_doc_cb)
+        self.assertEqual(2, self.db._get_generation())
+        self.assertEqual(2, target_gen)
+        self.assertGetDoc(self.db, doc2.doc_id, doc2.rev, tests.nested_doc,
+                          False)
         self.assertEqual([(doc1, 1)], returned)
 
 

@@ -83,6 +83,30 @@ struct _u1db_sync_target {
         const char *source_replica_uid, int source_gen);
 
     /**
+     * Send documents to the target, and receive the response.
+     *
+     * @param st        The target to sync with
+     * @param source_db The database we will get docs from
+     * @param n_doc_ids The number of document ids and generations in the
+     *                  following arrays.
+     * @param doc_ids   An array of document ids indicating the documents we
+     *                  want to send to the sync target
+     * @param generations   An array of generations. Each generation
+     *                      corresponds to a doc_id.
+     * @param target_gen    (IN/OUT) Seed this with the generation of the
+     *                      target that source_db has last seen, it will then
+     *                      be filled with the final generation of the target
+     *                      database from the returned document stream.
+     * @param context   Passed to cb.
+     * @param cb        After sending the requested documents, we read the
+     *                  response stream. For each document in the stream, we
+     *                  will trigger a callback.
+     */
+    int (*sync_exchange)(u1db_sync_target *st, u1database *source_db,
+            int n_doc_ids, const char **doc_ids, int *generations,
+            int *target_gen,
+            void *context, u1db_doc_gen_callback cb);
+    /**
      * Create a sync_exchange state object.
      *
      * This encapsulates the state during a single document exchange.
@@ -91,7 +115,7 @@ struct _u1db_sync_target {
      */
     int (*get_sync_exchange)(u1db_sync_target *st,
                              const char *source_replica_uid,
-                             int last_known_source_gen,
+                             int target_gen_known_by_source,
                              u1db_sync_exchange **exchange);
 
     void (*finalize_sync_exchange)(u1db_sync_target *st,
@@ -118,10 +142,8 @@ struct _u1db_sync_target {
 struct _u1db_sync_exchange {
     u1database *db;
     const char *source_replica_uid;
-    int last_known_source_gen;
-    int new_gen;
+    int target_gen;
     struct lh_table *seen_ids;
-    int max_doc_ids;
     int num_doc_ids;
     int *gen_for_doc_ids;
     char **doc_ids_to_return;
@@ -370,5 +392,6 @@ int u1db__sync_exchange_return_docs(u1db_sync_exchange *se, void *context,
 /**
  * Sync a database with a sync target.
  */
-int u1db__sync_db_to_target(u1database *db, u1db_sync_target *target);
+int u1db__sync_db_to_target(u1database *db, u1db_sync_target *target,
+                            int *local_gen_before_sync);
 #endif // U1DB_INTERNAL_H
