@@ -1199,15 +1199,19 @@ u1db__get_generation(u1database *db, int *generation)
 char *
 u1db__allocate_doc_id(u1database *db)
 {
-    int generation, status;
+    int status;
     char *buf;
-    status = u1db__get_generation(db, &generation);
-    if(status != U1DB_OK) {
-        // There was an error.
+    buf = (char *)calloc(1, 34);
+    if (buf == NULL) {
         return NULL;
     }
-    buf = (char *)calloc(1, 128);
-    snprintf(buf, 128, "doc-%d", generation);
+    buf[0] = 'D';
+    buf[1] = '-';
+    status = u1db__generate_hex_uuid(&buf[2]);
+    if (status != U1DB_OK) {
+        free(buf);
+        return NULL;
+    }
     return buf;
 }
 
