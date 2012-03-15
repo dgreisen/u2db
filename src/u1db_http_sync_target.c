@@ -41,14 +41,17 @@ static void st_http_finalize_sync_exchange(u1db_sync_target *st,
 static int st_http_set_trace_hook(u1db_sync_target *st,
                              void *context, u1db__trace_callback cb);
 static void st_http_finalize(u1db_sync_target *st);
+static int initialize_curl(struct _http_state *state);
 
 
 static struct _http_state {
     char *base_url;
     CURL *curl;
+    struct curl_slist *headers;
 };
 
 static struct _http_request {
+    struct _http_state *state;
     int num_header_bytes;
     int max_header_bytes;
     char *header_buffer;
@@ -75,8 +78,8 @@ u1db__create_http_sync_target(const char *url, u1db_sync_target **target)
     if (new_target == NULL) { goto oom; }
     state = (struct _http_state *)calloc(1, sizeof(struct _http_state));
     if (state == NULL) { goto oom; }
-    state->curl = curl_easy_init();
-    if (state->curl == NULL) { goto oom; }
+    status = initialize_curl(state);
+    if (status != U1DB_OK) { goto fail; }
     // Copy the url, but ensure that it ends in a '/'
     url_len = strlen(url);
     if (url[url_len-1] == '/') {
@@ -101,6 +104,7 @@ u1db__create_http_sync_target(const char *url, u1db_sync_target **target)
     return status;
 oom:
     status = U1DB_NOMEM;
+fail:
     if (state != NULL) {
         if (state->base_url != NULL) {
             free(state->base_url);
@@ -127,7 +131,6 @@ recv_header_bytes(char *ptr, size_t size, size_t nmemb, void *userdata)
     size_t total_bytes;
     int needed_bytes;
     struct _http_request *req;
-    char *tmp_buf;
     if (userdata == NULL) {
         // No bytes processed, because we have nowhere to put them
         return 0;
@@ -138,10 +141,19 @@ recv_header_bytes(char *ptr, size_t size, size_t nmemb, void *userdata)
     //       without separately buffering the raw bytes.
     req = (struct _http_request *)userdata;
     total_bytes = size * nmemb;
+    if (req->state != NULL && total_bytes > 9 && strncmp(ptr, "HTTP/", 5) == 0)
+    {
+        if (strncmp(ptr, "HTTP/1.0 ", 9) == 0) {
+        // The server is an HTTP 1.0 server (like in the test suite). Tell curl
+        // to treat it as such from now on.
+            curl_easy_setopt(req->state->curl, CURLOPT_HTTP_VERSION,
+                             CURL_HTTP_VERSION_1_0);
+        } else if (strncmp(ptr, "HTTP/1.1 ", 9) == 0) {
+            curl_easy_setopt(req->state->curl, CURLOPT_HTTP_VERSION,
+                             CURL_HTTP_VERSION_1_0);
+        }
+    }
     needed_bytes = req->num_header_bytes + total_bytes + 1;
-    tmp_buf = calloc(total_bytes + 1, 1);
-    memcpy(tmp_buf, ptr, total_bytes);
-    free(tmp_buf);
     if (needed_bytes >= req->max_header_bytes) {
         req->max_header_bytes = max((req->max_header_bytes * 2), needed_bytes);
         req->max_header_bytes += 100;
@@ -201,6 +213,49 @@ send_put_bytes(void *ptr, size_t size, size_t nmemb, void *userdata)
 
 
 static int
+initialize_curl(struct _http_state *state)
+{
+    int status;
+
+    state->curl = curl_easy_init();
+    if (state->curl == NULL) { goto oom; }
+    // All conversations are done without CURL generating progress bars.
+    status = curl_easy_setopt(state->curl, CURLOPT_NOPROGRESS, 1L);
+    if (status != CURLE_OK) { goto fail; }
+    /// status = curl_easy_setopt(state->curl, CURLOPT_VERBOSE, 1L);
+    /// if (status != CURLE_OK) { goto fail; }
+    state->headers = curl_slist_append(NULL, "Content-Type: application/json");
+    if (state->headers == NULL) {
+        status = U1DB_NOMEM;
+        goto fail;
+    }
+    status = curl_easy_setopt(state->curl, CURLOPT_HTTPHEADER, state->headers);
+    if (status != CURLE_OK) { goto fail; }
+    status = curl_easy_setopt(state->curl, CURLOPT_HEADERFUNCTION,
+                              recv_header_bytes);
+    if (status != CURLE_OK) { goto fail; }
+    status = curl_easy_setopt(state->curl, CURLOPT_WRITEFUNCTION,
+                              recv_body_bytes);
+    if (status != CURLE_OK) { goto fail; }
+    status = curl_easy_setopt(state->curl, CURLOPT_READFUNCTION,
+                              send_put_bytes);
+    if (status != CURLE_OK) { goto fail; }
+    return status;
+oom:
+    status = U1DB_NOMEM;
+fail:
+    if (state->curl != NULL) {
+        curl_easy_cleanup(state->curl);
+        state->curl = NULL;
+    }
+    if (state->headers != NULL) {
+        curl_slist_free_all(state->headers);
+    }
+    return status;
+}
+
+
+static int
 st_http_get_sync_info(u1db_sync_target *st,
         const char *source_replica_uid,
         const char **st_replica_uid, int *st_gen, int *source_gen)
@@ -223,24 +278,23 @@ st_http_get_sync_info(u1db_sync_target *st,
         return U1DB_INVALID_PARAMETER;
     }
 
+    req.state = state;
     status = u1db__format_sync_info_url(st, source_replica_uid, &url);
     if (status != U1DB_OK) { goto finish; }
-    curl_easy_reset(state->curl);
-    // All conversations are done without CURL generating progress bars.
-    status = curl_easy_setopt(state->curl, CURLOPT_NOPROGRESS, 1L);
+    // curl_easy_reset(state->curl);
     if (status != CURLE_OK) { goto finish; }
+    status = curl_easy_setopt(state->curl, CURLOPT_HTTPGET, 1L);
+    if (status != CURLE_OK) { goto finish; }
+    // status = curl_easy_setopt(state->curl, CURLOPT_USERAGENT, "...");
     status = curl_easy_setopt(state->curl, CURLOPT_URL, url);
-    if (status != CURLE_OK) { goto finish; }
-    status = curl_easy_setopt(state->curl, CURLOPT_HEADERFUNCTION,
-                              recv_header_bytes);
     if (status != CURLE_OK) { goto finish; }
     status = curl_easy_setopt(state->curl, CURLOPT_HEADERDATA, &req);
     if (status != CURLE_OK) { goto finish; }
-    status = curl_easy_setopt(state->curl, CURLOPT_WRITEFUNCTION,
-                              recv_body_bytes);
-    if (status != CURLE_OK) { goto finish; }
     status = curl_easy_setopt(state->curl, CURLOPT_WRITEDATA, &req);
     if (status != CURLE_OK) { goto finish; }
+    status = curl_easy_setopt(state->curl, CURLOPT_READDATA, NULL);
+    if (status != CURLE_OK) { goto finish; }
+    // Now do the GET
     status = curl_easy_perform(state->curl);
     if (status != CURLE_OK) { goto finish; }
     status = curl_easy_getinfo(state->curl, CURLINFO_RESPONSE_CODE, &http_code);
@@ -329,27 +383,20 @@ st_http_record_sync_info(u1db_sync_target *st,
     json_object_object_add(json, "generation", json_object_new_int(source_gen));
     raw_body = json_object_to_json_string(json);
     raw_len = strlen(raw_body);
+    req.state = state;
     req.put_buffer = raw_body;
     req.num_put_bytes = raw_len;
 
-    headers = curl_slist_append(headers, "Content-Type: application/json");
-    curl_easy_reset(state->curl);
-    status = curl_easy_setopt(state->curl, CURLOPT_HTTPHEADER, headers);
+    // curl_easy_reset(state->curl);
+    if (status != CURLE_OK) { goto finish; }
+    // status = curl_easy_setopt(state->curl, CURLOPT_HTTP_VERSION, CURL_HTTP_VERSION_1_0);
+    // if (status != CURLE_OK) { goto finish; }
 
     status = curl_easy_setopt(state->curl, CURLOPT_URL, url);
     if (status != CURLE_OK) { goto finish; }
-    status = curl_easy_setopt(state->curl, CURLOPT_HEADERFUNCTION,
-                              recv_header_bytes);
-    if (status != CURLE_OK) { goto finish; }
     status = curl_easy_setopt(state->curl, CURLOPT_HEADERDATA, &req);
     if (status != CURLE_OK) { goto finish; }
-    status = curl_easy_setopt(state->curl, CURLOPT_WRITEFUNCTION,
-                              recv_body_bytes);
-    if (status != CURLE_OK) { goto finish; }
     status = curl_easy_setopt(state->curl, CURLOPT_WRITEDATA, &req);
-    if (status != CURLE_OK) { goto finish; }
-    status = curl_easy_setopt(state->curl, CURLOPT_READFUNCTION,
-                              send_put_bytes);
     if (status != CURLE_OK) { goto finish; }
     status = curl_easy_setopt(state->curl, CURLOPT_READDATA, &req);
     if (status != CURLE_OK) { goto finish; }
@@ -361,14 +408,11 @@ st_http_record_sync_info(u1db_sync_target *st,
                               (curl_off_t)req.num_put_bytes);
     if (status != CURLE_OK) { goto finish; }
 
-    fprintf(stderr, "Ready to upload to: %s\n", url);
     // Now actually send the data
-    curl_easy_setopt(state->curl, CURLOPT_VERBOSE, 1L);
     status = curl_easy_perform(state->curl);
     if (status != CURLE_OK) { goto finish; }
     status = curl_easy_getinfo(state->curl, CURLINFO_RESPONSE_CODE, &http_code);
     if (status != CURLE_OK) { goto finish; }
-    fprintf(stderr, "Finished upload: %s %d\n", url, http_code);
     if (http_code != 200 && http_code != 201) {
         status = http_code;
         goto finish;
@@ -387,7 +431,6 @@ finish:
         free(url);
     }
     if (headers != NULL) {
-        curl_slist_free_all(headers);
     }
     return status;
 }
@@ -442,6 +485,10 @@ st_http_finalize(u1db_sync_target *st)
         if (state->curl != NULL) {
             curl_easy_cleanup(state->curl);
             state->curl = NULL;
+        }
+        if (state->headers != NULL) {
+            curl_slist_free_all(state->headers);
+            state->headers = NULL;
         }
         free(st->implementation);
         st->implementation = NULL;
