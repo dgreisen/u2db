@@ -55,6 +55,7 @@ typedef int (*u1db_doc_id_gen_callback)(void *context, const char *doc_id, int g
 #define U1DB_NOT_IMPLEMENTED -7
 #define U1DB_INVALID_JSON -8
 #define U1DB_INVALID_VALUE_FOR_INDEX -9
+#define U1DB_INVALID_HTTP_RESPONSE -10
 #define U1DB_INTERNAL_ERROR -999
 
 // Used by put_doc_if_newer

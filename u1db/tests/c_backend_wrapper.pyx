@@ -150,21 +150,21 @@ cdef extern from "u1db/u1db_internal.h":
     ctypedef struct u1db_sync_target:
         int (*get_sync_info)(u1db_sync_target *st,
             char *source_replica_uid,
-            const_char_ptr *st_replica_uid, int *st_gen, int *source_gen)
+            const_char_ptr *st_replica_uid, int *st_gen, int *source_gen) nogil
         int (*record_sync_info)(u1db_sync_target *st,
-            char *source_replica_uid, int source_gen)
+            char *source_replica_uid, int source_gen) nogil
         int (*sync_exchange)(u1db_sync_target *st, u1database *source_db,
                 int n_doc_ids, const_char_ptr *doc_ids, int *generations,
                 int *target_gen,
-                void *context, u1db_doc_gen_callback cb)
+                void *context, u1db_doc_gen_callback cb) nogil
         int (*get_sync_exchange)(u1db_sync_target *st,
                                  char *source_replica_uid,
                                  int last_known_source_gen,
-                                 u1db_sync_exchange **exchange)
+                                 u1db_sync_exchange **exchange) nogil
         void (*finalize_sync_exchange)(u1db_sync_target *st,
-                                       u1db_sync_exchange **exchange)
+                                       u1db_sync_exchange **exchange) nogil
         int (*_set_trace_hook)(u1db_sync_target *st,
-                               void *context, u1db__trace_callback cb)
+                               void *context, u1db__trace_callback cb) nogil
 
 
     int u1db__get_generation(u1database *, int *db_rev)
@@ -598,13 +598,14 @@ cdef class CSyncTarget(object):
 
     def get_sync_info(self, source_replica_uid):
         cdef const_char_ptr st_replica_uid = NULL
-        cdef int st_gen = 0, source_gen = 0
+        cdef int st_gen = 0, source_gen = 0, status
 
         self._check()
         assert self._st.get_sync_info != NULL, "get_sync_info is NULL?"
-        handle_status("get_sync_info",
-            self._st.get_sync_info(self._st, source_replica_uid,
-                &st_replica_uid, &st_gen, &source_gen))
+        with nogil:
+            status = self._st.get_sync_info(self._st, source_replica_uid,
+                &st_replica_uid, &st_gen, &source_gen)
+        handle_status("get_sync_info", status)
         return (safe_str(st_replica_uid), st_gen, source_gen)
 
     def record_sync_info(self, source_replica_uid, source_gen):

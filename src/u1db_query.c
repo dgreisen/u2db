@@ -384,6 +384,9 @@ evaluate_index_and_insert_into_db(void *context, const char *expression)
             *dot_chr = '\0';
             dot_chr++;
         }
+        // TODO: json_object uses ref-counting. Do we need to be
+        //       json_object_put to the previous val so it gets cleaned up
+        //       appropriately?
         val = json_object_object_get(val, result);
         result = dot_chr;
     }
