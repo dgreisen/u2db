@@ -48,7 +48,7 @@ static struct _http_state {
     CURL *curl;
 };
 
-static struct _http_return {
+static struct _http_request {
     int num_header_bytes;
     int max_header_bytes;
     char *header_buffer;
@@ -128,7 +128,7 @@ recv_header_bytes(char *ptr, size_t size, size_t nmemb, void *userdata)
 {
     size_t total_bytes;
     int needed_bytes;
-    struct _http_return *ret;
+    struct _http_request *req;
     char *tmp_buf;
     if (userdata == NULL) {
         // No bytes processed, because we have nowhere to put them
@@ -138,20 +138,20 @@ recv_header_bytes(char *ptr, size_t size, size_t nmemb, void *userdata)
     //       header, with exactly the header contents. So we should be able to
     //       change this into something that parses the header content itself,
     //       without separately buffering the raw bytes.
-    ret = (struct _http_return *)userdata;
+    req = (struct _http_request *)userdata;
     total_bytes = size * nmemb;
-    needed_bytes = ret->num_header_bytes + total_bytes + 1;
+    needed_bytes = req->num_header_bytes + total_bytes + 1;
     tmp_buf = calloc(total_bytes + 1, 1);
     memcpy(tmp_buf, ptr, total_bytes);
     free(tmp_buf);
-    if (needed_bytes >= ret->max_header_bytes) {
-        ret->max_header_bytes = max((ret->max_header_bytes * 2), needed_bytes);
-        ret->max_header_bytes += 100;
-        ret->header_buffer = realloc(ret->header_buffer, ret->max_header_bytes);
+    if (needed_bytes >= req->max_header_bytes) {
+        req->max_header_bytes = max((req->max_header_bytes * 2), needed_bytes);
+        req->max_header_bytes += 100;
+        req->header_buffer = realloc(req->header_buffer, req->max_header_bytes);
     }
-    memcpy(ret->header_buffer + ret->num_header_bytes, ptr, total_bytes);
-    ret->num_header_bytes += total_bytes;
-    ret->header_buffer[ret->num_header_bytes + 1] = '\0';
+    memcpy(req->header_buffer + req->num_header_bytes, ptr, total_bytes);
+    req->num_header_bytes += total_bytes;
+    req->header_buffer[req->num_header_bytes + 1] = '\0';
     return total_bytes;
 }
 
@@ -161,22 +161,22 @@ recv_body_bytes(char *ptr, size_t size, size_t nmemb, void *userdata)
 {
     size_t total_bytes;
     int needed_bytes;
-    struct _http_return *ret;
+    struct _http_request *req;
     if (userdata == NULL) {
         // No bytes processed, because we have nowhere to put them
         return 0;
     }
-    ret = (struct _http_return *)userdata;
+    req = (struct _http_request *)userdata;
     total_bytes = size * nmemb;
-    needed_bytes = ret->num_body_bytes + total_bytes + 1;
-    if (needed_bytes >= ret->max_body_bytes) {
-        ret->max_body_bytes = max((ret->max_body_bytes * 2), needed_bytes);
-        ret->max_body_bytes += 100;
-        ret->body_buffer = realloc(ret->body_buffer, ret->max_body_bytes);
+    needed_bytes = req->num_body_bytes + total_bytes + 1;
+    if (needed_bytes >= req->max_body_bytes) {
+        req->max_body_bytes = max((req->max_body_bytes * 2), needed_bytes);
+        req->max_body_bytes += 100;
+        req->body_buffer = realloc(req->body_buffer, req->max_body_bytes);
     }
-    memcpy(ret->body_buffer + ret->num_body_bytes, ptr, total_bytes);
-    ret->num_body_bytes += total_bytes;
-    ret->header_buffer[ret->num_header_bytes + 1] = '\0';
+    memcpy(req->body_buffer + req->num_body_bytes, ptr, total_bytes);
+    req->num_body_bytes += total_bytes;
+    req->header_buffer[req->num_header_bytes + 1] = '\0';
     return total_bytes;
 }
 
@@ -187,7 +187,7 @@ st_http_get_sync_info(u1db_sync_target *st,
         const char **st_replica_uid, int *st_gen, int *source_gen)
 {
     struct _http_state *state;
-    struct _http_return ret = {0};
+    struct _http_request req = {0};
     char *url = NULL;
     int status;
     long http_code;
@@ -211,12 +211,12 @@ st_http_get_sync_info(u1db_sync_target *st,
     status = curl_easy_setopt(state->curl, CURLOPT_HEADERFUNCTION,
                               recv_header_bytes);
     if (status != CURLE_OK) { goto finish; }
-    status = curl_easy_setopt(state->curl, CURLOPT_HEADERDATA, &ret);
+    status = curl_easy_setopt(state->curl, CURLOPT_HEADERDATA, &req);
     if (status != CURLE_OK) { goto finish; }
     status = curl_easy_setopt(state->curl, CURLOPT_WRITEFUNCTION,
                               recv_body_bytes);
     if (status != CURLE_OK) { goto finish; }
-    status = curl_easy_setopt(state->curl, CURLOPT_WRITEDATA, &ret);
+    status = curl_easy_setopt(state->curl, CURLOPT_WRITEDATA, &req);
     if (status != CURLE_OK) { goto finish; }
     status = curl_easy_perform(state->curl);
     if (status != CURLE_OK) { goto finish; }
@@ -226,7 +226,7 @@ st_http_get_sync_info(u1db_sync_target *st,
         status = http_code;
         goto finish;
     }
-    json = json_tokener_parse(ret.body_buffer);
+    json = json_tokener_parse(req.body_buffer);
     if (json == NULL) {
         status = U1DB_NOMEM;
         goto finish;
@@ -257,11 +257,11 @@ st_http_get_sync_info(u1db_sync_target *st,
     *source_gen = json_object_get_int(obj);
     json_object_put(obj);
 finish:
-    if (ret.header_buffer != NULL) {
-        free(ret.header_buffer);
+    if (req.header_buffer != NULL) {
+        free(req.header_buffer);
     }
-    if (ret.body_buffer != NULL) {
-        free(ret.body_buffer);
+    if (req.body_buffer != NULL) {
+        free(req.body_buffer);
     }
     if (json != NULL) {
         json_object_put(json);
