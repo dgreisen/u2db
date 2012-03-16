@@ -391,24 +391,6 @@ class TestHTTPResponder(tests.TestCase):
             self.response_body.append(data)
         return write
 
-    def test_send_response_json(self):
-        responder = http_app.HTTPResponder(self.start_response)
-        responder.send_response_json(value='success')
-        self.assertEqual('200 OK', self.status)
-        self.assertEqual({'content-type': 'application/json',
-                          'cache-control': 'no-cache'}, self.headers)
-        self.assertEqual(['{"value": "success"}\r\n'], self.response_body)
-        self.assertEqual([], responder.content)
-
-    def test_send_response_json_status_fail(self):
-        responder = http_app.HTTPResponder(self.start_response)
-        responder.send_response_json(400)
-        self.assertEqual('400 Bad Request', self.status)
-        self.assertEqual({'content-type': 'application/json',
-                          'cache-control': 'no-cache'}, self.headers)
-        self.assertEqual(['{}\r\n'], self.response_body)
-        self.assertEqual([], responder.content)
-
     def test_send_response_content_w_headers(self):
         responder = http_app.HTTPResponder(self.start_response)
         responder.send_response_content('foo', headers={'x-a': '1'})
@@ -418,6 +400,29 @@ class TestHTTPResponder(tests.TestCase):
                           'x-a': '1', 'content-length': '3'}, self.headers)
         self.assertEqual([], self.response_body)
         self.assertEqual(['foo'], responder.content)
+
+
+    def test_send_response_json(self):
+        responder = http_app.HTTPResponder(self.start_response)
+        responder.send_response_json(value='success')
+        self.assertEqual('200 OK', self.status)
+        expected_body = '{"value": "success"}\r\n'
+        self.assertEqual({'content-type': 'application/json',
+                          'content-length': str(len(expected_body)),
+                          'cache-control': 'no-cache'}, self.headers)
+        self.assertEqual([], self.response_body)
+        self.assertEqual([expected_body], responder.content)
+
+    def test_send_response_json_status_fail(self):
+        responder = http_app.HTTPResponder(self.start_response)
+        responder.send_response_json(400)
+        self.assertEqual('400 Bad Request', self.status)
+        expected_body = '{}\r\n'
+        self.assertEqual({'content-type': 'application/json',
+                          'content-length': str(len(expected_body)),
+                          'cache-control': 'no-cache'}, self.headers)
+        self.assertEqual([], self.response_body)
+        self.assertEqual([expected_body], responder.content)
 
     def test_start_finish_response_status_fail(self):
         responder = http_app.HTTPResponder(self.start_response)
