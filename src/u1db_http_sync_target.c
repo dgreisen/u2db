@@ -144,8 +144,10 @@ recv_header_bytes(char *ptr, size_t size, size_t nmemb, void *userdata)
     if (req->state != NULL && total_bytes > 9 && strncmp(ptr, "HTTP/", 5) == 0)
     {
         if (strncmp(ptr, "HTTP/1.0 ", 9) == 0) {
-        // The server is an HTTP 1.0 server (like in the test suite). Tell curl
-        // to treat it as such from now on.
+            // The server is an HTTP 1.0 server (like in the test suite). Tell
+            // curl to treat it as such from now on. I don't understand why
+            // curl isn't doing this already, because it has seen that the
+            // server is v1.0
             curl_easy_setopt(req->state->curl, CURLOPT_HTTP_VERSION,
                              CURL_HTTP_VERSION_1_0);
         } else if (strncmp(ptr, "HTTP/1.1 ", 9) == 0) {
@@ -281,18 +283,14 @@ st_http_get_sync_info(u1db_sync_target *st,
     req.state = state;
     status = u1db__format_sync_info_url(st, source_replica_uid, &url);
     if (status != U1DB_OK) { goto finish; }
-    // curl_easy_reset(state->curl);
-    if (status != CURLE_OK) { goto finish; }
     status = curl_easy_setopt(state->curl, CURLOPT_HTTPGET, 1L);
     if (status != CURLE_OK) { goto finish; }
     // status = curl_easy_setopt(state->curl, CURLOPT_USERAGENT, "...");
     status = curl_easy_setopt(state->curl, CURLOPT_URL, url);
     if (status != CURLE_OK) { goto finish; }
-    status = curl_easy_setopt(state->curl, CURLOPT_HEADERDATA, &req);
+    status = curl_easy_setopt(state->curl, CURLOPT_HTTPHEADER, state->headers);
     if (status != CURLE_OK) { goto finish; }
-    status = curl_easy_setopt(state->curl, CURLOPT_WRITEDATA, &req);
-    if (status != CURLE_OK) { goto finish; }
-    status = curl_easy_setopt(state->curl, CURLOPT_READDATA, NULL);
+    status = simple_set_curl_data(state->curl, &req, &req, NULL);
     if (status != CURLE_OK) { goto finish; }
     // Now do the GET
     status = curl_easy_perform(state->curl);
@@ -350,6 +348,43 @@ finish:
 }
 
 
+// Use the default send_put_bytes, recv_body_bytes, and recv_header_bytes. Only
+// set the functions if the associated data is not NULL
+static int
+simple_set_curl_data(CURL *curl, struct _http_request *header,
+                     struct _http_request *body, struct _http_request *put)
+{
+    int status;
+    status = curl_easy_setopt(curl, CURLOPT_HEADERDATA, header);
+    if (status != CURLE_OK) { goto finish; }
+    if (header == NULL) {
+        status = curl_easy_setopt(curl, CURLOPT_HEADERFUNCTION, NULL);
+    } else {
+        status = curl_easy_setopt(curl, CURLOPT_HEADERFUNCTION,
+                                  recv_header_bytes);
+    }
+    status = curl_easy_setopt(curl, CURLOPT_WRITEDATA, body);
+    if (status != CURLE_OK) { goto finish; }
+    if (body == NULL) {
+        status = curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, NULL);
+    } else {
+        status = curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION,
+                                  recv_body_bytes);
+    }
+    if (status != CURLE_OK) { goto finish; }
+    status = curl_easy_setopt(curl, CURLOPT_READDATA, put);
+    if (status != CURLE_OK) { goto finish; }
+    if (put == NULL) {
+        status = curl_easy_setopt(curl, CURLOPT_READFUNCTION, NULL);
+    } else {
+        status = curl_easy_setopt(curl, CURLOPT_READFUNCTION,
+                                  send_put_bytes);
+    }
+finish:
+    return status;
+}
+
+
 static int
 st_http_record_sync_info(u1db_sync_target *st,
         const char *source_replica_uid, int source_gen)
@@ -387,22 +422,15 @@ st_http_record_sync_info(u1db_sync_target *st,
     req.put_buffer = raw_body;
     req.num_put_bytes = raw_len;
 
-    // curl_easy_reset(state->curl);
-    if (status != CURLE_OK) { goto finish; }
-    // status = curl_easy_setopt(state->curl, CURLOPT_HTTP_VERSION, CURL_HTTP_VERSION_1_0);
-    // if (status != CURLE_OK) { goto finish; }
-
     status = curl_easy_setopt(state->curl, CURLOPT_URL, url);
     if (status != CURLE_OK) { goto finish; }
-    status = curl_easy_setopt(state->curl, CURLOPT_HEADERDATA, &req);
-    if (status != CURLE_OK) { goto finish; }
-    status = curl_easy_setopt(state->curl, CURLOPT_WRITEDATA, &req);
-    if (status != CURLE_OK) { goto finish; }
-    status = curl_easy_setopt(state->curl, CURLOPT_READDATA, &req);
+    status = curl_easy_setopt(state->curl, CURLOPT_HTTPHEADER, state->headers);
     if (status != CURLE_OK) { goto finish; }
     status = curl_easy_setopt(state->curl, CURLOPT_UPLOAD, 1L);
     if (status != CURLE_OK) { goto finish; }
     status = curl_easy_setopt(state->curl, CURLOPT_PUT, 1L);
+    if (status != CURLE_OK) { goto finish; }
+    status = simple_set_curl_data(state->curl, &req, &req, &req);
     if (status != CURLE_OK) { goto finish; }
     status = curl_easy_setopt(state->curl, CURLOPT_INFILESIZE_LARGE,
                               (curl_off_t)req.num_put_bytes);
