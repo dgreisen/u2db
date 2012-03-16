@@ -146,13 +146,13 @@ cdef extern from "u1db/u1db_internal.h":
         u1database *db
         int (*get_sync_info)(u1db_sync_target *st,
             char *source_replica_uid,
-            const_char_ptr *st_replica_uid, int *st_gen, int *source_gen)
+            const_char_ptr *st_replica_uid, int *st_gen, int *source_gen) nogil
         int (*record_sync_info)(u1db_sync_target *st,
-            char *source_replica_uid, int source_gen)
+            char *source_replica_uid, int source_gen) nogil
         int (*sync_exchange)(u1db_sync_target *st, u1database *source_db,
                 int n_doc_ids, const_char_ptr *doc_ids, int *generations,
                 int *target_gen,
-                void *context, u1db_doc_gen_callback cb)
+                void *context, u1db_doc_gen_callback cb) nogil
         int (*get_sync_exchange)(u1db_sync_target *st,
                                  char *source_replica_uid,
                                  int last_known_source_gen,
@@ -227,14 +227,14 @@ from sqlite3 import dbapi2
 
 
 cdef int _append_doc_gen_to_list(void *context, const_char_ptr doc_id,
-                                 int generation):
+                                 int generation) with gil:
     a_list = <object>(context)
     doc = doc_id
     a_list.append((doc, generation))
     return 0
 
 
-cdef int _append_doc_to_list(void *context, u1db_document *doc):
+cdef int _append_doc_to_list(void *context, u1db_document *doc) with gil:
     a_list = <object>context
     pydoc = CDocument()
     pydoc._doc = doc
@@ -252,7 +252,8 @@ cdef _list_to_array(lst, const_char_ptr **res, int *count):
 
 
 cdef int _append_index_definition_to_list(void *context, 
-    const_char_ptr index_name, int n_expressions, const_char_ptr *expressions):
+        const_char_ptr index_name, int n_expressions,
+        const_char_ptr *expressions) with gil:
     cdef int i
 
     a_list = <object>(context)
@@ -273,7 +274,8 @@ cdef int _format_query_dotted(char **buf, int *wildcard, int n_fields, ...):
     return status
 
 
-cdef int return_doc_cb_wrapper(void *context, u1db_document *doc, int gen):
+cdef int return_doc_cb_wrapper(void *context, u1db_document *doc,
+        int gen) with gil:
     cdef CDocument pydoc
     user_cb = <object>context
     pydoc = CDocument()
@@ -287,7 +289,7 @@ cdef int return_doc_cb_wrapper(void *context, u1db_document *doc, int gen):
     return U1DB_OK
 
 
-cdef int _trace_hook(void *context, const_char_ptr state):
+cdef int _trace_hook(void *context, const_char_ptr state) with gil:
     if context == NULL:
         return U1DB_INVALID_PARAMETER
     ctx = <object>context
@@ -601,20 +603,24 @@ cdef class CSyncTarget(object):
 
     def get_sync_info(self, source_replica_uid):
         cdef const_char_ptr st_replica_uid = NULL
-        cdef int st_gen = 0, source_gen = 0
+        cdef int st_gen = 0, source_gen = 0, status
 
         self._check()
         assert self._st.get_sync_info != NULL, "get_sync_info is NULL?"
-        handle_status("get_sync_info",
-            self._st.get_sync_info(self._st, source_replica_uid,
-                &st_replica_uid, &st_gen, &source_gen))
+        with nogil:
+            status = self._st.get_sync_info(self._st, source_replica_uid,
+                &st_replica_uid, &st_gen, &source_gen)
+        handle_status("get_sync_info", status)
         return (safe_str(st_replica_uid), st_gen, source_gen)
 
     def record_sync_info(self, source_replica_uid, source_gen):
+        cdef int status
         self._check()
         assert self._st.record_sync_info != NULL, "record_sync_info is NULL?"
-        handle_status("record_sync_info",
-            self._st.record_sync_info(self._st, source_replica_uid, source_gen))
+        with nogil:
+            status = self._st.record_sync_info(self._st, source_replica_uid,
+                                               source_gen)
+        handle_status("record_sync_info", status)
 
     def _get_sync_exchange(self, source_replica_uid, source_gen):
         self._check()
@@ -626,6 +632,7 @@ cdef class CSyncTarget(object):
         cdef int *generations
         cdef int num_doc_ids
         cdef int target_gen
+        cdef int status
         cdef CDatabase sdb
 
         self._check()
@@ -644,10 +651,11 @@ cdef class CSyncTarget(object):
                 doc_ids[i] = PyString_AsString(doc_id)
                 generations[i] = gen
             target_gen = last_known_generation
-            handle_status("sync_exchange",
-                self._st.sync_exchange(self._st, sdb._db,
+            with nogil:
+                status = self._st.sync_exchange(self._st, sdb._db,
                     num_doc_ids, doc_ids, generations, &target_gen,
-                    <void*>return_doc_cb, return_doc_cb_wrapper))
+                    <void*>return_doc_cb, return_doc_cb_wrapper)
+            handle_status("sync_exchange", status)
         finally:
             free(<void *>doc_ids)
             free(generations)
