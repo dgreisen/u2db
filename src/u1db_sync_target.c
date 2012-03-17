@@ -45,8 +45,8 @@ static void se_free_seen_id(struct lh_entry *e);
 
 struct _get_docs_to_doc_gen_context {
     int doc_offset;
-    void *orig_context;
-    int (*user_cb)(void *context, u1db_document *doc, int gen);
+    void *user_context;
+    u1db_doc_gen_callback user_cb;
     int *gen_for_doc_ids;
 };
 
@@ -264,7 +264,7 @@ u1db__sync_exchange_insert_doc_from_source(u1db_sync_exchange *se,
 }
 
 
-static struct _whats_changed_doc_ids_state {
+struct _whats_changed_doc_ids_state {
     int num_doc_ids;
     int max_doc_ids;
     struct lh_table *exclude_ids;
@@ -355,7 +355,7 @@ get_docs_to_gen_docs(void *context, u1db_document *doc)
     // Note: using doc_offset in this way assumes that u1db_get_docs will
     //       always return them in exactly the order we requested. This is
     //       probably true, though.
-    status = ctx->user_cb(ctx->orig_context, doc,
+    status = ctx->user_cb(ctx->user_context, doc,
             ctx->gen_for_doc_ids[ctx->doc_offset]);
     ctx->doc_offset++;
     return status;
@@ -371,7 +371,7 @@ u1db__sync_exchange_return_docs(u1db_sync_exchange *se, void *context,
     if (se == NULL || cb == NULL) {
         return U1DB_INVALID_PARAMETER;
     }
-    state.orig_context = context;
+    state.user_context = context;
     state.user_cb = cb;
     state.doc_offset = 0;
     state.gen_for_doc_ids = se->gen_for_doc_ids;
@@ -388,7 +388,7 @@ finish:
     return status;
 }
 
-static struct _return_doc_state {
+struct _return_doc_state {
     u1database *db;
     const char *target_uid;
     int num_inserted;
@@ -425,8 +425,11 @@ get_and_insert_docs(u1database *source_db, u1db_sync_exchange *se,
 {
     struct _get_docs_to_doc_gen_context get_doc_state = {0};
 
-    get_doc_state.orig_context = se;
-    get_doc_state.user_cb = u1db__sync_exchange_insert_doc_from_source;
+    get_doc_state.user_context = se;
+    // Note: user_cb takes a 'void *' as the first parameter, so we cast the
+    //       u1db__sync_exchange_insert_doc_from_source to avoid the warning
+    get_doc_state.user_cb = 
+        (u1db_doc_gen_callback)u1db__sync_exchange_insert_doc_from_source;
     get_doc_state.gen_for_doc_ids = generations;
     return u1db_get_docs(source_db, n_doc_ids, doc_ids,
             0, &get_doc_state, get_docs_to_gen_docs);
@@ -439,7 +442,7 @@ st_sync_exchange(u1db_sync_target *st, u1database *source_db,
         int *target_gen, void *context, u1db_doc_gen_callback cb)
 {
     int status;
-    const char *source_replica_uid = NULL, *target_replica_uid = NULL;
+    const char *source_replica_uid = NULL;
     u1db_sync_exchange *exchange = NULL;
     if (st == NULL || source_db == NULL || target_gen == NULL || cb == NULL)
     {
