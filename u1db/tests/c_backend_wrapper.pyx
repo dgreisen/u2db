@@ -214,7 +214,7 @@ cdef extern from "u1db/u1db_internal.h":
     int u1db__create_http_sync_target(char *url, u1db_sync_target **target)
 
 cdef extern from "u1db/u1db_http_internal.h":
-    int u1db__format_sync_info_url(u1db_sync_target *st,
+    int u1db__format_sync_url(u1db_sync_target *st,
             const_char_ptr source_replica_uid, char **sync_url)
 
 cdef extern from "u1db/u1db_vectorclock.h":
@@ -691,6 +691,7 @@ cdef class CSyncTarget(object):
                         source_replica_uid, count,
                         docs, generations, &target_gen, <void *>return_doc_cb,
                         return_doc_cb_wrapper)
+            handle_status("sync_exchange_docs", status)
         finally:
             if docs != NULL:
                 free(docs)
@@ -1106,13 +1107,13 @@ def create_http_sync_target(url):
     return target
 
 
-def _format_sync_info_url(target, source_replica_uid):
+def _format_sync_url(target, source_replica_uid):
     cdef CSyncTarget st
     cdef char *sync_url = NULL
     cdef object res
     st = target
-    handle_status("format_sync_info_url",
-        u1db__format_sync_info_url(st._st, source_replica_uid, &sync_url))
+    handle_status("format_sync_url",
+        u1db__format_sync_url(st._st, source_replica_uid, &sync_url))
     if sync_url == NULL:
         res = None
     else:

@@ -292,6 +292,7 @@ for name, scenario in tests.LOCAL_DATABASES_SCENARIOS:
 
 
 if tests.c_backend_wrapper is not None:
+    # TODO: We should hook up sync tests with an HTTP target
     def sync_via_c_sync(db_source, db_target, trace_hook=None):
         target = db_target.get_sync_target()
         if trace_hook:

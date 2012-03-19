@@ -17,6 +17,8 @@
  */
 
 #include "u1db/u1db_http_internal.h"
+#include <stdlib.h>
+#include <stdio.h>
 #include <string.h>
 #include <json/json.h>
 #include <curl/curl.h>
@@ -29,13 +31,14 @@ static int st_http_get_sync_info(u1db_sync_target *st,
 static int st_http_record_sync_info(u1db_sync_target *st,
         const char *source_replica_uid, int source_gen);
 
+static int st_http_sync_exchange_docs(u1db_sync_target *st,
+                      const char *source_replica_uid, 
+                      int n_docs, u1db_document **docs,
+                      int *generations, int *target_gen, void *context,
+                      u1db_doc_gen_callback cb);
 static int st_http_sync_exchange(u1db_sync_target *st, u1database *source_db,
         int n_doc_ids, const char **doc_ids, int *generations,
         int *target_gen, void *context, u1db_doc_gen_callback cb);
-static int st_http_get_sync_exchange(u1db_sync_target *st,
-                         const char *source_replica_uid,
-                         int source_gen,
-                         u1db_sync_exchange **exchange);
 static void st_http_finalize_sync_exchange(u1db_sync_target *st,
                                u1db_sync_exchange **exchange);
 static int st_http_set_trace_hook(u1db_sync_target *st,
@@ -97,8 +100,8 @@ u1db__create_http_sync_target(const char *url, u1db_sync_target **target)
     new_target->implementation = state;
     new_target->get_sync_info = st_http_get_sync_info;
     new_target->record_sync_info = st_http_record_sync_info;
+    new_target->sync_exchange_docs = st_http_sync_exchange_docs;
     new_target->sync_exchange = st_http_sync_exchange;
-    new_target->get_sync_exchange = st_http_get_sync_exchange;
     new_target->finalize_sync_exchange = st_http_finalize_sync_exchange;
     new_target->_set_trace_hook = st_http_set_trace_hook;
     new_target->finalize = st_http_finalize;
@@ -143,6 +146,7 @@ recv_header_bytes(char *ptr, size_t size, size_t nmemb, void *userdata)
     //       without separately buffering the raw bytes.
     req = (struct _http_request *)userdata;
     total_bytes = size * nmemb;
+    fprintf(stderr, "Header request of %d bytes\n", total_bytes);
     if (req->state != NULL && total_bytes > 9 && strncmp(ptr, "HTTP/", 5) == 0)
     {
         if (strncmp(ptr, "HTTP/1.0 ", 9) == 0) {
@@ -183,6 +187,7 @@ recv_body_bytes(char *ptr, size_t size, size_t nmemb, void *userdata)
     req = (struct _http_request *)userdata;
     total_bytes = size * nmemb;
     needed_bytes = req->num_body_bytes + total_bytes + 1;
+    fprintf(stderr, "Body request of %d bytes\n", total_bytes);
     if (needed_bytes >= req->max_body_bytes) {
         req->max_body_bytes = max((req->max_body_bytes * 2), needed_bytes);
         req->max_body_bytes += 100;
@@ -283,7 +288,7 @@ st_http_get_sync_info(u1db_sync_target *st,
     }
 
     req.state = state;
-    status = u1db__format_sync_info_url(st, source_replica_uid, &url);
+    status = u1db__format_sync_url(st, source_replica_uid, &url);
     if (status != U1DB_OK) { goto finish; }
     status = curl_easy_setopt(state->curl, CURLOPT_HTTPGET, 1L);
     if (status != CURLE_OK) { goto finish; }
@@ -410,7 +415,7 @@ st_http_record_sync_info(u1db_sync_target *st,
         return U1DB_INVALID_PARAMETER;
     }
 
-    status = u1db__format_sync_info_url(st, source_replica_uid, &url);
+    status = u1db__format_sync_url(st, source_replica_uid, &url);
     if (status != U1DB_OK) { goto finish; }
     json = json_object_new_object();
     if (json == NULL) {
@@ -423,6 +428,11 @@ st_http_record_sync_info(u1db_sync_target *st,
     req.state = state;
     req.put_buffer = raw_body;
     req.num_put_bytes = raw_len;
+
+    headers = curl_slist_append(headers, "Content-Type: application/json");
+    // We know the message is going to be short, no reason to wait for server
+    // confirmation of the post.
+    headers = curl_slist_append(headers, "Expect:");
 
     status = curl_easy_setopt(state->curl, CURLOPT_URL, url);
     if (status != CURLE_OK) { goto finish; }
@@ -465,12 +475,206 @@ finish:
     return status;
 }
 
+static size_t
+fread_proxy(void *ptr, size_t size, size_t nmemb, void *userdata)
+{
+    fprintf(stderr, "reading %d bytes\n", size*nmemb);
+    return fread(ptr, size, nmemb, userdata);
+}
+
+// Setup the CURL handle for doing the POST for sync exchange
+// @param headers   (OUT) Pass in a handle for curl_slist, callers must call
+//                  curl_slist_free_all themselves
+// @param req       The request state will be attached to this object
+// @param fd        This handle should have all data written to it. We will use
+//                  ftell to determine content length, then seek to the
+//                  beginning to do the upload
+static int
+setup_curl_for_sync(CURL *curl, struct curl_slist **headers,
+                    struct _http_request *req, FILE *fd)
+{
+    int status;
+    curl_off_t size;
+    status = curl_easy_setopt(curl, CURLOPT_VERBOSE, 1L);
+    *headers = curl_slist_append(*headers,
+            "Content-Type: application/x-u1db-sync-stream");
+    if (*headers == NULL) {
+        status = U1DB_NOMEM;
+        goto finish;
+    }
+    status = curl_easy_setopt(curl, CURLOPT_HTTPHEADER, headers);
+    if (status != CURLE_OK) { goto finish; }
+    status = curl_easy_setopt(curl, CURLOPT_UPLOAD, 1L);
+    // if (status != CURLE_OK) { goto finish; }
+    // status = curl_easy_setopt(curl, CURLOPT_HTTPPOST, 1L);
+    if (status != CURLE_OK) { goto finish; }
+
+    status = curl_easy_setopt(curl, CURLOPT_HEADERDATA, req);
+    if (status != CURLE_OK) { goto finish; }
+    status = curl_easy_setopt(curl, CURLOPT_HEADERFUNCTION,
+                              recv_header_bytes);
+    status = curl_easy_setopt(curl, CURLOPT_WRITEDATA, req);
+    if (status != CURLE_OK) { goto finish; }
+    status = curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION,
+                              recv_body_bytes);
+    if (status != CURLE_OK) { goto finish; }
+    status = curl_easy_setopt(curl, CURLOPT_READDATA, fd);
+    if (status != CURLE_OK) { goto finish; }
+    status = curl_easy_setopt(curl, CURLOPT_READFUNCTION, fread);
+    if (status != CURLE_OK) { goto finish; }
+    size = ftell(fd);
+    fseek(fd, 0, 0);
+    status = curl_easy_setopt(curl, CURLOPT_INFILESIZE_LARGE, size);
+    if (status != CURLE_OK) { goto finish; }
+finish:
+    return status;
+}
+
+
+static int
+doc_to_tempfile(u1db_document *doc, int gen, FILE *fd)
+{
+    int status = U1DB_OK;
+    json_object *obj = NULL;
+    fputs(",\r\n", fd);
+    obj = json_object_new_object();
+    if (obj == NULL) {
+        status = U1DB_NOMEM;
+        goto finish;
+    }
+    json_object_object_add(obj, "id", json_object_new_string(doc->doc_id));
+    json_object_object_add(obj, "rev", json_object_new_string(doc->doc_rev));
+    json_object_object_add(obj, "content",
+            json_object_new_string(doc->content));
+    json_object_object_add(obj, "gen", json_object_new_int(gen));
+    fputs(json_object_to_json_string(obj), fd);
+finish:
+    if (obj != NULL) {
+        json_object_put(obj);
+    }
+    return status;
+}
+
+static FILE *
+make_tempfile(char tmpname[1024])
+{
+    const char tmp_template[] = "tmp-u1db-sync-XXXXXX";
+    const char *env_temp[] = {"TMP", "TEMP", "TMPDIR"};
+    int i, fd;
+    FILE *ret;
+    const char *tmpdir = NULL;
+
+    for (i = 0; i < sizeof(env_temp); ++i) {
+        tmpdir = getenv(env_temp[0]);
+        if (tmpdir != NULL && tmpdir[0] != '\0') break;
+    } 
+    if (tmpdir == NULL || tmpdir[0] == '\0') {
+        tmpdir = ".";
+    }
+    snprintf(tmpname, 1024, "%s/%s", tmpdir, tmp_template);
+    fd = mkstemp(tmpname);
+    if (fd == -1) {
+        return NULL;
+    }
+    ret = fdopen(fd, "wb+");
+    if (ret == NULL) {
+        close(fd);
+        unlink(tmpname);
+        tmpname[0] = '\0';
+    }
+    return ret;
+}
+
+static int
+st_http_sync_exchange_docs(u1db_sync_target *st,
+                      const char *source_replica_uid, 
+                      int n_docs, u1db_document **docs,
+                      int *generations, int *target_gen, void *context,
+                      u1db_doc_gen_callback cb)
+{
+    int status, i;
+    int fd = -1;
+    FILE *temp_fd = NULL;
+    const char *target_replica_uid = NULL;
+    char *url = NULL;
+    struct curl_slist *headers = NULL;
+    struct _http_request req = {0};
+    struct _http_state *state;
+    char tmpname[1024] = {0};
+
+    if (st == NULL || generations == NULL || target_gen == NULL
+            || cb == NULL)
+    {
+        return U1DB_INVALID_PARAMETER;
+    }
+    if (n_docs > 0 && (docs == NULL || generations == NULL)) {
+        return U1DB_INVALID_PARAMETER;
+    }
+    state = (struct _http_state *)st->implementation;
+    fprintf(stderr, "mkstemp\n");
+    temp_fd = make_tempfile(tmpname);
+    if (temp_fd == NULL) {
+        status = errno;
+        if (status == 0) {
+            status = U1DB_INTERNAL_ERROR;
+        }
+        goto finish;
+    }
+    fprintf(stderr, "mkstemp: %s\n", tmpname);
+    // Spool all of the documents to a temporary file, so that it we can
+    // determine Content-Length before we start uploading the data.
+    fprintf(temp_fd, "[{\"last_known_generation\": %d}", *target_gen);
+    for (i = 0; i < n_docs; ++i) {
+        status = doc_to_tempfile(docs[i], generations[i], temp_fd);
+        if (status != U1DB_OK) { goto finish; }
+    }
+    fputs("\r\n]", temp_fd);
+    fprintf(stderr, "added %d docs\n", n_docs);
+    status = u1db__format_sync_url(st, source_replica_uid, &url);
+    if (status != U1DB_OK) { goto finish; }
+    status = curl_easy_setopt(state->curl, CURLOPT_URL, url);
+    if (status != CURLE_OK) { goto finish; }
+    status = setup_curl_for_sync(state->curl, &headers, &req, temp_fd);
+    if (status != CURLE_OK) { goto finish; }
+    // Now send off the messages, and handle the return content.
+    fprintf(stderr, "getting ready to sync\n");
+    status = curl_easy_perform(state->curl);
+    if (status != CURLE_OK) { goto finish; }
+    fprintf(stderr, "sync finished\n");
+finish:
+    if (temp_fd != NULL) {
+        fclose(temp_fd);
+    } else if (fd != -1) {
+        close(fd);
+    }
+    if (tmpname[0] != '\0') {
+        // unlink(tmpname);
+    }
+    if (url != NULL) {
+        free(url);
+    }
+    if (headers != NULL) {
+        curl_slist_free_all(headers);
+    }
+    return status;
+}
+
 
 static int
 st_http_sync_exchange(u1db_sync_target *st, u1database *source_db,
         int n_doc_ids, const char **doc_ids, int *generations,
         int *target_gen, void *context, u1db_doc_gen_callback cb)
 {
+    int status;
+    const char *source_replica_uid = NULL, *target_replica_uid = NULL;
+    u1db_sync_exchange *exchange = NULL;
+    if (st == NULL || source_db == NULL || target_gen == NULL || cb == NULL)
+    {
+        return U1DB_INVALID_PARAMETER;
+    }
+    if (n_doc_ids > 0 && (doc_ids == NULL || generations == NULL)) {
+        return U1DB_INVALID_PARAMETER;
+    }
     return U1DB_NOT_IMPLEMENTED;
 }
 
@@ -527,8 +731,8 @@ st_http_finalize(u1db_sync_target *st)
 
 
 int
-u1db__format_sync_info_url(u1db_sync_target *st,
-                               const char *source_replica_uid, char **sync_url)
+u1db__format_sync_url(u1db_sync_target *st,
+                      const char *source_replica_uid, char **sync_url)
 {
     int url_len;
     struct _http_state *state;

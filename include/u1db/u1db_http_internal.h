@@ -22,7 +22,7 @@
 #include "u1db/u1db_internal.h"
 
 
-int u1db__format_sync_info_url(u1db_sync_target *st,
+int u1db__format_sync_url(u1db_sync_target *st,
         const char *source_replica_uid, char **sync_url);
 
 

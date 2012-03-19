@@ -71,16 +71,19 @@ synchronize them with other stores.
     else:
         kwargs["cmdclass"] = {"build_ext": build_ext}
         extra_libs = []
+        extra_defines = []
         if sys.platform == 'win32':
             # Used for the random number generator
             extra_libs.append('advapi32')
             extra_libs.append('libcurl_imp')
+            extra_defines = [('_CRT_SECURE_NO_WARNINGS', 1)]
         else:
             extra_libs.append('curl')
         extra_libs.append('json')
         ext.append(Extension(
             "u1db.tests.c_backend_wrapper",
             ["u1db/tests/c_backend_wrapper.pyx",
+             "src/mkstemp_compat.c",
              "src/u1db.c",
              "src/u1db_http_sync_target.c",
              "src/u1db_query.c",
@@ -91,7 +94,7 @@ synchronize them with other stores.
              ],
             include_dirs=["include"],
             libraries=['sqlite3'] + extra_libs,
-            define_macros=[],
+            define_macros=[] + extra_defines,
             ))
 
 
