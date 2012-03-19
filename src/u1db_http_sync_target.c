@@ -42,6 +42,8 @@ static int st_http_set_trace_hook(u1db_sync_target *st,
                              void *context, u1db__trace_callback cb);
 static void st_http_finalize(u1db_sync_target *st);
 static int initialize_curl(struct _http_state *state);
+static int simple_set_curl_data(CURL *curl, struct _http_request *header,
+                     struct _http_request *body, struct _http_request *put);
 
 
 static struct _http_state {

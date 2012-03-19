@@ -153,6 +153,11 @@ cdef extern from "u1db/u1db_internal.h":
             const_char_ptr *st_replica_uid, int *st_gen, int *source_gen) nogil
         int (*record_sync_info)(u1db_sync_target *st,
             char *source_replica_uid, int source_gen) nogil
+        int (*sync_exchange_docs)(u1db_sync_target *st,
+                                  char *source_replica_uid, int n_docs,
+                                  u1db_document **docs, int *generations,
+                                  int *target_gen, void *context,
+                                  u1db_doc_gen_callback cb) nogil
         int (*sync_exchange)(u1db_sync_target *st, u1database *source_db,
                 int n_doc_ids, const_char_ptr *doc_ids, int *generations,
                 int *target_gen,
@@ -563,7 +568,7 @@ cdef class CSyncExchange(object):
         cdef int i, n_ids
         self._check()
         handle_status("sync_exchange_seen_ids",
-            u1db__sync_exchange_seen_ids(self._exchange, &n_ids, &seen_ids));
+            u1db__sync_exchange_seen_ids(self._exchange, &n_ids, &seen_ids))
         res = []
         for i from 0 <= i < n_ids:
             res.append(seen_ids[i])
@@ -661,23 +666,43 @@ cdef class CSyncTarget(object):
 
     def sync_exchange(self, docs_by_generations, source_replica_uid,
                       last_known_generation, return_doc_cb):
-        # Note: This contains more logic than we would normally put in the C
-        #       wrapper. Specifically, it contains functionality rather than
-        #       just handing off to C code. This is done because of how we are
-        #       unit-testing sync-target functionality ATM.
-        cdef CSyncExchange se
-        se = self._get_sync_exchange(source_replica_uid, last_known_generation)
-        for doc, gen in docs_by_generations:
-            se.insert_doc_from_source(doc, gen)
-        se.find_doc_ids_to_return()
-        se.return_docs(return_doc_cb)
-        return se._exchange.target_gen
+        cdef CDocument cur_doc
+        cdef u1db_document **docs = NULL
+        cdef int *generations = NULL
+        cdef int i, count, status, target_gen
+
+        self._check()
+        assert self._st.sync_exchange_docs != NULL, "sync_exchange_docs is NULL?"
+        count = len(docs_by_generations)
+        try:
+            docs = <u1db_document **>calloc(count, sizeof(u1db_document*))
+            if docs == NULL:
+                raise MemoryError
+            generations = <int*>calloc(count, sizeof(int))
+            if generations == NULL:
+                raise MemoryError
+            for i from 0 <= i < count:
+                cur_doc = docs_by_generations[i][0]
+                generations[i] = docs_by_generations[i][1]
+                docs[i] = cur_doc._doc
+            target_gen = last_known_generation
+            with nogil:
+                status = self._st.sync_exchange_docs(self._st,
+                        source_replica_uid, count,
+                        docs, generations, &target_gen, <void *>return_doc_cb,
+                        return_doc_cb_wrapper)
+        finally:
+            if docs != NULL:
+                free(docs)
+            if generations != NULL:
+                free(generations)
+        return target_gen
 
     def _set_trace_hook(self, cb):
         self._check()
         assert self._st._set_trace_hook != NULL, "_set_trace_hook is NULL?"
         handle_status("_set_trace_hook",
-            self._st._set_trace_hook(self._st, <void*>cb, _trace_hook));
+            self._st._set_trace_hook(self._st, <void*>cb, _trace_hook))
 
 
 cdef class CDatabase(object):
@@ -960,7 +985,7 @@ cdef class CDatabase(object):
                     <char*>entry[0], <char*>entry[1], <char*>entry[2],
                     <char*>entry[3])
             else:
-                status = U1DB_NOT_IMPLEMENTED;
+                status = U1DB_NOT_IMPLEMENTED
             handle_status("get_from_index", status)
         return res
 

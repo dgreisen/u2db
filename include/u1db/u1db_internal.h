@@ -106,6 +106,15 @@ struct _u1db_sync_target {
             int n_doc_ids, const char **doc_ids, int *generations,
             int *target_gen,
             void *context, u1db_doc_gen_callback cb);
+
+    /**
+     * Same as sync_exchange, only using document objects.
+     */
+    int (*sync_exchange_docs)(u1db_sync_target *st,
+                              const char *source_replica_uid, int n_docs,
+                              u1db_document **docs, int *generations,
+                              int *target_gen, void *context,
+                              u1db_doc_gen_callback cb);
     /**
      * Create a sync_exchange state object.
      *

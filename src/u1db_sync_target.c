@@ -28,6 +28,11 @@ static int st_get_sync_info(u1db_sync_target *st,
 static int st_record_sync_info(u1db_sync_target *st,
         const char *source_replica_uid, int source_gen);
 
+static int st_sync_exchange_docs(u1db_sync_target *st, 
+                          const char *source_replica_uid, int n_docs,
+                          u1db_document **docs, int *generations,
+                          int *target_gen, void *context,
+                          u1db_doc_gen_callback cb);
 static int st_sync_exchange(u1db_sync_target *st, u1database *source_db,
         int n_doc_ids, const char **doc_ids, int *generations,
         int *target_gen, void *context, u1db_doc_gen_callback cb);
@@ -69,6 +74,7 @@ u1db__get_sync_target(u1database *db, u1db_sync_target **sync_target)
     (*sync_target)->implementation = db;
     (*sync_target)->get_sync_info = st_get_sync_info;
     (*sync_target)->record_sync_info = st_record_sync_info;
+    (*sync_target)->sync_exchange_docs = st_sync_exchange_docs;
     (*sync_target)->sync_exchange = st_sync_exchange;
     (*sync_target)->get_sync_exchange = st_get_sync_exchange;
     (*sync_target)->finalize_sync_exchange = st_finalize_sync_exchange;
@@ -444,6 +450,42 @@ get_and_insert_docs(u1database *source_db, u1db_sync_exchange *se,
     get_doc_state.gen_for_doc_ids = generations;
     return u1db_get_docs(source_db, n_doc_ids, doc_ids,
             0, &get_doc_state, get_docs_to_gen_docs);
+}
+
+
+static int
+st_sync_exchange_docs(u1db_sync_target *st, const char *source_replica_uid, 
+                      int n_docs, u1db_document **docs,
+                      int *generations, int *target_gen, void *context,
+                      u1db_doc_gen_callback cb)
+{
+    int status, i;
+    const char *target_replica_uid = NULL;
+    u1db_sync_exchange *exchange = NULL;
+    if (st == NULL || generations == NULL || target_gen == NULL
+            || cb == NULL)
+    {
+        return U1DB_INVALID_PARAMETER;
+    }
+    if (n_docs > 0 && (docs == NULL || generations == NULL)) {
+        return U1DB_INVALID_PARAMETER;
+    }
+    status = st->get_sync_exchange(st, source_replica_uid,
+                                   *target_gen, &exchange);
+    if (status != U1DB_OK) { goto finish; }
+    for (i = 0; i < n_docs; ++i) {
+        status = u1db__sync_exchange_insert_doc_from_source(exchange, docs[i],
+                                                            generations[i]);
+        if (status != U1DB_OK) { goto finish; }
+    }
+    status = u1db__sync_exchange_find_doc_ids_to_return(exchange);
+    if (status != U1DB_OK) { goto finish; }
+    status = u1db__sync_exchange_return_docs(exchange, context, cb);
+    if (status != U1DB_OK) { goto finish; }
+    *target_gen = exchange->target_gen;
+finish:
+    st->finalize_sync_exchange(st, &exchange);
+    return status;
 }
 
 
