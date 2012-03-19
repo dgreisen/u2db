@@ -146,7 +146,6 @@ recv_header_bytes(char *ptr, size_t size, size_t nmemb, void *userdata)
     //       without separately buffering the raw bytes.
     req = (struct _http_request *)userdata;
     total_bytes = size * nmemb;
-    fprintf(stderr, "Header request of %d bytes\n", total_bytes);
     if (req->state != NULL && total_bytes > 9 && strncmp(ptr, "HTTP/", 5) == 0)
     {
         if (strncmp(ptr, "HTTP/1.0 ", 9) == 0) {
@@ -478,8 +477,11 @@ finish:
 static size_t
 fread_proxy(void *ptr, size_t size, size_t nmemb, void *userdata)
 {
-    fprintf(stderr, "reading %d bytes\n", size*nmemb);
-    return fread(ptr, size, nmemb, userdata);
+    size_t ret;
+    ret = fread(ptr, size, nmemb, userdata);
+    ((char*)ptr)[ret] = '\0';
+    fprintf(stderr, "reading %d bytes, got %d\n%s\n", size*nmemb, ret, ptr);
+    return ret;
 }
 
 // Setup the CURL handle for doing the POST for sync exchange
@@ -502,11 +504,11 @@ setup_curl_for_sync(CURL *curl, struct curl_slist **headers,
         status = U1DB_NOMEM;
         goto finish;
     }
-    status = curl_easy_setopt(curl, CURLOPT_HTTPHEADER, headers);
+    status = curl_easy_setopt(curl, CURLOPT_HTTPHEADER, *headers);
     if (status != CURLE_OK) { goto finish; }
-    status = curl_easy_setopt(curl, CURLOPT_UPLOAD, 1L);
-    // if (status != CURLE_OK) { goto finish; }
-    // status = curl_easy_setopt(curl, CURLOPT_HTTPPOST, 1L);
+    status = curl_easy_setopt(curl, CURLOPT_POST, 1L);
+    if (status != CURLE_OK) { goto finish; }
+    status = curl_easy_setopt(curl, CURLOPT_POSTFIELDS, NULL);
     if (status != CURLE_OK) { goto finish; }
 
     status = curl_easy_setopt(curl, CURLOPT_HEADERDATA, req);
@@ -523,7 +525,12 @@ setup_curl_for_sync(CURL *curl, struct curl_slist **headers,
     status = curl_easy_setopt(curl, CURLOPT_READFUNCTION, fread);
     if (status != CURLE_OK) { goto finish; }
     size = ftell(fd);
+    if (size > 0) {
+        size -= 1;
+    }
     fseek(fd, 0, 0);
+    status = curl_easy_setopt(curl, CURLOPT_POSTFIELDSIZE_LARGE, size);
+    if (status != CURLE_OK) { goto finish; }
     status = curl_easy_setopt(curl, CURLOPT_INFILESIZE_LARGE, size);
     if (status != CURLE_OK) { goto finish; }
 finish:
