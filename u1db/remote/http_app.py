@@ -427,7 +427,7 @@ class HTTPInvocationByMethodWithBody(object):
                 meth_end = self._lookup('%s_end' % method)
                 body_getline = reader.getline
                 if body_getline().strip() != '[':
-                    raise BadRequest
+                    raise BadRequest()
                 line = body_getline()
                 line, comma = utils.check_and_strip_comma(line.strip())
                 meth_args(args, line)

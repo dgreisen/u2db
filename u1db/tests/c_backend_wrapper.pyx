@@ -308,8 +308,9 @@ cdef int _trace_hook(void *context, const_char_ptr state) with gil:
     ctx = <object>context
     try:
         ctx(state)
-    except Exception:
-        # TODO: I'd really like a generic "something went wrong" error.
+    except:
+        # Note: It would be nice if we could map the Python exception into
+        #       something in C
         return U1DB_INTERNAL_ERROR
     return U1DB_OK
 

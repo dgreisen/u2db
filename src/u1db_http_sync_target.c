@@ -525,9 +525,6 @@ setup_curl_for_sync(CURL *curl, struct curl_slist **headers,
     status = curl_easy_setopt(curl, CURLOPT_READFUNCTION, fread);
     if (status != CURLE_OK) { goto finish; }
     size = ftell(fd);
-    if (size > 0) {
-        size -= 1;
-    }
     fseek(fd, 0, 0);
     status = curl_easy_setopt(curl, CURLOPT_POSTFIELDSIZE_LARGE, size);
     if (status != CURLE_OK) { goto finish; }
@@ -630,7 +627,7 @@ st_http_sync_exchange_docs(u1db_sync_target *st,
     fprintf(stderr, "mkstemp: %s\n", tmpname);
     // Spool all of the documents to a temporary file, so that it we can
     // determine Content-Length before we start uploading the data.
-    fprintf(temp_fd, "[{\"last_known_generation\": %d}", *target_gen);
+    fprintf(temp_fd, "[\r\n{\"last_known_generation\": %d}", *target_gen);
     for (i = 0; i < n_docs; ++i) {
         status = doc_to_tempfile(docs[i], generations[i], temp_fd);
         if (status != U1DB_OK) { goto finish; }
@@ -655,7 +652,7 @@ finish:
         close(fd);
     }
     if (tmpname[0] != '\0') {
-        // unlink(tmpname);
+        unlink(tmpname);
     }
     if (url != NULL) {
         free(url);
