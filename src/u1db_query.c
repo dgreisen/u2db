@@ -470,7 +470,7 @@ finish:
     if (status == U1DB_OK) {
         *unique_expressions = tmp;
     } else {
-        free(tmp);
+        free((void*)tmp);
     }
     return status;
 }
