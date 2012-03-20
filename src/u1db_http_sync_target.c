@@ -25,6 +25,10 @@
 #include <curl/curl.h>
 
 
+#ifndef max
+#define max(a, b) ((a) > (b) ? (a) : (b))
+#endif // max
+
 struct _http_state;
 struct _http_request;
 
@@ -35,6 +39,10 @@ static int st_http_get_sync_info(u1db_sync_target *st,
 static int st_http_record_sync_info(u1db_sync_target *st,
         const char *source_replica_uid, int source_gen);
 
+static int st_http_get_sync_exchange(u1db_sync_target *st,
+                         const char *source_replica_uid,
+                         int source_gen,
+                         u1db_sync_exchange **exchange);
 static int st_http_sync_exchange_docs(u1db_sync_target *st,
                       const char *source_replica_uid, 
                       int n_docs, u1db_document **docs,
@@ -79,7 +87,7 @@ u1db__create_http_sync_target(const char *url, u1db_sync_target **target)
 {
     int status = U1DB_OK;
     int url_len;
-    struct _http_state *state;
+    struct _http_state *state = NULL;
     u1db_sync_target *new_target;
 
     if (url == NULL || target == NULL) {
@@ -108,6 +116,7 @@ u1db__create_http_sync_target(const char *url, u1db_sync_target **target)
     new_target->record_sync_info = st_http_record_sync_info;
     new_target->sync_exchange_docs = st_http_sync_exchange_docs;
     new_target->sync_exchange = st_http_sync_exchange;
+    new_target->get_sync_exchange = st_http_get_sync_exchange;
     new_target->finalize_sync_exchange = st_http_finalize_sync_exchange;
     new_target->_set_trace_hook = st_http_set_trace_hook;
     new_target->finalize = st_http_finalize;
@@ -485,6 +494,7 @@ finish:
     return status;
 }
 
+// Can be used for debugging
 static size_t
 fread_proxy(void *ptr, size_t size, size_t nmemb, void *userdata)
 {
@@ -492,36 +502,6 @@ fread_proxy(void *ptr, size_t size, size_t nmemb, void *userdata)
     ret = fread(ptr, size, nmemb, userdata);
     ((char*)ptr)[ret] = '\0';
     return ret;
-}
-
-
-static void
-find_line_end(char *start, size_t len, char **end_of_content, char **next_line)
-{
-    char *newline;
-    
-    if (start == NULL) {
-        *end_of_content = *next_line = NULL;
-        return;
-    }
-    newline = memchr(start, '\n', len);
-    if (newline == NULL) {
-        *end_of_content = *next_line = NULL;
-        return;
-    }
-    *next_line = newline + 1;
-    // Now strip trailing whitespace
-    while (newline > start) {
-        newline--;
-        if (*newline != '\r' && *newline != '\n' && *newline != ' ') {
-            break;
-        }
-    }
-    if (newline < start) {
-        *end_of_content = *next_line = NULL;
-        return;
-    }
-    *end_of_content = newline + 1; 
 }
 
 
@@ -786,6 +766,7 @@ st_http_get_sync_exchange(u1db_sync_target *st,
                          int source_gen,
                          u1db_sync_exchange **exchange)
 {
+    // Intentionally not implemented
     return U1DB_NOT_IMPLEMENTED;
 }
 
@@ -794,6 +775,7 @@ static void
 st_http_finalize_sync_exchange(u1db_sync_target *st,
                                u1db_sync_exchange **exchange)
 {
+    // Intentionally a no-op
 }
 
 
