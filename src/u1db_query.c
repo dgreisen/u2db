@@ -144,7 +144,6 @@ u1db_get_from_index(u1database *db, u1query *query,
     va_list argp;
     const char *valN = NULL;
     int wildcard[20] = {0};
-    char *dupval = NULL;
 
     if (db == NULL || query == NULL || cb == NULL || n_values < 0)
     {
@@ -367,7 +366,6 @@ evaluate_index_and_insert_into_db(void *context, const char *expression)
     int status = U1DB_OK;
     char *result = NULL;
     char *tmp_expression = NULL;
-    char *progress = NULL;
     char *dot_chr = NULL;
     int i;
 

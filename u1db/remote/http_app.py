@@ -350,13 +350,13 @@ class HTTPResponder(object):
 
     def send_response_json(self, status=200, headers={}, **kwargs):
         """send and finish response with json object body from keyword args."""
-        self.start_response(status, kwargs, headers)
-        self.finish_response()
+        content = simplejson.dumps(kwargs) + "\r\n"
+        self.send_response_content(content, headers=headers, status=status)
 
-    def send_response_content(self, content, headers={}):
+    def send_response_content(self, content, status=200, headers={}):
         """send and finish response with content"""
         headers['content-length'] = str(len(content))
-        self.start_response(200, headers=headers)
+        self.start_response(status, headers=headers)
         self.content = [content]
         self.finish_response()
 

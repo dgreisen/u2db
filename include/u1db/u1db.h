@@ -40,7 +40,7 @@ typedef struct _u1db_document
 
 typedef struct _u1query u1query;
 typedef int (*u1db_doc_callback)(void *context, u1db_document *doc);
-typedef int (*u1db_doc_gen_callback)(void *context, u1db_document *doc_id, int gen);
+typedef int (*u1db_doc_gen_callback)(void *context, u1db_document *doc, int gen);
 typedef int (*u1db_doc_id_gen_callback)(void *context, const char *doc_id, int gen);
 
 #define U1DB_OK 0
