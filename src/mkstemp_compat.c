@@ -20,7 +20,6 @@
 #include <ctype.h>
 #include <string.h>
 #include <sys/timeb.h>
-#include <io.h>
 #include <fcntl.h>
 #include <sys/stat.h>
 
