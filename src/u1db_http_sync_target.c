@@ -17,12 +17,16 @@
  */
 
 #include "u1db/u1db_http_internal.h"
+#include <errno.h>
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
 #include <json/json.h>
 #include <curl/curl.h>
 
+
+struct _http_state;
+struct _http_request;
 
 static int st_http_get_sync_info(u1db_sync_target *st,
         const char *source_replica_uid,

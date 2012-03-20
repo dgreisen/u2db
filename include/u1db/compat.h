@@ -27,6 +27,8 @@
     #include <windows.h>
     #include <io.h>
 
+#else
+    #include <unistd.h>
 #endif
 
 #include <stdio.h>
