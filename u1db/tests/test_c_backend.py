@@ -267,26 +267,6 @@ class TestCHTTPSyncTarget(BackendTests):
             c_backend_wrapper._format_sync_url(target, "replica,uid"))
 
 
-class Test_CHttpSyncParser(BackendTests):
-
-    def setUp(self):
-        super(Test_CHttpSyncParser, self).setUp()
-        self.returned = []
-
-    def return_doc_cb(self, doc, gen):
-        self.returned.append((doc, gen))
-
-    def test_empty_response(self):
-        parser = c_backend_wrapper._CHttpSyncParser(self.return_doc_cb)
-        parser.add_content('[\r\n]')
-        self.assertEqual([], self.returned)
-
-    def test_not_starting_with_bracket(self):
-        parser = c_backend_wrapper._CHttpSyncParser(self.return_doc_cb)
-        self.assertRaises(errors.BrokenSyncStream,
-            parser.add_content, 'x\r\n')
-
-
 class TestVectorClock(BackendTests):
 
     def create_vcr(self, rev):

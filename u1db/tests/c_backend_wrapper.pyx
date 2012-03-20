@@ -217,12 +217,6 @@ cdef extern from "u1db/u1db_internal.h":
 cdef extern from "u1db/u1db_http_internal.h":
     int u1db__format_sync_url(u1db_sync_target *st,
             const_char_ptr source_replica_uid, char **sync_url)
-    int u1db__init_http_sync_parser(void *context, u1db_doc_gen_callback cb,
-                                    void **parser)
-
-    void u1db__free_http_sync_parser(void **parser)
-
-    int u1db__http_sync_add_content(void *parser, char *data, int len)
 
 
 cdef extern from "u1db/u1db_vectorclock.h":
@@ -1094,29 +1088,6 @@ cdef class VectorClockRev:
             return True
         else:
             raise RuntimeError("Failed to is_newer: %d" % (is_newer,))
-
-
-cdef class _CHttpSyncParser:
-
-    cdef void *parser
-    cdef public object _doc_cb
-
-    def __init__(self, doc_cb):
-        self._doc_cb = doc_cb
-        handle_status("http_sync_parser",
-            u1db__init_http_sync_parser(<void*>doc_cb, return_doc_cb_wrapper,
-                &self.parser))
-
-    def __dealloc__(self):
-        u1db__free_http_sync_parser(&self.parser)
-
-    def add_content(self, content):
-        cdef char *data
-        cdef Py_ssize_t data_len
-
-        PyString_AsStringAndSize(content, &data, &data_len)
-        handle_status("add_content",
-            u1db__http_sync_add_content(self.parser, data, data_len))
 
 
 def sync_db_to_target(db, target):

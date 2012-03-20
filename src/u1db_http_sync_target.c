@@ -56,13 +56,6 @@ struct _http_state {
 };
 
 
-struct _http_sync_response_state {
-    void *user_context;
-    u1db_doc_gen_callback user_cb;
-    int error;
-    int found_start;
-};
-
 struct _http_request {
     struct _http_state *state;
     int num_header_bytes;
@@ -528,36 +521,6 @@ find_line_end(char *start, size_t len, char **end_of_content, char **next_line)
 }
 
 
-static size_t
-parse_http_sync_response(const char *ptr, size_t size, size_t nmemb, void *userdata)
-{
-    size_t total_bytes;
-    struct _http_request *req;
-    char *end_of_content = NULL, *next_line = NULL;
-    // First, just buffer the data
-    total_bytes = recv_body_bytes(ptr, size, nmemb, userdata);
-    if (total_bytes == 0) {
-        return 0;
-    }
-    req = (struct _http_request *)userdata;
-    if (!req->response_state->found_start) {
-        find_line_end(req->body_buffer, total_bytes, &end_of_content,
-                      &next_line);
-        if (end_of_content == NULL || next_line == NULL) {
-            fprintf(stderr, "eoc or nl == NULL\n");
-            return 0;
-        }
-        if (end_of_content - req->body_buffer != 1
-                || req->body_buffer[0] != '[')
-        {
-            return 0;
-        }
-        req->response_state->found_start = 1;
-    }
-    return total_bytes;
-}
-
-
 // Setup the CURL handle for doing the POST for sync exchange
 // @param headers   (OUT) Pass in a handle for curl_slist, callers must call
 //                  curl_slist_free_all themselves
@@ -826,66 +789,3 @@ u1db__format_sync_url(u1db_sync_target *st,
 }
 
 
-
-int
-u1db__init_http_sync_parser(void *context, u1db_doc_gen_callback cb,
-                            void **parser)
-{
-    struct _http_request *state;
-    if (cb == NULL || parser == NULL) {
-        return U1DB_INVALID_PARAMETER;
-    }
-    state = (struct _http_request *)calloc(1,
-            sizeof(struct _http_request));
-    if (state == NULL) {
-        return U1DB_NOMEM;
-    }
-    state->response_state = (struct _http_sync_response_state *)calloc(1,
-            sizeof(struct _http_sync_response_state));
-    if (state->response_state == NULL) {
-        return U1DB_NOMEM;
-    }
-    state->response_state->user_cb = cb;
-    state->response_state->user_context = context;
-    *parser = state;
-    return U1DB_OK;
-}
-
-
-void
-u1db__free_http_sync_parser(void **parser)
-{
-    struct _http_request *state;
-    if (parser == NULL || *parser == NULL) {
-        return;
-    }
-    state = (struct _http_request *)*parser;
-    if (state->header_buffer != NULL) {
-        free(state->header_buffer);
-    }
-    if (state->body_buffer != NULL) {
-        free(state->body_buffer);
-    }
-    if (state->response_state != NULL) {
-        free(state->response_state);
-    }
-    free(state);
-    *parser = NULL;
-}
-
-
-int
-u1db__http_sync_add_content(void *parser, const char *data, int len)
-{
-    struct _http_request *req;
-    size_t res;
-    if (parser == NULL || data == NULL) {
-        return U1DB_INVALID_PARAMETER;
-    }
-    req = (struct _http_request *)parser;
-    res = parse_http_sync_response(data, 1, len, req); 
-    if (res < (size_t) len) {
-        return U1DB_BROKEN_SYNC_STREAM;
-    }
-    return U1DB_OK;
-}

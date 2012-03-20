@@ -25,11 +25,4 @@
 int u1db__format_sync_url(u1db_sync_target *st,
         const char *source_replica_uid, char **sync_url);
 
-int u1db__init_http_sync_parser(void *context, u1db_doc_gen_callback cb,
-                                void **parser);
-
-void u1db__free_http_sync_parser(void **parser);
-
-int u1db__http_sync_add_content(void *parser, const char *data, int len);
-
 #endif // _U1DB_HTTP_INTERNAL_H_
