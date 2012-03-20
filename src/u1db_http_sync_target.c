@@ -534,7 +534,6 @@ setup_curl_for_sync(CURL *curl, struct curl_slist **headers,
 {
     int status;
     curl_off_t size;
-    status = curl_easy_setopt(curl, CURLOPT_VERBOSE, 1L);
     *headers = curl_slist_append(*headers,
             "Content-Type: application/x-u1db-sync-stream");
     if (*headers == NULL) {
@@ -642,6 +641,12 @@ st_http_sync_exchange_docs(u1db_sync_target *st,
     struct _http_request req = {0};
     struct _http_state *state;
     char tmpname[1024] = {0};
+    long http_code;
+    json_object *json = NULL, *obj = NULL, *attr = NULL;
+    int doc_count;
+    const char *doc_id, *content, *rev;
+    int gen;
+    u1db_document *doc;
 
     if (st == NULL || generations == NULL || target_gen == NULL
             || cb == NULL)
@@ -674,14 +679,70 @@ st_http_sync_exchange_docs(u1db_sync_target *st,
     if (status != CURLE_OK) { goto finish; }
     status = setup_curl_for_sync(state->curl, &headers, &req, temp_fd);
     if (status != CURLE_OK) { goto finish; }
-    // Now send off the messages, and handle the return content.
+    // Now send off the messages, and handle the returned content.
     status = curl_easy_perform(state->curl);
     if (status != CURLE_OK) { goto finish; }
+    status = curl_easy_getinfo(state->curl, CURLINFO_RESPONSE_CODE, &http_code);
+    if (status != CURLE_OK) { goto finish; }
+    if (http_code != 200 && http_code != 201) {
+        status = U1DB_BROKEN_SYNC_STREAM;
+        goto finish;
+    }
+    json = json_tokener_parse(req.body_buffer);
+    if (json == NULL || !json_object_is_type(json, json_type_array)) {
+        status = U1DB_BROKEN_SYNC_STREAM;
+        goto finish;
+    }
+    doc_count = json_object_array_length(json);
+    if (doc_count < 1) {
+        // the first response is the new_generation info, so it must exist
+        status = U1DB_BROKEN_SYNC_STREAM;
+        goto finish;
+    }
+    obj = json_object_array_get_idx(json, 0);
+    attr = json_object_object_get(obj, "new_generation");
+    *target_gen = json_object_get_int(attr);
+    json_object_put(obj);
+    if (attr == NULL) {
+        status = U1DB_BROKEN_SYNC_STREAM;
+        goto finish;
+    }
+    for (i = 1; i < doc_count; ++i) {
+        obj = json_object_array_get_idx(json, i);
+        // TODO: Check that the attributes are not NULL, etc
+        attr = json_object_object_get(obj, "id");
+        doc_id = json_object_get_string(attr);
+        // TODO: Do we need to 'put' attr back?
+        attr = json_object_object_get(obj, "rev");
+        rev = json_object_get_string(attr);
+        attr = json_object_object_get(obj, "content");
+        content = json_object_get_string(attr);
+        attr = json_object_object_get(obj, "gen");
+        gen = json_object_get_int(attr);
+        doc = u1db__allocate_document(doc_id, rev, content, 0);
+        if (doc == NULL) {
+            status = U1DB_NOMEM;
+            goto finish;
+        }
+        status = cb(context, doc, gen);
+        if (status != U1DB_OK) { goto finish; }
+        json_object_put(obj);
+    }
+
 finish:
+    if (json != NULL) {
+        json_object_put(json);
+    }
     if (temp_fd != NULL) {
         fclose(temp_fd);
     } else if (fd != -1) {
         close(fd);
+    }
+    if (req.body_buffer != NULL) {
+        free(req.body_buffer);
+    }
+    if (req.header_buffer != NULL) {
+        free(req.header_buffer);
     }
     if (tmpname[0] != '\0') {
         unlink(tmpname);
@@ -736,9 +797,8 @@ static int
 st_http_set_trace_hook(u1db_sync_target *st, void *context,
                        u1db__trace_callback cb)
 {
-    st->trace_context = context;
-    st->trace_cb = cb;
-    return U1DB_OK;
+    // We can't trace a remote database
+    return U1DB_NOT_IMPLEMENTED;
 }
 
 
