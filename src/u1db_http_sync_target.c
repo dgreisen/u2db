@@ -186,7 +186,6 @@ recv_body_bytes(char *ptr, size_t size, size_t nmemb, void *userdata)
     req = (struct _http_request *)userdata;
     total_bytes = size * nmemb;
     needed_bytes = req->num_body_bytes + total_bytes + 1;
-    fprintf(stderr, "Body request of %d bytes\n", total_bytes);
     if (needed_bytes >= req->max_body_bytes) {
         req->max_body_bytes = max((req->max_body_bytes * 2), needed_bytes);
         req->max_body_bytes += 100;
@@ -480,7 +479,6 @@ fread_proxy(void *ptr, size_t size, size_t nmemb, void *userdata)
     size_t ret;
     ret = fread(ptr, size, nmemb, userdata);
     ((char*)ptr)[ret] = '\0';
-    fprintf(stderr, "reading %d bytes, got %d\n%s\n", size*nmemb, ret, ptr);
     return ret;
 }
 
@@ -615,7 +613,6 @@ st_http_sync_exchange_docs(u1db_sync_target *st,
         return U1DB_INVALID_PARAMETER;
     }
     state = (struct _http_state *)st->implementation;
-    fprintf(stderr, "mkstemp\n");
     temp_fd = make_tempfile(tmpname);
     if (temp_fd == NULL) {
         status = errno;
@@ -624,7 +621,6 @@ st_http_sync_exchange_docs(u1db_sync_target *st,
         }
         goto finish;
     }
-    fprintf(stderr, "mkstemp: %s\n", tmpname);
     // Spool all of the documents to a temporary file, so that it we can
     // determine Content-Length before we start uploading the data.
     fprintf(temp_fd, "[\r\n{\"last_known_generation\": %d}", *target_gen);
@@ -633,7 +629,6 @@ st_http_sync_exchange_docs(u1db_sync_target *st,
         if (status != U1DB_OK) { goto finish; }
     }
     fputs("\r\n]", temp_fd);
-    fprintf(stderr, "added %d docs\n", n_docs);
     status = u1db__format_sync_url(st, source_replica_uid, &url);
     if (status != U1DB_OK) { goto finish; }
     status = curl_easy_setopt(state->curl, CURLOPT_URL, url);
@@ -641,10 +636,8 @@ st_http_sync_exchange_docs(u1db_sync_target *st,
     status = setup_curl_for_sync(state->curl, &headers, &req, temp_fd);
     if (status != CURLE_OK) { goto finish; }
     // Now send off the messages, and handle the return content.
-    fprintf(stderr, "getting ready to sync\n");
     status = curl_easy_perform(state->curl);
     if (status != CURLE_OK) { goto finish; }
-    fprintf(stderr, "sync finished\n");
 finish:
     if (temp_fd != NULL) {
         fclose(temp_fd);
