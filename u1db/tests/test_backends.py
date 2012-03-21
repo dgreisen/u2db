@@ -337,6 +337,13 @@ class LocalDatabaseTests(tests.DatabaseBaseTests):
         self.assertEqual((4, [(doc1.doc_id, 3), (doc.doc_id, 4)]),
                          self.db.whats_changed())
 
+    def test_whats_changed_doesnt_includ_old_gen(self):
+        self.db.create_doc(simple_doc)
+        self.db.create_doc(simple_doc)
+        doc2 = self.db.create_doc(simple_doc)
+        self.assertEqual((3, [(doc2.doc_id, 3)]),
+                         self.db.whats_changed(2))
+
 
 class LocalDatabaseWithConflictsTests(tests.DatabaseBaseTests):
     # test supporting/functionality around storing conflicts
