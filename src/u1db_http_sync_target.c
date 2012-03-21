@@ -455,7 +455,7 @@ st_http_record_sync_info(u1db_sync_target *st,
 
     status = curl_easy_setopt(state->curl, CURLOPT_URL, url);
     if (status != CURLE_OK) { goto finish; }
-    status = curl_easy_setopt(state->curl, CURLOPT_HTTPHEADER, state->headers);
+    status = curl_easy_setopt(state->curl, CURLOPT_HTTPHEADER, headers);
     if (status != CURLE_OK) { goto finish; }
     status = curl_easy_setopt(state->curl, CURLOPT_UPLOAD, 1L);
     if (status != CURLE_OK) { goto finish; }
@@ -490,6 +490,7 @@ finish:
         free(url);
     }
     if (headers != NULL) {
+        curl_slist_free_all(headers);
     }
     return status;
 }
