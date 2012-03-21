@@ -23,6 +23,11 @@ cdef extern from "Python.h":
     char *strdup(char *)
     void *calloc(size_t, size_t)
     void free(void *)
+    ctypedef struct FILE:
+        pass
+    fprintf(FILE *, char *, ...)
+    FILE *stderr
+    size_t strlen(char *)
 
 cdef extern from "stdarg.h":
     ctypedef struct va_list:
@@ -107,6 +112,7 @@ cdef extern from "u1db/u1db.h":
     int U1DB_NOT_IMPLEMENTED
     int U1DB_INVALID_JSON
     int U1DB_INVALID_VALUE_FOR_INDEX
+    int U1DB_BROKEN_SYNC_STREAM
     int U1DB_INTERNAL_ERROR
 
     int U1DB_INSERTED
@@ -143,12 +149,16 @@ cdef extern from "u1db/u1db_internal.h":
 
     ctypedef int (*u1db__trace_callback)(void *context, const_char_ptr state)
     ctypedef struct u1db_sync_target:
-        u1database *db
         int (*get_sync_info)(u1db_sync_target *st,
             char *source_replica_uid,
             const_char_ptr *st_replica_uid, int *st_gen, int *source_gen) nogil
         int (*record_sync_info)(u1db_sync_target *st,
             char *source_replica_uid, int source_gen) nogil
+        int (*sync_exchange_docs)(u1db_sync_target *st,
+                                  char *source_replica_uid, int n_docs,
+                                  u1db_document **docs, int *generations,
+                                  int *target_gen, void *context,
+                                  u1db_doc_gen_callback cb) nogil
         int (*sync_exchange)(u1db_sync_target *st, u1database *source_db,
                 int n_doc_ids, const_char_ptr *doc_ids, int *generations,
                 int *target_gen,
@@ -156,11 +166,11 @@ cdef extern from "u1db/u1db_internal.h":
         int (*get_sync_exchange)(u1db_sync_target *st,
                                  char *source_replica_uid,
                                  int last_known_source_gen,
-                                 u1db_sync_exchange **exchange)
+                                 u1db_sync_exchange **exchange) nogil
         void (*finalize_sync_exchange)(u1db_sync_target *st,
-                                       u1db_sync_exchange **exchange)
+                                       u1db_sync_exchange **exchange) nogil
         int (*_set_trace_hook)(u1db_sync_target *st,
-                               void *context, u1db__trace_callback cb)
+                               void *context, u1db__trace_callback cb) nogil
 
 
     int u1db__get_generation(u1database *, int *db_rev)
@@ -202,6 +212,11 @@ cdef extern from "u1db/u1db_internal.h":
     int u1db__sync_exchange_find_doc_ids_to_return(u1db_sync_exchange *se)
     int u1db__sync_exchange_return_docs(u1db_sync_exchange *se, void *context,
             int (*cb)(void *context, u1db_document *doc, int gen))
+    int u1db__create_http_sync_target(char *url, u1db_sync_target **target)
+
+cdef extern from "u1db/u1db_http_internal.h":
+    int u1db__format_sync_url(u1db_sync_target *st,
+            const_char_ptr source_replica_uid, char **sync_url)
 
 
 cdef extern from "u1db/u1db_vectorclock.h":
@@ -295,8 +310,9 @@ cdef int _trace_hook(void *context, const_char_ptr state) with gil:
     ctx = <object>context
     try:
         ctx(state)
-    except Exception:
-        # TODO: I'd really like a generic "something went wrong" error.
+    except:
+        # Note: It would be nice if we could map the Python exception into
+        #       something in C
         return U1DB_INTERNAL_ERROR
     return U1DB_OK
 
@@ -498,6 +514,8 @@ cdef handle_status(context, int status):
         raise errors.InvalidValueForIndex()
     if status == U1DB_INTERNAL_ERROR:
         raise errors.U1DBError("internal error")
+    if status == U1DB_BROKEN_SYNC_STREAM:
+        raise errors.BrokenSyncStream()
     if status == U1DB_CONFLICTED:
         raise errors.ConflictedDoc()
     raise RuntimeError('%s (status: %s)' % (context, status))
@@ -555,7 +573,7 @@ cdef class CSyncExchange(object):
         cdef int i, n_ids
         self._check()
         handle_status("sync_exchange_seen_ids",
-            u1db__sync_exchange_seen_ids(self._exchange, &n_ids, &seen_ids));
+            u1db__sync_exchange_seen_ids(self._exchange, &n_ids, &seen_ids))
         res = []
         for i from 0 <= i < n_ids:
             res.append(seen_ids[i])
@@ -579,11 +597,9 @@ cdef class CSyncTarget(object):
     cdef u1db_sync_target *_st
     cdef CDatabase _db
 
-    def __init__(self, db):
-        self._db = db 
+    def __init__(self):
+        self._db = None
         self._st = NULL
-        handle_status("get_sync_target",
-            u1db__get_sync_target(self._db._db, &self._st))
 
     def __dealloc__(self):
         u1db__free_sync_target(&self._st)
@@ -591,15 +607,6 @@ cdef class CSyncTarget(object):
     def _check(self):
         if self._st == NULL:
             raise RuntimeError("self._st is NULL")
-
-    def _get_replica_uid(self):
-        cdef const_char_ptr val
-        cdef int status
-
-        self._check()
-        handle_status("get_replica_uid",
-            u1db_get_replica_uid(self._st.db, &val))
-        return str(val)
 
     def get_sync_info(self, source_replica_uid):
         cdef const_char_ptr st_replica_uid = NULL
@@ -664,23 +671,44 @@ cdef class CSyncTarget(object):
 
     def sync_exchange(self, docs_by_generations, source_replica_uid,
                       last_known_generation, return_doc_cb):
-        # Note: This contains more logic than we would normally put in the C
-        #       wrapper. Specifically, it contains functionality rather than
-        #       just handing off to C code. This is done because of how we are
-        #       unit-testing sync-target functionality ATM.
-        cdef CSyncExchange se
-        se = self._get_sync_exchange(source_replica_uid, last_known_generation)
-        for doc, gen in docs_by_generations:
-            se.insert_doc_from_source(doc, gen)
-        se.find_doc_ids_to_return()
-        se.return_docs(return_doc_cb)
-        return se._exchange.target_gen
+        cdef CDocument cur_doc
+        cdef u1db_document **docs = NULL
+        cdef int *generations = NULL
+        cdef int i, count, status, target_gen
+
+        self._check()
+        assert self._st.sync_exchange_docs != NULL, "sync_exchange_docs is NULL?"
+        count = len(docs_by_generations)
+        try:
+            docs = <u1db_document **>calloc(count, sizeof(u1db_document*))
+            if docs == NULL:
+                raise MemoryError
+            generations = <int*>calloc(count, sizeof(int))
+            if generations == NULL:
+                raise MemoryError
+            for i from 0 <= i < count:
+                cur_doc = docs_by_generations[i][0]
+                generations[i] = docs_by_generations[i][1]
+                docs[i] = cur_doc._doc
+            target_gen = last_known_generation
+            with nogil:
+                status = self._st.sync_exchange_docs(self._st,
+                        source_replica_uid, count,
+                        docs, generations, &target_gen, <void *>return_doc_cb,
+                        return_doc_cb_wrapper)
+            handle_status("sync_exchange_docs", status)
+        finally:
+            if docs != NULL:
+                free(docs)
+            if generations != NULL:
+                free(generations)
+        return target_gen
 
     def _set_trace_hook(self, cb):
         self._check()
         assert self._st._set_trace_hook != NULL, "_set_trace_hook is NULL?"
         handle_status("_set_trace_hook",
-            self._st._set_trace_hook(self._st, <void*>cb, _trace_hook));
+            self._st._set_trace_hook(self._st, <void*>cb, _trace_hook))
 
 
 cdef class CDatabase(object):
@@ -963,7 +991,7 @@ cdef class CDatabase(object):
                     <char*>entry[0], <char*>entry[1], <char*>entry[2],
                     <char*>entry[3])
             else:
-                status = U1DB_NOT_IMPLEMENTED;
+                status = U1DB_NOT_IMPLEMENTED
             handle_status("get_from_index", status)
         return res
 
@@ -975,7 +1003,12 @@ cdef class CDatabase(object):
         return query
     
     def get_sync_target(self):
-        return CSyncTarget(self)
+        cdef CSyncTarget target
+        target = CSyncTarget()
+        target._db = self
+        handle_status("get_sync_target",
+            u1db__get_sync_target(target._db._db, &target._st))
+        return target
 
 
 cdef class VectorClockRev:
@@ -1068,3 +1101,27 @@ def sync_db_to_target(db, target):
     handle_status("sync_db_to_target",
         u1db__sync_db_to_target(cdb._db, ctarget._st, &local_gen))
     return local_gen
+
+
+def create_http_sync_target(url):
+    cdef CSyncTarget target
+
+    target = CSyncTarget()
+    handle_status("create_http_sync_target",
+        u1db__create_http_sync_target(url, &target._st))
+    return target
+
+
+def _format_sync_url(target, source_replica_uid):
+    cdef CSyncTarget st
+    cdef char *sync_url = NULL
+    cdef object res
+    st = target
+    handle_status("format_sync_url",
+        u1db__format_sync_url(st._st, source_replica_uid, &sync_url))
+    if sync_url == NULL:
+        res = None
+    else:
+        res = sync_url
+        free(sync_url)
+    return res

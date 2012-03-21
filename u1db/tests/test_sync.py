@@ -53,6 +53,14 @@ def _make_local_db_and_http_target(test, path='test'):
     return db, st
 
 
+def _make_c_db_and_c_http_target(test, path='test'):
+    test.startServer()
+    db = test.request_state._create_database(os.path.basename(path))
+    url = test.getURL(path)
+    st = tests.c_backend_wrapper.create_http_sync_target(url)
+    return db, st
+
+
 def _make_local_db_and_oauth_http_target(test):
     db, st = _make_local_db_and_http_target(test, '~/test')
     st.set_oauth_credentials(tests.consumer1.key, tests.consumer1.secret,
@@ -73,7 +81,12 @@ c_db_scenarios = [
     ('local,c', {'create_db_and_target': _make_local_db_and_target,
                  'do_create_database': tests.create_c_database,
                  'make_document': tests.create_c_document,
-                 'whitebox': False})
+                 'whitebox': False}),
+    ('http,c', {'create_db_and_target': _make_c_db_and_c_http_target,
+                'do_create_database': tests.create_c_database,
+                'make_document': tests.create_c_document,
+                'server_def': http_server_def,
+                'whitebox': False})
     ]
 
 
@@ -279,6 +292,7 @@ for name, scenario in tests.LOCAL_DATABASES_SCENARIOS:
 
 
 if tests.c_backend_wrapper is not None:
+    # TODO: We should hook up sync tests with an HTTP target
     def sync_via_c_sync(db_source, db_target, trace_hook=None):
         target = db_target.get_sync_target()
         if trace_hook:

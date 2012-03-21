@@ -19,17 +19,16 @@
 #ifndef U1DB_COMPAT_H
 #define U1DB_COMPAT_H
 
-#if defined(_WIN32) || defined(WIN32)
-    /* Windows likes to complain when you use stuff like 'snprintf'
-     * Disable that
-     */
-    #define _CRT_SECURE_NO_WARNINGS
+#if defined (_MSC_VER) || defined(_WIN32) || defined(WIN32)
     /* Defining WIN32_LEAN_AND_MEAN makes including windows quite a bit
      * lighter weight.
      */
     #define WIN32_LEAN_AND_MEAN
     #include <windows.h>
+    #include <io.h>
 
+#else
+    #include <unistd.h>
 #endif
 
 #include <stdio.h>
@@ -41,6 +40,11 @@
 #define strtoull _strtoui64
 #define strdup _strdup
 #define strndup _win32_strndup
+#define fdopen _fdopen
+#define close _close
+#define unlink _unlink
+int mkstemp(char *fn);
+
 #endif
 
 #endif /* U1DB_COMPAT_H */

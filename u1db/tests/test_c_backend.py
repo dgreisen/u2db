@@ -17,6 +17,7 @@
 
 from u1db import (
     Document,
+    errors,
     tests,
     )
 from u1db.tests import c_backend_wrapper, c_backend_error
@@ -248,6 +249,22 @@ class TestCSyncTarget(BackendTests):
         self.assertGetDoc(self.db, doc2.doc_id, doc2.rev, tests.nested_doc,
                           False)
         self.assertEqual([(doc1, 1)], returned)
+
+
+class TestCHTTPSyncTarget(BackendTests):
+
+    def test_format_sync_url(self):
+        target = c_backend_wrapper.create_http_sync_target("http://base_url")
+        self.assertEqual("http://base_url/sync-from/replica-uid",
+            c_backend_wrapper._format_sync_url(target, "replica-uid"))
+
+    def test_format_sync_url_escapes(self):
+        # The base_url should not get munged (we assume it is already a
+        # properly formed URL), but the replica-uid should get properly escaped
+        target = c_backend_wrapper.create_http_sync_target(
+                "http://host/base%2Ctest/")
+        self.assertEqual("http://host/base%2Ctest/sync-from/replica%2Cuid",
+            c_backend_wrapper._format_sync_url(target, "replica,uid"))
 
 
 class TestVectorClock(BackendTests):
