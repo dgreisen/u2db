@@ -728,6 +728,27 @@ finish:
     return status;
 }
 
+static void
+
+cleanup_temp_files(char tmpname[], FILE *temp_fd, struct _http_request *req)
+{
+    if (temp_fd != NULL) {
+        fclose(temp_fd);
+    }
+    if (req != NULL) {
+        if (req->body_buffer != NULL) {
+            free(req->body_buffer);
+            req->body_buffer = NULL;
+        }
+        if (req->header_buffer != NULL) {
+            free(req->header_buffer);
+            req->header_buffer = NULL;
+        }
+    }
+    if (tmpname[0] != '\0') {
+        unlink(tmpname);
+    }
+}
 
 static int
 st_http_sync_exchange_docs(u1db_sync_target *st,
@@ -760,45 +781,77 @@ st_http_sync_exchange_docs(u1db_sync_target *st,
     if (status != U1DB_OK) { goto finish; }
     status = process_response(st, context, cb, req.body_buffer, target_gen);
 finish:
-    if (temp_fd != NULL) {
-        fclose(temp_fd);
-    }
-    if (req.body_buffer != NULL) {
-        free(req.body_buffer);
-    }
-    if (req.header_buffer != NULL) {
-        free(req.header_buffer);
-    }
-    if (tmpname[0] != '\0') {
-        unlink(tmpname);
-    }
+    cleanup_temp_files(tmpname, temp_fd, &req);
     return status;
 }
 
+
+struct _get_doc_to_tempfile_context {
+    int offset;
+    int num;
+    int *generations;
+    FILE *temp_fd;
+};
+
+
+static int
+get_docs_to_tempfile(void *context, u1db_document *doc)
+{
+    int status = U1DB_OK;
+    struct _get_doc_to_tempfile_context *state;
+
+    state = (struct _get_doc_to_tempfile_context *)context;
+    if (state->offset >= state->num) {
+        status = U1DB_INTERNAL_ERROR;
+    } else {
+        status = doc_to_tempfile(doc, state->generations[state->offset],
+                                 state->temp_fd);
+    }
+    u1db_free_doc(&doc);
+    return status;
+}
+
+
+int u1db_get_docs(u1database *db, int n_doc_ids, const char **doc_ids,
+                  int check_for_conflicts, void *context,
+                  u1db_doc_callback cb);
 
 static int
 st_http_sync_exchange(u1db_sync_target *st, u1database *source_db,
         int n_doc_ids, const char **doc_ids, int *generations,
         int *target_gen, void *context, u1db_doc_gen_callback cb)
 {
-    int status;
-    const char *source_replica_uid = NULL, *target_replica_uid = NULL;
-    u1db_sync_exchange *exchange = NULL;
-    char tmpname[1024] = {0};
+    int status, i;
     FILE *temp_fd = NULL;
-    if (st == NULL || source_db == NULL || target_gen == NULL || cb == NULL)
+    const char *target_replica_uid = NULL;
+    struct _http_request req = {0};
+    char tmpname[1024] = {0};
+    const char *source_replica_uid = NULL;
+    struct _get_doc_to_tempfile_context state = {0};
+
+    if (st == NULL || generations == NULL || target_gen == NULL
+            || cb == NULL)
     {
         return U1DB_INVALID_PARAMETER;
     }
     if (n_doc_ids > 0 && (doc_ids == NULL || generations == NULL)) {
         return U1DB_INVALID_PARAMETER;
     }
+    status = u1db_get_replica_uid(source_db, &source_replica_uid);
+    if (status != U1DB_OK) { goto finish; }
     status = init_temp_file(tmpname, &temp_fd, *target_gen);
     if (status != U1DB_OK) { goto finish; }
+    state.num = n_doc_ids;
+    state.generations = generations;
+    state.temp_fd = temp_fd;
+    status = u1db_get_docs(source_db, n_doc_ids, doc_ids, 0,
+            &state, get_docs_to_tempfile);
+    if (status != U1DB_OK) { goto finish; }
+    status = finalize_and_send_temp_file(st, temp_fd, source_replica_uid, &req);
+    if (status != U1DB_OK) { goto finish; }
+    status = process_response(st, context, cb, req.body_buffer, target_gen);
 finish:
-    if (temp_fd != NULL) {
-        fclose(temp_fd);
-    }
+    cleanup_temp_files(tmpname, temp_fd, &req);
     return status;
 }
 
