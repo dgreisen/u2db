@@ -102,7 +102,7 @@ struct _u1db_sync_target {
      *                  response stream. For each document in the stream, we
      *                  will trigger a callback.
      */
-    int (*sync_exchange)(u1db_sync_target *st, u1database *source_db,
+    int (*sync_exchange_doc_ids)(u1db_sync_target *st, u1database *source_db,
             int n_doc_ids, const char **doc_ids, int *generations,
             int *target_gen,
             void *context, u1db_doc_gen_callback cb);
@@ -110,7 +110,7 @@ struct _u1db_sync_target {
     /**
      * Same as sync_exchange, only using document objects.
      */
-    int (*sync_exchange_docs)(u1db_sync_target *st,
+    int (*sync_exchange)(u1db_sync_target *st,
                               const char *source_replica_uid, int n_docs,
                               u1db_document **docs, int *generations,
                               int *target_gen, void *context,
