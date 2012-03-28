@@ -154,14 +154,14 @@ cdef extern from "u1db/u1db_internal.h":
             const_char_ptr *st_replica_uid, int *st_gen, int *source_gen) nogil
         int (*record_sync_info)(u1db_sync_target *st,
             char *source_replica_uid, int source_gen) nogil
-        int (*sync_exchange_docs)(u1db_sync_target *st,
-                                  char *source_replica_uid, int n_docs,
-                                  u1db_document **docs, int *generations,
-                                  int *target_gen, void *context,
-                                  u1db_doc_gen_callback cb) nogil
-        int (*sync_exchange)(u1db_sync_target *st, u1database *source_db,
-                int n_doc_ids, const_char_ptr *doc_ids, int *generations,
-                int *target_gen,
+        int (*sync_exchange)(u1db_sync_target *st,
+                             char *source_replica_uid, int n_docs,
+                             u1db_document **docs, int *generations,
+                             int *target_gen, void *context,
+                             u1db_doc_gen_callback cb) nogil
+        int (*sync_exchange_doc_ids)(u1db_sync_target *st,
+                u1database *source_db, int n_doc_ids, const_char_ptr *doc_ids,
+                int *generations, int *target_gen,
                 void *context, u1db_doc_gen_callback cb) nogil
         int (*get_sync_exchange)(u1db_sync_target *st,
                                  char *source_replica_uid,
@@ -643,7 +643,7 @@ cdef class CSyncTarget(object):
         cdef CDatabase sdb
 
         self._check()
-        assert self._st.sync_exchange != NULL, "sync_exchange is NULL?"
+        assert self._st.sync_exchange_doc_ids != NULL, "sync_exchange_doc_ids is NULL?"
         sdb = source_db
         num_doc_ids = len(doc_id_generations)
         doc_ids = <const_char_ptr *>calloc(num_doc_ids, sizeof(char *))
@@ -659,10 +659,10 @@ cdef class CSyncTarget(object):
                 generations[i] = gen
             target_gen = last_known_generation
             with nogil:
-                status = self._st.sync_exchange(self._st, sdb._db,
+                status = self._st.sync_exchange_doc_ids(self._st, sdb._db,
                     num_doc_ids, doc_ids, generations, &target_gen,
                     <void*>return_doc_cb, return_doc_cb_wrapper)
-            handle_status("sync_exchange", status)
+            handle_status("sync_exchange_doc_ids", status)
         finally:
             free(<void *>doc_ids)
             free(generations)
@@ -677,7 +677,7 @@ cdef class CSyncTarget(object):
         cdef int i, count, status, target_gen
 
         self._check()
-        assert self._st.sync_exchange_docs != NULL, "sync_exchange_docs is NULL?"
+        assert self._st.sync_exchange != NULL, "sync_exchange is NULL?"
         count = len(docs_by_generations)
         try:
             docs = <u1db_document **>calloc(count, sizeof(u1db_document*))
@@ -692,11 +692,11 @@ cdef class CSyncTarget(object):
                 docs[i] = cur_doc._doc
             target_gen = last_known_generation
             with nogil:
-                status = self._st.sync_exchange_docs(self._st,
+                status = self._st.sync_exchange(self._st,
                         source_replica_uid, count,
                         docs, generations, &target_gen, <void *>return_doc_cb,
                         return_doc_cb_wrapper)
-            handle_status("sync_exchange_docs", status)
+            handle_status("sync_exchange", status)
         finally:
             if docs != NULL:
                 free(docs)

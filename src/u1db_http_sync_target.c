@@ -43,14 +43,15 @@ static int st_http_get_sync_exchange(u1db_sync_target *st,
                          const char *source_replica_uid,
                          int source_gen,
                          u1db_sync_exchange **exchange);
-static int st_http_sync_exchange_docs(u1db_sync_target *st,
+static int st_http_sync_exchange(u1db_sync_target *st,
                       const char *source_replica_uid, 
                       int n_docs, u1db_document **docs,
                       int *generations, int *target_gen, void *context,
                       u1db_doc_gen_callback cb);
-static int st_http_sync_exchange(u1db_sync_target *st, u1database *source_db,
-        int n_doc_ids, const char **doc_ids, int *generations,
-        int *target_gen, void *context, u1db_doc_gen_callback cb);
+static int st_http_sync_exchange_doc_ids(u1db_sync_target *st,
+        u1database *source_db, int n_doc_ids, const char **doc_ids,
+        int *generations, int *target_gen,
+        void *context, u1db_doc_gen_callback cb);
 static void st_http_finalize_sync_exchange(u1db_sync_target *st,
                                u1db_sync_exchange **exchange);
 static int st_http_set_trace_hook(u1db_sync_target *st,
@@ -114,8 +115,8 @@ u1db__create_http_sync_target(const char *url, u1db_sync_target **target)
     new_target->implementation = state;
     new_target->get_sync_info = st_http_get_sync_info;
     new_target->record_sync_info = st_http_record_sync_info;
-    new_target->sync_exchange_docs = st_http_sync_exchange_docs;
     new_target->sync_exchange = st_http_sync_exchange;
+    new_target->sync_exchange_doc_ids = st_http_sync_exchange_doc_ids;
     new_target->get_sync_exchange = st_http_get_sync_exchange;
     new_target->finalize_sync_exchange = st_http_finalize_sync_exchange;
     new_target->_set_trace_hook = st_http_set_trace_hook;
@@ -751,7 +752,7 @@ cleanup_temp_files(char tmpname[], FILE *temp_fd, struct _http_request *req)
 }
 
 static int
-st_http_sync_exchange_docs(u1db_sync_target *st,
+st_http_sync_exchange(u1db_sync_target *st,
                       const char *source_replica_uid, 
                       int n_docs, u1db_document **docs,
                       int *generations, int *target_gen, void *context,
@@ -817,7 +818,7 @@ int u1db_get_docs(u1database *db, int n_doc_ids, const char **doc_ids,
                   u1db_doc_callback cb);
 
 static int
-st_http_sync_exchange(u1db_sync_target *st, u1database *source_db,
+st_http_sync_exchange_doc_ids(u1db_sync_target *st, u1database *source_db,
         int n_doc_ids, const char **doc_ids, int *generations,
         int *target_gen, void *context, u1db_doc_gen_callback cb)
 {

@@ -28,12 +28,13 @@ static int st_get_sync_info(u1db_sync_target *st,
 static int st_record_sync_info(u1db_sync_target *st,
         const char *source_replica_uid, int source_gen);
 
-static int st_sync_exchange_docs(u1db_sync_target *st, 
+static int st_sync_exchange(u1db_sync_target *st, 
                           const char *source_replica_uid, int n_docs,
                           u1db_document **docs, int *generations,
                           int *target_gen, void *context,
                           u1db_doc_gen_callback cb);
-static int st_sync_exchange(u1db_sync_target *st, u1database *source_db,
+static int st_sync_exchange_doc_ids(u1db_sync_target *st,
+        u1database *source_db,
         int n_doc_ids, const char **doc_ids, int *generations,
         int *target_gen, void *context, u1db_doc_gen_callback cb);
 static int st_get_sync_exchange(u1db_sync_target *st,
@@ -74,8 +75,8 @@ u1db__get_sync_target(u1database *db, u1db_sync_target **sync_target)
     (*sync_target)->implementation = db;
     (*sync_target)->get_sync_info = st_get_sync_info;
     (*sync_target)->record_sync_info = st_record_sync_info;
-    (*sync_target)->sync_exchange_docs = st_sync_exchange_docs;
     (*sync_target)->sync_exchange = st_sync_exchange;
+    (*sync_target)->sync_exchange_doc_ids = st_sync_exchange_doc_ids;
     (*sync_target)->get_sync_exchange = st_get_sync_exchange;
     (*sync_target)->finalize_sync_exchange = st_finalize_sync_exchange;
     (*sync_target)->_set_trace_hook = st_set_trace_hook;
@@ -457,10 +458,10 @@ get_and_insert_docs(u1database *source_db, u1db_sync_exchange *se,
 
 
 static int
-st_sync_exchange_docs(u1db_sync_target *st, const char *source_replica_uid, 
-                      int n_docs, u1db_document **docs,
-                      int *generations, int *target_gen, void *context,
-                      u1db_doc_gen_callback cb)
+st_sync_exchange(u1db_sync_target *st, const char *source_replica_uid, 
+                 int n_docs, u1db_document **docs,
+                 int *generations, int *target_gen, void *context,
+                 u1db_doc_gen_callback cb)
 {
     int status, i;
     const char *target_replica_uid = NULL;
@@ -493,7 +494,7 @@ finish:
 
 
 static int
-st_sync_exchange(u1db_sync_target *st, u1database *source_db,
+st_sync_exchange_doc_ids(u1db_sync_target *st, u1database *source_db,
         int n_doc_ids, const char **doc_ids, int *generations,
         int *target_gen, void *context, u1db_doc_gen_callback cb)
 {
@@ -571,7 +572,8 @@ u1db__sync_db_to_target(u1database *db, u1db_sync_target *target,
     return_doc_state.db = db;
     return_doc_state.target_uid = target_uid;
     return_doc_state.num_inserted = 0;
-    status = target->sync_exchange(target, db, to_send_state.num_doc_ids,
+    status = target->sync_exchange_doc_ids(target, db,
+        to_send_state.num_doc_ids,
         (const char**)to_send_state.doc_ids_to_return,
         to_send_state.gen_for_doc_ids,
         &target_gen_known_by_local,
