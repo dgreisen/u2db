@@ -809,9 +809,6 @@ class DatabaseIndexTests(tests.DatabaseBaseTests):
         self.assertEqual([doc3],
             self.db.get_from_index('test-idx', [('va_*',)]))
 
-
-class PyDatabaseIndexTests(tests.DatabaseBaseTests):
-
     def test_get_from_index_with_lower(self):
         self.db.create_index("index", ["lower(name)"])
         content = '{"name": "Foo"}'
@@ -840,6 +837,9 @@ class PyDatabaseIndexTests(tests.DatabaseBaseTests):
         doc = self.db.create_doc(content)
         rows = self.db.get_from_index("index", [("Foo", )])
         self.assertEqual(0, len(rows))
+
+
+class PyDatabaseIndexTests(tests.DatabaseBaseTests):
 
     def test_index_split_words_match_first(self):
         self.db.create_index("index", ["split_words(name)"])

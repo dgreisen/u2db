@@ -20,8 +20,26 @@
 #include <sqlite3.h>
 #include <stdarg.h>
 #include <string.h>
+#include <ctype.h>
 #include <json/json.h>
 
+#define OPERATIONS 1
+const char *OPERATORS[] = {"lower"};
+
+int lower(char *value);
+
+int (*operations[]) (char *) = {lower};
+
+int lower(char *value)
+{
+    while (*value != '\0')
+    {
+        // TODO: unicode hahaha
+        *value = tolower(*value);
+        value++;
+    }
+    return 0;
+}
 
 static int
 lookup_index_fields(u1database *db, u1query *query)
@@ -356,6 +374,78 @@ finish:
     return status;
 }
 
+json_object
+*extract_field(char *expression, json_object *obj)
+{
+    char *result, *lparen, *rparen, *sub, *dot_chr = NULL;
+    int path_size;
+    json_object *val;
+    lparen = strchr(expression, '(');
+    if (lparen == NULL)
+    {
+        result = expression;
+        val = obj;
+        while (result != NULL && val != NULL) {
+            dot_chr = strchr(result, '.');
+            if (dot_chr != NULL) {
+                *dot_chr = '\0';
+                dot_chr++;
+            }
+            // TODO: json_object uses ref-counting. Do we need to be
+            //       json_object_put to the previous val so it gets cleaned up
+            //       appropriately?
+            val = json_object_object_get(val, result);
+            result = dot_chr;
+        }
+        return val;
+    }
+    rparen = strrchr(expression, ')');
+    if (rparen == NULL)
+    {
+        return NULL;
+    }
+    path_size = ((rparen - 1) - (lparen + 1)) + 1;
+    sub = (char *)malloc(path_size);
+    strncpy(sub, lparen + 1, path_size);
+    sub[path_size] = '\0';
+    return extract_field(sub, obj);
+}
+
+static int
+apply_operations(const char *expression, const char *val, char *new_val)
+{
+    int (*operation)(char *) = NULL;
+    char *lparen, *op = NULL;
+    int status = U1DB_OK;
+    int i, arg_size, op_size;
+    new_val = strdup(val);
+    lparen = strchr(expression, '(');
+    if (lparen == NULL)
+    {
+        return status;
+    }
+    op_size = ((lparen - 1) - expression) + 1;
+    op = (char *)malloc(op_size);
+    strncpy(op, expression, op_size);
+    op[op_size] = '\0';
+    for (i = 0; i < OPERATIONS; i++)
+    {
+        if (strcmp(OPERATORS[i], op) == 0)
+        {
+            operation = operations[i];
+            break;
+        }
+    }
+    if (operation == NULL)
+    {
+        // TODO: signal unknown operation
+        return -1;
+    }
+    // TODO: RECURSION
+    status = (*operation)(new_val);
+    free(op);
+}
+
 static int
 evaluate_index_and_insert_into_db(void *context, const char *expression)
 {
@@ -364,9 +454,7 @@ evaluate_index_and_insert_into_db(void *context, const char *expression)
     const char *str_val;
     struct array_list *list_val;
     int status = U1DB_OK;
-    char *result = NULL;
-    char *tmp_expression = NULL;
-    char *dot_chr = NULL;
+    char *tmp_expression, *new_val = NULL;
     int i;
 
     ctx = (struct evaluate_index_context *)context;
@@ -374,37 +462,34 @@ evaluate_index_and_insert_into_db(void *context, const char *expression)
         return U1DB_INVALID_JSON;
     }
     tmp_expression = strdup(expression);
-    result = tmp_expression;
-    val = ctx->obj;
-    while (result != NULL && val != NULL) {
-        dot_chr = strchr(result, '.');
-        if (dot_chr != NULL) {
-            *dot_chr = '\0';
-            dot_chr++;
-        }
-        // TODO: json_object uses ref-counting. Do we need to be
-        //       json_object_put to the previous val so it gets cleaned up
-        //       appropriately?
-        val = json_object_object_get(val, result);
-        result = dot_chr;
-    }
+    val = extract_field(tmp_expression, ctx->obj);
     free(tmp_expression);
     if (val != NULL) {
         if (json_object_is_type(val, json_type_string)) {
             str_val = json_object_get_string(val);
-            if (str_val != NULL) {
+            status = apply_operations(expression, str_val, new_val);
+            // TODO handle status
+            if (new_val != NULL) {
                 status = add_to_document_fields(ctx->db, ctx->doc_id,
-                        expression, str_val);
+                        expression, new_val);
+                free(new_val);
             }
         } else if (json_object_is_type(val, json_type_array)) {
             list_val = json_object_get_array(val);
             for (i = 0; i < list_val->length; i++) {
+                str_val = json_object_get_string(
+                        array_list_get_idx(list_val, i));
+                status = apply_operations(expression, str_val, new_val);
+                // TODO handle status
                 status = add_to_document_fields(ctx->db, ctx->doc_id,
-                        expression, json_object_get_string(
-                            array_list_get_idx(list_val, i)));
+                        expression, new_val);
+                free(new_val);
             }
         }
         json_object_put(val);
+    } else
+    {
+        // TODO: return U1DB_INVALID_EXPRESSION;
     }
     return status;
 }

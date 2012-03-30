@@ -23,6 +23,8 @@
 #include "u1db/u1db.h"
 #include "u1db/compat.h"
 
+#define LOWER = "lower"
+
 typedef struct sqlite3 sqlite3;
 typedef struct sqlite3_stmt sqlite3_stmt;
 
