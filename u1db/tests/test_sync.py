@@ -265,6 +265,19 @@ class DatabaseSyncTargetTests(tests.DatabaseBaseTests,
                           last_known_generation=0,
                           return_doc_cb=self.receive_doc)
 
+    def test_sync_exchange_doc_ids(self):
+        sync_exchange_doc_ids = getattr(self.st, 'sync_exchange_doc_ids', None)
+        if sync_exchange_doc_ids is None:
+            self.skipTest("sync_exchange_doc_ids not implemented")
+        db2 = self.create_database('test2')
+        doc = db2.create_doc(simple_doc)
+        new_gen = sync_exchange_doc_ids(db2, [(doc.doc_id, 10)], 0,
+                return_doc_cb=self.receive_doc)
+        self.assertGetDoc(self.db, doc.doc_id, doc.rev, simple_doc, False)
+        self.assertEqual([doc.doc_id], self.db._get_transaction_log())
+        self.assertEqual(([], 1), (self.other_changes, new_gen))
+        self.assertEqual(10, self.st.get_sync_info(db2._replica_uid)[-1])
+
     def test__set_trace_hook(self):
         called = []
         def cb(state):
