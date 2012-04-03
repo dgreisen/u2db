@@ -25,20 +25,33 @@
 
 #define OPERATIONS 1
 const char *OPERATORS[] = {"lower"};
+typedef char *(*operation)(const char *);
 
-int lower(char *value);
+char *lower(const char *value);
 
-int (*operations[]) (char *) = {lower};
+operation operations[] = {lower};
 
-int lower(char *value)
+char *lower(const char *value)
 {
-    while (*value != '\0')
+    char *new_value = NULL;
+    int i = 0;
+    new_value = (char *)malloc(strlen(value) + 1);
+    if (new_value != NULL)
     {
-        // TODO: unicode hahaha
-        *value = tolower(*value);
-        value++;
+        printf("old value: %s\n", value);
+        while (value[i] != '\0')
+        {
+            // TODO: unicode hahaha
+            new_value[i] = tolower(value[i]);
+            i++;
+        }
+        new_value[i] = '\0';
+    } else
+    {
+        printf("DANGER WILL ROBINSON\n");
     }
-    return 0;
+    printf("new value: %s\n", new_value);
+    return new_value;
 }
 
 static int
@@ -375,15 +388,16 @@ finish:
 }
 
 json_object
-*extract_field(char *expression, json_object *obj)
+*extract_field(const char *expression, json_object *obj)
 {
-    char *result, *lparen, *rparen, *sub, *dot_chr = NULL;
+    char *lparen, *rparen, *sub = NULL;
+    char *result, *dot_chr = NULL;
+    json_object *val = NULL;
     int path_size;
-    json_object *val;
     lparen = strchr(expression, '(');
     if (lparen == NULL)
     {
-        result = expression;
+        result = strdup(expression);
         val = obj;
         while (result != NULL && val != NULL) {
             dot_chr = strchr(result, '.');
@@ -397,6 +411,10 @@ json_object
             val = json_object_object_get(val, result);
             result = dot_chr;
         }
+        if (result != NULL)
+        {
+            free(result);
+        }
         return val;
     }
     rparen = strrchr(expression, ')');
@@ -406,44 +424,75 @@ json_object
     }
     path_size = ((rparen - 1) - (lparen + 1)) + 1;
     sub = (char *)malloc(path_size);
-    strncpy(sub, lparen + 1, path_size);
-    sub[path_size] = '\0';
-    return extract_field(sub, obj);
+    if (sub != NULL)
+    {
+        strncpy(sub, lparen + 1, path_size);
+        sub[path_size] = '\0';
+        printf("subfield: %s\n", sub);
+        val = extract_field(sub, obj);
+        free(sub);
+    }
+    return val;
 }
 
-static int
-apply_operations(const char *expression, const char *val, char *new_val)
+char
+*apply_operations(const char *expression, const char *val)
 {
-    int (*operation)(char *) = NULL;
-    char *lparen, *op = NULL;
-    int status = U1DB_OK;
-    int i, arg_size, op_size;
-    new_val = strdup(val);
+    operation op = NULL;
+    char *lparen, *op_name, *tmp_val, *new_val = NULL;
+    int i, op_size;
+    printf("val: %s\n", val);
     lparen = strchr(expression, '(');
     if (lparen == NULL)
     {
-        return status;
+        new_val = strdup(val);
+        printf("new_val: %s\n", new_val);
+        return new_val;
     }
     op_size = ((lparen - 1) - expression) + 1;
-    op = (char *)malloc(op_size);
-    strncpy(op, expression, op_size);
-    op[op_size] = '\0';
-    for (i = 0; i < OPERATIONS; i++)
+    op_name = (char *)malloc(op_size);
+    if (op_name != NULL)
     {
-        if (strcmp(OPERATORS[i], op) == 0)
+        strncpy(op_name, expression, op_size);
+        op_name[op_size] = '\0';
+        printf("op_name: %s\n", op_name);
+        for (i = 0; i < OPERATIONS; i++)
         {
-            operation = operations[i];
-            break;
+            if (strcmp(OPERATORS[i], op_name) == 0)
+            {
+                op = operations[i];
+                break;
+            }
         }
+        if (op == NULL)
+        {
+            // TODO: signal unknown operation
+            printf("Problem?\n");
+            goto finish;
+        }
+        printf("lparen + 1: %s\n", lparen + 1);
+        printf("val: %s\n", val);
+        printf("before tmp_val: %s\n", tmp_val);
+        if ((tmp_val = apply_operations(lparen + 1, val)) == NULL)
+        {
+            printf("Problem? (2) \n");
+            new_val = tmp_val;
+            goto finish;
+        }
+        printf("after tmp_val: %s\n", tmp_val);
+        printf("tmp_val: %s\n", tmp_val);
+        new_val = op(tmp_val);
     }
-    if (operation == NULL)
+finish:
+    if (tmp_val != NULL)
     {
-        // TODO: signal unknown operation
-        return -1;
+        free(tmp_val);
     }
-    // TODO: RECURSION
-    status = (*operation)(new_val);
-    free(op);
+    if (op != NULL)
+    {
+        free(op_name);
+    }
+    return new_val;
 }
 
 static int
@@ -454,42 +503,50 @@ evaluate_index_and_insert_into_db(void *context, const char *expression)
     const char *str_val;
     struct array_list *list_val;
     int status = U1DB_OK;
-    char *tmp_expression, *new_val = NULL;
+    char *new_val = NULL;
     int i;
 
     ctx = (struct evaluate_index_context *)context;
     if (ctx->obj == NULL || !json_object_is_type(ctx->obj, json_type_object)) {
         return U1DB_INVALID_JSON;
     }
-    tmp_expression = strdup(expression);
-    val = extract_field(tmp_expression, ctx->obj);
-    free(tmp_expression);
+    val = extract_field(expression, ctx->obj);
     if (val != NULL) {
         if (json_object_is_type(val, json_type_string)) {
             str_val = json_object_get_string(val);
-            status = apply_operations(expression, str_val, new_val);
+            new_val = apply_operations(expression, str_val);
             // TODO handle status
             if (new_val != NULL) {
                 status = add_to_document_fields(ctx->db, ctx->doc_id,
                         expression, new_val);
                 free(new_val);
+                if (status != U1DB_OK)
+                {
+                    return status;
+                }
             }
         } else if (json_object_is_type(val, json_type_array)) {
             list_val = json_object_get_array(val);
             for (i = 0; i < list_val->length; i++) {
                 str_val = json_object_get_string(
                         array_list_get_idx(list_val, i));
-                status = apply_operations(expression, str_val, new_val);
-                // TODO handle status
-                status = add_to_document_fields(ctx->db, ctx->doc_id,
-                        expression, new_val);
-                free(new_val);
+                new_val = apply_operations(expression, str_val);
+                if (new_val != NULL) {
+                    // TODO handle status
+                    status = add_to_document_fields(ctx->db, ctx->doc_id,
+                            expression, new_val);
+                    free(new_val);
+                    if (status != U1DB_OK) {
+                        return status;
+                    }
+                }
             }
         }
         json_object_put(val);
     } else
     {
         // TODO: return U1DB_INVALID_EXPRESSION;
+        return -1;
     }
     return status;
 }
