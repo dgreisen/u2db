@@ -408,7 +408,8 @@ json_object
         }
         if (result != NULL)
         {
-            free(result);
+            // TODO: Freeing result here leads to a segfault.
+            //free(result);
         }
         return val;
     }
@@ -530,7 +531,6 @@ evaluate_index_and_insert_into_db(void *context, const char *expression)
     } else
     {
         // TODO: return U1DB_INVALID_EXPRESSION;
-        return -1;
     }
     return status;
 }
