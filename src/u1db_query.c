@@ -38,7 +38,6 @@ char *lower(const char *value)
     new_value = (char *)malloc(strlen(value) + 1);
     if (new_value != NULL)
     {
-        printf("old value: %s\n", value);
         while (value[i] != '\0')
         {
             // TODO: unicode hahaha
@@ -46,11 +45,7 @@ char *lower(const char *value)
             i++;
         }
         new_value[i] = '\0';
-    } else
-    {
-        printf("DANGER WILL ROBINSON\n");
     }
-    printf("new value: %s\n", new_value);
     return new_value;
 }
 
@@ -428,7 +423,6 @@ json_object
     {
         strncpy(sub, lparen + 1, path_size);
         sub[path_size] = '\0';
-        printf("subfield: %s\n", sub);
         val = extract_field(sub, obj);
         free(sub);
     }
@@ -441,12 +435,10 @@ char
     operation op = NULL;
     char *lparen, *op_name, *tmp_val, *new_val = NULL;
     int i, op_size;
-    printf("val: %s\n", val);
     lparen = strchr(expression, '(');
     if (lparen == NULL)
     {
         new_val = strdup(val);
-        printf("new_val: %s\n", new_val);
         return new_val;
     }
     op_size = ((lparen - 1) - expression) + 1;
@@ -455,7 +447,6 @@ char
     {
         strncpy(op_name, expression, op_size);
         op_name[op_size] = '\0';
-        printf("op_name: %s\n", op_name);
         for (i = 0; i < OPERATIONS; i++)
         {
             if (strcmp(OPERATORS[i], op_name) == 0)
@@ -467,20 +458,13 @@ char
         if (op == NULL)
         {
             // TODO: signal unknown operation
-            printf("Problem?\n");
             goto finish;
         }
-        printf("lparen + 1: %s\n", lparen + 1);
-        printf("val: %s\n", val);
-        printf("before tmp_val: %s\n", tmp_val);
         if ((tmp_val = apply_operations(lparen + 1, val)) == NULL)
         {
-            printf("Problem? (2) \n");
             new_val = tmp_val;
             goto finish;
         }
-        printf("after tmp_val: %s\n", tmp_val);
-        printf("tmp_val: %s\n", tmp_val);
         new_val = op(tmp_val);
     }
 finish:
