@@ -27,11 +27,12 @@
 const char *OPERATORS[] = {"lower"};
 typedef char *(*operation)(const char *);
 
-char *lower(const char *value);
+static char *op_lower(const char *value);
 
-operation operations[] = {lower};
+operation operations[] = {op_lower};
 
-char *lower(const char *value)
+static char *
+op_lower(const char *value)
 {
     char *new_value = NULL;
     int i = 0;
@@ -382,8 +383,8 @@ finish:
     return status;
 }
 
-json_object
-*extract_field(const char *expression, json_object *obj)
+json_object *
+extract_field(const char *expression, json_object *obj)
 {
     char *lparen, *rparen, *sub = NULL;
     char *result, *result_ptr, *dot_chr = NULL;
@@ -430,8 +431,8 @@ json_object
     return val;
 }
 
-char
-*apply_operations(const char *expression, const char *val)
+char *
+apply_operations(const char *expression, const char *val)
 {
     operation op = NULL;
     char *lparen, *op_name, *tmp_val, *new_val = NULL;
