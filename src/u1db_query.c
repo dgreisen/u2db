@@ -386,16 +386,17 @@ json_object
 *extract_field(const char *expression, json_object *obj)
 {
     char *lparen, *rparen, *sub = NULL;
-    char *result, *dot_chr = NULL;
+    char *result, *result_ptr, *dot_chr = NULL;
     json_object *val = NULL;
     int path_size;
     lparen = strchr(expression, '(');
     if (lparen == NULL)
     {
         result = strdup(expression);
+        result_ptr = result;
         val = obj;
-        while (result != NULL && val != NULL) {
-            dot_chr = strchr(result, '.');
+        while (result_ptr != NULL && val != NULL) {
+            dot_chr = strchr(result_ptr, '.');
             if (dot_chr != NULL) {
                 *dot_chr = '\0';
                 dot_chr++;
@@ -403,13 +404,12 @@ json_object
             // TODO: json_object uses ref-counting. Do we need to be
             //       json_object_put to the previous val so it gets cleaned up
             //       appropriately?
-            val = json_object_object_get(val, result);
-            result = dot_chr;
+            val = json_object_object_get(val, result_ptr);
+            result_ptr = dot_chr;
         }
         if (result != NULL)
         {
-            // TODO: Freeing result here leads to a segfault.
-            //free(result);
+            free(result);
         }
         return val;
     }
