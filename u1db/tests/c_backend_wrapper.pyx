@@ -951,7 +951,7 @@ cdef class CDatabase(object):
         _list_to_array(index_expression, &expressions, &n_expressions)
         handle_status("create_index",
             u1db_create_index(self._db, index_name, n_expressions, expressions))
-        #free(<void*>expressions)
+        free(<void*>expressions)
 
     def list_indexes(self):
         a_list = []
