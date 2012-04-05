@@ -68,10 +68,13 @@ def _make_local_db_and_oauth_http_target(test):
     return db, st
 
 
-def _make_c_db_and_oauth_http_target(test):
-    db, st = _make_c_db_and_c_http_target(test, '~/test')
-    st.set_oauth_credentials(tests.consumer1.key, tests.consumer1.secret,
-                             tests.token1.key, tests.token1.secret)
+def _make_c_db_and_oauth_http_target(test, path='~/test'):
+    test.startServer()
+    db = test.request_state._create_database(os.path.basename(path))
+    url = test.getURL(path)
+    st = tests.c_backend_wrapper.create_oauth_http_sync_target(url,
+        tests.consumer1.key, tests.consumer1.secret,
+        tests.token1.key, tests.token1.secret)
     return db, st
 
 

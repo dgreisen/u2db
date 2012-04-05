@@ -68,13 +68,15 @@ struct _http_state {
     char *base_url;
     CURL *curl;
     struct curl_slist *json_headers;
-    char *c_key;
-    char *c_secret;
-    char *t_key;
-    char *t_secret;
+    char *consumer_key;
+    char *consumer_secret;
+    char *token_key;
+    char *token_secret;
 };
 
 static const char is_http[4] = "HTTP";
+static const char auth_header_prefix[] =
+    "Authorization: OAuth realm=\"\", ";
 
 // Do a safe cast from implementation into the http state
 static int
@@ -92,6 +94,7 @@ impl_as_http_state(void *impl, struct _http_state **state)
     return U1DB_OK;
 }
 
+
 struct _http_request {
     struct _http_state *state;
     int num_header_bytes;
@@ -107,7 +110,10 @@ struct _http_request {
 
 
 int
-u1db__create_http_sync_target(const char *url, u1db_sync_target **target)
+u1db__create_oauth_http_sync_target(char *url,
+    const char *consumer_key, const char *consumer_secret,
+    const char *token_key, const char *token_secret,
+    u1db_sync_target **target)
 {
     int status = U1DB_OK;
     int url_len;
@@ -135,6 +141,18 @@ u1db__create_http_sync_target(const char *url, u1db_sync_target **target)
         memcpy(state->base_url, url, url_len);
         state->base_url[url_len] = '/';
         state->base_url[url_len+1] = '\0';
+    }
+    if (consumer_key != NULL) {
+        state->consumer_key = strdup(consumer_key);
+    }
+    if (consumer_secret != NULL) {
+        state->consumer_secret = strdup(consumer_secret);
+    }
+    if (token_key != NULL) {
+        state->token_key = strdup(token_key);
+    }
+    if (token_secret != NULL) {
+        state->token_secret = strdup(token_secret);
     }
     new_target->implementation = state;
     new_target->get_sync_info = st_http_get_sync_info;
@@ -167,6 +185,13 @@ fail:
         new_target = NULL;
     }
     return status;
+}
+
+
+int
+u1db__create_http_sync_target(const char *url, u1db_sync_target **target)
+{
+    return u1db__create_oauth_http_sync_target(url, NULL, NULL, NULL, NULL, target);
 }
 
 
@@ -930,6 +955,22 @@ st_http_finalize(u1db_sync_target *st)
             curl_slist_free_all(state->json_headers);
             state->json_headers = NULL;
         }
+        if (state->consumer_key != NULL) {
+            free(state->consumer_key);
+            state->consumer_key = NULL;
+        }
+        if (state->consumer_secret != NULL) {
+            free(state->consumer_secret);
+            state->consumer_secret = NULL;
+        }
+        if (state->token_key != NULL) {
+            free(state->token_key);
+            state->token_key = NULL;
+        }
+        if (state->token_secret != NULL) {
+            free(state->token_secret);
+            state->token_secret = NULL;
+        }
         free(st->implementation);
         st->implementation = NULL;
     }
@@ -962,3 +1003,57 @@ u1db__format_sync_url(u1db_sync_target *st,
 }
 
 
+int
+u1db__get_oauth_authorization(u1db_sync_target *st,
+    const char *http_method, const char *url,
+    char **oauth_authorization)
+{
+    int status = U1DB_OK;
+    struct _http_state *state;
+    char *oauth_data = NULL;
+    char *http_hdr = NULL;
+    int argc = 0;
+    int hdr_size = 0, oauth_size = 0;
+    char **argv = NULL;
+
+    status = impl_as_http_state(st->implementation, &state);
+    if (status != U1DB_OK) {
+        return status;
+    }
+    if (state->consumer_key == NULL || state->consumer_secret == NULL
+        || state->token_key == NULL || state->token_secret == NULL)
+    {
+        return U1DB_INVALID_PARAMETER;
+    }
+    argc = oauth_split_url_parameters(url, &argv);
+    oauth_sign_array2_process(&argc, &argv, NULL, OA_HMAC, http_method,
+        state->consumer_key, state->consumer_secret,
+        state->token_key, state->token_secret);
+    oauth_data = oauth_serialize_url_sep(argc, 0, argv, ", ", 6);
+    if (oauth_data == NULL) {
+        status = U1DB_INTERNAL_ERROR;
+        goto finish;
+    }
+    oauth_size = strlen(oauth_data);
+    // sizeof(auth_header_prefix) includes the trailing null, so we don't
+    // need to add 1
+    hdr_size = sizeof(auth_header_prefix) + oauth_size;
+    http_hdr = (char *)calloc(hdr_size, 1);
+    if (http_hdr == NULL) {
+        status = U1DB_NOMEM;
+        goto finish;
+    }
+    memcpy(http_hdr, auth_header_prefix, sizeof(auth_header_prefix));
+    memcpy(http_hdr + sizeof(auth_header_prefix)-1, oauth_data, oauth_size);
+finish:
+    if (oauth_data != NULL) {
+        free(oauth_data);
+    }
+    oauth_free_array(&argc, &argv);
+    if (status == U1DB_OK) {
+        *oauth_authorization = http_hdr;
+    } else if (http_hdr != NULL) {
+        free(http_hdr);
+    }
+    return status;
+}

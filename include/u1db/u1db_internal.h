@@ -408,6 +408,14 @@ int u1db__sync_exchange_return_docs(u1db_sync_exchange *se, void *context,
 int u1db__create_http_sync_target(const char *url, u1db_sync_target **target);
 
 /**
+ * Create a sync target, passing in OAUTH credentials.
+ */
+int u1db__create_oauth_http_sync_target(char *url,
+    const char *consumer_key, const char *consumer_secret,
+    const char *token_key, const char *token_secret,
+    u1db_sync_target **target);
+
+/**
  * Sync a database with a sync target.
  */
 int u1db__sync_db_to_target(u1database *db, u1db_sync_target *target,

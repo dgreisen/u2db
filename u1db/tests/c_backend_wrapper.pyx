@@ -213,13 +213,17 @@ cdef extern from "u1db/u1db_internal.h":
     int u1db__sync_exchange_return_docs(u1db_sync_exchange *se, void *context,
             int (*cb)(void *context, u1db_document *doc, int gen))
     int u1db__create_http_sync_target(char *url, u1db_sync_target **target)
+    int u1db__create_oauth_http_sync_target(char *url,
+        char *consumer_key, char *consumer_secret,
+        char *token_key, char *token_secret,
+        u1db_sync_target **target)
 
 cdef extern from "u1db/u1db_http_internal.h":
     int u1db__format_sync_url(u1db_sync_target *st,
             const_char_ptr source_replica_uid, char **sync_url)
-    int u1db__set_oauth_credentials(u1db_sync_target *st,
-        char *consumer_key, char *consumer_secret,
-        char *token_key, char *token_secret)
+    int u1db__get_oauth_authorization(u1db_sync_target *st,
+        char *http_method, char *url,
+        char **oauth_authorization)
 
 
 cdef extern from "u1db/u1db_vectorclock.h":
@@ -1115,6 +1119,18 @@ def create_http_sync_target(url):
     return target
 
 
+def create_oauth_http_sync_target(url, consumer_key, consumer_secret,
+                                  token_key, token_secret):
+    cdef CSyncTarget target
+
+    target = CSyncTarget()
+    handle_status("create_http_sync_target",
+        u1db__create_oauth_http_sync_target(url, consumer_key, consumer_secret,
+                                            token_key, token_secret,
+                                            &target._st))
+    return target
+
+
 def _format_sync_url(target, source_replica_uid):
     cdef CSyncTarget st
     cdef char *sync_url = NULL
@@ -1127,4 +1143,18 @@ def _format_sync_url(target, source_replica_uid):
     else:
         res = sync_url
         free(sync_url)
+    return res
+
+
+def _get_oauth_authorization(target, method, url):
+    cdef CSyncTarget st
+    cdef char *auth = NULL
+
+    st = target
+    handle_status("get_oauth_authorization",
+        u1db__get_oauth_authorization(st._st, method, url, &auth))
+    res = None
+    if auth != NULL:
+        res = auth
+        free(auth)
     return res
