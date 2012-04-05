@@ -266,6 +266,12 @@ class TestCHTTPSyncTarget(BackendTests):
         self.assertEqual("http://host/base%2Ctest/sync-from/replica%2Cuid",
             c_backend_wrapper._format_sync_url(target, "replica,uid"))
 
+    def test_set_oauth_credentials(self):
+        target = c_backend_wrapper.create_http_sync_target(
+                "http://host/base%2Ctest/")
+        target.set_oauth_credentials('consumer-key', 'consumer-secret',
+            'token-key', 'token-secret')
+
 
 class TestVectorClock(BackendTests):
 

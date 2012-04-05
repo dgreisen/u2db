@@ -93,7 +93,7 @@ synchronize them with other stores.
              "src/u1db_vectorclock.c",
              ],
             include_dirs=["include"],
-            libraries=['sqlite3'] + extra_libs,
+            libraries=['sqlite3', 'oauth'] + extra_libs,
             define_macros=[] + extra_defines,
             ))
 

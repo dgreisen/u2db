@@ -25,4 +25,8 @@
 int u1db__format_sync_url(u1db_sync_target *st,
         const char *source_replica_uid, char **sync_url);
 
+int u1db__set_oauth_credentials(u1db_sync_target *st,
+    const char *consumer_key, const char *consumer_secret,
+    const char *token_key, const char *token_secret);
+
 #endif // _U1DB_HTTP_INTERNAL_H_

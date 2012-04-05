@@ -217,6 +217,9 @@ cdef extern from "u1db/u1db_internal.h":
 cdef extern from "u1db/u1db_http_internal.h":
     int u1db__format_sync_url(u1db_sync_target *st,
             const_char_ptr source_replica_uid, char **sync_url)
+    int u1db__set_oauth_credentials(u1db_sync_target *st,
+        char *consumer_key, char *consumer_secret,
+        char *token_key, char *token_secret)
 
 
 cdef extern from "u1db/u1db_vectorclock.h":
