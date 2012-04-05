@@ -67,7 +67,6 @@ struct _http_state {
     char is_http[4];
     char *base_url;
     CURL *curl;
-    struct curl_slist *json_headers;
     char *consumer_key;
     char *consumer_secret;
     char *token_key;
@@ -110,7 +109,7 @@ struct _http_request {
 
 
 int
-u1db__create_oauth_http_sync_target(char *url,
+u1db__create_oauth_http_sync_target(const char *url,
     const char *consumer_key, const char *consumer_secret,
     const char *token_key, const char *token_secret,
     u1db_sync_target **target)
@@ -302,12 +301,6 @@ initialize_curl(struct _http_state *state)
     if (status != CURLE_OK) { goto fail; }
     /// status = curl_easy_setopt(state->curl, CURLOPT_VERBOSE, 1L);
     /// if (status != CURLE_OK) { goto fail; }
-    state->json_headers = curl_slist_append(NULL, "Content-Type: application/json");
-    if (state->json_headers == NULL) {
-        status = U1DB_NOMEM;
-        goto fail;
-    }
-    status = curl_easy_setopt(state->curl, CURLOPT_HTTPHEADER, state->json_headers);
     if (status != CURLE_OK) { goto fail; }
     status = curl_easy_setopt(state->curl, CURLOPT_HEADERFUNCTION,
                               recv_header_bytes);
@@ -326,9 +319,6 @@ fail:
         curl_easy_cleanup(state->curl);
         state->curl = NULL;
     }
-    if (state->json_headers != NULL) {
-        curl_slist_free_all(state->json_headers);
-    }
     return status;
 }
 
@@ -343,6 +333,8 @@ st_http_get_sync_info(u1db_sync_target *st,
     char *url = NULL;
     int status;
     long http_code;
+    struct curl_slist *headers = NULL;
+    
     json_object *json = NULL, *obj = NULL;
 
     if (st == NULL || source_replica_uid == NULL || st_replica_uid == NULL
@@ -356,6 +348,11 @@ st_http_get_sync_info(u1db_sync_target *st,
         return status;
     }
 
+    headers = curl_slist_append(NULL, "Content-Type: application/json");
+    if (headers == NULL) {
+        status = U1DB_NOMEM;
+        goto finish;
+    }
     req.state = state;
     status = u1db__format_sync_url(st, source_replica_uid, &url);
     if (status != U1DB_OK) { goto finish; }
@@ -364,7 +361,7 @@ st_http_get_sync_info(u1db_sync_target *st,
     // status = curl_easy_setopt(state->curl, CURLOPT_USERAGENT, "...");
     status = curl_easy_setopt(state->curl, CURLOPT_URL, url);
     if (status != CURLE_OK) { goto finish; }
-    status = curl_easy_setopt(state->curl, CURLOPT_HTTPHEADER, state->json_headers);
+    status = curl_easy_setopt(state->curl, CURLOPT_HTTPHEADER, headers);
     if (status != CURLE_OK) { goto finish; }
     status = simple_set_curl_data(state->curl, &req, &req, NULL);
     if (status != CURLE_OK) { goto finish; }
@@ -420,6 +417,7 @@ finish:
     if (url != NULL) {
         free(url);
     }
+    curl_slist_free_all(headers);
     return status;
 }
 
@@ -950,10 +948,6 @@ st_http_finalize(u1db_sync_target *st)
         if (state->curl != NULL) {
             curl_easy_cleanup(state->curl);
             state->curl = NULL;
-        }
-        if (state->json_headers != NULL) {
-            curl_slist_free_all(state->json_headers);
-            state->json_headers = NULL;
         }
         if (state->consumer_key != NULL) {
             free(state->consumer_key);

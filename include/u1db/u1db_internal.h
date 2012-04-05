@@ -410,7 +410,7 @@ int u1db__create_http_sync_target(const char *url, u1db_sync_target **target);
 /**
  * Create a sync target, passing in OAUTH credentials.
  */
-int u1db__create_oauth_http_sync_target(char *url,
+int u1db__create_oauth_http_sync_target(const char *url,
     const char *consumer_key, const char *consumer_secret,
     const char *token_key, const char *token_secret,
     u1db_sync_target **target);
