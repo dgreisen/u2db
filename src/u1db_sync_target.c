@@ -464,7 +464,6 @@ st_sync_exchange(u1db_sync_target *st, const char *source_replica_uid,
                  u1db_doc_gen_callback cb)
 {
     int status, i;
-    const char *target_replica_uid = NULL;
     u1db_sync_exchange *exchange = NULL;
     if (st == NULL || generations == NULL || target_gen == NULL
             || cb == NULL)
