@@ -280,6 +280,7 @@ class TestCHTTPSyncTarget(BackendTests):
             "GET", "http://host/base%2Ctest/sync-from/abcd-efg")
         self.assertIsNot(None, auth)
         self.assertTrue(auth.startswith('Authorization: OAuth realm="", '))
+        self.assertNotIn('http://host/base', auth)
         self.assertIn('oauth_nonce="', auth)
         self.assertIn('oauth_timestamp="', auth)
         self.assertIn('oauth_consumer_key="consumer-key"', auth)

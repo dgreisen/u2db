@@ -100,7 +100,7 @@ c_db_scenarios = [
     ('oauth_http,c', {'create_db_and_target': _make_c_db_and_oauth_http_target,
                       'do_create_database': tests.create_c_database,
                       'make_document': tests.create_c_document,
-                      'server_def': http_server_def,
+                      'server_def': oauth_http_server_def,
                       'whitebox': False}),
     ]
 

@@ -19,6 +19,7 @@ from oauth import oauth
 import simplejson
 from urllib import quote
 from wsgiref.util import shift_path_info
+import sys
 
 
 sign_meth_HMAC_SHA1 = oauth.OAuthSignatureMethod_HMAC_SHA1()

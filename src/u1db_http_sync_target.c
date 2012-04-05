@@ -301,7 +301,6 @@ initialize_curl(struct _http_state *state)
     if (status != CURLE_OK) { goto fail; }
     /// status = curl_easy_setopt(state->curl, CURLOPT_VERBOSE, 1L);
     /// if (status != CURLE_OK) { goto fail; }
-    if (status != CURLE_OK) { goto fail; }
     status = curl_easy_setopt(state->curl, CURLOPT_HEADERFUNCTION,
                               recv_header_bytes);
     if (status != CURLE_OK) { goto fail; }
@@ -320,6 +319,36 @@ fail:
         state->curl = NULL;
     }
     return status;
+}
+
+
+// If we have oauth credentials, sign the URL and set the Authorization:
+// header
+static int
+maybe_sign_url(u1db_sync_target *st, const char *http_method,
+               const char *url, struct curl_slist **headers)
+{
+    int status;
+    struct _http_state *state;
+    char *authorization = NULL;
+    status = impl_as_http_state(st->implementation, &state);
+    if (status != U1DB_OK) {
+        return status;
+    }
+    if (state->consumer_key == NULL || state->consumer_secret == NULL) {
+        return U1DB_OK; // Shortcut, do nothing, no OAuth creds to use
+    }
+    status = u1db__get_oauth_authorization(st, http_method, url,
+        &authorization);
+    if (status != U1DB_OK) {
+        return status;
+    }
+    *headers = curl_slist_append(*headers, authorization);
+    if (authorization != NULL) {
+        // curl_slist_append already copies the data, so we don't need it now
+        free(authorization);
+    }
+    return U1DB_OK;
 }
 
 
@@ -361,9 +390,11 @@ st_http_get_sync_info(u1db_sync_target *st,
     // status = curl_easy_setopt(state->curl, CURLOPT_USERAGENT, "...");
     status = curl_easy_setopt(state->curl, CURLOPT_URL, url);
     if (status != CURLE_OK) { goto finish; }
-    status = curl_easy_setopt(state->curl, CURLOPT_HTTPHEADER, headers);
-    if (status != CURLE_OK) { goto finish; }
     status = simple_set_curl_data(state->curl, &req, &req, NULL);
+    if (status != CURLE_OK) { goto finish; }
+    status = maybe_sign_url(st, "GET", url, &headers); 
+    if (status != CURLE_OK) { goto finish; }
+    status = curl_easy_setopt(state->curl, CURLOPT_HTTPHEADER, headers);
     if (status != CURLE_OK) { goto finish; }
     // Now do the GET
     status = curl_easy_perform(state->curl);
@@ -1023,7 +1054,7 @@ u1db__get_oauth_authorization(u1db_sync_target *st,
     oauth_sign_array2_process(&argc, &argv, NULL, OA_HMAC, http_method,
         state->consumer_key, state->consumer_secret,
         state->token_key, state->token_secret);
-    oauth_data = oauth_serialize_url_sep(argc, 0, argv, ", ", 6);
+    oauth_data = oauth_serialize_url_sep(argc, 1, argv, ", ", 6);
     if (oauth_data == NULL) {
         status = U1DB_INTERNAL_ERROR;
         goto finish;
