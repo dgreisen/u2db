@@ -279,8 +279,7 @@ class TestCHTTPSyncTarget(BackendTests):
         auth = c_backend_wrapper._get_oauth_authorization(target,
             "GET", "http://host/base%2Ctest/sync-from/abcd-efg")
         self.assertIsNot(None, auth)
-        # import pdb; pdb.set_trace()
-        # self.assertTrue(auth.startswith('OAuth realm="", '))
+        self.assertTrue(auth.startswith('Authorization: OAuth realm="", '))
         self.assertIn('oauth_nonce="', auth)
         self.assertIn('oauth_timestamp="', auth)
         self.assertIn('oauth_consumer_key="consumer-key"', auth)
