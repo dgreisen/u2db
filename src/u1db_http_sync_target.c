@@ -545,6 +545,8 @@ st_http_record_sync_info(u1db_sync_target *st,
     status = curl_easy_setopt(state->curl, CURLOPT_INFILESIZE_LARGE,
                               (curl_off_t)req.num_put_bytes);
     if (status != CURLE_OK) { goto finish; }
+    status = maybe_sign_url(st, "PUT", url, &headers); 
+    if (status != U1DB_OK) { goto finish; }
 
     // Now actually send the data
     status = curl_easy_perform(state->curl);
@@ -722,6 +724,8 @@ finalize_and_send_temp_file(u1db_sync_target *st, FILE *temp_fd,
     if (status != CURLE_OK) { goto finish; }
     status = setup_curl_for_sync(state->curl, &headers, req, temp_fd);
     if (status != CURLE_OK) { goto finish; }
+    status = maybe_sign_url(st, "POST", url, &headers);
+    if (status != U1DB_OK) { goto finish; }
     // Now send off the messages, and handle the returned content.
     status = curl_easy_perform(state->curl);
     if (status != CURLE_OK) { goto finish; }
