@@ -496,16 +496,6 @@ finish:
     return status;
 }
 
-// Can be used for debugging
-static size_t
-fread_proxy(void *ptr, size_t size, size_t nmemb, void *userdata)
-{
-    size_t ret;
-    ret = fread(ptr, size, nmemb, userdata);
-    ((char*)ptr)[ret] = '\0';
-    return ret;
-}
-
 
 // Setup the CURL handle for doing the POST for sync exchange
 // @param headers   (OUT) Pass in a handle for curl_slist, callers must call
@@ -760,7 +750,6 @@ st_http_sync_exchange(u1db_sync_target *st,
 {
     int status, i;
     FILE *temp_fd = NULL;
-    const char *target_replica_uid = NULL;
     struct _http_request req = {0};
     char tmpname[1024] = {0};
 
@@ -822,9 +811,8 @@ st_http_sync_exchange_doc_ids(u1db_sync_target *st, u1database *source_db,
         int n_doc_ids, const char **doc_ids, int *generations,
         int *target_gen, void *context, u1db_doc_gen_callback cb)
 {
-    int status, i;
+    int status;
     FILE *temp_fd = NULL;
-    const char *target_replica_uid = NULL;
     struct _http_request req = {0};
     char tmpname[1024] = {0};
     const char *source_replica_uid = NULL;
