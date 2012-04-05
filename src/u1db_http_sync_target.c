@@ -76,6 +76,21 @@ struct _http_state {
 
 static const char is_http[4] = "HTTP";
 
+// Do a safe cast from implementation into the http state
+static int
+impl_as_http_state(void *impl, struct _http_state **state)
+{
+    struct _http_state *maybe_state;
+    if (impl == NULL) {
+        return U1DB_INVALID_PARAMETER;
+    }
+    maybe_state = (struct _http_state *)impl;
+    if (memcmp(maybe_state->is_http, is_http, sizeof(is_http)) != 0) {
+        return U1DB_INVALID_PARAMETER;
+    }
+    *state = maybe_state;
+    return U1DB_OK;
+}
 
 struct _http_request {
     struct _http_state *state;
@@ -311,9 +326,9 @@ st_http_get_sync_info(u1db_sync_target *st,
     {
         return U1DB_INVALID_PARAMETER;
     }
-    state = (struct _http_state *)st->implementation;
-    if (state->curl == NULL) {
-        return U1DB_INVALID_PARAMETER;
+    status = impl_as_http_state(st->implementation, &state);
+    if (status != U1DB_OK) {
+        return status;
     }
 
     req.state = state;
@@ -439,9 +454,9 @@ st_http_record_sync_info(u1db_sync_target *st,
     {
         return U1DB_INVALID_PARAMETER;
     }
-    state = (struct _http_state *)st->implementation;
-    if (state->curl == NULL) {
-        return U1DB_INVALID_PARAMETER;
+    status = impl_as_http_state(st->implementation, &state);
+    if (status != U1DB_OK) {
+        return status;
     }
 
     status = u1db__format_sync_url(st, source_replica_uid, &url);
@@ -653,7 +668,10 @@ finalize_and_send_temp_file(u1db_sync_target *st, FILE *temp_fd,
     struct curl_slist *headers = NULL;
 
     fputs("\r\n]", temp_fd);
-    state = (struct _http_state *)st->implementation;
+    status = impl_as_http_state(st->implementation, &state);
+    if (status != U1DB_OK) {
+        return status;
+    }
     status = u1db__format_sync_url(st, source_replica_uid, &url);
     if (status != U1DB_OK) { goto finish; }
     status = curl_easy_setopt(state->curl, CURLOPT_URL, url);
@@ -922,11 +940,14 @@ int
 u1db__format_sync_url(u1db_sync_target *st,
                       const char *source_replica_uid, char **sync_url)
 {
-    int url_len;
+    int status, url_len;
     struct _http_state *state;
     char *tmp;
 
-    state = (struct _http_state *)st->implementation;
+    status = impl_as_http_state(st->implementation, &state);
+    if (status != U1DB_OK) {
+        return status;
+    }
 
     url_len = strlen(state->base_url) + 1;
     url_len += strlen("sync-from/");
