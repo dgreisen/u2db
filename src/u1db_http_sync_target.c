@@ -23,6 +23,7 @@
 #include <string.h>
 #include <json/json.h>
 #include <curl/curl.h>
+#include <oauth.h>
 
 
 #ifndef max
@@ -63,11 +64,29 @@ static int simple_set_curl_data(CURL *curl, struct _http_request *header,
 
 
 struct _http_state {
+    char is_http[4];
     char *base_url;
     CURL *curl;
-    struct curl_slist *headers;
+    struct curl_slist *json_headers;
 };
 
+static const char is_http[4] = "HTTP";
+
+// Do a safe cast from implementation into the http state
+static int
+impl_as_http_state(void *impl, struct _http_state **state)
+{
+    struct _http_state *maybe_state;
+    if (impl == NULL) {
+        return U1DB_INVALID_PARAMETER;
+    }
+    maybe_state = (struct _http_state *)impl;
+    if (memcmp(maybe_state->is_http, is_http, sizeof(is_http)) != 0) {
+        return U1DB_INVALID_PARAMETER;
+    }
+    *state = maybe_state;
+    return U1DB_OK;
+}
 
 struct _http_request {
     struct _http_state *state;
@@ -98,6 +117,7 @@ u1db__create_http_sync_target(const char *url, u1db_sync_target **target)
     if (new_target == NULL) { goto oom; }
     state = (struct _http_state *)calloc(1, sizeof(struct _http_state));
     if (state == NULL) { goto oom; }
+    memcpy(state->is_http, is_http, sizeof(is_http));
     status = initialize_curl(state);
     if (status != U1DB_OK) { goto fail; }
     // Copy the url, but ensure that it ends in a '/'
@@ -253,12 +273,12 @@ initialize_curl(struct _http_state *state)
     if (status != CURLE_OK) { goto fail; }
     /// status = curl_easy_setopt(state->curl, CURLOPT_VERBOSE, 1L);
     /// if (status != CURLE_OK) { goto fail; }
-    state->headers = curl_slist_append(NULL, "Content-Type: application/json");
-    if (state->headers == NULL) {
+    state->json_headers = curl_slist_append(NULL, "Content-Type: application/json");
+    if (state->json_headers == NULL) {
         status = U1DB_NOMEM;
         goto fail;
     }
-    status = curl_easy_setopt(state->curl, CURLOPT_HTTPHEADER, state->headers);
+    status = curl_easy_setopt(state->curl, CURLOPT_HTTPHEADER, state->json_headers);
     if (status != CURLE_OK) { goto fail; }
     status = curl_easy_setopt(state->curl, CURLOPT_HEADERFUNCTION,
                               recv_header_bytes);
@@ -277,8 +297,8 @@ fail:
         curl_easy_cleanup(state->curl);
         state->curl = NULL;
     }
-    if (state->headers != NULL) {
-        curl_slist_free_all(state->headers);
+    if (state->json_headers != NULL) {
+        curl_slist_free_all(state->json_headers);
     }
     return status;
 }
@@ -302,9 +322,9 @@ st_http_get_sync_info(u1db_sync_target *st,
     {
         return U1DB_INVALID_PARAMETER;
     }
-    state = (struct _http_state *)st->implementation;
-    if (state->curl == NULL) {
-        return U1DB_INVALID_PARAMETER;
+    status = impl_as_http_state(st->implementation, &state);
+    if (status != U1DB_OK) {
+        return status;
     }
 
     req.state = state;
@@ -315,7 +335,7 @@ st_http_get_sync_info(u1db_sync_target *st,
     // status = curl_easy_setopt(state->curl, CURLOPT_USERAGENT, "...");
     status = curl_easy_setopt(state->curl, CURLOPT_URL, url);
     if (status != CURLE_OK) { goto finish; }
-    status = curl_easy_setopt(state->curl, CURLOPT_HTTPHEADER, state->headers);
+    status = curl_easy_setopt(state->curl, CURLOPT_HTTPHEADER, state->json_headers);
     if (status != CURLE_OK) { goto finish; }
     status = simple_set_curl_data(state->curl, &req, &req, NULL);
     if (status != CURLE_OK) { goto finish; }
@@ -430,9 +450,9 @@ st_http_record_sync_info(u1db_sync_target *st,
     {
         return U1DB_INVALID_PARAMETER;
     }
-    state = (struct _http_state *)st->implementation;
-    if (state->curl == NULL) {
-        return U1DB_INVALID_PARAMETER;
+    status = impl_as_http_state(st->implementation, &state);
+    if (status != U1DB_OK) {
+        return status;
     }
 
     status = u1db__format_sync_url(st, source_replica_uid, &url);
@@ -644,7 +664,10 @@ finalize_and_send_temp_file(u1db_sync_target *st, FILE *temp_fd,
     struct curl_slist *headers = NULL;
 
     fputs("\r\n]", temp_fd);
-    state = (struct _http_state *)st->implementation;
+    status = impl_as_http_state(st->implementation, &state);
+    if (status != U1DB_OK) {
+        return status;
+    }
     status = u1db__format_sync_url(st, source_replica_uid, &url);
     if (status != U1DB_OK) { goto finish; }
     status = curl_easy_setopt(state->curl, CURLOPT_URL, url);
@@ -899,9 +922,9 @@ st_http_finalize(u1db_sync_target *st)
             curl_easy_cleanup(state->curl);
             state->curl = NULL;
         }
-        if (state->headers != NULL) {
-            curl_slist_free_all(state->headers);
-            state->headers = NULL;
+        if (state->json_headers != NULL) {
+            curl_slist_free_all(state->json_headers);
+            state->json_headers = NULL;
         }
         free(st->implementation);
         st->implementation = NULL;
@@ -913,11 +936,14 @@ int
 u1db__format_sync_url(u1db_sync_target *st,
                       const char *source_replica_uid, char **sync_url)
 {
-    int url_len;
+    int status, url_len;
     struct _http_state *state;
     char *tmp;
 
-    state = (struct _http_state *)st->implementation;
+    status = impl_as_http_state(st->implementation, &state);
+    if (status != U1DB_OK) {
+        return status;
+    }
 
     url_len = strlen(state->base_url) + 1;
     url_len += strlen("sync-from/");

@@ -266,6 +266,12 @@ class TestCHTTPSyncTarget(BackendTests):
         self.assertEqual("http://host/base%2Ctest/sync-from/replica%2Cuid",
             c_backend_wrapper._format_sync_url(target, "replica,uid"))
 
+    def test_format_refuses_non_http(self):
+        db = c_backend_wrapper.CDatabase(':memory:')
+        target = db.get_sync_target()
+        self.assertRaises(RuntimeError,
+            c_backend_wrapper._format_sync_url, target, 'replica,uid')
+
 
 class TestVectorClock(BackendTests):
 
