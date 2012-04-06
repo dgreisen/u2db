@@ -22,10 +22,8 @@ from u1db import (
     vectorclock,
     )
 
-
 simple_doc = tests.simple_doc
 nested_doc = tests.nested_doc
-
 
 from u1db.tests.test_remote_sync_target import (
     http_server_def,
