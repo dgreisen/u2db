@@ -38,8 +38,8 @@ typedef struct string_list_
     string_list_item *tail;
 } string_list;
 
-typedef string_list *(*operation)(const string_list *);
-string_list *op_lower(const string_list *value);
+typedef int(*operation)(string_list *, const string_list *);
+static int op_lower(string_list *result, const string_list *value);
 
 static operation operations[] = {op_lower};
 
@@ -54,11 +54,9 @@ static int
 append(string_list *list, char *data)
 {
     string_list_item *new_item;
-    printf("append\n");
     if ((new_item = (string_list_item *)malloc(sizeof(string_list_item)))
             == NULL)
-        return -1;
-    printf("data: %s\n", data);
+        return U1DB_NOMEM;
     new_item->data = data;
     new_item->next = NULL;
     if (list->head == NULL)
@@ -68,57 +66,46 @@ append(string_list *list, char *data)
     if (list->tail != NULL)
         list->tail->next = new_item;
     list->tail = new_item;
-    return 0;
+    return U1DB_OK;
 }
 
 static void
 destroy_list(string_list *list)
 {
-    printf("destroy_list\n");
     if (list == NULL)
         return;
     string_list_item *item, *previous = NULL;
     item = list->head;
     while (item != NULL)
     {
-        printf("data: %s\n", item->data);
         previous = item;
         item = item->next;
         free(previous->data);
         free(previous);
     }
     free(list);
-    printf("destroy_list done\n");
 }
 
-static string_list *
-list_copy(const string_list *original)
+static int
+list_copy(string_list *copy, const string_list *original)
 {
-    string_list *copy = NULL;
     string_list_item *item = NULL;
-    if ((copy = (string_list *)malloc(sizeof(string_list))) == NULL)
-        return NULL;
-    init_list(copy);
+    int status = U1DB_OK;
     for (item = original->head; item != NULL; item = item->next)
-        if (append(copy, strdup(item->data)) == -1)
+        if ((status = append(copy, strdup(item->data))) != U1DB_OK)
         {
-            destroy_list(copy);
-            return NULL;
+            return status;
         }
-    return copy;
+    return status;
 }
 
-string_list *
-op_lower(const string_list *values)
+static int
+op_lower(string_list *result, const string_list *values)
 {
-    string_list *result = NULL;
     string_list_item *item = NULL;
-    if ((result = (string_list *)malloc(sizeof(string_list))) == NULL)
-        return NULL;
-    init_list(result);
+    int status = U1DB_OK;
     char *new_value, *value = NULL;
 
-    printf("op_lower\n");
     for (item = values->head; item != NULL; item = item->next)
     {
         value = item->data;
@@ -134,13 +121,13 @@ op_lower(const string_list *values)
             }
             new_value[i] = '\0';
         }
-        if (append(result, new_value) == -1)
+        if ((status = append(result, new_value)) != U1DB_OK)
         {
             destroy_list(result);
-            return NULL;
+            return status;
         }
     }
-    return result;
+    return status;
 }
 
 static int
@@ -476,23 +463,20 @@ finish:
     return status;
 }
 
-string_list *
-extract_field_values(const char *expression, json_object *obj)
+static int
+extract_field_values(const char *expression, string_list *values,
+        json_object *obj)
 {
     char *lparen, *rparen, *sub, *data = NULL;
     char *result, *result_ptr, *dot_chr = NULL;
     struct array_list *list_val;
-    string_list *values;
     json_object *val = NULL;
     int path_size, i;
-    printf("extract_field_values\n");
-    printf("expression: %s\n", expression);
+    int status = U1DB_OK;
     lparen = strchr(expression, '(');
-    printf("lparen: %s\n", lparen);
     if (lparen == NULL)
     {
         result = strdup(expression);
-        printf("result: %s\n", result);
         result_ptr = result;
         val = obj;
         while (result_ptr != NULL && val != NULL) {
@@ -513,76 +497,65 @@ extract_field_values(const char *expression, json_object *obj)
         }
         if (val == NULL)
         {
-            return NULL;
+            return U1DB_OK;
         }
-        if ((values = (string_list *)malloc(sizeof(string_list))) == NULL)
-            return NULL;
-        init_list(values);
-        printf("**here\n");
         if (json_object_is_type(val, json_type_string)) {
-            printf("here\n");
             data = strdup(json_object_get_string(val));
-            printf("string data: %s\n", data);
-            if (append(values, data) == -1)
+            if ((status = append(values, data)) != U1DB_OK)
             {
-                printf("oops destroy_list\n");
                 destroy_list(values);
-                return NULL;
+                return status;
             }
         } else if (json_object_is_type(val, json_type_array)) {
-            printf("here\n");
             list_val = json_object_get_array(val);
             for (i = 0; i < list_val->length; i++)
             {
                 data = strdup(json_object_get_string(
                             array_list_get_idx(list_val, i)));
-                printf("list data: %s\n", data);
-                if (append(values, data) == -1)
+                if ((status = append(values, data)) != U1DB_OK)
                 {
-                    printf("oops destroy_list\n");
                     destroy_list(values);
-                    return NULL;
+                    return status;
                 }
             }
         } else {
-            printf("wtf\n");
         }
         json_object_put(val);
-        return values;
+        return U1DB_OK;
     }
-    printf("recursing\n");
     rparen = strrchr(expression, ')');
     if (rparen == NULL)
     {
-        return NULL;
+        // TODO: invalid expression
+        return -1;
     }
-    printf("rparen %s\n", rparen);
     path_size = ((rparen - 1) - (lparen + 1)) + 1;
     sub = (char *)malloc(path_size);
     if (sub != NULL)
     {
         strncpy(sub, lparen + 1, path_size);
         sub[path_size] = '\0';
-        printf("sub %s\n", sub);
-        values = extract_field_values(sub, obj);
+        status = extract_field_values(sub, values, obj);
         free(sub);
     }
-    return values;
+    return status;
 }
 
-string_list *
-apply_operations(const char *expression, const string_list *values)
+static int
+apply_operations(const char *expression, string_list *result,
+        const string_list *values)
 {
     operation op = NULL;
     char *lparen, *op_name = NULL;
     int i, op_size;
-    string_list *result, *tmp_values = NULL;
-    printf("apply_operations\n");
+    int status = U1DB_OK;
+    string_list *tmp_values = NULL;
     lparen = strchr(expression, '(');
     if (lparen == NULL)
     {
-        result = list_copy(values);
-        return result;
+        if ((status = list_copy(result, values)) != U1DB_OK)
+            return status;
+        return U1DB_OK;
     }
     op_size = ((lparen - 1) - expression) + 1;
     op_name = (char *)malloc(op_size);
@@ -601,19 +574,27 @@ apply_operations(const char *expression, const string_list *values)
         if (op == NULL)
         {
             // TODO: signal unknown operation
+            status = -1;
             goto finish;
         }
-        tmp_values = apply_operations(lparen + 1, values);
-        result = op(tmp_values);
+        if ((tmp_values = (string_list *)malloc(sizeof(string_list))) == NULL)
+        {
+            status = U1DB_NOMEM;
+            goto finish;
+        }
+        init_list(tmp_values);
+        status = apply_operations(lparen + 1, tmp_values, values);
+        if (status != U1DB_OK)
+            goto finish;
+        op(result, tmp_values);
     }
 finish:
-    printf("finally destroy_list\n");
     destroy_list(tmp_values);
-    if (op != NULL)
+    if (op_name != NULL)
     {
         free(op_name);
     }
-    return result;
+    return status;
 }
 
 static int
@@ -623,34 +604,40 @@ evaluate_index_and_insert_into_db(void *context, const char *expression)
     string_list *tmp_values, *values = NULL;
     string_list_item *item;
     int status = U1DB_OK;
-    printf("evaluate_index_context\n");
 
     ctx = (struct evaluate_index_context *)context;
     if (ctx->obj == NULL || !json_object_is_type(ctx->obj, json_type_object)) {
         return U1DB_INVALID_JSON;
     }
-    if ((tmp_values = extract_field_values(expression, ctx->obj)) == NULL)
-    {
-        goto finish;
-    }
-    if ((values = apply_operations(expression, tmp_values)) == NULL)
+    if ((tmp_values = (string_list *)malloc(sizeof(string_list))) == NULL)
     {
         status = U1DB_NOMEM;
         goto finish;
     }
+    init_list(tmp_values);
+    if ((status = extract_field_values(expression, tmp_values, ctx->obj)) !=
+            U1DB_OK)
+    {
+        goto finish;
+    }
+    if ((values = (string_list *)malloc(sizeof(string_list))) == NULL)
+    {
+        status = U1DB_NOMEM;
+        goto finish;
+    }
+    init_list(values);
+    if ((status = apply_operations(expression, values, tmp_values)) != U1DB_OK)
+    {
+        goto finish;
+    }
     for (item = values->head; item != NULL; item = item->next)
     {
-        printf("data: %s\n", item->data);
-        status = add_to_document_fields(
-                ctx->db, ctx->doc_id, expression, item->data);
-        if (status != U1DB_OK)
+        if ((status = add_to_document_fields(ctx->db, ctx->doc_id, expression,
+                        item->data)) != U1DB_OK)
             goto finish;
     }
-    printf("AOK\n");
 finish:
-    printf("tmp_values destroy_list\n");
     destroy_list(tmp_values);
-    printf("values destroy_list\n");
     destroy_list(values);
     return status;
 }
