@@ -64,6 +64,7 @@ typedef int (*u1db_doc_id_gen_callback)(void *context, const char *doc_id, int g
 #define U1DB_SUPERSEDED 2
 #define U1DB_CONVERGED 3
 #define U1DB_CONFLICTED 4
+#define U1DB_ALREADY_IN_SET 5
 
 /**
  * The basic constructor for a new connection.
