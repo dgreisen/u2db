@@ -53,7 +53,7 @@ init_set(string_set **set)
 }
 
 static int
-append(string_set *set, char *data)
+append(string_set *set, const char *data)
 {
     string_set_item *new_item, *iter_item = NULL;
     if ((new_item = (string_set_item *)malloc(sizeof(string_set_item)))
@@ -61,7 +61,7 @@ append(string_set *set, char *data)
         return U1DB_NOMEM;
     if (set->head == NULL)
     {
-        new_item->data = data;
+        new_item->data = strdup(data);
         new_item->next = NULL;
         set->head = new_item;
     }
@@ -69,14 +69,11 @@ append(string_set *set, char *data)
     {
         if (strcmp(iter_item->data, data) == 0)
         {
-            // TODO: data should now be freed, but I can't seem to get that to
-            // work, either by doing it here, or by returning
-            // U1DB_ALREADY_IN_SET and doing it in the caller.
             return U1DB_OK;
         }
         if (iter_item->next == NULL)
         {
-            new_item->data = data;
+            new_item->data = strdup(data);
             new_item->next = NULL;
             iter_item->next = new_item;
             return U1DB_OK;
@@ -110,7 +107,7 @@ set_copy(string_set *copy, const string_set *original)
     string_set_item *item = NULL;
     int status = U1DB_OK;
     for (item = original->head; item != NULL; item = item->next)
-        if ((status = append(copy, strdup(item->data))) != U1DB_OK)
+        if ((status = append(copy, item->data)) != U1DB_OK)
         {
             return status;
         }
@@ -142,8 +139,10 @@ op_lower(string_set *result, const string_set *values)
         }
         if ((status = append(result, new_value)) != U1DB_OK)
         {
+            free(new_value);
             return status;
         }
+        free(new_value);
     }
     return status;
 }
@@ -165,7 +164,7 @@ op_split_words(string_set *result, const string_set *values)
                 *space_chr = '\0';
                 space_chr++;
             }
-            if ((status = append(result, strdup(intermediate_ptr))) != U1DB_OK)
+            if ((status = append(result, intermediate_ptr)) != U1DB_OK)
             {
                 return status;
             }
@@ -513,7 +512,7 @@ static int
 extract_field_values(const char *expression, string_set *values,
         json_object *obj)
 {
-    char *lparen, *rparen, *sub, *data = NULL;
+    char *lparen, *rparen, *sub = NULL;
     char *result, *result_ptr, *dot_chr = NULL;
     struct array_list *list_val = NULL;
     json_object *val = NULL;
@@ -546,8 +545,7 @@ extract_field_values(const char *expression, string_set *values,
             return U1DB_OK;
         }
         if (json_object_is_type(val, json_type_string)) {
-            data = strdup(json_object_get_string(val));
-            if ((status = append(values, data)) != U1DB_OK)
+            if ((status = append(values, json_object_get_string(val))) != U1DB_OK)
             {
                 return status;
             }
@@ -555,9 +553,9 @@ extract_field_values(const char *expression, string_set *values,
             list_val = json_object_get_array(val);
             for (i = 0; i < list_val->length; i++)
             {
-                data = strdup(json_object_get_string(
-                            array_list_get_idx(list_val, i)));
-                if ((status = append(values, data)) != U1DB_OK)
+                if ((status = append(values, json_object_get_string(
+                                    array_list_get_idx(
+                                        list_val, i)))) != U1DB_OK)
                 {
                     return status;
                 }
