@@ -43,17 +43,20 @@ static int op_lower(string_list *result, const string_list *value);
 
 static operation operations[] = {op_lower};
 
-static void
-init_list(string_list *list)
+static int
+init_list(string_list **list)
 {
-    list->head = NULL;
-    list->tail = NULL;
+    if ((*list = (string_list *)malloc(sizeof(string_list))) == NULL)
+        return U1DB_NOMEM;
+    (*list)->head = NULL;
+    (*list)->tail = NULL;
+    return U1DB_OK;
 }
 
 static int
 append(string_list *list, char *data)
 {
-    string_list_item *new_item;
+    string_list_item *new_item = NULL;
     if ((new_item = (string_list_item *)malloc(sizeof(string_list_item)))
             == NULL)
         return U1DB_NOMEM;
@@ -84,6 +87,7 @@ destroy_list(string_list *list)
         free(previous);
     }
     free(list);
+    list = NULL;
 }
 
 static int
@@ -103,13 +107,14 @@ static int
 op_lower(string_list *result, const string_list *values)
 {
     string_list_item *item = NULL;
-    int status = U1DB_OK;
     char *new_value, *value = NULL;
+    int i;
+    int status = U1DB_OK;
 
     for (item = values->head; item != NULL; item = item->next)
     {
         value = item->data;
-        int i = 0;
+        i = 0;
         new_value = (char *)malloc(strlen(value) + 1);
         if (new_value != NULL)
         {
@@ -134,7 +139,7 @@ static int
 lookup_index_fields(u1database *db, u1query *query)
 {
     int status, offset;
-    char *field;
+    char *field = NULL;
     sqlite3_stmt *statement = NULL;
 
     status = sqlite3_prepare_v2(db->sql_handle,
@@ -199,7 +204,7 @@ void
 u1db_free_query(u1query **query)
 {
     int i;
-    u1query *q;
+    u1query *q = NULL;
     if (query == NULL || *query == NULL) {
         return;
     }
@@ -329,8 +334,8 @@ u1db__format_query(int n_fields, va_list argp, char **buf, int *wildcard)
 {
     int status = U1DB_OK;
     int buf_size, i;
-    char *cur;
-    const char *val;
+    char *cur = NULL;
+    const char *val = NULL;
     int have_wildcard = 0;
 
     if (n_fields < 1) {
@@ -402,7 +407,7 @@ struct sqlcb_to_field_cb {
 static int
 sqlite_cb_to_field_cb(void *context, int n_cols, char **cols, char **rows)
 {
-    struct sqlcb_to_field_cb *ctx;
+    struct sqlcb_to_field_cb *ctx = NULL;
     ctx = (struct sqlcb_to_field_cb*)context;
     if (n_cols != 1) {
         return 1; // Error
@@ -439,7 +444,7 @@ add_to_document_fields(u1database *db, const char *doc_id,
                        const char *expression, const char *val)
 {
     int status;
-    sqlite3_stmt *statement;
+    sqlite3_stmt *statement = NULL;
 
     status = sqlite3_prepare_v2(db->sql_handle,
         "INSERT INTO document_fields (doc_id, field_name, value)"
@@ -469,7 +474,7 @@ extract_field_values(const char *expression, string_list *values,
 {
     char *lparen, *rparen, *sub, *data = NULL;
     char *result, *result_ptr, *dot_chr = NULL;
-    struct array_list *list_val;
+    struct array_list *list_val = NULL;
     json_object *val = NULL;
     int path_size, i;
     int status = U1DB_OK;
@@ -577,14 +582,10 @@ apply_operations(const char *expression, string_list *result,
             status = -1;
             goto finish;
         }
-        if ((tmp_values = (string_list *)malloc(sizeof(string_list))) == NULL)
-        {
-            status = U1DB_NOMEM;
+        if ((status = init_list(&tmp_values)) != U1DB_OK)
             goto finish;
-        }
-        init_list(tmp_values);
-        status = apply_operations(lparen + 1, tmp_values, values);
-        if (status != U1DB_OK)
+        if ((status = apply_operations(lparen + 1, tmp_values, values)) !=
+                U1DB_OK)
             goto finish;
         op(result, tmp_values);
     }
@@ -602,30 +603,22 @@ evaluate_index_and_insert_into_db(void *context, const char *expression)
 {
     struct evaluate_index_context *ctx;
     string_list *tmp_values, *values = NULL;
-    string_list_item *item;
+    string_list_item *item = NULL;
     int status = U1DB_OK;
 
     ctx = (struct evaluate_index_context *)context;
     if (ctx->obj == NULL || !json_object_is_type(ctx->obj, json_type_object)) {
         return U1DB_INVALID_JSON;
     }
-    if ((tmp_values = (string_list *)malloc(sizeof(string_list))) == NULL)
-    {
-        status = U1DB_NOMEM;
+    if ((status = init_list(&tmp_values)) != U1DB_OK)
         goto finish;
-    }
-    init_list(tmp_values);
     if ((status = extract_field_values(expression, tmp_values, ctx->obj)) !=
             U1DB_OK)
     {
         goto finish;
     }
-    if ((values = (string_list *)malloc(sizeof(string_list))) == NULL)
-    {
-        status = U1DB_NOMEM;
+    if ((status = init_list(&values)) != U1DB_OK)
         goto finish;
-    }
-    init_list(values);
     if ((status = apply_operations(expression, values, tmp_values)) != U1DB_OK)
     {
         goto finish;
@@ -648,7 +641,7 @@ finish:
 static int
 is_present(u1database *db, const char *expression, int *present)
 {
-    sqlite3_stmt *statement;
+    sqlite3_stmt *statement = NULL;
     int status;
 
     status = sqlite3_prepare_v2(db->sql_handle,
@@ -679,7 +672,7 @@ u1db__find_unique_expressions(u1database *db,
                               int *n_unique, const char ***unique_expressions)
 {
     int i, status, present = 0;
-    const char **tmp;
+    const char **tmp = NULL;
 
     tmp = (const char **)calloc(n_expressions, sizeof(char*));
     if (tmp == NULL) {
@@ -740,7 +733,7 @@ u1db__index_all_docs(u1database *db, int n_expressions,
                      const char **expressions)
 {
     int status, i;
-    sqlite3_stmt *statement;
+    sqlite3_stmt *statement = NULL;
     struct evaluate_index_context context;
 
     status = sqlite3_prepare_v2(db->sql_handle,
