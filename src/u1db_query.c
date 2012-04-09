@@ -64,6 +64,7 @@ append(string_set *set, const char *data)
         new_item->data = strdup(data);
         new_item->next = NULL;
         set->head = new_item;
+        return U1DB_OK;
     }
     for (iter_item = set->head; iter_item != NULL; iter_item = iter_item->next)
     {
