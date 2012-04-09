@@ -70,6 +70,7 @@ append(string_set *set, const char *data)
     {
         if (strcmp(iter_item->data, data) == 0)
         {
+            // set already contains this string
             return U1DB_OK;
         }
         if (iter_item->next == NULL)
