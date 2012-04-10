@@ -36,7 +36,7 @@ op_lower(const char *value)
 {
     char *new_value = NULL;
     int i = 0;
-    new_value = (char *)malloc(strlen(value) + 1);
+    new_value = (char *)calloc(strlen(value) + 1, 1);
     if (new_value != NULL)
     {
         while (value[i] != '\0')
@@ -420,7 +420,7 @@ extract_field(const char *expression, json_object *obj)
         return NULL;
     }
     path_size = ((rparen - 1) - (lparen + 1)) + 1;
-    sub = (char *)malloc(path_size);
+    sub = (char *)calloc(path_size + 1, 1);
     if (sub != NULL)
     {
         strncpy(sub, lparen + 1, path_size);
@@ -444,7 +444,7 @@ apply_operations(const char *expression, const char *val)
         return new_val;
     }
     op_size = ((lparen - 1) - expression) + 1;
-    op_name = (char *)malloc(op_size);
+    op_name = (char *)calloc(op_size + 1, 1);
     if (op_name != NULL)
     {
         strncpy(op_name, expression, op_size);
@@ -474,7 +474,7 @@ finish:
     {
         free(tmp_val);
     }
-    if (op != NULL)
+    if (op_name != NULL)
     {
         free(op_name);
     }
