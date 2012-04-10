@@ -857,6 +857,27 @@ class DatabaseIndexTests(tests.DatabaseBaseTests):
         rows = self.db.get_from_index("index", [("foo", )])
         self.assertEqual([doc], rows)
 
+    def test_index_split_words_double_space(self):
+        self.db.create_index("index", ["split_words(name)"])
+        content = '{"name": "foo  bar"}'
+        doc = self.db.create_doc(content)
+        rows = self.db.get_from_index("index", [("bar", )])
+        self.assertEqual([doc], rows)
+
+    def test_index_split_words_leading_space(self):
+        self.db.create_index("index", ["split_words(name)"])
+        content = '{"name": " foo bar"}'
+        doc = self.db.create_doc(content)
+        rows = self.db.get_from_index("index", [("foo", )])
+        self.assertEqual([doc], rows)
+
+    def test_index_split_words_trailing_space(self):
+        self.db.create_index("index", ["split_words(name)"])
+        content = '{"name": "foo bar "}'
+        doc = self.db.create_doc(content)
+        rows = self.db.get_from_index("index", [("bar", )])
+        self.assertEqual([doc], rows)
+
 
 class PyDatabaseIndexTests(tests.DatabaseBaseTests):
 
