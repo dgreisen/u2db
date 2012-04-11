@@ -26,72 +26,62 @@
 #define OPERATIONS 2
 static const char *OPERATORS[OPERATIONS] = {"lower", "split_words"};
 
-typedef struct string_set_item_
+typedef struct string_list_item_
 {
     char *data;
-    struct string_set_item_ *next;
-} string_set_item;
+    struct string_list_item_ *next;
+} string_list_item;
 
-typedef struct string_set_
+typedef struct string_list_
 {
-    string_set_item *head;
-} string_set;
+    string_list_item *head;
+    string_list_item *tail;
+} string_list;
 
-typedef int(*operation)(string_set *, const string_set *);
-static int op_lower(string_set *result, const string_set *value);
-static int op_split_words(string_set *result, const string_set *value);
+typedef int(*operation)(string_list *, const string_list *);
+static int op_lower(string_list *result, const string_list *value);
+static int op_split_words(string_list *result, const string_list *value);
 
 static operation operations[OPERATIONS] = {op_lower, op_split_words};
 
 static int
-init_set(string_set **set)
+init_list(string_list **list)
 {
-    if ((*set = (string_set *)malloc(sizeof(string_set))) == NULL)
+    if ((*list = (string_list *)malloc(sizeof(string_list))) == NULL)
         return U1DB_NOMEM;
-    (*set)->head = NULL;
+    (*list)->head = NULL;
+    (*list)->tail = NULL;
     return U1DB_OK;
 }
 
 static int
-append(string_set *set, const char *data)
+append(string_list *list, const char *data)
 {
-    string_set_item *new_item, *iter_item = NULL;
-    if ((new_item = (string_set_item *)malloc(sizeof(string_set_item)))
+    string_list_item *new_item = NULL;
+    if ((new_item = (string_list_item *)malloc(sizeof(string_list_item)))
             == NULL)
         return U1DB_NOMEM;
-    if (set->head == NULL)
+    new_item->data = strdup(data);
+    new_item->next = NULL;
+    if (list->head == NULL)
     {
-        new_item->data = strdup(data);
-        new_item->next = NULL;
-        set->head = new_item;
-        return U1DB_OK;
+        list->head = new_item;
     }
-    for (iter_item = set->head; iter_item != NULL; iter_item = iter_item->next)
+    if (list->tail != NULL)
     {
-        if (strcmp(iter_item->data, data) == 0)
-        {
-            // set already contains this string
-            return U1DB_OK;
-        }
-        if (iter_item->next == NULL)
-        {
-            new_item->data = strdup(data);
-            new_item->next = NULL;
-            iter_item->next = new_item;
-            return U1DB_OK;
-        }
-
+        list->tail->next = new_item;
     }
-    return -1;
+    list->tail = new_item;
+    return U1DB_OK;
 }
 
 static void
-destroy_set(string_set *set)
+destroy_list(string_list *list)
 {
-    if (set == NULL)
+    if (list == NULL)
         return;
-    string_set_item *item, *previous = NULL;
-    item = set->head;
+    string_list_item *item, *previous = NULL;
+    item = list->head;
     while (item != NULL)
     {
         previous = item;
@@ -99,14 +89,32 @@ destroy_set(string_set *set)
         free(previous->data);
         free(previous);
     }
-    free(set);
-    set = NULL;
+    list->head = NULL;
+    list->tail = NULL;
+    free(list);
+    list = NULL;
 }
 
 static int
-set_copy(string_set *copy, const string_set *original)
+list_index(string_list *list, char *data)
 {
-    string_set_item *item = NULL;
+    int i = 0;
+    string_list_item *item = NULL;
+    for (item = list->head; item != NULL; item = item->next)
+    {
+        if (strcmp(item->data, data) == 0)
+        {
+            return i;
+        }
+        i++;
+    }
+    return -1;
+}
+
+static int
+list_copy(string_list *copy, const string_list *original)
+{
+    string_list_item *item = NULL;
     int status = U1DB_OK;
     for (item = original->head; item != NULL; item = item->next)
         if ((status = append(copy, item->data)) != U1DB_OK)
@@ -117,9 +125,9 @@ set_copy(string_set *copy, const string_set *original)
 }
 
 static int
-op_lower(string_set *result, const string_set *values)
+op_lower(string_list *result, const string_list *values)
 {
-    string_set_item *item = NULL;
+    string_list_item *item = NULL;
     char *new_value, *value = NULL;
     int i;
     int status = U1DB_OK;
@@ -150,9 +158,9 @@ op_lower(string_set *result, const string_set *values)
 }
 
 static int
-op_split_words(string_set *result, const string_set *values)
+op_split_words(string_list *result, const string_list *values)
 {
-    string_set_item *item = NULL;
+    string_list_item *item = NULL;
     char *intermediate, *intermediate_ptr = NULL;
     char *space_chr = NULL;
     int status = U1DB_OK;
@@ -166,9 +174,12 @@ op_split_words(string_set *result, const string_set *values)
                 *space_chr = '\0';
                 space_chr++;
             }
-            if ((status = append(result, intermediate_ptr)) != U1DB_OK)
+            if (list_index(result, intermediate_ptr) == -1)
             {
-                return status;
+                if ((status = append(result, intermediate_ptr)) != U1DB_OK)
+                {
+                    return status;
+                }
             }
             intermediate_ptr = space_chr;
         }
@@ -511,7 +522,7 @@ finish:
 }
 
 static int
-extract_field_values(const char *expression, string_set *values,
+extract_field_values(const char *expression, string_list *values,
         json_object *obj)
 {
     char *lparen, *rparen, *sub = NULL;
@@ -586,18 +597,18 @@ extract_field_values(const char *expression, string_set *values,
 }
 
 static int
-apply_operations(const char *expression, string_set *result,
-        const string_set *values)
+apply_operations(const char *expression, string_list *result,
+        const string_list *values)
 {
     operation op = NULL;
     char *lparen, *op_name = NULL;
     int i, op_size;
     int status = U1DB_OK;
-    string_set *tmp_values = NULL;
+    string_list *tmp_values = NULL;
     lparen = strchr(expression, '(');
     if (lparen == NULL)
     {
-        if ((status = set_copy(result, values)) != U1DB_OK)
+        if ((status = list_copy(result, values)) != U1DB_OK)
             return status;
         return U1DB_OK;
     }
@@ -620,7 +631,7 @@ apply_operations(const char *expression, string_set *result,
             status = U1DB_INVALID_VALUE_FOR_INDEX;
             goto finish;
         }
-        if ((status = init_set(&tmp_values)) != U1DB_OK)
+        if ((status = init_list(&tmp_values)) != U1DB_OK)
             goto finish;
         if ((status = apply_operations(lparen + 1, tmp_values, values)) !=
                 U1DB_OK)
@@ -628,7 +639,7 @@ apply_operations(const char *expression, string_set *result,
         op(result, tmp_values);
     }
 finish:
-    destroy_set(tmp_values);
+    destroy_list(tmp_values);
     if (op_name != NULL)
     {
         free(op_name);
@@ -640,22 +651,22 @@ static int
 evaluate_index_and_insert_into_db(void *context, const char *expression)
 {
     struct evaluate_index_context *ctx;
-    string_set *tmp_values, *values = NULL;
-    string_set_item *item = NULL;
+    string_list *tmp_values, *values = NULL;
+    string_list_item *item = NULL;
     int status = U1DB_OK;
 
     ctx = (struct evaluate_index_context *)context;
     if (ctx->obj == NULL || !json_object_is_type(ctx->obj, json_type_object)) {
         return U1DB_INVALID_JSON;
     }
-    if ((status = init_set(&tmp_values)) != U1DB_OK)
+    if ((status = init_list(&tmp_values)) != U1DB_OK)
         goto finish;
     if ((status = extract_field_values(expression, tmp_values, ctx->obj)) !=
             U1DB_OK)
     {
         goto finish;
     }
-    if ((status = init_set(&values)) != U1DB_OK)
+    if ((status = init_list(&values)) != U1DB_OK)
         goto finish;
     if ((status = apply_operations(expression, values, tmp_values)) != U1DB_OK)
     {
@@ -668,8 +679,8 @@ evaluate_index_and_insert_into_db(void *context, const char *expression)
             goto finish;
     }
 finish:
-    destroy_set(tmp_values);
-    destroy_set(values);
+    destroy_list(tmp_values);
+    destroy_list(values);
     return status;
 }
 
