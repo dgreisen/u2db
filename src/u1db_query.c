@@ -23,38 +23,176 @@
 #include <ctype.h>
 #include <json/json.h>
 
-#define OPERATIONS 1
-const char *OPERATORS[] = {"lower"};
-typedef char *(*operation)(const char *);
+#define OPERATIONS 2
+static const char *OPERATORS[OPERATIONS] = {"lower", "split_words"};
 
-static char *op_lower(const char *value);
-
-operation operations[] = {op_lower};
-
-static char *
-op_lower(const char *value)
+typedef struct string_list_item_
 {
-    char *new_value = NULL;
-    int i = 0;
-    new_value = (char *)calloc(strlen(value) + 1, 1);
-    if (new_value != NULL)
+    char *data;
+    struct string_list_item_ *next;
+} string_list_item;
+
+typedef struct string_list_
+{
+    string_list_item *head;
+    string_list_item *tail;
+} string_list;
+
+typedef int(*operation)(string_list *, const string_list *);
+static int op_lower(string_list *result, const string_list *value);
+static int op_split_words(string_list *result, const string_list *value);
+
+static operation operations[OPERATIONS] = {op_lower, op_split_words};
+
+static int
+init_list(string_list **list)
+{
+    if ((*list = (string_list *)malloc(sizeof(string_list))) == NULL)
+        return U1DB_NOMEM;
+    (*list)->head = NULL;
+    (*list)->tail = NULL;
+    return U1DB_OK;
+}
+
+static int
+append(string_list *list, const char *data)
+{
+    string_list_item *new_item = NULL;
+    if ((new_item = (string_list_item *)malloc(sizeof(string_list_item)))
+            == NULL)
+        return U1DB_NOMEM;
+    new_item->data = strdup(data);
+    new_item->next = NULL;
+    if (list->head == NULL)
     {
-        while (value[i] != '\0')
-        {
-            // TODO: unicode hahaha
-            new_value[i] = tolower(value[i]);
-            i++;
-        }
-        new_value[i] = '\0';
+        list->head = new_item;
     }
-    return new_value;
+    if (list->tail != NULL)
+    {
+        list->tail->next = new_item;
+    }
+    list->tail = new_item;
+    return U1DB_OK;
+}
+
+static void
+destroy_list(string_list *list)
+{
+    if (list == NULL)
+        return;
+    string_list_item *item, *previous = NULL;
+    item = list->head;
+    while (item != NULL)
+    {
+        previous = item;
+        item = item->next;
+        free(previous->data);
+        free(previous);
+    }
+    list->head = NULL;
+    list->tail = NULL;
+    free(list);
+    list = NULL;
+}
+
+static int
+list_index(string_list *list, char *data)
+{
+    int i = 0;
+    string_list_item *item = NULL;
+    for (item = list->head; item != NULL; item = item->next)
+    {
+        if (strcmp(item->data, data) == 0)
+        {
+            return i;
+        }
+        i++;
+    }
+    return -1;
+}
+
+static int
+list_copy(string_list *copy, const string_list *original)
+{
+    string_list_item *item = NULL;
+    int status = U1DB_OK;
+    for (item = original->head; item != NULL; item = item->next)
+        if ((status = append(copy, item->data)) != U1DB_OK)
+        {
+            return status;
+        }
+    return status;
+}
+
+static int
+op_lower(string_list *result, const string_list *values)
+{
+    string_list_item *item = NULL;
+    char *new_value, *value = NULL;
+    int i;
+    int status = U1DB_OK;
+
+    for (item = values->head; item != NULL; item = item->next)
+    {
+        value = item->data;
+        i = 0;
+        new_value = (char *)calloc(strlen(value) + 1, 1);
+        if (new_value != NULL)
+        {
+            while (value[i] != '\0')
+            {
+                // TODO: unicode hahaha
+                new_value[i] = tolower(value[i]);
+                i++;
+            }
+            new_value[i] = '\0';
+        }
+        if ((status = append(result, new_value)) != U1DB_OK)
+        {
+            free(new_value);
+            return status;
+        }
+        free(new_value);
+    }
+    return status;
+}
+
+static int
+op_split_words(string_list *result, const string_list *values)
+{
+    string_list_item *item = NULL;
+    char *intermediate, *intermediate_ptr = NULL;
+    char *space_chr = NULL;
+    int status = U1DB_OK;
+    for (item = values->head; item != NULL; item = item->next)
+    {
+        intermediate = strdup(item->data);
+        intermediate_ptr = intermediate;
+        while (intermediate_ptr != NULL) {
+            space_chr = strchr(intermediate_ptr, ' ');
+            if (space_chr != NULL) {
+                *space_chr = '\0';
+                space_chr++;
+            }
+            if (list_index(result, intermediate_ptr) == -1)
+            {
+                if ((status = append(result, intermediate_ptr)) != U1DB_OK)
+                {
+                    return status;
+                }
+            }
+            intermediate_ptr = space_chr;
+        }
+        free(intermediate);
+    }
+    return status;
 }
 
 static int
 lookup_index_fields(u1database *db, u1query *query)
 {
     int status, offset;
-    char *field;
+    char *field = NULL;
     sqlite3_stmt *statement = NULL;
 
     status = sqlite3_prepare_v2(db->sql_handle,
@@ -119,7 +257,7 @@ void
 u1db_free_query(u1query **query)
 {
     int i;
-    u1query *q;
+    u1query *q = NULL;
     if (query == NULL || *query == NULL) {
         return;
     }
@@ -249,8 +387,8 @@ u1db__format_query(int n_fields, va_list argp, char **buf, int *wildcard)
 {
     int status = U1DB_OK;
     int buf_size, i;
-    char *cur;
-    const char *val;
+    char *cur = NULL;
+    const char *val = NULL;
     int have_wildcard = 0;
 
     if (n_fields < 1) {
@@ -322,7 +460,7 @@ struct sqlcb_to_field_cb {
 static int
 sqlite_cb_to_field_cb(void *context, int n_cols, char **cols, char **rows)
 {
-    struct sqlcb_to_field_cb *ctx;
+    struct sqlcb_to_field_cb *ctx = NULL;
     ctx = (struct sqlcb_to_field_cb*)context;
     if (n_cols != 1) {
         return 1; // Error
@@ -359,7 +497,7 @@ add_to_document_fields(u1database *db, const char *doc_id,
                        const char *expression, const char *val)
 {
     int status;
-    sqlite3_stmt *statement;
+    sqlite3_stmt *statement = NULL;
 
     status = sqlite3_prepare_v2(db->sql_handle,
         "INSERT INTO document_fields (doc_id, field_name, value)"
@@ -383,13 +521,16 @@ finish:
     return status;
 }
 
-json_object *
-extract_field(const char *expression, json_object *obj)
+static int
+extract_field_values(const char *expression, string_list *values,
+        json_object *obj)
 {
     char *lparen, *rparen, *sub = NULL;
     char *result, *result_ptr, *dot_chr = NULL;
+    struct array_list *list_val = NULL;
     json_object *val = NULL;
-    int path_size;
+    int path_size, i;
+    int status = U1DB_OK;
     lparen = strchr(expression, '(');
     if (lparen == NULL)
     {
@@ -412,12 +553,36 @@ extract_field(const char *expression, json_object *obj)
         {
             free(result);
         }
-        return val;
+        if (val == NULL)
+        {
+            return U1DB_OK;
+        }
+        if (json_object_is_type(val, json_type_string)) {
+            if ((status = append(values, json_object_get_string(val))) != U1DB_OK)
+            {
+                return status;
+            }
+        } else if (json_object_is_type(val, json_type_array)) {
+            list_val = json_object_get_array(val);
+            for (i = 0; i < list_val->length; i++)
+            {
+                if ((status = append(values, json_object_get_string(
+                                    array_list_get_idx(
+                                        list_val, i)))) != U1DB_OK)
+                {
+                    return status;
+                }
+            }
+        } else {
+        }
+        // TODO: this segfaults unreliably:
+        // json_object_put(val);
+        return U1DB_OK;
     }
     rparen = strrchr(expression, ')');
     if (rparen == NULL)
     {
-        return NULL;
+        return U1DB_INVALID_VALUE_FOR_INDEX;
     }
     path_size = ((rparen - 1) - (lparen + 1)) + 1;
     sub = (char *)calloc(path_size + 1, 1);
@@ -425,23 +590,27 @@ extract_field(const char *expression, json_object *obj)
     {
         strncpy(sub, lparen + 1, path_size);
         sub[path_size] = '\0';
-        val = extract_field(sub, obj);
+        status = extract_field_values(sub, values, obj);
         free(sub);
     }
-    return val;
+    return status;
 }
 
-char *
-apply_operations(const char *expression, const char *val)
+static int
+apply_operations(const char *expression, string_list *result,
+        const string_list *values)
 {
     operation op = NULL;
-    char *lparen, *op_name, *tmp_val, *new_val = NULL;
+    char *lparen, *op_name = NULL;
     int i, op_size;
+    int status = U1DB_OK;
+    string_list *tmp_values = NULL;
     lparen = strchr(expression, '(');
     if (lparen == NULL)
     {
-        new_val = strdup(val);
-        return new_val;
+        if ((status = list_copy(result, values)) != U1DB_OK)
+            return status;
+        return U1DB_OK;
     }
     op_size = ((lparen - 1) - expression) + 1;
     op_name = (char *)calloc(op_size + 1, 1);
@@ -459,80 +628,59 @@ apply_operations(const char *expression, const char *val)
         }
         if (op == NULL)
         {
-            // TODO: signal unknown operation
+            status = U1DB_INVALID_VALUE_FOR_INDEX;
             goto finish;
         }
-        if ((tmp_val = apply_operations(lparen + 1, val)) == NULL)
-        {
-            new_val = tmp_val;
+        if ((status = init_list(&tmp_values)) != U1DB_OK)
             goto finish;
-        }
-        new_val = op(tmp_val);
+        if ((status = apply_operations(lparen + 1, tmp_values, values)) !=
+                U1DB_OK)
+            goto finish;
+        op(result, tmp_values);
     }
 finish:
-    if (tmp_val != NULL)
-    {
-        free(tmp_val);
-    }
+    destroy_list(tmp_values);
     if (op_name != NULL)
     {
         free(op_name);
     }
-    return new_val;
+    return status;
 }
 
 static int
 evaluate_index_and_insert_into_db(void *context, const char *expression)
 {
     struct evaluate_index_context *ctx;
-    json_object *val;
-    const char *str_val;
-    struct array_list *list_val;
+    string_list *tmp_values, *values = NULL;
+    string_list_item *item = NULL;
     int status = U1DB_OK;
-    char *new_val = NULL;
-    int i;
 
     ctx = (struct evaluate_index_context *)context;
     if (ctx->obj == NULL || !json_object_is_type(ctx->obj, json_type_object)) {
         return U1DB_INVALID_JSON;
     }
-    val = extract_field(expression, ctx->obj);
-    if (val != NULL) {
-        if (json_object_is_type(val, json_type_string)) {
-            str_val = json_object_get_string(val);
-            new_val = apply_operations(expression, str_val);
-            // TODO handle status
-            if (new_val != NULL) {
-                status = add_to_document_fields(ctx->db, ctx->doc_id,
-                        expression, new_val);
-                free(new_val);
-                if (status != U1DB_OK)
-                {
-                    return status;
-                }
-            }
-        } else if (json_object_is_type(val, json_type_array)) {
-            list_val = json_object_get_array(val);
-            for (i = 0; i < list_val->length; i++) {
-                str_val = json_object_get_string(
-                        array_list_get_idx(list_val, i));
-                new_val = apply_operations(expression, str_val);
-                if (new_val != NULL) {
-                    // TODO handle status
-                    status = add_to_document_fields(ctx->db, ctx->doc_id,
-                            expression, new_val);
-                    free(new_val);
-                    if (status != U1DB_OK) {
-                        return status;
-                    }
-                }
-            }
-        }
-        json_object_put(val);
-    } else
+    if ((status = init_list(&tmp_values)) != U1DB_OK)
+        goto finish;
+    if ((status = extract_field_values(expression, tmp_values, ctx->obj)) !=
+            U1DB_OK)
     {
-        // TODO: return U1DB_INVALID_EXPRESSION;
+        goto finish;
     }
+    if ((status = init_list(&values)) != U1DB_OK)
+        goto finish;
+    if ((status = apply_operations(expression, values, tmp_values)) != U1DB_OK)
+    {
+        goto finish;
+    }
+    for (item = values->head; item != NULL; item = item->next)
+    {
+        if ((status = add_to_document_fields(ctx->db, ctx->doc_id, expression,
+                        item->data)) != U1DB_OK)
+            goto finish;
+    }
+finish:
+    destroy_list(tmp_values);
+    destroy_list(values);
     return status;
 }
 
@@ -542,7 +690,7 @@ evaluate_index_and_insert_into_db(void *context, const char *expression)
 static int
 is_present(u1database *db, const char *expression, int *present)
 {
-    sqlite3_stmt *statement;
+    sqlite3_stmt *statement = NULL;
     int status;
 
     status = sqlite3_prepare_v2(db->sql_handle,
@@ -573,7 +721,7 @@ u1db__find_unique_expressions(u1database *db,
                               int *n_unique, const char ***unique_expressions)
 {
     int i, status, present = 0;
-    const char **tmp;
+    const char **tmp = NULL;
 
     tmp = (const char **)calloc(n_expressions, sizeof(char*));
     if (tmp == NULL) {
@@ -634,7 +782,7 @@ u1db__index_all_docs(u1database *db, int n_expressions,
                      const char **expressions)
 {
     int status, i;
-    sqlite3_stmt *statement;
+    sqlite3_stmt *statement = NULL;
     struct evaluate_index_context context;
 
     status = sqlite3_prepare_v2(db->sql_handle,
@@ -656,8 +804,10 @@ u1db__index_all_docs(u1database *db, int n_expressions,
             continue;
         }
         for (i = 0; i < n_expressions; ++i) {
-            status = evaluate_index_and_insert_into_db(&context, expressions[i]);
-            if (status != U1DB_OK) { goto finish; }
+            status = evaluate_index_and_insert_into_db(&context, 
+                    expressions[i]);
+            if (status != U1DB_OK)
+                goto finish;
         }
         status = sqlite3_step(statement);
     }

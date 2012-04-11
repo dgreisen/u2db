@@ -22,10 +22,8 @@ from u1db import (
     vectorclock,
     )
 
-
 simple_doc = tests.simple_doc
 nested_doc = tests.nested_doc
-
 
 from u1db.tests.test_remote_sync_target import (
     http_server_def,
@@ -838,9 +836,6 @@ class DatabaseIndexTests(tests.DatabaseBaseTests):
         rows = self.db.get_from_index("index", [("Foo", )])
         self.assertEqual(0, len(rows))
 
-
-class PyDatabaseIndexTests(tests.DatabaseBaseTests):
-
     def test_index_split_words_match_first(self):
         self.db.create_index("index", ["split_words(name)"])
         content = '{"name": "foo bar"}'
@@ -861,6 +856,9 @@ class PyDatabaseIndexTests(tests.DatabaseBaseTests):
         doc = self.db.create_doc(content)
         rows = self.db.get_from_index("index", [("foo", )])
         self.assertEqual([doc], rows)
+
+
+class PyDatabaseIndexTests(tests.DatabaseBaseTests):
 
     def test_sync_exchange_updates_indexes(self):
         doc = self.db.create_doc(simple_doc)
