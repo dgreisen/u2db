@@ -76,6 +76,7 @@ synchronize them with other stores.
             # Used for the random number generator
             extra_libs.append('advapi32')
             extra_libs.append('libcurl_imp')
+            extra_libs.append('libeay32')
             extra_defines = [('_CRT_SECURE_NO_WARNINGS', 1)]
         else:
             extra_libs.append('curl')
