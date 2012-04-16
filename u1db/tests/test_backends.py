@@ -31,7 +31,7 @@ from u1db.tests.test_remote_sync_target import (
 )
 
 from u1db.remote import (
-    http_database
+    http_database,
     )
 
 try:
@@ -767,11 +767,18 @@ class DatabaseIndexTests(tests.DatabaseBaseTests):
         self.db.create_index('test-idx', ['sub.foo.bar.baz.qux.fnord'])
         self.assertEqual([], self.db.get_from_index('test-idx', [('*',)]))
 
-    def test_index_list(self):
+    def test_index_list1(self):
         self.db.create_index("index", ["name"])
         content = '{"name": ["foo", "bar"]}'
         doc = self.db.create_doc(content)
         rows = self.db.get_from_index("index", [("bar", )])
+        self.assertEqual([doc], rows)
+
+    def test_index_list2(self):
+        self.db.create_index("index", ["name"])
+        content = '{"name": ["foo", "bar"]}'
+        doc = self.db.create_doc(content)
+        rows = self.db.get_from_index("index", [("foo", )])
         self.assertEqual([doc], rows)
 
     def test_get_from_index_case_sensitive(self):
