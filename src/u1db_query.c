@@ -78,9 +78,9 @@ append(string_list *list, const char *data)
 static void
 destroy_list(string_list *list)
 {
+    string_list_item *item, *previous = NULL;
     if (list == NULL)
         return;
-    string_list_item *item, *previous = NULL;
     item = list->head;
     while (item != NULL)
     {
