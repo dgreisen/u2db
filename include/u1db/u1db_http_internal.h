@@ -25,4 +25,18 @@
 int u1db__format_sync_url(u1db_sync_target *st,
         const char *source_replica_uid, char **sync_url);
 
+/**
+ * Sign the given request.
+ *
+ * @param st    This should be an http_sync_target created from
+ *              u1db__create_oauth_http_sync_target
+ * @param http_method   "GET", "POST", "PUT", etc.
+ * @param url    See u1db__format_sync_url
+ * @param oauth_authorization   (OUT) The Authorization string to add to the
+ *                              request. Callers should free this string.
+ */
+int u1db__get_oauth_authorization(u1db_sync_target *st,
+    const char *http_method, const char *url,
+    char **oauth_authorization);
+
 #endif // _U1DB_HTTP_INTERNAL_H_

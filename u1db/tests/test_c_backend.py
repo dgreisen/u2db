@@ -272,6 +272,23 @@ class TestCHTTPSyncTarget(BackendTests):
         self.assertRaises(RuntimeError,
             c_backend_wrapper._format_sync_url, target, 'replica,uid')
 
+    def test_oauth_credentials(self):
+        target = c_backend_wrapper.create_oauth_http_sync_target(
+                "http://host/base%2Ctest/",
+                'consumer-key', 'consumer-secret', 'token-key', 'token-secret')
+        auth = c_backend_wrapper._get_oauth_authorization(target,
+            "GET", "http://host/base%2Ctest/sync-from/abcd-efg")
+        self.assertIsNot(None, auth)
+        self.assertTrue(auth.startswith('Authorization: OAuth realm="", '))
+        self.assertNotIn('http://host/base', auth)
+        self.assertIn('oauth_nonce="', auth)
+        self.assertIn('oauth_timestamp="', auth)
+        self.assertIn('oauth_consumer_key="consumer-key"', auth)
+        self.assertIn('oauth_signature_method="HMAC-SHA1"', auth)
+        self.assertIn('oauth_version="1.0"', auth)
+        self.assertIn('oauth_token="token-key"', auth)
+        self.assertIn('oauth_signature="', auth)
+
 
 class TestVectorClock(BackendTests):
 

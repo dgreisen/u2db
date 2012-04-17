@@ -68,6 +68,16 @@ def _make_local_db_and_oauth_http_target(test):
     return db, st
 
 
+def _make_c_db_and_oauth_http_target(test, path='~/test'):
+    test.startServer()
+    db = test.request_state._create_database(os.path.basename(path))
+    url = test.getURL(path)
+    st = tests.c_backend_wrapper.create_oauth_http_sync_target(url,
+        tests.consumer1.key, tests.consumer1.secret,
+        tests.token1.key, tests.token1.secret)
+    return db, st
+
+
 target_scenarios = [
     ('local', {'create_db_and_target': _make_local_db_and_target}),
     ('http', {'create_db_and_target': _make_local_db_and_http_target,
@@ -86,7 +96,12 @@ c_db_scenarios = [
                 'do_create_database': tests.create_c_database,
                 'make_document': tests.create_c_document,
                 'server_def': http_server_def,
-                'whitebox': False})
+                'whitebox': False}),
+    ('oauth_http,c', {'create_db_and_target': _make_c_db_and_oauth_http_target,
+                      'do_create_database': tests.create_c_database,
+                      'make_document': tests.create_c_document,
+                      'server_def': oauth_http_server_def,
+                      'whitebox': False}),
     ]
 
 
@@ -94,7 +109,7 @@ class DatabaseSyncTargetTests(tests.DatabaseBaseTests,
                               tests.TestCaseWithServer):
 
     scenarios = (tests.multiply_scenarios(tests.DatabaseBaseTests.scenarios,
-                                          target_scenarios) 
+                                          target_scenarios)
                  + c_db_scenarios)
     # whitebox true means self.db is the actual local db object
     # against which the sync is performed

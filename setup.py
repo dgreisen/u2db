@@ -76,6 +76,7 @@ synchronize them with other stores.
             # Used for the random number generator
             extra_libs.append('advapi32')
             extra_libs.append('libcurl_imp')
+            extra_libs.append('libeay32')
             extra_defines = [('_CRT_SECURE_NO_WARNINGS', 1)]
         else:
             extra_libs.append('curl')
@@ -93,7 +94,7 @@ synchronize them with other stores.
              "src/u1db_vectorclock.c",
              ],
             include_dirs=["include"],
-            libraries=['sqlite3'] + extra_libs,
+            libraries=['sqlite3', 'oauth'] + extra_libs,
             define_macros=[] + extra_defines,
             ))
 
