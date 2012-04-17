@@ -393,7 +393,7 @@ st_http_get_sync_info(u1db_sync_target *st,
     status = simple_set_curl_data(state->curl, &req, &req, NULL);
     if (status != CURLE_OK) { goto finish; }
     status = maybe_sign_url(st, "GET", url, &headers); 
-    if (status != CURLE_OK) { goto finish; }
+    if (status != U1DB_OK) { goto finish; }
     status = curl_easy_setopt(state->curl, CURLOPT_HTTPHEADER, headers);
     if (status != CURLE_OK) { goto finish; }
     // Now do the GET
