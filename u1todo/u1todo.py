@@ -1,7 +1,7 @@
 import json
 
-DONE = 'x'
-NOT_DONE = ''
+DONE = 'true'
+NOT_DONE = 'false'
 
 EMPTY_TASK = json.dumps({"title": "", "done": NOT_DONE, "tags": []})
 
@@ -15,51 +15,49 @@ class TodoStore(object):
     """The todo application backend."""
 
     def __init__(self, db):
-        db_indexes = dict(db.list_indexes())
+        self.db = db
+        self.initialize_db()
+
+    def initialize_db(self):
+        db_indexes = dict(self.db.list_indexes())
         for name, expression in INDEXES.items():
             if name not in db_indexes:
                 # The index does not yet exist.
-                db.create_index(name, expression)
+                self.db.create_index(name, expression)
                 continue
             if expression == db_indexes[name]:
                 # The index exists and is up to date.
                 continue
             # The index exists but the definition is out of date.
-            db.delete_index(name)
-            db.create_index(name, expression)
+            self.db.delete_index(name)
+            self.db.create_index(name, expression)
 
     def tag_task(self, task, tags):
         """Set the tags of a task."""
         task.tags = tags
 
+    def get_task(self, task_id):
+        """Get a task from the database."""
+        document = self.db.get_doc(task_id)
+        if document is None:
+            raise KeyError("No task with id '%s'." % (task_id,))
+        return Task(document)
+
+    def new_task(self):
+        document = self.db.create_doc(content=EMPTY_TASK)
+        return Task(document)
+
+    def save_task(self, task):
+        """Save task to the database."""
+        self.db.put_doc(task.document)
+
 
 class Task(object):
     """A todo item."""
 
-    def __init__(self, db, doc_id=None):
-        self.db = db
-        if doc_id:
-            # We are looking for an existing document.
-            self.doc_id = doc_id
-            self._document = self.db.get_doc(doc_id)
-            if self._document is None:
-                raise KeyError("No task with id '%s'." % (doc_id,))
-        else:
-            # Create a new empty Task document in the database.
-            self._document = self.db.create_doc(content=EMPTY_TASK)
-            self.doc_id = self._document.doc_id
-        # Convert the document content that we got from the database (or that
-        # we just created,) to a Python object, and cache it as a private
-        # property.
-        self._content = json.loads(self._document.content)
-
-    def _save(self):
-        """Save the document to the database."""
-        # Convert the cached content to a json string, and save it to the
-        # database. This should be called after any modification of a task that
-        # the UI expects to be persistent.
-        self._document.content = json.dumps(self._content)
-        self.db.put_doc(self._document)
+    def __init__(self, document):
+        self._document = document
+        self._content = json.loads(document.content)
 
     def _get_title(self):
         """Get the task title."""
@@ -68,7 +66,6 @@ class Task(object):
     def _set_title(self, title):
         """Set the task title and save to db."""
         self._content['title'] = title
-        self._save()
 
     title = property(_get_title, _set_title, doc="Title of the task.")
 
@@ -82,7 +79,6 @@ class Task(object):
         # Indexes on booleans are not currently possible, so we convert to and
         # from strings.
         self._content['done'] = DONE if value else NOT_DONE
-        self._save()
 
     done = property(_get_done, _set_done, doc="Done flag.")
 
@@ -92,7 +88,6 @@ class Task(object):
 
     def _set_tags(self, tags):
         self._content['tags'] = list(set(tags))
-        self._save()
 
     tags = property(_get_tags, _set_tags, doc="Task tags.")
 
@@ -103,7 +98,6 @@ class Task(object):
             # request to add it again.
             return
         tags.append(tag)
-        self._save()
 
     def remove_tag(self, tag):
         tags = self._content['tags']
@@ -111,4 +105,8 @@ class Task(object):
             # Can't remove a tag that the task does not have.
             raise KeyError("Task has no tag '%s'." % (tag,))
         tags.remove(tag)
-        self._save()
+
+    @property
+    def document(self):
+        self._document.content = json.dumps(self._content)
+        return self._document
