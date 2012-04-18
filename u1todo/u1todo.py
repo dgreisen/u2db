@@ -16,7 +16,6 @@ class TodoStore(object):
 
     def __init__(self, db):
         self.db = db
-        self.initialize_db()
 
     def initialize_db(self):
         db_indexes = dict(self.db.list_indexes())

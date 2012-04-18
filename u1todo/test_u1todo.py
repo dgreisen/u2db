@@ -11,25 +11,30 @@ class TodoStoreTestCase(TestCase):
 
     def test_initialize_db(self):
         """Creates indexes."""
-        TodoStore(self.db)
+        store = TodoStore(self.db)
+        store.initialize_db()
         self.assertEqual(INDEXES, dict(self.db.list_indexes()))
 
     def test_indexes_are_added(self):
         """New indexes are added when a new store is created."""
-        TodoStore(self.db)
+        store = TodoStore(self.db)
+        store.initialize_db()
         INDEXES['foo'] = ['bar']
         self.assertNotIn('foo', dict(self.db.list_indexes()))
-        TodoStore(self.db)
+        store = TodoStore(self.db)
+        store.initialize_db()
         self.assertIn('foo', dict(self.db.list_indexes()))
 
     def test_indexes_are_updated(self):
         """Indexes are updated when a new store is created."""
-        TodoStore(self.db)
+        store = TodoStore(self.db)
+        store.initialize_db()
         new_expression = ['newtags']
         INDEXES['tags'] = new_expression
         self.assertNotEqual(
             new_expression, dict(self.db.list_indexes())['tags'])
-        TodoStore(self.db)
+        store = TodoStore(self.db)
+        store.initialize_db()
         self.assertEqual(new_expression, dict(self.db.list_indexes())['tags'])
 
     def test_tag_task(self):
