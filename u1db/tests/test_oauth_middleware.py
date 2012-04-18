@@ -148,7 +148,7 @@ class TestAuthMiddleware(tests.TestCase):
             http_url=url,
             http_method='DELETE'
             )
-        oauth_req.set_parameter('oauth_timestamp', int(time.time())-5)
+        oauth_req.set_parameter('oauth_timestamp', int(time.time()) - 5)
         oauth_req.sign_request(tests.sign_meth_PLAINTEXT,
                                tests.consumer1, tests.token1)
         # tweak threshold
