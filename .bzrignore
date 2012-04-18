@@ -10,4 +10,3 @@ html-docs/_build/doctrees
 html-docs/_build/html
 u1db/tests/c_backend_wrapper.c
 ./src/u1db_schema.c
-_trial_temp
