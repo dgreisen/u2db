@@ -401,7 +401,6 @@ class TestHTTPResponder(tests.TestCase):
         self.assertEqual([], self.response_body)
         self.assertEqual(['foo'], responder.content)
 
-
     def test_send_response_json(self):
         responder = http_app.HTTPResponder(self.start_response)
         responder.send_response_json(value='success')
@@ -812,3 +811,22 @@ class TestHTTPAppErrorHandling(tests.TestCase):
         marker, (exc_type, exc, tb) = calls[1]
         self.assertEqual('failed', marker)
         self.assertEqual(self.exc, exc)
+
+
+class TestPluggableSyncExchange(tests.TestCase):
+
+    def setUp(self):
+        super(TestPluggableSyncExchange, self).setUp()
+        self.state = tests.ServerStateForTests()
+        self.state.ensure_database('foo')
+
+    def test_plugging(self):
+        class MySyncExchange(object):
+            def __init__(self, db, source_replica_uid, last_known_generation):
+                pass
+        class MySyncResource(http_app.SyncResource):
+            sync_exchange_class = MySyncExchange
+
+        sync_res = MySyncResource('foo', 'src', self.state, None)
+        sync_res.post_args({'last_known_generation': 0}, '{}')
+        self.assertIsInstance(sync_res.sync_exch, MySyncExchange)

@@ -265,6 +265,9 @@ class SyncResource(object):
 
     url_pattern = "/{dbname}/sync-from/{source_replica_uid}"
 
+    # pluggable
+    sync_exchange_class = sync.SyncExchange
+
     def __init__(self, dbname, source_replica_uid, state, responder):
         self.source_replica_uid = source_replica_uid
         self.responder = responder
@@ -290,8 +293,9 @@ class SyncResource(object):
     @http_method(last_known_generation=int,
                  content_as_args=True)
     def post_args(self, last_known_generation):
-        self.sync_exch = sync.SyncExchange(self.db, self.source_replica_uid,
-                last_known_generation)
+        self.sync_exch = self.sync_exchange_class(self.db,
+                                                  self.source_replica_uid,
+                                                  last_known_generation)
 
     @http_method(content_as_args=True)
     def post_stream_entry(self, id, rev, content, gen):
