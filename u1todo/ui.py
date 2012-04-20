@@ -6,6 +6,7 @@ from PyQt4 import QtGui, QtCore, uic
 
 
 class UITask(QtGui.QListWidgetItem):
+    """Task list item."""
 
     def __init__(self, task):
         super(UITask, self).__init__()

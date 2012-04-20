@@ -18,6 +18,7 @@ class TodoStore(object):
         self.db = db
 
     def initialize_db(self):
+        """Initialize the database."""
         db_indexes = dict(self.db.list_indexes())
         for name, expression in INDEXES.items():
             if name not in db_indexes:
@@ -45,6 +46,7 @@ class TodoStore(object):
         return Task(document)
 
     def delete_task(self, task):
+        """Delete a task from the database."""
         self.db.delete_doc(task._document)
 
     def new_task(self, title=None, tags=None):
