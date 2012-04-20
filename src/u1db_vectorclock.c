@@ -333,7 +333,7 @@ u1db__vectorclock_as_str(u1db_vectorclock *clock, char **result)
     int buf_size, i, val, count;
     char *cur, *fmt;
     // Quick pass, to determine the buffer size:
-    buf_size = 0;
+    buf_size = 1; // Trailing null
     if (result == NULL) {
         return U1DB_INVALID_PARAMETER;
     }
@@ -354,7 +354,7 @@ u1db__vectorclock_as_str(u1db_vectorclock *clock, char **result)
             buf_size++;
         } while (val > 0);
     }
-    cur = (char *)calloc(1, buf_size);
+    cur = (char *)calloc(buf_size, 1);
     *result = cur;
     for (i = 0; i < clock->num_items; i++) {
         if (i == 0) {
