@@ -235,7 +235,7 @@ recv_header_bytes(const char *ptr, size_t size, size_t nmemb, void *userdata)
     }
     memcpy(req->header_buffer + req->num_header_bytes, ptr, total_bytes);
     req->num_header_bytes += total_bytes;
-    req->header_buffer[req->num_header_bytes + 1] = '\0';
+    req->header_buffer[req->num_header_bytes] = '\0';
     return total_bytes;
 }
 
@@ -263,7 +263,7 @@ recv_body_bytes(const char *ptr, size_t size, size_t nmemb, void *userdata)
     }
     memcpy(req->body_buffer + req->num_body_bytes, ptr, total_bytes);
     req->num_body_bytes += total_bytes;
-    req->body_buffer[req->num_body_bytes + 1] = '\0';
+    req->body_buffer[req->num_body_bytes] = '\0';
     return total_bytes;
 }
 
@@ -363,7 +363,7 @@ st_http_get_sync_info(u1db_sync_target *st,
     int status;
     long http_code;
     struct curl_slist *headers = NULL;
-    
+
     json_object *json = NULL, *obj = NULL;
 
     if (st == NULL || source_replica_uid == NULL || st_replica_uid == NULL
@@ -390,9 +390,10 @@ st_http_get_sync_info(u1db_sync_target *st,
     // status = curl_easy_setopt(state->curl, CURLOPT_USERAGENT, "...");
     status = curl_easy_setopt(state->curl, CURLOPT_URL, url);
     if (status != CURLE_OK) { goto finish; }
+    req.body_buffer = req.header_buffer = NULL;
     status = simple_set_curl_data(state->curl, &req, &req, NULL);
     if (status != CURLE_OK) { goto finish; }
-    status = maybe_sign_url(st, "GET", url, &headers); 
+    status = maybe_sign_url(st, "GET", url, &headers);
     if (status != U1DB_OK) { goto finish; }
     status = curl_easy_setopt(state->curl, CURLOPT_HTTPHEADER, headers);
     if (status != CURLE_OK) { goto finish; }
@@ -404,6 +405,10 @@ st_http_get_sync_info(u1db_sync_target *st,
     if (http_code != 200) { // 201 for created? shouldn't happen on GET
         status = http_code;
         goto finish;
+    }
+    if (req.body_buffer == NULL) {
+	status = U1DB_INVALID_HTTP_RESPONSE;
+	goto finish;
     }
     json = json_tokener_parse(req.body_buffer);
     if (json == NULL) {
@@ -420,21 +425,18 @@ st_http_get_sync_info(u1db_sync_target *st,
         status = U1DB_NOMEM;
         goto finish;
     }
-    json_object_put(obj);
     obj = json_object_object_get(json, "target_replica_generation");
     if (obj == NULL) {
         status = U1DB_INVALID_HTTP_RESPONSE;
         goto finish;
     }
     *st_gen = json_object_get_int(obj);
-    json_object_put(obj);
     obj = json_object_object_get(json, "source_replica_generation");
     if (obj == NULL) {
         status = U1DB_INVALID_HTTP_RESPONSE;
         goto finish;
     }
     *source_gen = json_object_get_int(obj);
-    json_object_put(obj);
 finish:
     if (req.header_buffer != NULL) {
         free(req.header_buffer);
@@ -631,22 +633,22 @@ static int
 doc_to_tempfile(u1db_document *doc, int gen, FILE *fd)
 {
     int status = U1DB_OK;
-    json_object *obj = NULL;
+    json_object *json = NULL;
     fputs(",\r\n", fd);
-    obj = json_object_new_object();
-    if (obj == NULL) {
+    json = json_object_new_object();
+    if (json == NULL) {
         status = U1DB_NOMEM;
         goto finish;
     }
-    json_object_object_add(obj, "id", json_object_new_string(doc->doc_id));
-    json_object_object_add(obj, "rev", json_object_new_string(doc->doc_rev));
-    json_object_object_add(obj, "content",
+    json_object_object_add(json, "id", json_object_new_string(doc->doc_id));
+    json_object_object_add(json, "rev", json_object_new_string(doc->doc_rev));
+    json_object_object_add(json, "content",
             json_object_new_string(doc->content));
-    json_object_object_add(obj, "gen", json_object_new_int(gen));
-    fputs(json_object_to_json_string(obj), fd);
+    json_object_object_add(json, "gen", json_object_new_int(gen));
+    fputs(json_object_to_json_string(json), fd);
 finish:
-    if (obj != NULL) {
-        json_object_put(obj);
+    if (json != NULL) {
+        json_object_put(json);
     }
     return status;
 }
@@ -771,7 +773,6 @@ process_response(u1db_sync_target *st, void *context, u1db_doc_gen_callback cb,
     obj = json_object_array_get_idx(json, 0);
     attr = json_object_object_get(obj, "new_generation");
     *target_gen = json_object_get_int(attr);
-    json_object_put(obj);
     if (attr == NULL) {
         status = U1DB_BROKEN_SYNC_STREAM;
         goto finish;
@@ -795,7 +796,6 @@ process_response(u1db_sync_target *st, void *context, u1db_doc_gen_callback cb,
         }
         status = cb(context, doc, gen);
         if (status != U1DB_OK) { goto finish; }
-        json_object_put(obj);
     }
 finish:
     if (json != NULL) {
