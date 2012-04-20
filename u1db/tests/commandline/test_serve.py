@@ -46,7 +46,10 @@ class TestU1DBServe(tests.TestCase):
     def test_help(self):
         p = self.startU1DBServe(['--help'])
         stdout, stderr = p.communicate()
-        self.assertEqual('', stderr)
+        if stderr != '':
+            # stderr should normally be empty, but if we are running under
+            # python-dbg, it contains the following string
+            self.assertRegexpMatches(stderr, r'\[\d+ refs\]')
         self.assertEqual(0, p.returncode)
         self.assertIn('Run the U1DB server', stdout)
 
