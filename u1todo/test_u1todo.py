@@ -1,3 +1,5 @@
+"""Tests for u1todo example application."""
+
 from testtools import TestCase
 from u1todo import Task, TodoStore, INDEXES, EMPTY_TASK, DONE, NOT_DONE
 from u1db.backends import inmemory
@@ -50,7 +52,21 @@ class TodoStoreTestCase(TestCase):
         store = TodoStore(self.db)
         task = store.new_task()
         self.assertTrue(isinstance(task, Task))
-        self.assertIsNotNone(task.document.doc_id)
+        self.assertIsNotNone(task.task_id)
+
+    def test_new_task_with_title(self):
+        """Creates a new task."""
+        store = TodoStore(self.db)
+        title = "Un task muy importante"
+        task = store.new_task(title=title)
+        self.assertEqual(title, task.title)
+
+    def test_new_task_with_tags(self):
+        """Creates a new task."""
+        store = TodoStore(self.db)
+        tags = ['foo', 'bar', 'bam']
+        task = store.new_task(tags=tags)
+        self.assertEqual(tags, task.tags)
 
     def test_save_task_get_task(self):
         """Saves a modified task and retrieves it from the db."""
@@ -58,8 +74,20 @@ class TodoStoreTestCase(TestCase):
         task = store.new_task()
         task.title = "This is the title."
         store.save_task(task)
-        task_copy = store.get_task(task.document.doc_id)
+        task_copy = store.get_task(task.task_id)
         self.assertEqual(task.title, task_copy.title)
+
+    def test_get_non_existant_task(self):
+        """Saves a modified task and retrieves it from the db."""
+        store = TodoStore(self.db)
+        self.assertRaises(KeyError, store.get_task, "nonexistant")
+
+    def test_delete_task(self):
+        """Deletes a task by id."""
+        store = TodoStore(self.db)
+        task = store.new_task()
+        store.delete_task(task)
+        self.assertRaises(KeyError, store.get_task, task.task_id)
 
 
 class TaskTestCase(TestCase):
@@ -76,6 +104,11 @@ class TaskTestCase(TestCase):
         self.assertEqual("", task.title)
         self.assertEqual([], task.tags)
         self.assertEqual(False, task.done)
+
+    def test_task_id(self):
+        """Task id is set to document id."""
+        task = Task(self.document)
+        self.assertEqual(self.document.doc_id, task.task_id)
 
     def test_set_title(self):
         """Changing the title is persistent."""
