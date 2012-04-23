@@ -1201,7 +1201,7 @@ u1db__allocate_doc_id(u1database *db)
 {
     int status;
     char *buf;
-    buf = (char *)calloc(1, 34);
+    buf = (char *)calloc(35, 1);
     if (buf == NULL) {
         return NULL;
     }
