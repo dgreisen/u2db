@@ -1,7 +1,22 @@
+# Copyright 2012 Canonical Ltd.
+#
+# This file is part of u1db.
+#
+# u1db is free software: you can redistribute it and/or modify
+# it under the terms of the GNU Lesser General Public License version 3
+# as published by the Free Software Foundation.
+#
+# u1db is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU Lesser General Public License for more details.
+#
+# You should have received a copy of the GNU Lesser General Public License
+# along with u1db.  If not, see <http://www.gnu.org/licenses/>.
+
 """User interface for the u1todo example application."""
 
-from u1db.backends import inmemory
-from u1todo import TodoStore
+from u1todo import TodoStore, get_database
 import os
 import sys
 from PyQt4 import QtGui, QtCore, uic
@@ -21,16 +36,19 @@ class UITask(QtGui.QListWidgetItem):
 class Main(QtGui.QMainWindow):
     """Main window of our application."""
 
-    def __init__(self):
+    def __init__(self, in_memory=False):
         super(Main, self).__init__()
         uifile = os.path.join(os.path.abspath(os.path.dirname(__file__)),
                               'u1todo.ui')
         uic.loadUi(uifile, self)
-        db = inmemory.InMemoryDatabase("u1todo")
+        db = get_database()
         self.store = TodoStore(db)
+        self.store.initialize_db()
         self.connect_events()
         self.item = None
         self.delete_button.setEnabled(False)
+        for task in self.store.get_all_tasks():
+            self.add_task(task)
 
     def connect_events(self):
         """Hook up all the signal handlers."""
@@ -40,7 +58,7 @@ class Main(QtGui.QMainWindow):
         self.list_widget.itemChanged.connect(self.item_changed)
 
     def item_changed(self, item):
-        if item.checkState == QtCore.Qt.Checked:
+        if item.checkState() == QtCore.Qt.Checked:
             item.task.done = True
         else:
             item.task.done = False
@@ -52,9 +70,10 @@ class Main(QtGui.QMainWindow):
         if not text:
             return
         if self.item is None:
-            self.add_item(text)
+            task = self.store.new_task(text)
+            self.add_task(task)
         else:
-            self.update_item(text)
+            self.update_task_text(text)
         self.line_edit.clear()
         self.item = None
 
@@ -65,14 +84,13 @@ class Main(QtGui.QMainWindow):
         if self.list_widget.count() == 0:
             self.delete_button.setEnabled(False)
 
-    def add_item(self, text):
+    def add_task(self, task):
         """Add a new todo item."""
-        task = self.store.new_task(text)
         item = UITask(task)
         self.list_widget.addItem(item)
         self.delete_button.setEnabled(True)
 
-    def update_item(self, text):
+    def update_task_text(self, text):
         """Edit an existing todo item."""
         self.item.task.title = text
         # disconnect the signal temporarily while we change the title

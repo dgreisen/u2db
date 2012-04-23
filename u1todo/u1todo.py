@@ -1,6 +1,25 @@
+# Copyright 2012 Canonical Ltd.
+#
+# This file is part of u1db.
+#
+# u1db is free software: you can redistribute it and/or modify
+# it under the terms of the GNU Lesser General Public License version 3
+# as published by the Free Software Foundation.
+#
+# u1db is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU Lesser General Public License for more details.
+#
+# You should have received a copy of the GNU Lesser General Public License
+# along with u1db.  If not, see <http://www.gnu.org/licenses/>.
+
 """u1todo example application."""
 
 import json
+import os
+import xdg.BaseDirectory
+from u1db.backends.sqlite_backend import SQLitePartialExpandDatabase
 
 DONE = 'true'
 NOT_DONE = 'false'
@@ -11,6 +30,14 @@ INDEXES = {
     'tags': ['tags'],
     'done': ['done'],
 }
+
+
+def get_database():
+    """Get the path that the database is stored in."""
+    # TODO: Make this (at least somewhat) platform/backend independent.
+    return SQLitePartialExpandDatabase(
+        os.path.join(xdg.BaseDirectory.save_data_path("u1todo"),
+        "u1todo.u1db"))
 
 
 class TodoStore(object):
@@ -69,6 +96,10 @@ class TodoStore(object):
         # Get the u1db document from the task object, and save it to the
         # database.
         self.db.put_doc(task.document)
+
+    def get_all_tasks(self):
+        return [
+            Task(doc) for doc in self.db.get_from_index("done", ["*"])]
 
 
 class Task(object):
