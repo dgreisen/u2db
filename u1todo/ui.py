@@ -34,13 +34,17 @@ class Main(QtGui.QMainWindow):
 
     def connect_events(self):
         """Hook up all the signal handlers."""
-        self.connect(
-            self.edit_button, QtCore.SIGNAL("clicked()"), self.update)
-        self.connect(
-            self.delete_button, QtCore.SIGNAL("clicked()"), self.delete)
-        self.connect(
-            self.list_widget, QtCore.SIGNAL("currentRowChanged(int)"),
-            self.row_changed)
+        self.edit_button.clicked.connect(self.update)
+        self.delete_button.clicked.connect(self.delete)
+        self.list_widget.currentRowChanged.connect(self.row_changed)
+        self.list_widget.itemChanged.connect(self.item_changed)
+
+    def item_changed(self, item):
+        if item.checkState == QtCore.Qt.Checked:
+            item.task.done = True
+        else:
+            item.task.done = False
+        self.store.save_task(item.task)
 
     def update(self):
         """Either add a new task or update an existing one."""
@@ -71,7 +75,11 @@ class Main(QtGui.QMainWindow):
     def update_item(self, text):
         """Edit an existing todo item."""
         self.item.task.title = text
+        # disconnect the signal temporarily while we change the title
+        self.list_widget.itemChanged.disconnect(self.item_changed)
         self.item.setText(text)
+        # reconnect the signal after we changed the title
+        self.list_widget.itemChanged.connect(self.item_changed)
         self.store.save_task(self.item.task)
 
     def row_changed(self, index):
