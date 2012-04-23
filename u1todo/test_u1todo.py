@@ -1,3 +1,5 @@
+"""Tests for u1todo example application."""
+
 from testtools import TestCase
 from u1todo import Task, TodoStore, INDEXES, EMPTY_TASK, DONE, NOT_DONE
 from u1db.backends import inmemory

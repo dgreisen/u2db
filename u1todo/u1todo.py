@@ -1,3 +1,5 @@
+"""u1todo example application."""
+
 import json
 
 DONE = 'true'

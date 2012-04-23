@@ -1,3 +1,5 @@
+"""User interface for the u1todo example application."""
+
 from u1db.backends import inmemory
 from u1todo import TodoStore
 import os
