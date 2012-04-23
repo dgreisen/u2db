@@ -796,15 +796,22 @@ u1db__index_all_docs(u1database *db, int n_expressions,
     while (status == SQLITE_ROW) {
         context.doc_id = (const char*)sqlite3_column_text(statement, 0);
         context.content = (const char*)sqlite3_column_text(statement, 1);
+        if (context.content == NULL)
+        {
+            // Invalid JSON in the database, for now we just continue?
+            status = sqlite3_step(statement);
+            continue;
+        }
         context.obj = json_tokener_parse(context.content);
         if (context.obj == NULL
                 || !json_object_is_type(context.obj, json_type_object))
         {
             // Invalid JSON in the database, for now we just continue?
+            status = sqlite3_step(statement);
             continue;
         }
         for (i = 0; i < n_expressions; ++i) {
-            status = evaluate_index_and_insert_into_db(&context, 
+            status = evaluate_index_and_insert_into_db(&context,
                     expressions[i]);
             if (status != U1DB_OK)
                 goto finish;
