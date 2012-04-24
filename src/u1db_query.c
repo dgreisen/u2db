@@ -798,7 +798,7 @@ u1db__index_all_docs(u1database *db, int n_expressions,
         context.content = (const char*)sqlite3_column_text(statement, 1);
         if (context.content == NULL)
         {
-            // Invalid JSON in the database, for now we just continue?
+            // This document is deleted so does not need to be indexed.
             status = sqlite3_step(statement);
             continue;
         }
@@ -807,6 +807,7 @@ u1db__index_all_docs(u1database *db, int n_expressions,
                 || !json_object_is_type(context.obj, json_type_object))
         {
             // Invalid JSON in the database, for now we just continue?
+            // TODO: Raise an error here.
             status = sqlite3_step(statement);
             continue;
         }
