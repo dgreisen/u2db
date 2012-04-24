@@ -751,6 +751,16 @@ class TestHTTPAppErrorHandling(tests.TestCase):
         self.assertEqual({"error": "revision conflict"},
                          simplejson.loads(resp.body))
 
+    def test_Unavailable(self):
+        self.exc = errors.Unavailable
+        resp = self.app.post('/req', params='{}',
+                             headers={'content-type': 'application/json'},
+                             expect_errors=True)
+        self.assertEqual(503, resp.status)
+        self.assertEqual('application/json', resp.header('content-type'))
+        self.assertEqual({"error": "unavailable"},
+                         simplejson.loads(resp.body))
+
     def test_generic_u1db_errors(self):
         self.exc = errors.U1DBError()
         resp = self.app.post('/req', params='{}',
