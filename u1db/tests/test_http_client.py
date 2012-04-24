@@ -46,14 +46,18 @@ class TestHTTPClientBase(tests.TestCaseWithServer):
             content_length = int(environ['CONTENT_LENGTH'])
             error = simplejson.loads(environ['wsgi.input'].read(content_length))
             response = error['response']
-            if isinstance(response, basestring):
-                start_response(error['status'],
-                               [('Content-Type', 'text/plain')])
-                return [response]
+            # In debug mode, wsgiref has an assertion that the status parameter
+            # is a 'str' object. However error['status'] returns a unicode
+            # object.
+            status = str(error['status'])
+            if isinstance(response, unicode):
+                response = str(response)
+            if isinstance(response, str):
+                start_response(status, [('Content-Type', 'text/plain')])
+                return [str(response)]
             else:
-                start_response(error['status'],
-                               [('Content-Type', 'application/json')])
-                return [simplejson.dumps(error['response'])]
+                start_response(status, [('Content-Type', 'application/json')])
+                return [simplejson.dumps(response)]
         elif '/oauth' in environ['PATH_INFO']:
             base_url = self.getURL('').rstrip('/')
             oauth_req = oauth.OAuthRequest.from_request(
