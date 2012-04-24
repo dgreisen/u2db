@@ -32,6 +32,12 @@ from u1db import (
     vectorclock,
     )
 
+SQL_INDEX_KEYS = """
+    SELECT document_fields.value, COUNT(document_fields.value) FROM
+    index_definitions INNER JOIN document_fields ON field = field_name
+    WHERE index_definitions.name = ? GROUP BY document_fields.value;
+    """
+
 
 class SQLiteDatabase(CommonBackend):
     """A U1DB implementation that uses SQLite as its persistence layer."""
@@ -570,6 +576,16 @@ class SQLiteDatabase(CommonBackend):
             res = c.fetchall()
             result.extend([Document(r[0], r[1], r[2]) for r in res])
         return result
+
+    def get_index_keys(self, index):
+        c = self._db_handle.cursor()
+        try:
+            c.execute(SQL_INDEX_KEYS, (index,))
+        except dbapi2.OperationalError, e:
+            raise dbapi2.OperationalError(str(e) +
+                '\nstatement: %s\nargs: %s\n' % (statement, args))
+        res = c.fetchall()
+        return [r for r in res]
 
     def delete_index(self, index_name):
         with self._db_handle:

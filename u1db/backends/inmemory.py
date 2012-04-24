@@ -190,6 +190,10 @@ class InMemoryDatabase(CommonBackend):
             result.append(Document(doc_id, doc_rev, doc))
         return result
 
+    def get_index_keys(self, index_name):
+        index = self._indexes[index_name]
+        return index.keys()
+
     def whats_changed(self, old_generation=0):
         changes = []
         relevant_tail = self._transaction_log[old_generation:]
@@ -302,6 +306,10 @@ class InMemoryIndex(object):
                 result.extend(self._lookup_prefix(values[:last]))
         return result
 
+    def keys(self):
+        """Find the indexed keys."""
+        return [(key, len(val)) for key, val in self._values.items()]
+
     def _lookup_prefix(self, value):
         """Find docs that match the prefix string in values."""
         # TODO: We need a different data structure to make prefix style fast,
@@ -326,7 +334,8 @@ class InMemorySyncTarget(CommonSyncTarget):
 
     def get_sync_info(self, source_replica_uid):
         source_gen = self._db.get_sync_generation(source_replica_uid)
-        return self._db._replica_uid, len(self._db._transaction_log), source_gen
+        return (
+            self._db._replica_uid, len(self._db._transaction_log), source_gen)
 
     def record_sync_info(self, source_replica_uid, source_replica_generation):
         self._db.set_sync_generation(source_replica_uid,

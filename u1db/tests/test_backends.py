@@ -897,6 +897,18 @@ class DatabaseIndexTests(tests.DatabaseBaseTests):
 
 class PyDatabaseIndexTests(tests.DatabaseBaseTests):
 
+    def test_get_index_keys_from_index(self):
+        self.db.create_index('test-idx', ['key'])
+        content1 = '{"key": "value1"}'
+        content2 = '{"key": "value2"}'
+        content3 = '{"key": "value2"}'
+        self.db.create_doc(content1)
+        self.db.create_doc(content2)
+        self.db.create_doc(content3)
+        self.assertEqual(
+            [('value1', 1), ('value2', 2)],
+            sorted(self.db.get_index_keys('test-idx')))
+
     def test_sync_exchange_updates_indexes(self):
         doc = self.db.create_doc(simple_doc)
         self.db.create_index('test-idx', ['key'])
@@ -909,9 +921,9 @@ class PyDatabaseIndexTests(tests.DatabaseBaseTests):
 
         doc_other = self.make_document(doc.doc_id, other_rev, new_content)
         docs_by_gen = [(doc_other, 10)]
-        result = st.sync_exchange(docs_by_gen, 'other-replica',
-                                  last_known_generation=0,
-                                  return_doc_cb=ignore)
+        st.sync_exchange(
+            docs_by_gen, 'other-replica', last_known_generation=0,
+            return_doc_cb=ignore)
         self.assertGetDoc(self.db, doc.doc_id, other_rev, new_content, False)
         self.assertEqual([doc_other],
                          self.db.get_from_index('test-idx', [('altval',)]))
