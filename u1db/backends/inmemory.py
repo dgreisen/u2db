@@ -168,7 +168,8 @@ class InMemoryDatabase(CommonBackend):
     def create_index(self, index_name, index_expression):
         index = InMemoryIndex(index_name, index_expression)
         for doc_id, (doc_rev, doc) in self._docs.iteritems():
-            index.add_json(doc_id, doc)
+            if doc is not None:
+                index.add_json(doc_id, doc)
         self._indexes[index_name] = index
 
     def delete_index(self, index_name):
