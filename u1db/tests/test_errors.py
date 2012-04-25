@@ -50,3 +50,12 @@ class TestError(tests.TestCase):
 
         err = errors.HTTPError(500, "ERROR")
         self.assertEqual("HTTPError(500, 'ERROR')", str(err))
+
+    def test_Unvailable(self):
+        err = errors.Unavailable()
+        self.assertEqual(503, err.status)
+        self.assertEqual("Unavailable()", str(err))
+
+        err = errors.Unavailable("DOWN")
+        self.assertEqual("DOWN", err.message)
+        self.assertEqual("Unavailable('DOWN')", str(err))

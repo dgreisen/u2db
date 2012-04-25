@@ -185,6 +185,26 @@ class TestHTTPClientBase(tests.TestCaseWithServer):
                           {'status': "409 Conflict",
                            'response': {"error": "revision conflict"}})
 
+    def test_unavailable_proper(self):
+        cli = self.getClient()
+        self.assertRaises(errors.Unavailable,
+                          cli._request_json, 'POST', ['error'], {},
+                          {'status': "503 Service Unavailable",
+                           'response': {"error": "unavailable"}})
+
+    def test_unavailable_random_source(self):
+        cli = self.getClient()
+        try:
+            cli._request_json('POST', ['error'], {},
+                              {'status': "503 Service Unavailable",
+                               'response': "random unavailable."})
+        except errors.Unavailable, e:
+            pass
+
+        self.assertEqual(503, e.status)
+        self.assertEqual("random unavailable.", e.message)
+        self.assertTrue("content-type" in e.headers)
+
     def test_generic_u1db_error(self):
         cli = self.getClient()
         self.assertRaises(errors.U1DBError,
