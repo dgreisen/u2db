@@ -1,3 +1,19 @@
+# Copyright 2012 Canonical Ltd.
+#
+# This file is part of u1db.
+#
+# u1db is free software: you can redistribute it and/or modify
+# it under the terms of the GNU Lesser General Public License version 3
+# as published by the Free Software Foundation.
+#
+# u1db is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU Lesser General Public License for more details.
+#
+# You should have received a copy of the GNU Lesser General Public License
+# along with u1db.  If not, see <http://www.gnu.org/licenses/>.
+
 """Tests for u1todo example application."""
 
 from testtools import TestCase
@@ -14,6 +30,13 @@ class TodoStoreTestCase(TestCase):
     def test_initialize_db(self):
         """Creates indexes."""
         store = TodoStore(self.db)
+        store.initialize_db()
+        self.assertEqual(INDEXES, dict(self.db.list_indexes()))
+
+    def test_reinitialize_db(self):
+        """Creates indexes."""
+        store = TodoStore(self.db)
+        store.new_task()
         store.initialize_db()
         self.assertEqual(INDEXES, dict(self.db.list_indexes()))
 
@@ -88,6 +111,17 @@ class TodoStoreTestCase(TestCase):
         task = store.new_task()
         store.delete_task(task)
         self.assertRaises(KeyError, store.get_task, task.task_id)
+
+    def test_get_all_tasks(self):
+        store = TodoStore(self.db)
+        store.initialize_db()
+        task1 = store.new_task()
+        task2 = store.new_task()
+        task3 = store.new_task()
+        task_ids = [task.task_id for task in store.get_all_tasks()]
+        self.assertEqual(
+            sorted([task1.task_id, task2.task_id, task3.task_id]),
+            sorted(task_ids))
 
 
 class TaskTestCase(TestCase):
