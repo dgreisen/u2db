@@ -595,6 +595,11 @@ u1db__sync_db_to_target(u1database *db, u1db_sync_target *target,
     }
 finish:
     if (to_send_state.doc_ids_to_return != NULL) {
+        int i;
+
+        for (i = 0; i < to_send_state.num_doc_ids; ++i) {
+            free(to_send_state.doc_ids_to_return[i]);
+        }
         free(to_send_state.doc_ids_to_return);
     }
     if (to_send_state.gen_for_doc_ids != NULL) {
