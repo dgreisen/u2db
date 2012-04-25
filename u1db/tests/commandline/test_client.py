@@ -346,8 +346,13 @@ class TestCommandLine(TestCaseWithDB, RunMainHelper):
         doc = self.db.get_doc('test-id')
         self.assertEqual(tests.simple_doc, doc.content)
         self.assertFalse(doc.has_conflicts)
-        self.assertEqual('id: test-id\nrev: %s\n' % (doc.rev,),
-                         stderr.replace('\r\n', '\n'))
+        expected = 'id: test-id\nrev: %s\n' % (doc.rev,)
+        stripped = stderr.replace('\r\n', '\n')
+        if expected != stripped:
+            # When run under python-dbg, it prints out the refs after the
+            # actual content, so match it if we need to.
+            expected_re = expected + '\[\d+ refs\]\n'
+            self.assertRegexpMatches(stripped, expected_re)
 
     def test_get(self):
         doc = self.db.create_doc(tests.simple_doc, doc_id='test-id')

@@ -80,6 +80,9 @@ class HTTPClientBase(object):
                 if exc_cls is not None:
                     message = respdic.get("message")
                     raise exc_cls(message)
+        # special case
+        if resp.status == 503:
+            raise errors.Unavailable(body, headers)
         raise errors.HTTPError(resp.status, body, headers)
 
     def _sign_request(self, method, url_query, params):

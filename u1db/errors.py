@@ -96,6 +96,21 @@ class HTTPError(U1DBError):
             return "HTTPError(%d, %r)" % (self.status, self.message)
 
 
+class Unavailable(HTTPError):
+    """Server not available not serve request."""
+
+    wire_description = "unavailable"
+
+    def __init__(self, message=None, headers={}):
+        super(Unavailable, self).__init__(503, message, headers)
+
+    def __str__(self):
+        if not self.message:
+            return "Unavailable()"
+        else:
+            return "Unavailable(%r)" % self.message
+
+
 class BrokenSyncStream(U1DBError):
     """Unterminated or otherwise broken sync exchange stream."""
 
