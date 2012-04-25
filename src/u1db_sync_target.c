@@ -55,6 +55,7 @@ struct _get_docs_to_doc_gen_context {
     void *user_context;
     u1db_doc_gen_callback user_cb;
     int *gen_for_doc_ids;
+    int free_when_done;
 };
 
 // A wrapper to change a 'u1db_doc_callback' into a 'u1db_doc_gen_callback'.
@@ -379,6 +380,9 @@ get_docs_to_gen_docs(void *context, u1db_document *doc)
     status = ctx->user_cb(ctx->user_context, doc,
             ctx->gen_for_doc_ids[ctx->doc_offset]);
     ctx->doc_offset++;
+    if (ctx->free_when_done) {
+        u1db_free_doc(&doc);
+    }
     return status;
 }
 
@@ -446,10 +450,11 @@ get_and_insert_docs(u1database *source_db, u1db_sync_exchange *se,
 {
     struct _get_docs_to_doc_gen_context get_doc_state = {0};
 
+    get_doc_state.free_when_done = 1;
     get_doc_state.user_context = se;
     // Note: user_cb takes a 'void *' as the first parameter, so we cast the
     //       u1db__sync_exchange_insert_doc_from_source to avoid the warning
-    get_doc_state.user_cb = 
+    get_doc_state.user_cb =
         (u1db_doc_gen_callback)u1db__sync_exchange_insert_doc_from_source;
     get_doc_state.gen_for_doc_ids = generations;
     return u1db_get_docs(source_db, n_doc_ids, doc_ids,
@@ -458,7 +463,7 @@ get_and_insert_docs(u1database *source_db, u1db_sync_exchange *se,
 
 
 static int
-st_sync_exchange(u1db_sync_target *st, const char *source_replica_uid, 
+st_sync_exchange(u1db_sync_target *st, const char *source_replica_uid,
                  int n_docs, u1db_document **docs,
                  int *generations, int *target_gen, void *context,
                  u1db_doc_gen_callback cb)
