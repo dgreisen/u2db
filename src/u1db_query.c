@@ -783,7 +783,7 @@ u1db__index_all_docs(u1database *db, int n_expressions,
 {
     int status, i;
     sqlite3_stmt *statement = NULL;
-    struct evaluate_index_context context;
+    struct evaluate_index_context context = {0};
 
     status = sqlite3_prepare_v2(db->sql_handle,
         "SELECT doc_id, content FROM document", -1,
@@ -794,6 +794,10 @@ u1db__index_all_docs(u1database *db, int n_expressions,
     context.db = db;
     status = sqlite3_step(statement);
     while (status == SQLITE_ROW) {
+        if (context.obj != NULL) {
+            json_object_put(context.obj);
+            context.obj = NULL;
+        }
         context.doc_id = (const char*)sqlite3_column_text(statement, 0);
         context.content = (const char*)sqlite3_column_text(statement, 1);
         if (context.content == NULL)
@@ -823,6 +827,10 @@ u1db__index_all_docs(u1database *db, int n_expressions,
         status = U1DB_OK;
     }
 finish:
+    if (context.obj != NULL) {
+        json_object_put(context.obj);
+        context.obj = NULL;
+    }
     sqlite3_finalize(statement);
     return status;
 }
