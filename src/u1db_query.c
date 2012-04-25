@@ -302,7 +302,7 @@ u1db_get_from_index(u1database *db, u1query *query,
                     int n_values, ...)
 {
     int status = U1DB_OK;
-    sqlite3_stmt *statement;
+    sqlite3_stmt *statement = NULL;
     char *doc_id = NULL;
     char *query_str = NULL;
     int i, bind_arg;
@@ -362,6 +362,7 @@ u1db_get_from_index(u1database *db, u1query *query,
     }
 finish:
     va_end(argp);
+    sqlite3_finalize(statement);
     if (query_str != NULL) {
         free(query_str);
     }
@@ -783,7 +784,7 @@ u1db__index_all_docs(u1database *db, int n_expressions,
 {
     int status, i;
     sqlite3_stmt *statement = NULL;
-    struct evaluate_index_context context;
+    struct evaluate_index_context context = {0};
 
     status = sqlite3_prepare_v2(db->sql_handle,
         "SELECT doc_id, content FROM document", -1,
@@ -794,17 +795,29 @@ u1db__index_all_docs(u1database *db, int n_expressions,
     context.db = db;
     status = sqlite3_step(statement);
     while (status == SQLITE_ROW) {
+        if (context.obj != NULL) {
+            json_object_put(context.obj);
+            context.obj = NULL;
+        }
         context.doc_id = (const char*)sqlite3_column_text(statement, 0);
         context.content = (const char*)sqlite3_column_text(statement, 1);
+        if (context.content == NULL)
+        {
+            // This document is deleted so does not need to be indexed.
+            status = sqlite3_step(statement);
+            continue;
+        }
         context.obj = json_tokener_parse(context.content);
         if (context.obj == NULL
                 || !json_object_is_type(context.obj, json_type_object))
         {
             // Invalid JSON in the database, for now we just continue?
+            // TODO: Raise an error here.
+            status = sqlite3_step(statement);
             continue;
         }
         for (i = 0; i < n_expressions; ++i) {
-            status = evaluate_index_and_insert_into_db(&context, 
+            status = evaluate_index_and_insert_into_db(&context,
                     expressions[i]);
             if (status != U1DB_OK)
                 goto finish;
@@ -815,6 +828,10 @@ u1db__index_all_docs(u1database *db, int n_expressions,
         status = U1DB_OK;
     }
 finish:
+    if (context.obj != NULL) {
+        json_object_put(context.obj);
+        context.obj = NULL;
+    }
     sqlite3_finalize(statement);
     return status;
 }

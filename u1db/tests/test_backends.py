@@ -42,7 +42,7 @@ except ImportError:
 
 def http_create_database(test, replica_uid, path='test'):
     test.startServer()
-    db = test.request_state._create_database(replica_uid)
+    test.request_state._create_database(replica_uid)
     return http_database.HTTPDatabase(test.getURL(path))
 
 
@@ -593,6 +593,14 @@ class DatabaseIndexTests(tests.DatabaseBaseTests):
         self.assertEqual([doc],
                          self.db.get_from_index('test-idx', [('value',)]))
 
+    def test_create_index_after_deleting_document(self):
+        doc = self.db.create_doc(simple_doc)
+        doc2 = self.db.create_doc(simple_doc)
+        self.db.delete_doc(doc2)
+        self.db.create_index('test-idx', ['key'])
+        self.assertEqual([doc],
+                         self.db.get_from_index('test-idx', [('value',)]))
+
     def test_delete_index(self):
         self.db.create_index('test-idx', ['key'])
         self.assertEqual([('test-idx', ['key'])], self.db.list_indexes())
@@ -606,9 +614,10 @@ class DatabaseIndexTests(tests.DatabaseBaseTests):
             self.db.get_from_index('test-idx', [('value',)]))
 
     def test_get_from_index_unmatched(self):
-        doc = self.db.create_doc(simple_doc)
+        self.db.create_doc(simple_doc)
         self.db.create_index('test-idx', ['key'])
-        self.assertEqual([], self.db.get_from_index('test-idx', [('novalue',)]))
+        self.assertEqual(
+            [], self.db.get_from_index('test-idx', [('novalue',)]))
 
     def test_create_index_multiple_exact_matches(self):
         doc = self.db.create_doc(simple_doc)

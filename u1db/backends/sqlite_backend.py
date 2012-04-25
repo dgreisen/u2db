@@ -669,6 +669,8 @@ class SQLitePartialExpandDatabase(SQLiteDatabase):
                    for field in new_fields]
         c = self._db_handle.cursor()
         for doc_id, doc in self._iter_all_docs():
+            if doc is None:
+                continue
             raw_doc = simplejson.loads(doc)
             self._update_indexes(doc_id, raw_doc, getters, c)
 

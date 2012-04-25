@@ -66,6 +66,7 @@ static int simple_set_curl_data(CURL *curl, struct _http_request *header,
 struct _http_state {
     char is_http[4];
     char *base_url;
+    char *replica_uid;
     CURL *curl;
     char *consumer_key;
     char *consumer_secret;
@@ -420,7 +421,21 @@ st_http_get_sync_info(u1db_sync_target *st,
         status = U1DB_INVALID_HTTP_RESPONSE;
         goto finish;
     }
-    *st_replica_uid = strdup(json_object_get_string(obj));
+    if (state->replica_uid == NULL) {
+        // we cache this on the state object, because the api for get_sync_info
+        // asserts that callers do not have to free the returned string.
+        // This isn't a functional problem, because if the sync target ever
+        // changed its replica uid we'd be seriously broken anyway.
+        state->replica_uid = strdup(json_object_get_string(obj));
+    } else {
+        if (strcmp(state->replica_uid, json_object_get_string(obj)) != 0) {
+            // Our http target changed replica_uid, this would be a really
+            // strange bug
+            status = U1DB_INVALID_HTTP_RESPONSE;
+            goto finish;
+        }
+    }
+    *st_replica_uid = state->replica_uid;
     if (*st_replica_uid == NULL) {
         status = U1DB_NOMEM;
         goto finish;
@@ -967,6 +982,10 @@ st_http_finalize(u1db_sync_target *st)
         if (state->base_url != NULL) {
             free(state->base_url);
             state->base_url = NULL;
+        }
+        if (state->replica_uid != NULL) {
+            free(state->replica_uid);
+            state->replica_uid = NULL;
         }
         if (state->curl != NULL) {
             curl_easy_cleanup(state->curl);
