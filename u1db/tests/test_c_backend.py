@@ -14,7 +14,6 @@
 # You should have received a copy of the GNU Lesser General Public License
 # along with u1db.  If not, see <http://www.gnu.org/licenses/>.
 
-
 from u1db import (
     Document,
     errors,
@@ -106,6 +105,13 @@ class TestCDatabase(BackendTests):
         self.db.create_index("multi-idx", ["key", "sub.doc"])
         docs = self.db.get_from_index('multi-idx', [('value', 'underneath')])
         self.assertEqual([doc], docs)
+
+    def test_get_index_keys(self):
+        self.db = c_backend_wrapper.CDatabase(':memory:')
+        self.db.create_doc(tests.simple_doc)
+        self.db.create_index("key-idx", ["key"])
+        keys = self.db.get_index_keys('key-idx')
+        self.assertEqual([("value", 1)], keys)
 
     def test__query_init_one_field(self):
         self.db = c_backend_wrapper.CDatabase(':memory:')

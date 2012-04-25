@@ -894,9 +894,6 @@ class DatabaseIndexTests(tests.DatabaseBaseTests):
         rows = self.db.get_from_index("index", [("bar", )])
         self.assertEqual([doc], rows)
 
-
-class PyDatabaseIndexTests(tests.DatabaseBaseTests):
-
     def test_get_index_keys_from_index(self):
         self.db.create_index('test-idx', ['key'])
         content1 = '{"key": "value1"}'
@@ -908,6 +905,9 @@ class PyDatabaseIndexTests(tests.DatabaseBaseTests):
         self.assertEqual(
             [('value1', 1), ('value2', 2)],
             sorted(self.db.get_index_keys('test-idx')))
+
+
+class PyDatabaseIndexTests(tests.DatabaseBaseTests):
 
     def test_sync_exchange_updates_indexes(self):
         doc = self.db.create_doc(simple_doc)

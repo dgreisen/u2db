@@ -44,6 +44,7 @@ static int op_split_words(string_list *result, const string_list *value);
 
 static operation operations[OPERATIONS] = {op_lower, op_split_words};
 
+
 static int
 init_list(string_list **list)
 {
@@ -368,6 +369,42 @@ finish:
     return status;
 }
 
+int
+u1db_get_index_keys(u1database *db, char *index_name,
+                    void *context, u1db_key_callback cb)
+{
+    int frequency;
+    int status = U1DB_OK;
+    char *key = NULL;
+    sqlite3_stmt *statement;
+    status = sqlite3_prepare_v2(
+        db->sql_handle,
+        "SELECT document_fields.value, COUNT(document_fields.value) FROM "
+        "index_definitions INNER JOIN document_fields ON "
+        "index_definitions.field = document_fields.field_name WHERE "
+        "index_definitions.name = ? GROUP BY document_fields.value;",
+        -1, &statement, NULL);
+    if (status != SQLITE_OK) {
+        goto finish;
+    }
+    status = sqlite3_bind_text(
+        statement, 1, index_name, -1, SQLITE_TRANSIENT);
+    if (status != SQLITE_OK) {
+        goto finish;
+    }
+    status = sqlite3_step(statement);
+    while (status == SQLITE_ROW) {
+        key = (char*)sqlite3_column_text(statement, 0);
+        frequency = (int)sqlite3_column_int(statement, 1);
+        cb(context, key, frequency);
+        status = sqlite3_step(statement);
+    }
+    if (status == SQLITE_DONE) {
+        status = U1DB_OK;
+    }
+finish:
+    return status;
+}
 
 static void
 add_to_buf(char **buf, int *buf_size, const char *fmt, ...)
