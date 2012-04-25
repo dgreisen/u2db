@@ -18,6 +18,11 @@ check-valgrind: build-debug
 	--suppressions=custom.supp \
 	python-dbg -m testtools.run discover
 
+check-valgrind-leaks: 
+	valgrind --tool=memcheck --suppressions=custom.supp \
+	--track-origins=yes --num-callers=40 --leak-resolution=high \
+	--leak-check=full python-dbg -m testtools.run discover
+
 check-verbose:
 	python -c "import unittest, sys; from testtools import run; run.TestProgram(argv=sys.argv, testRunner=unittest.TextTestRunner(verbosity=2), stdout=sys.stdout)" discover
 
