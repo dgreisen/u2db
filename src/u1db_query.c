@@ -302,7 +302,7 @@ u1db_get_from_index(u1database *db, u1query *query,
                     int n_values, ...)
 {
     int status = U1DB_OK;
-    sqlite3_stmt *statement;
+    sqlite3_stmt *statement = NULL;
     char *doc_id = NULL;
     char *query_str = NULL;
     int i, bind_arg;
@@ -362,6 +362,7 @@ u1db_get_from_index(u1database *db, u1query *query,
     }
 finish:
     va_end(argp);
+    sqlite3_finalize(statement);
     if (query_str != NULL) {
         free(query_str);
     }
