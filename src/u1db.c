@@ -270,6 +270,9 @@ finish:
         // have to free our local content.
         free(local_doc_id);
     }
+    if (status != U1DB_OK) {
+        u1db_free_doc(doc);
+    }
     return status;
 }
 

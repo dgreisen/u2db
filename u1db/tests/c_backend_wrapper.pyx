@@ -1039,7 +1039,12 @@ cdef class VectorClockRev:
         status = u1db__vectorclock_as_str(self._clock, &res)
         if status != U1DB_OK:
             return '%s(<failure: %d>)' % (status,)
-        return '%s(%s)' % (self.__class__.__name__, res)
+        if res == NULL:
+            val = '%s(NULL)' % (self.__class__.__name__,)
+        else:
+            val = '%s(%s)' % (self.__class__.__name__, res)
+            free(res)
+        return val
 
     def as_dict(self):
         cdef u1db_vectorclock *cur
