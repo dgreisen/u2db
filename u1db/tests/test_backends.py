@@ -897,6 +897,13 @@ class DatabaseIndexTests(tests.DatabaseBaseTests):
 
 class PyDatabaseIndexTests(tests.DatabaseBaseTests):
 
+    def test_get_from_index_with_numbeeer(self):
+        self.db.create_index("index", ["number(foo, 5)"])
+        content = '{"foo": 12}'
+        doc = self.db.create_doc(content)
+        rows = self.db.get_from_index("index", [("00012", )])
+        self.assertEqual([doc], rows)
+
     def test_sync_exchange_updates_indexes(self):
         doc = self.db.create_doc(simple_doc)
         self.db.create_index('test-idx', ['key'])
@@ -909,7 +916,7 @@ class PyDatabaseIndexTests(tests.DatabaseBaseTests):
 
         doc_other = self.make_document(doc.doc_id, other_rev, new_content)
         docs_by_gen = [(doc_other, 10)]
-        result = st.sync_exchange(docs_by_gen, 'other-replica',
+        st.sync_exchange(docs_by_gen, 'other-replica',
                                   last_known_generation=0,
                                   return_doc_cb=ignore)
         self.assertGetDoc(self.db, doc.doc_id, other_rev, new_content, False)
