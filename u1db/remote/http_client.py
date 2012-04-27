@@ -66,7 +66,8 @@ class _VerifiedHTTPSConnection(httplib.HTTPSConnection):
                                     ssl_version=ssl.PROTOCOL_SSLv3,
                                     **cert_opts
                                     )
-        match_hostname(self.sock.getpeercert(), self.host)
+        if cert_opts:
+            match_hostname(self.sock.getpeercert(), self.host)
 
 
 class HTTPClientBase(object):
