@@ -40,6 +40,7 @@ typedef struct _u1db_document
 
 typedef struct _u1query u1query;
 typedef int (*u1db_doc_callback)(void *context, u1db_document *doc);
+typedef int (*u1db_key_callback)(void *context, const char *key);
 typedef int (*u1db_doc_gen_callback)(void *context, u1db_document *doc, int gen);
 typedef int (*u1db_doc_id_gen_callback)(void *context, const char *doc_id, int gen);
 
@@ -305,6 +306,14 @@ int u1db_get_from_index(u1database *db, u1query *query,
                         void *context, u1db_doc_callback cb,
                         int n_values, ...);
 
+/**
+ * Get keys under which documents are indexed.
+ *
+ * @param index_name Name of the index for which to get keys.
+ * @param context Will be returned via the document callback
+ */
+int u1db_get_index_keys(u1database *db, char *index_name, void *context,
+                        u1db_key_callback cb);
 /**
  * Get documents matching a single column index.
  */

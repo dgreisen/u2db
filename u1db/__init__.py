@@ -199,6 +199,15 @@ class Database(object):
         """
         raise NotImplementedError(self.get_from_index)
 
+    def get_index_keys(self, index_name):
+        """Return all keys under which documents are indexed in this index.
+
+        :return: [(key, frequency)] A list of indexed keys and the frequency
+            they occur.
+        :param index_name: The index to query
+        """
+        raise NotImplementedError(self.get_index_keys)
+
     # XXX: get_doc_conflicts still uses tuples, we need to change this to using
     #      Document objects
     def get_doc_conflicts(self, doc_id):

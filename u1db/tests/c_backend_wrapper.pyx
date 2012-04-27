@@ -58,6 +58,7 @@ cdef extern from "u1db/u1db.h":
 
     ctypedef char* const_char_ptr "const char*"
     ctypedef int (*u1db_doc_callback)(void *context, u1db_document *doc)
+    ctypedef int (*u1db_key_callback)(void *context, char *key)
     ctypedef int (*u1db_doc_gen_callback)(void *context,
         u1db_document *doc, int gen)
     ctypedef int (*u1db_doc_id_gen_callback)(void *context,
@@ -97,6 +98,8 @@ cdef extern from "u1db/u1db.h":
                             int n_expressions, const_char_ptr *expressions))
     int u1db_get_from_index(u1database *db, u1query *query, void *context,
                             u1db_doc_callback cb, int n_values, char *val0, ...)
+    int u1db_get_index_keys(u1database *db, char *index_name, void *context,
+                            u1db_key_callback cb)
     int u1db_simple_lookup1(u1database *db, char *index_name, char *val1,
                             void *context, u1db_doc_callback cb)
 
@@ -263,6 +266,10 @@ cdef int _append_doc_to_list(void *context, u1db_document *doc) with gil:
     a_list.append(pydoc)
     return 0
 
+cdef int _append_key_to_list(void *context, const_char_ptr key) with gil:
+    a_list = <object>context
+    a_list.append(key)
+    return 0
 
 cdef _list_to_array(lst, const_char_ptr **res, int *count):
     cdef const_char_ptr *tmp
@@ -273,7 +280,7 @@ cdef _list_to_array(lst, const_char_ptr **res, int *count):
     res[0] = tmp
 
 
-cdef int _append_index_definition_to_list(void *context, 
+cdef int _append_index_definition_to_list(void *context,
         const_char_ptr index_name, int n_expressions,
         const_char_ptr *expressions) with gil:
     cdef int i
@@ -338,10 +345,10 @@ def _format_query(fields):
         status = _format_query_dotted(&buf, wildcard, 2, <char*>fields[0],
                 <char*>fields[1])
     elif len(fields) == 3:
-        status = _format_query_dotted(&buf, wildcard, 3, <char*>fields[0], 
+        status = _format_query_dotted(&buf, wildcard, 3, <char*>fields[0],
                 <char*>fields[1], <char*>fields[2])
     elif len(fields) == 4:
-        status = _format_query_dotted(&buf, wildcard, 4, <char*>fields[0], 
+        status = _format_query_dotted(&buf, wildcard, 4, <char*>fields[0],
                 <char*>fields[1], <char*>fields[2], <char *>fields[3])
     else:
         status = U1DB_NOT_IMPLEMENTED
@@ -468,7 +475,7 @@ cdef object safe_str(const_char_ptr s):
 
 
 cdef class CQuery:
-    
+
     cdef u1query *_query
 
     def __init__(self):
@@ -839,7 +846,7 @@ cdef class CDatabase(object):
             gen = replica_gen
         handle_status("Failed to put_doc_if_newer",
             u1db_put_doc_if_newer(self._db, doc._doc, save_conflict,
-                c_uid, gen, &state)) 
+                c_uid, gen, &state))
         if state == U1DB_INSERTED:
             return 'inserted'
         elif state == U1DB_SUPERSEDED:
@@ -1002,13 +1009,22 @@ cdef class CDatabase(object):
             handle_status("get_from_index", status)
         return res
 
+    def get_index_keys(self, index_name):
+        cdef int status
+        result = []
+        status = U1DB_OK
+        status = u1db_get_index_keys(
+            self._db, index_name, <void*>result, _append_key_to_list)
+        handle_status("get_index_keys", status)
+        return result
+
     def _query_init(self, index_name):
         cdef CQuery query
         query = CQuery()
         handle_status("query_init",
             u1db_query_init(self._db, index_name, &query._query))
         return query
-    
+
     def get_sync_target(self):
         cdef CSyncTarget target
         target = CSyncTarget()
