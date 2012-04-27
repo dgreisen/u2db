@@ -232,6 +232,11 @@ class Parser(object):
                 raise errors.IndexDefinitionParseError(
                     "Unknown operation: %s" % word)
             if ',' in field:
+                # XXX: The arguments should probably be cast to whatever types
+                # they represent, but short of evaling them, I don't see an
+                # easy way to do that without adding a lot of complexity.
+                # Since there is only one operation with an extra argument, I'm
+                # punting on this until we grow some more.
                 args = [a.strip() for a in field[1:-1].split(',')]
                 extracted = args[0]
             else:

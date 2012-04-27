@@ -840,7 +840,7 @@ class DatabaseIndexTests(tests.DatabaseBaseTests):
     def test_index_lower_doesnt_match_different_case(self):
         self.db.create_index("index", ["lower(name)"])
         content = '{"name": "Foo"}'
-        doc = self.db.create_doc(content)
+        self.db.create_doc(content)
         rows = self.db.get_from_index("index", [("Foo", )])
         self.assertEqual([], rows)
 
@@ -848,7 +848,7 @@ class DatabaseIndexTests(tests.DatabaseBaseTests):
         self.db.create_index("index", ["lower(name)"])
         self.db.create_index("other_index", ["name"])
         content = '{"name": "Foo"}'
-        doc = self.db.create_doc(content)
+        self.db.create_doc(content)
         rows = self.db.get_from_index("index", [("Foo", )])
         self.assertEqual(0, len(rows))
 
@@ -894,15 +894,16 @@ class DatabaseIndexTests(tests.DatabaseBaseTests):
         rows = self.db.get_from_index("index", [("bar", )])
         self.assertEqual([doc], rows)
 
-
-class PyDatabaseIndexTests(tests.DatabaseBaseTests):
-
-    def test_get_from_index_with_numbeeer(self):
+    def test_get_from_index_with_number(self):
         self.db.create_index("index", ["number(foo, 5)"])
         content = '{"foo": 12}'
         doc = self.db.create_doc(content)
+        import pdb; pdb.set_trace()
         rows = self.db.get_from_index("index", [("00012", )])
         self.assertEqual([doc], rows)
+
+
+class PyDatabaseIndexTests(tests.DatabaseBaseTests):
 
     def test_sync_exchange_updates_indexes(self):
         doc = self.db.create_doc(simple_doc)

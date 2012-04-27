@@ -23,8 +23,8 @@
 #include <ctype.h>
 #include <json/json.h>
 
-#define OPERATIONS 2
-static const char *OPERATORS[OPERATIONS] = {"lower", "split_words"};
+#define OPERATIONS 3
+static const char *OPERATORS[OPERATIONS] = {"lower", "number", "split_words"};
 
 typedef struct string_list_item_
 {
@@ -38,11 +38,31 @@ typedef struct string_list_
     string_list_item *tail;
 } string_list;
 
-typedef int(*operation)(string_list *, const string_list *);
-static int op_lower(string_list *result, const string_list *value);
-static int op_split_words(string_list *result, const string_list *value);
+typedef int(*operation)(string_list *, const string_list *, ...);
+static int op_lower(string_list *result, const string_list *value, ...);
+static int op_number(string_list *result, const string_list *value, ...);
+static int op_split_words(string_list *result, const string_list *value, ...);
 
-static operation operations[OPERATIONS] = {op_lower, op_split_words};
+static operation operations[OPERATIONS] = {
+    op_lower, op_number, op_split_words};
+
+static char *
+itoa(int integer_value)
+{
+    int tmp, size;
+    char *result = NULL;
+    tmp = abs(integer_value);
+    size = 1;
+    while (tmp >= 10) {
+        size++;
+        tmp /= 10;
+    }
+    result = (char *)calloc(size + 1, 1);
+    if (result == NULL)
+        return NULL;
+    snprintf(result, size + 1, "%d", integer_value);
+    return result;
+}
 
 static int
 init_list(string_list **list)
@@ -125,7 +145,7 @@ list_copy(string_list *copy, const string_list *original)
 }
 
 static int
-op_lower(string_list *result, const string_list *values)
+op_lower(string_list *result, const string_list *values, ...)
 {
     string_list_item *item = NULL;
     char *new_value, *value = NULL;
@@ -158,7 +178,62 @@ op_lower(string_list *result, const string_list *values)
 }
 
 static int
-op_split_words(string_list *result, const string_list *values)
+op_number(string_list *result, const string_list *values, ...)
+{
+    string_list_item *item = NULL;
+    char *p, *new_value, *value, *number = NULL;
+    int count, zeroes, value_size;
+    int status = U1DB_OK;
+    va_list argp;
+
+    va_start(argp, values);
+    number = va_arg(argp, char *);
+    for (p = number; *p; p++) {
+        if (isdigit(*p) == 0) {
+            status = U1DB_INVALID_VALUE_FOR_INDEX;
+            goto finish;
+        }
+    }
+    zeroes = atoi(number);
+
+    for (item = values->head; item != NULL; item = item->next)
+    {
+        value = item->data;
+        for (p = value; *p; p++) {
+            if (isdigit(*p) == 0) {
+                continue;
+            }
+        }
+        value_size = strlen(value);
+        if (zeroes > value_size)
+            value_size = zeroes;
+        value_size++;
+        new_value = (char *)calloc(value_size, 1);
+        if (new_value == NULL)
+        {
+            status = U1DB_NOMEM;
+            goto finish;
+        }
+        count = snprintf(new_value, value_size, "%0*d", zeroes, atoi(value));
+        if (count != (value_size - 1)) {
+            // Most likely encoding issues.
+            status = U1DB_INVALID_PARAMETER;
+            goto finish;
+        }
+        if ((status = append(result, new_value)) != U1DB_OK)
+        {
+            free(new_value);
+            goto finish;
+        }
+        free(new_value);
+    }
+finish:
+    va_end(argp);
+    return status;
+}
+
+static int
+op_split_words(string_list *result, const string_list *values, ...)
 {
     string_list_item *item = NULL;
     char *intermediate, *intermediate_ptr = NULL;
@@ -526,11 +601,11 @@ static int
 extract_field_values(const char *expression, string_list *values,
         json_object *obj)
 {
-    char *lparen, *rparen, *sub = NULL;
+    char *lparen, *rparen, *sub, *string_value, *first_comma, *end = NULL;
     char *result, *result_ptr, *dot_chr = NULL;
     struct array_list *list_val = NULL;
     json_object *val = NULL;
-    int path_size, i;
+    int path_size, i, integer_value;
     int status = U1DB_OK;
     lparen = strchr(expression, '(');
     if (lparen == NULL)
@@ -563,6 +638,18 @@ extract_field_values(const char *expression, string_list *values,
             {
                 return status;
             }
+        } else if (json_object_is_type(val, json_type_int)) {
+            integer_value = json_object_get_int(val);
+            string_value = itoa(integer_value);
+            if (string_value == NULL) {
+                return U1DB_NOMEM;
+            }
+            if ((status = append(values, string_value)) != U1DB_OK)
+            {
+                free(string_value);
+                return status;
+            }
+            free(string_value);
         } else if (json_object_is_type(val, json_type_array)) {
             list_val = json_object_get_array(val);
             for (i = 0; i < list_val->length; i++)
@@ -585,15 +672,20 @@ extract_field_values(const char *expression, string_list *values,
     {
         return U1DB_INVALID_VALUE_FOR_INDEX;
     }
-    path_size = ((rparen - 1) - (lparen + 1)) + 1;
-    sub = (char *)calloc(path_size + 1, 1);
-    if (sub != NULL)
-    {
-        strncpy(sub, lparen + 1, path_size);
-        sub[path_size] = '\0';
-        status = extract_field_values(sub, values, obj);
-        free(sub);
+    first_comma = strchr(expression, ',');
+    if (first_comma != NULL) {
+        end = first_comma - 1;
+    } else {
+        end = rparen - 1;
     }
+    path_size = (end - (lparen + 1)) + 1;
+    sub = (char *)calloc(path_size + 1, 1);
+    if (sub == NULL)
+        return U1DB_NOMEM;
+    strncpy(sub, lparen + 1, path_size);
+    sub[path_size] = '\0';
+    status = extract_field_values(sub, values, obj);
+    free(sub);
     return status;
 }
 
@@ -602,7 +694,7 @@ apply_operations(const char *expression, string_list *result,
         const string_list *values)
 {
     operation op = NULL;
-    char *lparen, *op_name = NULL;
+    char *rparen, *lparen, *op_name, *first_comma, *extra_args = NULL;
     int i, op_size;
     int status = U1DB_OK;
     string_list *tmp_values = NULL;
@@ -634,10 +726,34 @@ apply_operations(const char *expression, string_list *result,
         }
         if ((status = init_list(&tmp_values)) != U1DB_OK)
             goto finish;
-        if ((status = apply_operations(lparen + 1, tmp_values, values)) !=
+        lparen++;
+        first_comma = strchr(lparen, ',');
+        if (first_comma != NULL) {
+            extra_args = first_comma + 1;
+            *first_comma = '\0';
+        }
+        if ((status = apply_operations(lparen, tmp_values, values)) !=
                 U1DB_OK)
             goto finish;
-        op(result, tmp_values);
+        if (extra_args == NULL)
+        {
+            op(result, tmp_values);
+        } else {
+            rparen = strchr(extra_args, ')');
+            if (rparen == NULL) {
+                status = U1DB_INVALID_VALUE_FOR_INDEX;
+                goto finish;
+            }
+            *rparen = '\0';
+            while (*extra_args == ' ')
+                extra_args++;
+            if (*extra_args != '\0') {
+                op(result, tmp_values, extra_args);
+            } else {
+                status = U1DB_INVALID_VALUE_FOR_INDEX;
+                goto finish;
+            }
+        }
     }
 finish:
     destroy_list(tmp_values);
@@ -675,6 +791,7 @@ evaluate_index_and_insert_into_db(void *context, const char *expression)
     }
     for (item = values->head; item != NULL; item = item->next)
     {
+        printf("item->data: %s\n", item->data);
         if ((status = add_to_document_fields(ctx->db, ctx->doc_id, expression,
                         item->data)) != U1DB_OK)
             goto finish;
