@@ -1,6 +1,7 @@
 """Test support for client-side https support."""
 
 import os
+import ssl
 import sys
 
 from paste import httpserver
@@ -68,9 +69,8 @@ class TestHttpSyncTargetHttpsSupport(tests.TestCaseWithServer):
             import OpenSSL
         except ImportError:
             self.skipTest("Requires pyOpenSSL")
-        cacert_pem = os.path.join(os.path.dirname(__file__), 'testing-certs',
-                                  'cacert.pem')
-        self.patch(http_client, 'CA_CERTS', cacert_pem)
+        self.cacert_pem = os.path.join(os.path.dirname(__file__),
+                                       'testing-certs', 'cacert.pem')
         super(TestHttpSyncTargetHttpsSupport, self).setUp()
 
     def getSyncTarget(self, host, path=None):
@@ -81,9 +81,26 @@ class TestHttpSyncTargetHttpsSupport(tests.TestCaseWithServer):
     def test_working(self):
         self.startServer()
         db = self.request_state._create_database('test')
+        self.patch(http_client, 'CA_CERTS', self.cacert_pem)
         remote_target = self.getSyncTarget('localhost', 'test')
         remote_target.record_sync_info('other-id', 2)
         self.assertEqual(db.get_sync_generation('other-id'), 2)
+
+    def test_cannot_verify_cert(self):
+        if not sys.platform.startswith('linux'):
+            self.skipTest(
+                "XXX certificate verification happens on linux only for now")
+        self.startServer()
+        # don't print expected traceback server-side
+        self.server.handle_error = lambda req, cli_addr: None
+        db = self.request_state._create_database('test')
+        remote_target = self.getSyncTarget('localhost', 'test')
+        try:
+            remote_target.record_sync_info('other-id', 2)
+        except ssl.SSLError, e:
+            self.assertIn("certificate verify failed", str(e))
+        else:
+            self.fail("certificate verification should have failed.")
 
     def test_host_mismatch(self):
         if not sys.platform.startswith('linux'):
@@ -91,6 +108,7 @@ class TestHttpSyncTargetHttpsSupport(tests.TestCaseWithServer):
                 "XXX certificate verification happens on linux only for now")
         self.startServer()
         db = self.request_state._create_database('test')
+        self.patch(http_client, 'CA_CERTS', self.cacert_pem)
         remote_target = self.getSyncTarget('127.0.0.1', 'test')
         self.assertRaises(http_client.CertificateError,
                           remote_target.record_sync_info, 'other-id', 2)
