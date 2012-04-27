@@ -602,16 +602,16 @@ extract_field_values(const char *expression, string_list *values,
         json_object *obj)
 {
     char *lparen, *rparen, *sub, *string_value, *first_comma, *end = NULL;
-    char *result, *result_ptr, *dot_chr = NULL;
+    char *result_ptr, *dot_chr, *tmp_expression = NULL;
     struct array_list *list_val = NULL;
     json_object *val = NULL;
     int path_size, i, integer_value;
     int status = U1DB_OK;
-    lparen = strchr(expression, '(');
+    tmp_expression = strdup(expression);
+    lparen = strchr(tmp_expression, '(');
     if (lparen == NULL)
     {
-        result = strdup(expression);
-        result_ptr = result;
+        result_ptr = tmp_expression;
         val = obj;
         while (result_ptr != NULL && val != NULL) {
             dot_chr = strchr(result_ptr, '.');
@@ -625,29 +625,26 @@ extract_field_values(const char *expression, string_list *values,
             val = json_object_object_get(val, result_ptr);
             result_ptr = dot_chr;
         }
-        if (result != NULL)
-        {
-            free(result);
-        }
         if (val == NULL)
         {
-            return U1DB_OK;
+            goto finish;
         }
         if (json_object_is_type(val, json_type_string)) {
             if ((status = append(values, json_object_get_string(val))) != U1DB_OK)
             {
-                return status;
+                goto finish;
             }
         } else if (json_object_is_type(val, json_type_int)) {
             integer_value = json_object_get_int(val);
             string_value = itoa(integer_value);
             if (string_value == NULL) {
-                return U1DB_NOMEM;
+                status = U1DB_NOMEM;
+                goto finish;
             }
             if ((status = append(values, string_value)) != U1DB_OK)
             {
                 free(string_value);
-                return status;
+                goto finish;
             }
             free(string_value);
         } else if (json_object_is_type(val, json_type_array)) {
@@ -658,21 +655,20 @@ extract_field_values(const char *expression, string_list *values,
                                     array_list_get_idx(
                                         list_val, i)))) != U1DB_OK)
                 {
-                    return status;
+                    goto finish;
                 }
             }
         } else {
         }
-        // TODO: this segfaults unreliably:
-        // json_object_put(val);
-        return U1DB_OK;
+        goto finish;
     }
-    rparen = strrchr(expression, ')');
+    rparen = strrchr(tmp_expression, ')');
     if (rparen == NULL)
     {
-        return U1DB_INVALID_VALUE_FOR_INDEX;
+        status = U1DB_INVALID_VALUE_FOR_INDEX;
+        goto finish;
     }
-    first_comma = strchr(expression, ',');
+    first_comma = strchr(tmp_expression, ',');
     if (first_comma != NULL) {
         end = first_comma - 1;
     } else {
@@ -681,11 +677,16 @@ extract_field_values(const char *expression, string_list *values,
     path_size = (end - (lparen + 1)) + 1;
     sub = (char *)calloc(path_size + 1, 1);
     if (sub == NULL)
-        return U1DB_NOMEM;
+    {
+        status = U1DB_NOMEM;
+        goto finish;
+    }
     strncpy(sub, lparen + 1, path_size);
     sub[path_size] = '\0';
     status = extract_field_values(sub, values, obj);
     free(sub);
+finish:
+    free(tmp_expression);
     return status;
 }
 
@@ -695,21 +696,22 @@ apply_operations(const char *expression, string_list *result,
 {
     operation op = NULL;
     char *rparen, *lparen, *op_name, *first_comma, *extra_args = NULL;
+    char *tmp_expression = NULL;
     int i, op_size;
     int status = U1DB_OK;
     string_list *tmp_values = NULL;
-    lparen = strchr(expression, '(');
+    tmp_expression = strdup(expression);
+    lparen = strchr(tmp_expression, '(');
     if (lparen == NULL)
     {
-        if ((status = list_copy(result, values)) != U1DB_OK)
-            return status;
-        return U1DB_OK;
+        status = list_copy(result, values);
+        goto finish;
     }
-    op_size = ((lparen - 1) - expression) + 1;
+    op_size = ((lparen - 1) - tmp_expression) + 1;
     op_name = (char *)calloc(op_size + 1, 1);
     if (op_name != NULL)
     {
-        strncpy(op_name, expression, op_size);
+        strncpy(op_name, tmp_expression, op_size);
         op_name[op_size] = '\0';
         for (i = 0; i < OPERATIONS; i++)
         {
@@ -756,6 +758,7 @@ apply_operations(const char *expression, string_list *result,
         }
     }
 finish:
+    free(tmp_expression);
     destroy_list(tmp_values);
     if (op_name != NULL)
     {
@@ -791,7 +794,6 @@ evaluate_index_and_insert_into_db(void *context, const char *expression)
     }
     for (item = values->head; item != NULL; item = item->next)
     {
-        printf("item->data: %s\n", item->data);
         if ((status = add_to_document_fields(ctx->db, ctx->doc_id, expression,
                         item->data)) != U1DB_OK)
             goto finish;
