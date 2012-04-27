@@ -898,7 +898,6 @@ class DatabaseIndexTests(tests.DatabaseBaseTests):
         self.db.create_index("index", ["number(foo, 5)"])
         content = '{"foo": 12}'
         doc = self.db.create_doc(content)
-        import pdb; pdb.set_trace()
         rows = self.db.get_from_index("index", [("00012", )])
         self.assertEqual([doc], rows)
 
