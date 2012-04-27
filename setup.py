@@ -37,7 +37,8 @@ def config():
         "ext_modules": ext,
         "install_requires": ["paste", "simplejson", "routes"],
         # informational
-        "tests_require": ["testtools", "testscenarios", "Cython"],
+        "tests_require": ["testtools", "testscenarios", "Cython",
+                          "pyOpenSSL"],
         "classifiers": [
             'Development Status :: 4 - Beta',
             'Environment :: Console',

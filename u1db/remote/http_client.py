@@ -19,6 +19,9 @@
 import httplib
 from oauth import oauth
 import simplejson
+import socket
+import ssl
+import sys
 import urlparse
 import urllib
 
@@ -28,6 +31,42 @@ from u1db import (
 from u1db.remote import (
     http_errors,
     )
+
+from u1db.remote.ssl_match_hostname import (
+    match_hostname,
+    CertificateError,
+    )
+
+# Ubuntu/debian
+# XXX other...
+CA_CERTS = "/etc/ssl/certs/ca-certificates.crt"
+
+
+class _VerifiedHTTPSConnection(httplib.HTTPSConnection):
+    """HTTPSConnection verifying server side certificates."""
+    # derived from httplib.py
+
+    def connect(self):
+        "Connect to a host on a given (SSL) port."
+
+        sock = socket.create_connection((self.host, self.port),
+                                        self.timeout, self.source_address)
+        if self._tunnel_host:
+            self.sock = sock
+            self._tunnel()
+        if sys.platform.startswith('linux'):
+            cert_opts = {
+                'cert_reqs': ssl.CERT_REQUIRED,
+                'ca_certs': CA_CERTS
+                }
+        else:
+            # XXX no cert verification implemented elsewhere for now
+            cert_opts = {}
+        self.sock = ssl.wrap_socket(sock, self.key_file, self.cert_file,
+                                    ssl_version=ssl.PROTOCOL_SSLv3,
+                                    **cert_opts
+                                    )
+        match_hostname(self.sock.getpeercert(), self.host)
 
 
 class HTTPClientBase(object):
@@ -53,8 +92,11 @@ class HTTPClientBase(object):
     def _ensure_connection(self):
         if self._conn is not None:
             return
-        self._conn = httplib.HTTPConnection(self._url.hostname,
-                                              self._url.port)
+        if self._url.scheme == 'https':
+            connClass = _VerifiedHTTPSConnection
+        else:
+            connClass = httplib.HTTPConnection
+        self._conn = connClass(self._url.hostname, self._url.port)
 
     def close(self):
         if self._conn:
