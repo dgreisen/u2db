@@ -380,7 +380,7 @@ u1db_get_index_keys(u1database *db, char *index_name,
     sqlite3_stmt *statement;
     status = sqlite3_prepare_v2(
         db->sql_handle,
-        "SELECT document_fields.value, COUNT(document_fields.value) FROM "
+        "SELECT document_fields.value FROM "
         "index_definitions INNER JOIN document_fields ON "
         "index_definitions.field = document_fields.field_name WHERE "
         "index_definitions.name = ? GROUP BY document_fields.value;",
@@ -396,8 +396,8 @@ u1db_get_index_keys(u1database *db, char *index_name,
     status = sqlite3_step(statement);
     while (status == SQLITE_ROW) {
         key = (char*)sqlite3_column_text(statement, 0);
-        frequency = (int)sqlite3_column_int(statement, 1);
-        cb(context, key, frequency);
+        if ((status = cb(context, key)) != U1DB_OK)
+            goto finish;
         status = sqlite3_step(statement);
     }
     if (status == SQLITE_DONE) {

@@ -33,9 +33,9 @@ from u1db import (
     )
 
 SQL_INDEX_KEYS = """
-    SELECT document_fields.value, COUNT(document_fields.value) FROM
-    index_definitions INNER JOIN document_fields ON field = field_name
-    WHERE index_definitions.name = ? GROUP BY document_fields.value;
+    SELECT document_fields.value FROM index_definitions INNER JOIN
+    document_fields ON field = field_name WHERE index_definitions.name = ?
+    GROUP BY document_fields.value;
     """
 
 
@@ -585,7 +585,7 @@ class SQLiteDatabase(CommonBackend):
             raise dbapi2.OperationalError(str(e) +
                 '\nstatement: %s\nargs: %s\n' % (statement, args))
         res = c.fetchall()
-        return [r for r in res]
+        return [r[0] for r in res]
 
     def delete_index(self, index_name):
         with self._db_handle:

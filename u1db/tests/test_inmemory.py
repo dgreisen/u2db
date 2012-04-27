@@ -99,7 +99,7 @@ class TestInMemoryIndex(tests.TestCase):
     def test_keys(self):
         idx = inmemory.InMemoryIndex('idx-name', ['key'])
         idx.add_json('doc-id', simple_doc)
-        self.assertEqual([('value', 1)], idx.keys())
+        self.assertEqual(['value'], idx.keys())
 
     def test_lookup(self):
         idx = inmemory.InMemoryIndex('idx-name', ['key'])

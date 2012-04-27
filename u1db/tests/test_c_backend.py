@@ -16,7 +16,6 @@
 
 from u1db import (
     Document,
-    errors,
     tests,
     )
 from u1db.tests import c_backend_wrapper, c_backend_error
@@ -111,7 +110,7 @@ class TestCDatabase(BackendTests):
         self.db.create_doc(tests.simple_doc)
         self.db.create_index("key-idx", ["key"])
         keys = self.db.get_index_keys('key-idx')
-        self.assertEqual([("value", 1)], keys)
+        self.assertEqual(["value"], keys)
 
     def test__query_init_one_field(self):
         self.db = c_backend_wrapper.CDatabase(':memory:')

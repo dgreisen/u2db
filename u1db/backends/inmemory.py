@@ -192,7 +192,7 @@ class InMemoryDatabase(CommonBackend):
 
     def get_index_keys(self, index_name):
         index = self._indexes[index_name]
-        return index.keys()
+        return list(set(index.keys()))
 
     def whats_changed(self, old_generation=0):
         changes = []
@@ -308,7 +308,7 @@ class InMemoryIndex(object):
 
     def keys(self):
         """Find the indexed keys."""
-        return [(key, len(val)) for key, val in self._values.items()]
+        return self._values.keys()
 
     def _lookup_prefix(self, value):
         """Find docs that match the prefix string in values."""

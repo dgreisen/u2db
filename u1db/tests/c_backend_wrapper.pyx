@@ -58,7 +58,7 @@ cdef extern from "u1db/u1db.h":
 
     ctypedef char* const_char_ptr "const char*"
     ctypedef int (*u1db_doc_callback)(void *context, u1db_document *doc)
-    ctypedef int (*u1db_key_callback)(void *context, char *key, int frequency)
+    ctypedef int (*u1db_key_callback)(void *context, char *key)
     ctypedef int (*u1db_doc_gen_callback)(void *context,
         u1db_document *doc, int gen)
     ctypedef int (*u1db_doc_id_gen_callback)(void *context,
@@ -266,10 +266,9 @@ cdef int _append_doc_to_list(void *context, u1db_document *doc) with gil:
     a_list.append(pydoc)
     return 0
 
-cdef int _append_key_and_freq_to_list(void *context, const_char_ptr key,
-                                      int frequency) with gil:
+cdef int _append_key_to_list(void *context, const_char_ptr key) with gil:
     a_list = <object>context
-    a_list.append((key, frequency))
+    a_list.append(key)
     return 0
 
 cdef _list_to_array(lst, const_char_ptr **res, int *count):
@@ -1015,7 +1014,7 @@ cdef class CDatabase(object):
         result = []
         status = U1DB_OK
         status = u1db_get_index_keys(
-            self._db, index_name, <void*>result, _append_key_and_freq_to_list)
+            self._db, index_name, <void*>result, _append_key_to_list)
         handle_status("get_index_keys", status)
         return result
 
