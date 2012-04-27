@@ -404,6 +404,7 @@ u1db_get_index_keys(u1database *db, char *index_name,
         status = U1DB_OK;
     }
 finish:
+    sqlite3_finalize(statement);
     return status;
 }
 
