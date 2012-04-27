@@ -22,7 +22,6 @@ from u1db import (
 
 
 trivial_raw_doc = {}
-PADDING = 5
 
 
 class TestStaticGetter(tests.TestCase):
@@ -187,9 +186,9 @@ class TestSplitWords(tests.TestCase):
 
 class TestNumber(tests.TestCase):
 
-    def assertNumber(self, expected, value):
+    def assertNumber(self, expected, value, padding=5):
         """Assert number transformation produced expected values."""
-        getter = query_parser.Number(query_parser.StaticGetter(value), PADDING)
+        getter = query_parser.Number(query_parser.StaticGetter(value), padding)
         self.assertEqual(expected, getter.get(trivial_raw_doc))
 
     def test_inner_returns_None(self):

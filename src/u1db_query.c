@@ -24,6 +24,9 @@
 #include <json/json.h>
 
 #define OPERATIONS 3
+#ifndef max
+    #define max(a, b) (((a) > (b)) ? (a) : (b))
+#endif
 static const char *OPERATORS[OPERATIONS] = {"lower", "number", "split_words"};
 
 typedef struct string_list_item_
@@ -45,24 +48,6 @@ static int op_split_words(string_list *result, const string_list *value, ...);
 
 static operation operations[OPERATIONS] = {
     op_lower, op_number, op_split_words};
-
-static char *
-itoa(int integer_value)
-{
-    int tmp, size;
-    char *result = NULL;
-    tmp = abs(integer_value);
-    size = 1;
-    while (tmp >= 10) {
-        size++;
-        tmp /= 10;
-    }
-    result = (char *)calloc(size + 1, 1);
-    if (result == NULL)
-        return NULL;
-    snprintf(result, size + 1, "%d", integer_value);
-    return result;
-}
 
 static int
 init_list(string_list **list)
@@ -182,7 +167,7 @@ op_number(string_list *result, const string_list *values, ...)
 {
     string_list_item *item = NULL;
     char *p, *new_value, *value, *number = NULL;
-    int count, zeroes, value_size;
+    int count, zeroes, value_size, isnumber;
     int status = U1DB_OK;
     va_list argp;
 
@@ -199,15 +184,17 @@ op_number(string_list *result, const string_list *values, ...)
     for (item = values->head; item != NULL; item = item->next)
     {
         value = item->data;
+        isnumber = 1;
         for (p = value; *p; p++) {
             if (isdigit(*p) == 0) {
-                continue;
+                isnumber = 0;
+                break;
             }
         }
-        value_size = strlen(value);
-        if (zeroes > value_size)
-            value_size = zeroes;
-        value_size++;
+        if (isnumber == 0) {
+            continue;
+        }
+        value_size = max(strlen(value), zeroes) + 1;
         new_value = (char *)calloc(value_size, 1);
         if (new_value == NULL)
         {
@@ -601,8 +588,9 @@ static int
 extract_field_values(const char *expression, string_list *values,
         json_object *obj)
 {
-    char *lparen, *rparen, *sub, *string_value, *first_comma, *end = NULL;
+    char *lparen, *rparen, *sub, *first_comma, *end = NULL;
     char *result_ptr, *dot_chr, *tmp_expression = NULL;
+    char string_value[21];
     struct array_list *list_val = NULL;
     json_object *val = NULL;
     int path_size, i, integer_value;
@@ -636,17 +624,13 @@ extract_field_values(const char *expression, string_list *values,
             }
         } else if (json_object_is_type(val, json_type_int)) {
             integer_value = json_object_get_int(val);
-            string_value = itoa(integer_value);
-            if (string_value == NULL) {
-                status = U1DB_NOMEM;
+            snprintf(string_value, 21, "%d", integer_value);
+            if (status != U1DB_OK)
                 goto finish;
-            }
             if ((status = append(values, string_value)) != U1DB_OK)
             {
-                free(string_value);
                 goto finish;
             }
-            free(string_value);
         } else if (json_object_is_type(val, json_type_array)) {
             list_val = json_object_get_array(val);
             for (i = 0; i < list_val->length; i++)
