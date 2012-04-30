@@ -201,8 +201,10 @@ class SyncExchange(object):
         seen_ids = self.seen_ids
         # changed docs that weren't superseded by or converged with
         self.changes_to_return = [(doc_id, gen) for (doc_id, gen)  in changes
-                                         if seen_ids.get(doc_id) != gen]
-        return gen
+                                         if doc_id not in seen_ids or
+                                         # there was a subsequent update
+                                            seen_ids.get(doc_id) < gen]
+        return self.new_gen
 
     def return_docs(self, return_doc_cb):
         """Return the changed documents and their last change generation

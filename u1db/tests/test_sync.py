@@ -284,6 +284,16 @@ class DatabaseSyncTargetTests(tests.DatabaseBaseTests,
                                         return_doc_cb=self.receive_doc)
         self.assertEqual(([], 2), (self.other_changes, new_gen))
 
+    def test_sync_exchange_converged_handling(self):
+        doc = self.db.create_doc(simple_doc)
+        docs_by_gen = [
+            (self.make_document('new', 'other:1', '{}'), 4),
+            (self.make_document(doc.doc_id, doc.rev, doc.content), 5)]
+        new_gen = self.st.sync_exchange(docs_by_gen, 'other-replica',
+                                        last_known_generation=0,
+                                        return_doc_cb=self.receive_doc)
+        self.assertEqual(([], 2), (self.other_changes, new_gen))
+
     def test_sync_exchange_detect_incomplete_exchange(self):
         def before_get_docs_explode(state):
             if state != 'before get_docs':

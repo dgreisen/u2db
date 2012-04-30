@@ -301,7 +301,7 @@ whats_changed_to_doc_ids(void *context, const char *doc_id, int gen)
     state = (struct _whats_changed_doc_ids_state *)context;
     if (state->exclude_ids != NULL
 	&& (e = lh_table_lookup_entry(state->exclude_ids, doc_id)) != NULL
-        && (int)e->v == gen)
+        && (int)e->v >= gen)
     {
         // This document was already seen at this gen,
         // so we don't need to return it
