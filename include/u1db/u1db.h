@@ -136,10 +136,12 @@ int u1db_put_doc(u1database *db, u1db_document *doc);
  *  U1DB_CONVERGED  We have exactly the same document
  *  U1DB_CONFLICTED Neither document is strictly newer than the other. If
  *                  save_conflict is false, then we will ignore the document.
+ * @param at_gen (OUT) For INSERTED or CONVERGED states used to return
+ *                     the insertion/current generation. Ignored if NULL.
  */
 int u1db_put_doc_if_newer(u1database *db, u1db_document *doc, int save_conflict,
                           const char *replica_uid, int replica_gen,
-                          int *state);
+                          int *state, int *at_gen);
 
 
 /**

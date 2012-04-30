@@ -113,7 +113,7 @@ class CommonBackend(u1db.Database):
                 self._force_doc_sync_conflict(doc)
         if replica_uid is not None and replica_gen is not None:
             self._set_sync_generation(replica_uid, replica_gen)
-        return state
+        return state, self._get_generation()
 
     def _ensure_maximal_rev(self, cur_rev, extra_revs):
         vcr = VectorClockRev(cur_rev)

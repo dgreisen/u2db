@@ -51,7 +51,7 @@ class Synchronizer(object):
         """
         # Increases self.num_inserted depending whether the document
         # was effectively inserted.
-        state = self.source.put_doc_if_newer(doc, save_conflict=True,
+        state, _ = self.source.put_doc_if_newer(doc, save_conflict=True,
             replica_uid=self.target_replica_uid, replica_gen=replica_gen)
         if state == 'inserted':
             self.num_inserted += 1
@@ -125,7 +125,7 @@ class SyncExchange(object):
         self._db = db
         self.source_replica_uid = source_replica_uid
         self.source_last_known_generation = last_known_generation
-        self.seen_ids = set()  # incoming ids not superseded
+        self.seen_ids = {}  # incoming ids not superseded
         self.changes_to_return = None
         self.new_gen = None
         # for tests
@@ -160,13 +160,13 @@ class SyncExchange(object):
         :param source_gen: The source generation of doc.
         :return: None
         """
-        state = self._db.put_doc_if_newer(doc, save_conflict=False,
+        state, at_gen = self._db.put_doc_if_newer(doc, save_conflict=False,
             replica_uid=self.source_replica_uid, replica_gen=source_gen)
         if state == 'inserted':
-            self.seen_ids.add(doc.doc_id)
+            self.seen_ids[doc.doc_id] = at_gen
         elif state == 'converged':
             # magical convergence
-            self.seen_ids.add(doc.doc_id)
+            self.seen_ids[doc.doc_id] = at_gen
         elif state == 'superseded':
             # we have something newer that we will return
             pass
@@ -201,7 +201,7 @@ class SyncExchange(object):
         seen_ids = self.seen_ids
         # changed docs that weren't superseded by or converged with
         self.changes_to_return = [(doc_id, gen) for (doc_id, gen)  in changes
-                                         if doc_id not in seen_ids]
+                                         if seen_ids.get(doc_id) != gen]
         return gen
 
     def return_docs(self, return_doc_cb):
