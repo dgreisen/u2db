@@ -374,7 +374,6 @@ int
 u1db_get_index_keys(u1database *db, char *index_name,
                     void *context, u1db_key_callback cb)
 {
-    int frequency;
     int status = U1DB_OK;
     char *key = NULL;
     sqlite3_stmt *statement;
