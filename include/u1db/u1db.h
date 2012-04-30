@@ -57,6 +57,11 @@ typedef int (*u1db_doc_id_gen_callback)(void *context, const char *doc_id, int g
 #define U1DB_INVALID_VALUE_FOR_INDEX -9
 #define U1DB_INVALID_HTTP_RESPONSE -10
 #define U1DB_BROKEN_SYNC_STREAM -11
+#define U1DB_INVALID_TRANSFORMATION_FUNCTION -12
+#define U1DB_UNKNOWN_OPERATION -13
+#define U1DB_UNHANDLED_CHARACTERS -14
+#define U1DB_MISSING_FIELD_SPECIFIER -15
+#define U1DB_INVALID_FIELD_SPECIFIER -16
 #define U1DB_INTERNAL_ERROR -999
 
 // Used by put_doc_if_newer
