@@ -113,14 +113,14 @@ destroy_list(string_list *list)
 }
 
 static int
-init_transformation(transformation *tr)
+init_transformation(transformation **tr)
 {
     int status = U1DB_OK;
-    if ((tr = (transformation *)malloc(sizeof(transformation))) == NULL)
+    if ((*tr = (transformation *)malloc(sizeof(transformation))) == NULL)
         return U1DB_NOMEM;
-    tr->op = NULL;
-    tr->next = NULL;
-    status = init_list(&(tr->args));
+    (*tr)->op = NULL;
+    (*tr)->next = NULL;
+    status = init_list(&((*tr)->args));
     if (status != U1DB_OK)
         return status;
     return status;
@@ -146,7 +146,7 @@ apply_transformation(transformation *tr, json_object *obj, string_list *result)
         status = apply_transformation(tr->next, obj, tmp_values);
         if (status != U1DB_OK)
             goto finish;
-        if (tr->args != NULL)
+        if (tr->args->head != NULL)
         {
             status = ((args_operation)tr->op)(result, tmp_values, tr->args);
         } else {
@@ -200,10 +200,8 @@ list_index(string_list *list, char *data)
 static int
 is_word_char(char c)
 {
-    printf("c: %c\n", c);
     if (isalnum(c))
     {
-        printf("isalnum\n");
         return 0;
     }
     if (c == '.')
@@ -211,35 +209,6 @@ is_word_char(char c)
     if (c == '_')
         return 0;
     return -1;
-}
-
-static int
-take_word(char **ptr, char **word)
-{
-    int status = U1DB_OK;
-    char *end = NULL;
-    end = *ptr;
-    printf("*end: %c\n", *end);
-    while (is_word_char(*end) == 0)
-    {
-        printf("*end: %c\n", *end);
-        printf("ptr: %s\n", *ptr);
-        end++;
-    }
-    if (*end == '\0')
-    {
-        printf("yerp\n");
-        *word = *ptr;
-        *ptr = end;
-    }
-    else {
-        // TODO: unicode fieldnames ?
-        *end = '\0';
-        *word = *ptr;
-        *ptr = end + 1;
-    }
-    printf("word: %s, ptr: %s\n", *word, *ptr);
-    return status;
 }
 
 static int
@@ -706,26 +675,24 @@ extract_field_values(string_list *values, json_object *obj,
     int i, integer_value;
     int status = U1DB_OK;
     val = obj;
-    for (item = field_path->head; item != NULL; item = item->next)
-        val = json_object_object_get(val, item->data);
     if (val == NULL)
-    {
         goto finish;
+    for (item = field_path->head; item != NULL; item = item->next)
+    {
+        val = json_object_object_get(val, item->data);
+        if (val == NULL)
+            goto finish;
     }
     if (json_object_is_type(val, json_type_string)) {
         if ((status = append(values, json_object_get_string(val))) != U1DB_OK)
-        {
             goto finish;
-        }
     } else if (json_object_is_type(val, json_type_int)) {
         integer_value = json_object_get_int(val);
         snprintf(string_value, 21, "%d", integer_value);
         if (status != U1DB_OK)
             goto finish;
         if ((status = append(values, string_value)) != U1DB_OK)
-        {
             goto finish;
-        }
     } else if (json_object_is_type(val, json_type_array)) {
         list_val = json_object_get_array(val);
         for (i = 0; i < list_val->length; i++)
@@ -733,9 +700,7 @@ extract_field_values(string_list *values, json_object *obj,
             if ((status = append(values, json_object_get_string(
                                 array_list_get_idx(
                                     list_val, i)))) != U1DB_OK)
-            {
                 goto finish;
-            }
         }
     }
 finish:
@@ -743,36 +708,53 @@ finish:
 }
 
 static int
-parse(char *field, transformation *result)
+parse(const char *field, transformation *result)
 {
     transformation *inner = NULL;
-    char *ptr, *argptr, *argend, *word, *first_comma = NULL;
+    char *new_field, *new_ptr, *argptr, *argend, *word, *first_comma = NULL;
     int status = U1DB_OK;
-    int i;
-    ptr = field;
-    printf("before take_word\n");
-    printf("ptr: %s\n", ptr);
-    status = take_word(&ptr, &word);
-    printf("after take_word\n");
-    printf("word: %s, ptr: %s\n", word, ptr);
+    int i, size;
+    char *field_copy, *end = NULL;
+    field_copy = strdup(field);
+    end = field_copy;
+    while (is_word_char(*end) == 0)
+    {
+        end++;
+    }
+    if (*end == '\0')
+    {
+        word = strdup(field_copy);
+        if (word == NULL)
+        {
+            status = U1DB_NOMEM;
+            goto finish;
+        }
+    }
+    else {
+        // TODO: unicode fieldnames ?
+        size = (end - field_copy);
+        word = (char *)calloc(size + 1, 1);
+        strncpy(word, field_copy, size);
+    }
+    new_field = strdup(end);
+    new_ptr = new_field;
     if (status != U1DB_OK)
         goto finish;
-    if (*ptr == '(')
+    if (*new_ptr == '(')
     {
-        printf("(\n");
-        if (ptr[strlen(ptr) - 1] != ')')
+        if (new_field[strlen(new_field) - 1] != ')')
         {
             status = U1DB_INVALID_TRANSFORMATION_FUNCTION;
             goto finish;
         }
         // step into parens
-        ptr++;
-        ptr[strlen(ptr) - 1] = '\0';
+        new_ptr++;
+        new_field[strlen(new_field) - 1] = '\0';
         for (i = 0; i < OPERATIONS; i++)
         {
             if (strcmp(OPERATORS[i], word) == 0)
             {
-                result->op = (void *)operations[i];
+                result->op = operations[i];
                 break;
             }
         }
@@ -781,7 +763,7 @@ parse(char *field, transformation *result)
             status = U1DB_UNKNOWN_OPERATION;
             goto finish;
         }
-        first_comma = strchr(ptr, ',');
+        first_comma = strchr(new_field, ',');
         if (first_comma != NULL)
         {
             argptr = first_comma + 1;
@@ -792,6 +774,8 @@ parse(char *field, transformation *result)
                 if (*argend == ',')
                 {
                     *argend = '\0';
+                    while (*argptr == ' ')
+                        argptr++;
                     status = append(result->args, argptr);
                     if (status != U1DB_OK)
                         goto finish;
@@ -801,15 +785,17 @@ parse(char *field, transformation *result)
             }
             if ((argend - argptr) > 0)
             {
+                while (*argptr == ' ')
+                    argptr++;
                 status = append(result->args, argptr);
                 if (status != U1DB_OK)
                     goto finish;
             }
         }
-        status = init_transformation(inner);
+        status = init_transformation(&inner);
         if (status != U1DB_OK)
             goto finish;
-        status = parse(ptr, inner);
+        status = parse(new_ptr, inner);
         if (status != U1DB_OK)
         {
             destroy_transformation(inner);
@@ -817,7 +803,7 @@ parse(char *field, transformation *result)
         }
         result->next = inner;
     } else {
-        if (*ptr != '\0')
+        if (*new_ptr != '\0')
         {
             status = U1DB_UNHANDLED_CHARACTERS;
             goto finish;
@@ -832,17 +818,13 @@ parse(char *field, transformation *result)
             status = U1DB_INVALID_FIELD_SPECIFIER;
             goto finish;
         }
-        printf("before set op\n");
-        result->op = (void *)*extract_field_values;
-        printf("after set op\n");
-        printf("before split\n");
+        result->op = *extract_field_values;
         status = split(result->args, word, '.');
-        printf("after split\n");
     }
 finish:
-    printf("status: %d\n", status);
-    if (word != NULL)
-        free(word);
+    free(word);
+    free(field_copy);
+    free(new_field);
     return status;
 }
 
@@ -850,7 +832,6 @@ static int
 evaluate_index_and_insert_into_db(void *context, const char *expression)
 {
     struct evaluate_index_context *ctx;
-    char *tmp_expression = NULL;
     transformation *tr = NULL;
     string_list *values = NULL;
     string_list_item *item = NULL;
@@ -860,13 +841,10 @@ evaluate_index_and_insert_into_db(void *context, const char *expression)
     if (ctx->obj == NULL || !json_object_is_type(ctx->obj, json_type_object)) {
         return U1DB_INVALID_JSON;
     }
-    status = init_transformation(tr);
+    status = init_transformation(&tr);
     if (status != U1DB_OK)
         goto finish;
-    tmp_expression = strdup(expression);
-    printf("before parse\n");
-    status = parse(tmp_expression, tr);
-    printf("after parse\n");
+    status = parse(expression, tr);
     if (status != U1DB_OK)
         goto finish;
     if ((status = init_list(&values)) != U1DB_OK)
@@ -879,9 +857,6 @@ evaluate_index_and_insert_into_db(void *context, const char *expression)
             goto finish;
     }
 finish:
-    if (tmp_expression != NULL)
-        free(tmp_expression);
-    destroy_list(values);
     destroy_transformation(tr);
     return status;
 }
