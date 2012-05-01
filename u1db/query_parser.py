@@ -141,6 +141,30 @@ class Lower(Transformation):
         return [val.lower() for val in values if self._can_transform(val)]
 
 
+class Number(Transformation):
+    """Convert an integer to a zero padded string.
+
+    This transformation will return None for non-integer inputs. However, it
+    will transform any integers in a list, dropping any elements that are not
+    integers.
+    """
+
+    name = 'number'
+
+    def __init__(self, inner, number):
+        super(Number, self).__init__(inner)
+        self.padding = "%%0%sd" % number
+
+    def _can_transform(self, val):
+        return not isinstance(val, (str, bool, float, list, dict))
+
+    def transform(self, values):
+        """Transform any integers in values into zero padded strings."""
+        if not values:
+            return []
+        return [self.padding % (v,) for v in values if self._can_transform(v)]
+
+
 class SplitWords(Transformation):
     """Split a string on whitespace.
 
@@ -187,7 +211,6 @@ class Parser(object):
     _word_chars = string.lowercase + string.uppercase + "._" + string.digits
 
     def _take_word(self, partial):
-        word = ''
         for idx, char in enumerate(partial):
             if char not in self._word_chars:
                 return partial[:idx], partial[idx:]
@@ -208,8 +231,19 @@ class Parser(object):
             if op is None:
                 raise errors.IndexDefinitionParseError(
                     "Unknown operation: %s" % word)
-            inner = self._inner_parse(field[1:-1])
-            return op(inner)
+            if ',' in field:
+                # XXX: The arguments should probably be cast to whatever types
+                # they represent, but short of evaling them, I don't see an
+                # easy way to do that without adding a lot of complexity.
+                # Since there is only one operation with an extra argument, I'm
+                # punting on this until we grow some more.
+                args = [a.strip() for a in field[1:-1].split(',')]
+                extracted = args[0]
+            else:
+                args = []
+                extracted = field[1:-1]
+            inner = self._inner_parse(extracted)
+            return op(inner, *args[1:])
         else:
             if len(field) != 0:
                 raise errors.IndexDefinitionParseError(
@@ -235,4 +269,5 @@ class Parser(object):
 
 Parser.register_transormation(SplitWords)
 Parser.register_transormation(Lower)
+Parser.register_transormation(Number)
 Parser.register_transormation(IsNull)
