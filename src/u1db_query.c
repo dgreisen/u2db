@@ -113,6 +113,18 @@ destroy_list(string_list *list)
     list = NULL;
 }
 
+/*
+static void
+print_list(string_list *list)
+{
+    string_list_item *item = NULL;
+    printf("[");
+    for (item = list->head; item != NULL; item = item->next)
+        printf("%s,", item->data);
+    printf("]\n");
+}
+*/
+
 static int
 init_transformation(transformation **tr)
 {
@@ -144,20 +156,16 @@ apply_transformation(transformation *tr, json_object *obj, string_list *result)
     if (tr->next != NULL)
     {
         init_list(&tmp_values);
-        printf("apply_transformation tr->next\n");
         status = apply_transformation(tr->next, obj, tmp_values);
         if (status != U1DB_OK)
             goto finish;
         if (tr->args->head != NULL)
         {
-            printf("args_operation\n");
             status = ((args_operation)tr->op)(result, tmp_values, tr->args);
         } else {
-            printf("operation\n");
             status = ((operation)tr->op)(result, tmp_values);
         }
     } else {
-        printf("extract_operation\n");
         status = ((extract_operation)tr->op)(result, obj, tr->args);
     }
 finish:
@@ -649,13 +657,11 @@ extract_field_values(string_list *values, json_object *obj,
     json_object *val = NULL;
     int i, integer_value;
     int status = U1DB_OK;
-    printf("here\n");
     val = obj;
     if (val == NULL)
         goto finish;
     for (item = field_path->head; item != NULL; item = item->next)
     {
-        printf("item->data: %s\n", item->data);
         val = json_object_object_get(val, item->data);
         if (val == NULL)
             goto finish;
@@ -897,16 +903,13 @@ evaluate_index_and_insert_into_db(void *context, const char *expression,
     if (ctx->obj == NULL || !json_object_is_type(ctx->obj, json_type_object)) {
         return U1DB_INVALID_JSON;
     }
-    status = init_transformation(&tr);
     if (status != U1DB_OK)
         goto finish;
     if (status != U1DB_OK)
         goto finish;
     if ((status = init_list(&values)) != U1DB_OK)
         goto finish;
-    printf("before apply_transformation\n");
     status = apply_transformation(tr, ctx->obj, values);
-    printf("after apply_transformation\n");
     for (item = values->head; item != NULL; item = item->next)
     {
         if ((status = add_to_document_fields(ctx->db, ctx->doc_id, expression,
