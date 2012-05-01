@@ -36,12 +36,12 @@ from u1db.remote import (
 class TestFencedReader(tests.TestCase):
 
     def test_init(self):
-        reader = http_app._FencedReader(StringIO.StringIO(""), 25)
+        reader = http_app._FencedReader(StringIO.StringIO(""), 25, 100)
         self.assertEqual(25, reader.remaining)
 
     def test_read_chunk(self):
         inp = StringIO.StringIO("abcdef")
-        reader = http_app._FencedReader(inp, 5)
+        reader = http_app._FencedReader(inp, 5, 10)
         data = reader.read_chunk(2)
         self.assertEqual("ab", data)
         self.assertEqual(2, inp.tell())
@@ -49,7 +49,7 @@ class TestFencedReader(tests.TestCase):
 
     def test_read_chunk_remaining(self):
         inp = StringIO.StringIO("abcdef")
-        reader = http_app._FencedReader(inp, 4)
+        reader = http_app._FencedReader(inp, 4, 10)
         data = reader.read_chunk(9999)
         self.assertEqual("abcd", data)
         self.assertEqual(4, inp.tell())
@@ -57,7 +57,7 @@ class TestFencedReader(tests.TestCase):
 
     def test_read_chunk_nothing_left(self):
         inp = StringIO.StringIO("abc")
-        reader = http_app._FencedReader(inp, 2)
+        reader = http_app._FencedReader(inp, 2, 10)
         reader.read_chunk(2)
         self.assertEqual(2, inp.tell())
         self.assertEqual(0, reader.remaining)
@@ -68,7 +68,7 @@ class TestFencedReader(tests.TestCase):
 
     def test_read_chunk_kept(self):
         inp = StringIO.StringIO("abcde")
-        reader = http_app._FencedReader(inp, 4)
+        reader = http_app._FencedReader(inp, 4, 10)
         reader._kept = "xyz"
         data = reader.read_chunk(2)  # atmost ignored
         self.assertEqual("xyz", data)
@@ -78,7 +78,7 @@ class TestFencedReader(tests.TestCase):
 
     def test_getline(self):
         inp = StringIO.StringIO("abc\r\nde")
-        reader = http_app._FencedReader(inp, 6)
+        reader = http_app._FencedReader(inp, 6, 10)
         reader.MAXCHUNK = 6
         line = reader.getline()
         self.assertEqual("abc\r\n", line)
@@ -86,7 +86,7 @@ class TestFencedReader(tests.TestCase):
 
     def test_getline_exact(self):
         inp = StringIO.StringIO("abcd\r\nef")
-        reader = http_app._FencedReader(inp, 6)
+        reader = http_app._FencedReader(inp, 6, 10)
         reader.MAXCHUNK = 6
         line = reader.getline()
         self.assertEqual("abcd\r\n", line)
@@ -94,14 +94,14 @@ class TestFencedReader(tests.TestCase):
 
     def test_getline_no_newline(self):
         inp = StringIO.StringIO("abcd")
-        reader = http_app._FencedReader(inp, 4)
+        reader = http_app._FencedReader(inp, 4, 10)
         reader.MAXCHUNK = 6
         line = reader.getline()
         self.assertEqual("abcd", line)
 
     def test_getline_many_chunks(self):
         inp = StringIO.StringIO("abcde\r\nf")
-        reader = http_app._FencedReader(inp, 8)
+        reader = http_app._FencedReader(inp, 8, 10)
         reader.MAXCHUNK = 4
         line = reader.getline()
         self.assertEqual("abcde\r\n", line)
@@ -111,7 +111,7 @@ class TestFencedReader(tests.TestCase):
 
     def test_getline_empty(self):
         inp = StringIO.StringIO("")
-        reader = http_app._FencedReader(inp, 0)
+        reader = http_app._FencedReader(inp, 0, 10)
         reader.MAXCHUNK = 4
         line = reader.getline()
         self.assertEqual("", line)
@@ -120,12 +120,24 @@ class TestFencedReader(tests.TestCase):
 
     def test_getline_just_newline(self):
         inp = StringIO.StringIO("\r\n")
-        reader = http_app._FencedReader(inp, 2)
+        reader = http_app._FencedReader(inp, 2, 10)
         reader.MAXCHUNK = 4
         line = reader.getline()
         self.assertEqual("\r\n", line)
         line = reader.getline()
         self.assertEqual("", line)
+
+    def test_getline_too_large(self):
+        inp = StringIO.StringIO("x" * 50)
+        reader = http_app._FencedReader(inp, 50, 25)
+        reader.MAXCHUNK = 4
+        self.assertRaises(http_app.BadRequest, reader.getline)
+
+    def test_getline_too_large_complete(self):
+        inp = StringIO.StringIO("x" * 25 + "\r\n")
+        reader = http_app._FencedReader(inp, 50, 25)
+        reader.MAXCHUNK = 4
+        self.assertRaises(http_app.BadRequest, reader.getline)
 
 
 class TestHTTPMethodDecorator(tests.TestCase):
@@ -231,12 +243,18 @@ class TestResource(object):
         return "Put/end"
 
 
+class parameters:
+    max_request_size = 200000
+    max_entry_size = 100000
+
+
 class TestHTTPInvocationByMethodWithBody(tests.TestCase):
 
     def test_get(self):
         resource = TestResource()
         environ = {'QUERY_STRING': 'a=1&b=2', 'REQUEST_METHOD': 'GET'}
-        invoke = http_app.HTTPInvocationByMethodWithBody(resource, environ)
+        invoke = http_app.HTTPInvocationByMethodWithBody(resource, environ,
+                                                         parameters)
         res = invoke()
         self.assertEqual('Get', res)
         self.assertEqual({'a': '1', 'b': '2'}, resource.args)
@@ -248,7 +266,8 @@ class TestHTTPInvocationByMethodWithBody(tests.TestCase):
                    'wsgi.input': StringIO.StringIO(body),
                    'CONTENT_LENGTH': str(len(body)),
                    'CONTENT_TYPE': 'application/json'}
-        invoke = http_app.HTTPInvocationByMethodWithBody(resource, environ)
+        invoke = http_app.HTTPInvocationByMethodWithBody(resource, environ,
+                                                         parameters)
         res = invoke()
         self.assertEqual('Put', res)
         self.assertEqual({'a': '1'}, resource.args)
@@ -267,7 +286,8 @@ class TestHTTPInvocationByMethodWithBody(tests.TestCase):
                    'wsgi.input': StringIO.StringIO(body),
                    'CONTENT_LENGTH': str(len(body)),
                    'CONTENT_TYPE': 'application/x-u1db-sync-stream'}
-        invoke = http_app.HTTPInvocationByMethodWithBody(resource, environ)
+        invoke = http_app.HTTPInvocationByMethodWithBody(resource, environ,
+                                                         parameters)
         res = invoke()
         self.assertEqual('Put/end', res)
         self.assertEqual({'a': '1', 'b': 2}, resource.args)
@@ -280,7 +300,8 @@ class TestHTTPInvocationByMethodWithBody(tests.TestCase):
                    'wsgi.input': StringIO.StringIO(body),
                    'CONTENT_LENGTH': str(len(body)),
                    'CONTENT_TYPE': 'application/x-u1db-sync-stream'}
-        invoke = http_app.HTTPInvocationByMethodWithBody(resource, environ)
+        invoke = http_app.HTTPInvocationByMethodWithBody(resource, environ,
+                                                         parameters)
         res = invoke()
 
     def test_put_sync_stream_wrong_start(self):
@@ -320,7 +341,8 @@ class TestHTTPInvocationByMethodWithBody(tests.TestCase):
                    'wsgi.input': StringIO.StringIO('{}'),
                    'CONTENT_LENGTH': '2',
                    'CONTENT_TYPE': 'application/json'}
-        invoke = http_app.HTTPInvocationByMethodWithBody(resource, environ)
+        invoke = http_app.HTTPInvocationByMethodWithBody(resource, environ,
+                                                         parameters)
         self.assertRaises(http_app.BadRequest, invoke)
 
     def test_bad_request_unsupported_content_type(self):
@@ -329,7 +351,21 @@ class TestHTTPInvocationByMethodWithBody(tests.TestCase):
                    'wsgi.input': StringIO.StringIO('{}'),
                    'CONTENT_LENGTH': '2',
                    'CONTENT_TYPE': 'text/plain'}
-        invoke = http_app.HTTPInvocationByMethodWithBody(resource, environ)
+        invoke = http_app.HTTPInvocationByMethodWithBody(resource, environ,
+                                                         parameters)
+        self.assertRaises(http_app.BadRequest, invoke)
+
+    def test_bad_request_content_length_too_large(self):
+        resource = TestResource()
+        environ = {'QUERY_STRING': '', 'REQUEST_METHOD': 'PUT',
+                   'wsgi.input': StringIO.StringIO('{}'),
+                   'CONTENT_LENGTH': '10000',
+                   'CONTENT_TYPE': 'text/plain'}
+        class params:
+            max_request_size = 5000
+            max_entry_size = sys.maxint  # we don't get to use this
+        invoke = http_app.HTTPInvocationByMethodWithBody(resource, environ,
+                                                         params)
         self.assertRaises(http_app.BadRequest, invoke)
 
     def test_bad_request_no_content_length(self):
@@ -337,7 +373,8 @@ class TestHTTPInvocationByMethodWithBody(tests.TestCase):
         environ = {'QUERY_STRING': '', 'REQUEST_METHOD': 'PUT',
                    'wsgi.input': StringIO.StringIO('a'),
                    'CONTENT_TYPE': 'application/json'}
-        invoke = http_app.HTTPInvocationByMethodWithBody(resource, environ)
+        invoke = http_app.HTTPInvocationByMethodWithBody(resource, environ,
+                                                         parameters)
         self.assertRaises(http_app.BadRequest, invoke)
 
     def test_bad_request_invalid_content_length(self):
@@ -346,7 +383,8 @@ class TestHTTPInvocationByMethodWithBody(tests.TestCase):
                    'wsgi.input': StringIO.StringIO('abc'),
                    'CONTENT_LENGTH': '1unk',
                    'CONTENT_TYPE': 'application/json'}
-        invoke = http_app.HTTPInvocationByMethodWithBody(resource, environ)
+        invoke = http_app.HTTPInvocationByMethodWithBody(resource, environ,
+                                                         parameters)
         self.assertRaises(http_app.BadRequest, invoke)
 
     def test_bad_request_empty_body(self):
@@ -355,12 +393,14 @@ class TestHTTPInvocationByMethodWithBody(tests.TestCase):
                    'wsgi.input': StringIO.StringIO(''),
                    'CONTENT_LENGTH': '0',
                    'CONTENT_TYPE': 'application/json'}
-        invoke = http_app.HTTPInvocationByMethodWithBody(resource, environ)
+        invoke = http_app.HTTPInvocationByMethodWithBody(resource, environ,
+                                                         parameters)
         self.assertRaises(http_app.BadRequest, invoke)
 
     def test_bad_request_unsupported_method_get_like(self):
         environ = {'QUERY_STRING': '', 'REQUEST_METHOD': 'DELETE'}
-        invoke = http_app.HTTPInvocationByMethodWithBody(None, environ)
+        invoke = http_app.HTTPInvocationByMethodWithBody(None, environ,
+                                                         parameters)
         self.assertRaises(http_app.BadRequest, invoke)
 
     def test_bad_request_unsupported_method_put_like(self):
@@ -368,7 +408,8 @@ class TestHTTPInvocationByMethodWithBody(tests.TestCase):
                    'wsgi.input': StringIO.StringIO('{}'),
                    'CONTENT_LENGTH': '2',
                    'CONTENT_TYPE': 'application/json'}
-        invoke = http_app.HTTPInvocationByMethodWithBody(None, environ)
+        invoke = http_app.HTTPInvocationByMethodWithBody(None, environ,
+                                                         parameters)
         self.assertRaises(http_app.BadRequest, invoke)
 
     def test_bad_request_unsupported_method_put_like_multi_json(self):
@@ -377,7 +418,8 @@ class TestHTTPInvocationByMethodWithBody(tests.TestCase):
                    'wsgi.input': StringIO.StringIO(body),
                    'CONTENT_LENGTH': str(len(body)),
                    'CONTENT_TYPE': 'application/x-u1db-multi-json'}
-        invoke = http_app.HTTPInvocationByMethodWithBody(None, environ)
+        invoke = http_app.HTTPInvocationByMethodWithBody(None, environ,
+                                                         parameters)
         self.assertRaises(http_app.BadRequest, invoke)
 
 
@@ -457,8 +499,8 @@ class TestHTTPApp(tests.TestCase):
     def setUp(self):
         super(TestHTTPApp, self).setUp()
         self.state = tests.ServerStateForTests()
-        application = http_app.HTTPApp(self.state)
-        self.app = paste.fixture.TestApp(application)
+        self.http_app = http_app.HTTPApp(self.state)
+        self.app = paste.fixture.TestApp(self.http_app)
         self.db0 = self.state._create_database('db0')
 
     def test_bad_request_broken(self):
@@ -544,6 +586,15 @@ class TestHTTPApp(tests.TestCase):
         self.assertEqual('{"x": 2}', doc.content)
         self.assertEqual('application/json', resp.header('content-type'))
         self.assertEqual({'rev': doc.rev}, simplejson.loads(resp.body))
+
+    def test_put_doc_too_large(self):
+        self.http_app.max_request_size = 15000
+        doc = self.db0.create_doc('{"x": 1}', doc_id='doc1')
+        resp = self.app.put('/db0/doc/doc1?old_rev=%s' % doc.rev,
+                            params='{"%s": 2}' % ('z' * 16000),
+                            headers={'content-type': 'application/json'},
+                            expect_errors=True)
+        self.assertEqual(400, resp.status)
 
     def test_delete_doc(self):
         doc = self.db0.create_doc('{"x": 1}', doc_id='doc1')
@@ -645,6 +696,25 @@ class TestHTTPApp(tests.TestCase):
                          resp.header('content-type'))
         self.assertEqual('[\r\n{"new_generation": 2}\r\n]\r\n', resp.body)
         self.assertEqual([('replica', 10), ('replica', 11)], gens)
+
+    def test_sync_exchange_send_entry_too_large(self):
+        self.http_app.max_request_size = 20000
+        self.http_app.max_entry_size = 10000
+        entries = {
+            10: {'id': 'doc-here', 'rev': 'replica:1', 'content':
+                 '{"value": "%s"}' % ('H' * 11000), 'gen': 10},
+            }
+        args = dict(last_known_generation=0)
+        body = ("[\r\n" +
+                "%s,\r\n" % simplejson.dumps(args) +
+                "%s\r\n" % simplejson.dumps(entries[10]) +
+                "]\r\n")
+        resp = self.app.post('/db0/sync-from/replica',
+                            params=body,
+                            headers={'content-type':
+                                     'application/x-u1db-sync-stream'},
+                             expect_errors=True)
+        self.assertEqual(400, resp.status)
 
     def test_sync_exchange_receive(self):
         doc = self.db0.create_doc('{"value": "there"}')
