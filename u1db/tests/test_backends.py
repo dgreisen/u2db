@@ -901,6 +901,13 @@ class DatabaseIndexTests(tests.DatabaseBaseTests):
         rows = self.db.get_from_index("index", [("00012", )])
         self.assertEqual([doc], rows)
 
+    def test_get_from_index_with_number_bigger_than_padding(self):
+        self.db.create_index("index", ["number(foo, 5)"])
+        content = '{"foo": 123456}'
+        doc = self.db.create_doc(content)
+        rows = self.db.get_from_index("index", [("123456", )])
+        self.assertEqual([doc], rows)
+
     def test_get_index_keys_from_index(self):
         self.db.create_index('test-idx', ['key'])
         content1 = '{"key": "value1"}'
