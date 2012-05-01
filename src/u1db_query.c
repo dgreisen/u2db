@@ -894,6 +894,7 @@ evaluate_index_and_insert_into_db(void *context, const char *expression)
             goto finish;
     }
 finish:
+    destroy_list(values);
     destroy_transformation(tr);
     return status;
 }
