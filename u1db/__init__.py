@@ -130,15 +130,17 @@ class Database(object):
         :param replica_gen: The generation of the replica corresponding to the
             this document. The replica arguments are optional, but are used
             during synchronization.
-        :return: state -  If we don't have doc_id already, or if doc_rev
-            supersedes the existing document revision, then the content will
-            be inserted, and state is 'inserted'.
+        :return: (state, at_gen) -  If we don't have doc_id already,
+            or if doc_rev supersedes the existing document revision,
+            then the content will be inserted, and state is 'inserted'.
             If doc_rev is less than or equal to the existing revision,
             then the put is ignored and state is respecitvely 'superseded'
             or 'converged'.
             If doc_rev is not strictly superseded or supersedes, then
             state is 'conflicted'. The document will not be inserted if
             save_conflict is False.
+            For 'inserted' or 'converged', at_gen is the insertion/current
+            generation.
         """
         raise NotImplementedError(self.put_doc_if_newer)
 
