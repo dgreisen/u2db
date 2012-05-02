@@ -914,7 +914,7 @@ class DatabaseIndexTests(tests.DatabaseBaseTests):
         doc1 = self.db.create_doc(content)
         content = '{"foo": "this is not a maigret painting"}'
         self.db.create_doc(content)
-        rows = self.db.get_from_index("index", [("00056", )])
+        rows = self.db.get_from_index("index", [("*", )])
         self.assertEqual([doc1], rows)
 
     def test_get_from_index_with_bool(self):
