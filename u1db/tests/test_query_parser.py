@@ -88,8 +88,8 @@ class TestExtractField(tests.TestCase):
         self.assertExtractField([9.2], 'foo', {'foo': 9.2})
 
     def test_get_value_bool(self):
-        self.assertExtractField([True], 'foo', {'foo': True})
-        self.assertExtractField([False], 'foo', {'foo': False})
+        self.assertExtractField(['1'], 'foo', {'foo': True})
+        self.assertExtractField(['0'], 'foo', {'foo': False})
 
 
 class TestLower(tests.TestCase):

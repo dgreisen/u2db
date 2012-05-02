@@ -155,7 +155,7 @@ extract_field_values(string_list *values, json_object *obj,
     char string_value[MAX_INT_STR_LEN];
     struct array_list *list_val = NULL;
     json_object *val = NULL;
-    int i, integer_value;
+    int i, integer_value, boolean_value;
     int status = U1DB_OK;
     val = obj;
     if (val == NULL)
@@ -176,6 +176,18 @@ extract_field_values(string_list *values, json_object *obj,
             goto finish;
         if ((status = append(values, string_value)) != U1DB_OK)
             goto finish;
+    } else if (json_object_is_type(val, json_type_boolean)) {
+        boolean_value = json_object_get_boolean(val);
+        if (boolean_value) {
+            status = append(values, "1");
+            if (status != U1DB_OK)
+                goto finish;
+        } else {
+            status = append(values, "0");
+            if (status != U1DB_OK)
+                goto finish;
+        }
+
     } else if (json_object_is_type(val, json_type_array)) {
         list_val = json_object_get_array(val);
         for (i = 0; i < list_val->length; i++)
@@ -743,7 +755,7 @@ parse(const char *field, transformation *result)
                 break;
             }
         }
-        if (result == NULL)
+        if (result->op == NULL)
         {
             status = U1DB_UNKNOWN_OPERATION;
             goto finish;
