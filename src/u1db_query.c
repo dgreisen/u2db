@@ -129,6 +129,8 @@ init_transformation(transformation **tr)
 static void
 destroy_transformation(transformation *tr)
 {
+    if (tr == NULL)
+        return;
     if (tr->next != NULL)
         destroy_transformation(tr->next);
     destroy_list(tr->args);
@@ -837,6 +839,8 @@ parse(const char *field, transformation *result)
         status = parse(new_ptr, inner);
         if (status != U1DB_OK)
         {
+            // free the memory if the parsing fails. Otherwise, inner will be
+            // cleaned up when the outer transformation (result) is destroyed.
             destroy_transformation(inner);
             goto finish;
         }
