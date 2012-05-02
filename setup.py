@@ -35,7 +35,7 @@ def config():
         "package_data": {'': ["*.sql"]},
         "scripts": ['u1db-client', 'u1db-serve'],
         "ext_modules": ext,
-        "install_requires": ["paste", "simplejson", "routes"],
+        "install_requires": ["paste", "simplejson", "routes", "pyxdg"],
         # informational
         "tests_require": ["testtools", "testscenarios", "Cython"],
         "classifiers": [

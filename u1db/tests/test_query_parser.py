@@ -184,6 +184,63 @@ class TestSplitWords(tests.TestCase):
                               ['foo baz', {'baa': 'xam'}, 'bar sux'])
 
 
+class TestNumber(tests.TestCase):
+
+    def assertNumber(self, expected, value, padding=5):
+        """Assert number transformation produced expected values."""
+        getter = query_parser.Number(query_parser.StaticGetter(value), padding)
+        self.assertEqual(expected, getter.get(trivial_raw_doc))
+
+    def test_inner_returns_None(self):
+        """None is thrown away."""
+        self.assertNumber([], None)
+
+    def test_inner_returns_int(self):
+        """A single integer is converted to zero padded strings."""
+        self.assertNumber(['00009'], 9)
+
+    def test_inner_returns_list(self):
+        """Integers are converted to zero padded strings."""
+        self.assertNumber(['00009', '00235'], [9, 235])
+
+    def test_inner_returns_string(self):
+        """A string is thrown away."""
+        self.assertNumber([], 'foo bar')
+
+    def test_inner_returns_float(self):
+        """A float is thrown away."""
+        self.assertNumber([], 9.2)
+
+    def test_inner_returns_bool(self):
+        """A boolean is thrown away."""
+        self.assertNumber([], True)
+
+    def test_inner_returns_list_containing_strings(self):
+        """Strings in a list are thrown away."""
+        self.assertNumber(['00009'], ['foo baz', 9, 'bar sux'])
+
+    def test_inner_returns_list_containing_float(self):
+        """Floats in a list are thrown away."""
+        self.assertNumber(
+            ['00083', '00073'], [83, 9.2, 73])
+
+    def test_inner_returns_list_containing_bool(self):
+        """Booleans in a list are thrown away."""
+        self.assertNumber(
+            ['00083', '00073'], [83, True, 73])
+
+    def test_inner_returns_list_containing_list(self):
+        """Lists in a list are thrown away."""
+        # TODO: Expand sub-lists?
+        self.assertNumber(
+            ['00012', '03333'], [12, [29], 3333])
+
+    def test_inner_returns_list_containing_dict(self):
+        """Dicts in a list are thrown away."""
+        self.assertNumber(
+            ['00012', '00001'], [12, {54: 89}, 1])
+
+
 class TestIsNull(tests.TestCase):
 
     def assertIsNull(self, value):
