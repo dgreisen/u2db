@@ -24,6 +24,7 @@
 #include <json/json.h>
 
 #define OPERATIONS 3
+#define MAX_INT_STR_LEN 21
 #ifndef max
     #define max(a, b) (((a) > (b)) ? (a) : (b))
 #endif
@@ -48,27 +49,25 @@ typedef struct transformation_
     string_list *args;
 } transformation;
 
-typedef int(*operation)(string_list *, const string_list *);
-typedef int(*args_operation)(string_list *, const string_list *,
-            const string_list *);
-typedef int(*extract_operation)(string_list *, json_object *,
-            const string_list *);
-static int op_lower(string_list *result, const string_list *value);
+typedef int(*operation)(string_list *, const string_list *,
+                        const string_list *);
+static int op_lower(string_list *result, const string_list *value,
+                    const string_list *args);
 static int op_number(string_list *result, const string_list *value,
                      const string_list *args);
-static int op_split_words(string_list *result, const string_list *value);
+static int op_split_words(string_list *result, const string_list *value,
+                          const string_list *args);
 
-static void *operations[OPERATIONS] = {
+static operation operations[OPERATIONS] = {
     op_lower, op_number, op_split_words};
 
 
 static int
 init_list(string_list **list)
 {
-    if ((*list = (string_list *)malloc(sizeof(string_list))) == NULL)
+    *list = (string_list *)calloc(1, sizeof(string_list));
+    if (*list == NULL)
         return U1DB_NOMEM;
-    (*list)->head = NULL;
-    (*list)->tail = NULL;
     return U1DB_OK;
 }
 
@@ -76,11 +75,10 @@ static int
 append(string_list *list, const char *data)
 {
     string_list_item *new_item = NULL;
-    if ((new_item = (string_list_item *)malloc(sizeof(string_list_item)))
-            == NULL)
+    new_item = (string_list_item *)calloc(1, sizeof(string_list_item));
+    if (new_item == NULL)
         return U1DB_NOMEM;
     new_item->data = strdup(data);
-    new_item->next = NULL;
     if (list->head == NULL)
     {
         list->head = new_item;
@@ -129,10 +127,9 @@ static int
 init_transformation(transformation **tr)
 {
     int status = U1DB_OK;
-    if ((*tr = (transformation *)malloc(sizeof(transformation))) == NULL)
+    *tr = (transformation *)calloc(1, sizeof(transformation));
+    if (*tr == NULL)
         return U1DB_NOMEM;
-    (*tr)->op = NULL;
-    (*tr)->next = NULL;
     status = init_list(&((*tr)->args));
     if (status != U1DB_OK)
         return status;
@@ -142,11 +139,57 @@ init_transformation(transformation **tr)
 static void
 destroy_transformation(transformation *tr)
 {
+    if (tr == NULL)
+        return;
     if (tr->next != NULL)
         destroy_transformation(tr->next);
     destroy_list(tr->args);
     free(tr);
 }
+
+static int
+extract_field_values(string_list *values, json_object *obj,
+                     const string_list *field_path)
+{
+    string_list_item *item = NULL;
+    char string_value[MAX_INT_STR_LEN];
+    struct array_list *list_val = NULL;
+    json_object *val = NULL;
+    int i, integer_value;
+    int status = U1DB_OK;
+    val = obj;
+    if (val == NULL)
+        goto finish;
+    for (item = field_path->head; item != NULL; item = item->next)
+    {
+        val = json_object_object_get(val, item->data);
+        if (val == NULL)
+            goto finish;
+    }
+    if (json_object_is_type(val, json_type_string)) {
+        if ((status = append(values, json_object_get_string(val))) != U1DB_OK)
+            goto finish;
+    } else if (json_object_is_type(val, json_type_int)) {
+        integer_value = json_object_get_int(val);
+        snprintf(string_value, MAX_INT_STR_LEN, "%d", integer_value);
+        if (status != U1DB_OK)
+            goto finish;
+        if ((status = append(values, string_value)) != U1DB_OK)
+            goto finish;
+    } else if (json_object_is_type(val, json_type_array)) {
+        list_val = json_object_get_array(val);
+        for (i = 0; i < list_val->length; i++)
+        {
+            if ((status = append(values, json_object_get_string(
+                                array_list_get_idx(
+                                    list_val, i)))) != U1DB_OK)
+                goto finish;
+        }
+    }
+finish:
+    return status;
+}
+
 
 static int
 apply_transformation(transformation *tr, json_object *obj, string_list *result)
@@ -161,12 +204,12 @@ apply_transformation(transformation *tr, json_object *obj, string_list *result)
             goto finish;
         if (tr->args->head != NULL)
         {
-            status = ((args_operation)tr->op)(result, tmp_values, tr->args);
+            status = ((operation)tr->op)(result, tmp_values, tr->args);
         } else {
-            status = ((operation)tr->op)(result, tmp_values);
+            status = ((operation)tr->op)(result, tmp_values, NULL);
         }
     } else {
-        status = ((extract_operation)tr->op)(result, obj, tr->args);
+        status = extract_field_values(result, obj, tr->args);
     }
 finish:
     destroy_list(tmp_values);
@@ -224,7 +267,8 @@ is_word_char(char c)
 }
 
 static int
-op_lower(string_list *result, const string_list *values)
+op_lower(string_list *result, const string_list *values,
+         const string_list *args)
 {
     string_list_item *item = NULL;
     char *new_value, *value = NULL;
@@ -312,7 +356,8 @@ finish:
 }
 
 static int
-op_split_words(string_list *result, const string_list *values)
+op_split_words(string_list *result, const string_list *values,
+               const string_list *args)
 {
     string_list_item *item = NULL;
     char *intermediate, *intermediate_ptr = NULL;
@@ -648,49 +693,6 @@ struct sqlcb_to_field_cb {
 };
 
 static int
-extract_field_values(string_list *values, json_object *obj,
-                     const string_list *field_path)
-{
-    string_list_item *item = NULL;
-    char string_value[21];
-    struct array_list *list_val = NULL;
-    json_object *val = NULL;
-    int i, integer_value;
-    int status = U1DB_OK;
-    val = obj;
-    if (val == NULL)
-        goto finish;
-    for (item = field_path->head; item != NULL; item = item->next)
-    {
-        val = json_object_object_get(val, item->data);
-        if (val == NULL)
-            goto finish;
-    }
-    if (json_object_is_type(val, json_type_string)) {
-        if ((status = append(values, json_object_get_string(val))) != U1DB_OK)
-            goto finish;
-    } else if (json_object_is_type(val, json_type_int)) {
-        integer_value = json_object_get_int(val);
-        snprintf(string_value, 21, "%d", integer_value);
-        if (status != U1DB_OK)
-            goto finish;
-        if ((status = append(values, string_value)) != U1DB_OK)
-            goto finish;
-    } else if (json_object_is_type(val, json_type_array)) {
-        list_val = json_object_get_array(val);
-        for (i = 0; i < list_val->length; i++)
-        {
-            if ((status = append(values, json_object_get_string(
-                                array_list_get_idx(
-                                    list_val, i)))) != U1DB_OK)
-                goto finish;
-        }
-    }
-finish:
-    return status;
-}
-
-static int
 parse(const char *field, transformation *result)
 {
     transformation *inner = NULL;
@@ -781,6 +783,8 @@ parse(const char *field, transformation *result)
         status = parse(new_ptr, inner);
         if (status != U1DB_OK)
         {
+            // free the memory if the parsing fails. Otherwise, inner will be
+            // cleaned up when the outer transformation (result) is destroyed.
             destroy_transformation(inner);
             goto finish;
         }
@@ -801,7 +805,6 @@ parse(const char *field, transformation *result)
             status = U1DB_INVALID_FIELD_SPECIFIER;
             goto finish;
         }
-        result->op = extract_field_values;
         status = split(result->args, word, '.');
     }
 finish:
@@ -1021,7 +1024,8 @@ u1db__index_all_docs(u1database *db, int n_expressions,
     int status, i;
     sqlite3_stmt *statement = NULL;
     struct evaluate_index_context context = {0};
-    transformation *transformations[n_expressions];
+    transformation **transformations;
+    transformations = (transformation**)calloc(n_expressions, sizeof(transformation*));
     for (i = 0; i < n_expressions; ++i) {
         init_transformation(&transformations[i]);
         status = parse(expressions[i], transformations[i]);
