@@ -1076,6 +1076,7 @@ u1db__index_all_docs(u1database *db, int n_expressions,
 finish:
     for (i = 0; i < n_expressions; ++i)
         destroy_transformation(transformations[i]);
+    free(transformations);
     if (context.obj != NULL) {
         json_object_put(context.obj);
         context.obj = NULL;
