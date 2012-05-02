@@ -24,6 +24,7 @@
 #include <json/json.h>
 
 #define OPERATIONS 3
+#define MAX_INT_STR_LEN 21
 #ifndef max
     #define max(a, b) (((a) > (b)) ? (a) : (b))
 #endif
@@ -64,10 +65,9 @@ static operation operations[OPERATIONS] = {
 static int
 init_list(string_list **list)
 {
-    if ((*list = (string_list *)malloc(sizeof(string_list))) == NULL)
+    *list = (string_list *)calloc(1, sizeof(string_list));
+    if (*list == NULL)
         return U1DB_NOMEM;
-    (*list)->head = NULL;
-    (*list)->tail = NULL;
     return U1DB_OK;
 }
 
@@ -75,11 +75,10 @@ static int
 append(string_list *list, const char *data)
 {
     string_list_item *new_item = NULL;
-    if ((new_item = (string_list_item *)malloc(sizeof(string_list_item)))
-            == NULL)
+    new_item = (string_list_item *)calloc(1, sizeof(string_list_item));
+    if (new_item == NULL)
         return U1DB_NOMEM;
     new_item->data = strdup(data);
-    new_item->next = NULL;
     if (list->head == NULL)
     {
         list->head = new_item;
@@ -112,14 +111,25 @@ destroy_list(string_list *list)
     list = NULL;
 }
 
+/*
+static void
+print_list(string_list *list)
+{
+    string_list_item *item = NULL;
+    printf("[");
+    for (item = list->head; item != NULL; item = item->next)
+        printf("%s,", item->data);
+    printf("]\n");
+}
+*/
+
 static int
 init_transformation(transformation **tr)
 {
     int status = U1DB_OK;
-    if ((*tr = (transformation *)malloc(sizeof(transformation))) == NULL)
+    *tr = (transformation *)calloc(1, sizeof(transformation));
+    if (*tr == NULL)
         return U1DB_NOMEM;
-    (*tr)->op = NULL;
-    (*tr)->next = NULL;
     status = init_list(&((*tr)->args));
     if (status != U1DB_OK)
         return status;
@@ -142,7 +152,7 @@ extract_field_values(string_list *values, json_object *obj,
                      const string_list *field_path)
 {
     string_list_item *item = NULL;
-    char string_value[21];
+    char string_value[MAX_INT_STR_LEN];
     struct array_list *list_val = NULL;
     json_object *val = NULL;
     int i, integer_value;
@@ -161,7 +171,7 @@ extract_field_values(string_list *values, json_object *obj,
             goto finish;
     } else if (json_object_is_type(val, json_type_int)) {
         integer_value = json_object_get_int(val);
-        snprintf(string_value, 21, "%d", integer_value);
+        snprintf(string_value, MAX_INT_STR_LEN, "%d", integer_value);
         if (status != U1DB_OK)
             goto finish;
         if ((status = append(values, string_value)) != U1DB_OK)
@@ -200,7 +210,6 @@ apply_transformation(transformation *tr, json_object *obj, string_list *result)
         }
     } else {
         status = extract_field_values(result, obj, tr->args);
-        goto finish;
     }
 finish:
     destroy_list(tmp_values);
@@ -680,73 +689,8 @@ finish:
 
 struct sqlcb_to_field_cb {
     void *user_context;
-    int (*user_cb)(void *, const char*);
+    int (*user_cb)(void *, const char*, transformation *tr);
 };
-
-// Thunk from the SQL interface, to a nicer single value interface
-static int
-sqlite_cb_to_field_cb(void *context, int n_cols, char **cols, char **rows)
-{
-    struct sqlcb_to_field_cb *ctx = NULL;
-    ctx = (struct sqlcb_to_field_cb*)context;
-    if (n_cols != 1) {
-        return 1; // Error
-    }
-    return ctx->user_cb(ctx->user_context, cols[0]);
-}
-
-
-// Iterate over the fields that are indexed, and invoke cb for each one
-static int
-iter_field_definitions(u1database *db, void *context,
-                      int (*cb)(void *context, const char *expression))
-{
-    int status;
-    struct sqlcb_to_field_cb ctx;
-
-    ctx.user_context = context;
-    ctx.user_cb = cb;
-    status = sqlite3_exec(db->sql_handle,
-        "SELECT field FROM index_definitions",
-        sqlite_cb_to_field_cb, &ctx, NULL);
-    return status;
-}
-
-struct evaluate_index_context {
-    u1database *db;
-    const char *doc_id;
-    json_object *obj;
-    const char *content;
-};
-
-static int
-add_to_document_fields(u1database *db, const char *doc_id,
-                       const char *expression, const char *val)
-{
-    int status;
-    sqlite3_stmt *statement = NULL;
-
-    status = sqlite3_prepare_v2(db->sql_handle,
-        "INSERT INTO document_fields (doc_id, field_name, value)"
-        " VALUES (?, ?, ?)", -1,
-        &statement, NULL);
-    if (status != SQLITE_OK) {
-        return status;
-    }
-    status = sqlite3_bind_text(statement, 1, doc_id, -1, SQLITE_TRANSIENT);
-    if (status != SQLITE_OK) { goto finish; }
-    status = sqlite3_bind_text(statement, 2, expression, -1, SQLITE_TRANSIENT);
-    if (status != SQLITE_OK) { goto finish; }
-    status = sqlite3_bind_text(statement, 3, val, -1, SQLITE_TRANSIENT);
-    if (status != SQLITE_OK) { goto finish; }
-    status = sqlite3_step(statement);
-    if (status == SQLITE_DONE) {
-        status = SQLITE_OK;
-    }
-finish:
-    sqlite3_finalize(statement);
-    return status;
-}
 
 static int
 parse(const char *field, transformation *result)
@@ -870,11 +814,90 @@ finish:
     return status;
 }
 
+// Thunk from the SQL interface, to a nicer single value interface
 static int
-evaluate_index_and_insert_into_db(void *context, const char *expression)
+sqlite_cb_to_field_cb(void *context, int n_cols, char **cols, char **rows)
+{
+    struct sqlcb_to_field_cb *ctx = NULL;
+    transformation *tr = NULL;
+    char *expression = NULL;
+    int status = U1DB_OK;
+    ctx = (struct sqlcb_to_field_cb*)context;
+    if (n_cols != 1) {
+        return 1; // Error
+    }
+    expression = cols[0];
+    status = init_transformation(&tr);
+    if (status != U1DB_OK)
+        goto finish;
+    status = parse(expression, tr);
+    if (status != U1DB_OK)
+        goto finish;
+    status = ctx->user_cb(ctx->user_context, expression, tr);
+finish:
+    destroy_transformation(tr);
+    return status;
+}
+
+
+// Iterate over the fields that are indexed, and invoke cb for each one
+static int
+iter_field_definitions(u1database *db, void *context,
+                      int (*cb)(void *context, const char *expression,
+                                transformation *tr))
+{
+    int status;
+    struct sqlcb_to_field_cb ctx;
+
+    ctx.user_context = context;
+    ctx.user_cb = cb;
+    status = sqlite3_exec(db->sql_handle,
+        "SELECT field FROM index_definitions",
+        sqlite_cb_to_field_cb, &ctx, NULL);
+    return status;
+}
+
+struct evaluate_index_context {
+    u1database *db;
+    const char *doc_id;
+    json_object *obj;
+    const char *content;
+};
+
+static int
+add_to_document_fields(u1database *db, const char *doc_id,
+                       const char *expression, const char *val)
+{
+    int status;
+    sqlite3_stmt *statement = NULL;
+
+    status = sqlite3_prepare_v2(db->sql_handle,
+        "INSERT INTO document_fields (doc_id, field_name, value)"
+        " VALUES (?, ?, ?)", -1,
+        &statement, NULL);
+    if (status != SQLITE_OK) {
+        return status;
+    }
+    status = sqlite3_bind_text(statement, 1, doc_id, -1, SQLITE_TRANSIENT);
+    if (status != SQLITE_OK) { goto finish; }
+    status = sqlite3_bind_text(statement, 2, expression, -1, SQLITE_TRANSIENT);
+    if (status != SQLITE_OK) { goto finish; }
+    status = sqlite3_bind_text(statement, 3, val, -1, SQLITE_TRANSIENT);
+    if (status != SQLITE_OK) { goto finish; }
+    status = sqlite3_step(statement);
+    if (status == SQLITE_DONE) {
+        status = SQLITE_OK;
+    }
+finish:
+    sqlite3_finalize(statement);
+    return status;
+}
+
+static int
+evaluate_index_and_insert_into_db(void *context, const char *expression, 
+                                  transformation *tr)
 {
     struct evaluate_index_context *ctx;
-    transformation *tr = NULL;
     string_list *values = NULL;
     string_list_item *item = NULL;
     int status = U1DB_OK;
@@ -883,10 +906,8 @@ evaluate_index_and_insert_into_db(void *context, const char *expression)
     if (ctx->obj == NULL || !json_object_is_type(ctx->obj, json_type_object)) {
         return U1DB_INVALID_JSON;
     }
-    status = init_transformation(&tr);
     if (status != U1DB_OK)
         goto finish;
-    status = parse(expression, tr);
     if (status != U1DB_OK)
         goto finish;
     if ((status = init_list(&values)) != U1DB_OK)
@@ -900,7 +921,6 @@ evaluate_index_and_insert_into_db(void *context, const char *expression)
     }
 finish:
     destroy_list(values);
-    destroy_transformation(tr);
     return status;
 }
 
@@ -1004,7 +1024,14 @@ u1db__index_all_docs(u1database *db, int n_expressions,
     int status, i;
     sqlite3_stmt *statement = NULL;
     struct evaluate_index_context context = {0};
-
+    transformation **transformations;
+    transformations = (transformation**)calloc(n_expressions, sizeof(transformation*));
+    for (i = 0; i < n_expressions; ++i) {
+        init_transformation(&transformations[i]);
+        status = parse(expressions[i], transformations[i]);
+        if (status != U1DB_OK)
+            goto finish;
+    }
     status = sqlite3_prepare_v2(db->sql_handle,
         "SELECT doc_id, content FROM document", -1,
         &statement, NULL);
@@ -1037,7 +1064,7 @@ u1db__index_all_docs(u1database *db, int n_expressions,
         }
         for (i = 0; i < n_expressions; ++i) {
             status = evaluate_index_and_insert_into_db(&context,
-                    expressions[i]);
+                    expressions[i], transformations[i]);
             if (status != U1DB_OK)
                 goto finish;
         }
@@ -1047,6 +1074,9 @@ u1db__index_all_docs(u1database *db, int n_expressions,
         status = U1DB_OK;
     }
 finish:
+    for (i = 0; i < n_expressions; ++i)
+        destroy_transformation(transformations[i]);
+    free(transformations);
     if (context.obj != NULL) {
         json_object_put(context.obj);
         context.obj = NULL;
