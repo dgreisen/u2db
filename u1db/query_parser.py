@@ -86,8 +86,6 @@ class ExtractField(Getter):
             # Strip anything in the list that isn't a simple type
             result = [val for val in raw_doc
                       if not isinstance(val, (dict, list))]
-        elif isinstance(raw_doc, bool):
-            result = ["1" if raw_doc else "0"]
         else:
             result = [raw_doc]
         return result
@@ -165,6 +163,21 @@ class Number(Transformation):
         if not values:
             return []
         return [self.padding % (v,) for v in values if self._can_transform(v)]
+
+
+class Bool(Transformation):
+    """Convert bool to string."""
+
+    name = "bool"
+
+    def _can_transform(self, val):
+        return isinstance(val, bool)
+
+    def transform(self, values):
+        """Transform any booleans in values into strings."""
+        if not values:
+            return []
+        return [('1' if v else '0') for v in values if self._can_transform(v)]
 
 
 class SplitWords(Transformation):
@@ -272,4 +285,5 @@ class Parser(object):
 Parser.register_transormation(SplitWords)
 Parser.register_transormation(Lower)
 Parser.register_transormation(Number)
+Parser.register_transormation(Bool)
 Parser.register_transormation(IsNull)
