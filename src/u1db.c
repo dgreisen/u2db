@@ -718,7 +718,8 @@ finish:
 
 int
 u1db_put_doc_if_newer(u1database *db, u1db_document *doc, int save_conflict,
-                      const char *replica_uid, int replica_gen, int *state)
+                      const char *replica_uid, int replica_gen, int *state,
+                      int *at_gen)
 {
     const char *stored_content = NULL, *stored_doc_rev = NULL;
     int status = U1DB_INVALID_PARAMETER, store = 0;
@@ -805,6 +806,9 @@ u1db_put_doc_if_newer(u1database *db, u1db_document *doc, int save_conflict,
     }
     if (status == U1DB_OK && replica_uid != NULL) {
         status = u1db__set_sync_generation(db, replica_uid, replica_gen);
+    }
+    if (status == U1DB_OK && at_gen != NULL) {
+        status = u1db__get_generation(db, at_gen);
     }
 finish:
     sqlite3_finalize(statement);

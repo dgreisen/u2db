@@ -130,15 +130,17 @@ class Database(object):
         :param replica_gen: The generation of the replica corresponding to the
             this document. The replica arguments are optional, but are used
             during synchronization.
-        :return: state -  If we don't have doc_id already, or if doc_rev
-            supersedes the existing document revision, then the content will
-            be inserted, and state is 'inserted'.
+        :return: (state, at_gen) -  If we don't have doc_id already,
+            or if doc_rev supersedes the existing document revision,
+            then the content will be inserted, and state is 'inserted'.
             If doc_rev is less than or equal to the existing revision,
             then the put is ignored and state is respecitvely 'superseded'
             or 'converged'.
             If doc_rev is not strictly superseded or supersedes, then
             state is 'conflicted'. The document will not be inserted if
             save_conflict is False.
+            For 'inserted' or 'converged', at_gen is the insertion/current
+            generation.
         """
         raise NotImplementedError(self.put_doc_if_newer)
 
@@ -198,6 +200,15 @@ class Database(object):
             [(x-val1, x-val2, x-val3), (y-val1, y-val2, y-val3), ...])
         """
         raise NotImplementedError(self.get_from_index)
+
+    def get_index_keys(self, index_name):
+        """Return all keys under which documents are indexed in this index.
+
+        :return: [(key, frequency)] A list of indexed keys and the frequency
+            they occur.
+        :param index_name: The index to query
+        """
+        raise NotImplementedError(self.get_index_keys)
 
     # XXX: get_doc_conflicts still uses tuples, we need to change this to using
     #      Document objects

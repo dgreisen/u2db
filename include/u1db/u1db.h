@@ -40,6 +40,7 @@ typedef struct _u1db_document
 
 typedef struct _u1query u1query;
 typedef int (*u1db_doc_callback)(void *context, u1db_document *doc);
+typedef int (*u1db_key_callback)(void *context, const char *key);
 typedef int (*u1db_doc_gen_callback)(void *context, u1db_document *doc, int gen);
 typedef int (*u1db_doc_id_gen_callback)(void *context, const char *doc_id, int gen);
 
@@ -57,6 +58,11 @@ typedef int (*u1db_doc_id_gen_callback)(void *context, const char *doc_id, int g
 #define U1DB_INVALID_VALUE_FOR_INDEX -9
 #define U1DB_INVALID_HTTP_RESPONSE -10
 #define U1DB_BROKEN_SYNC_STREAM -11
+#define U1DB_INVALID_TRANSFORMATION_FUNCTION -12
+#define U1DB_UNKNOWN_OPERATION -13
+#define U1DB_UNHANDLED_CHARACTERS -14
+#define U1DB_MISSING_FIELD_SPECIFIER -15
+#define U1DB_INVALID_FIELD_SPECIFIER -16
 #define U1DB_INTERNAL_ERROR -999
 
 // Used by put_doc_if_newer
@@ -135,10 +141,12 @@ int u1db_put_doc(u1database *db, u1db_document *doc);
  *  U1DB_CONVERGED  We have exactly the same document
  *  U1DB_CONFLICTED Neither document is strictly newer than the other. If
  *                  save_conflict is false, then we will ignore the document.
+ * @param at_gen (OUT) For INSERTED or CONVERGED states used to return
+ *                     the insertion/current generation. Ignored if NULL.
  */
 int u1db_put_doc_if_newer(u1database *db, u1db_document *doc, int save_conflict,
                           const char *replica_uid, int replica_gen,
-                          int *state);
+                          int *state, int *at_gen);
 
 
 /**
@@ -305,6 +313,14 @@ int u1db_get_from_index(u1database *db, u1query *query,
                         void *context, u1db_doc_callback cb,
                         int n_values, ...);
 
+/**
+ * Get keys under which documents are indexed.
+ *
+ * @param index_name Name of the index for which to get keys.
+ * @param context Will be returned via the document callback
+ */
+int u1db_get_index_keys(u1database *db, char *index_name, void *context,
+                        u1db_key_callback cb);
 /**
  * Get documents matching a single column index.
  */

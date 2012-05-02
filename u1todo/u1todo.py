@@ -127,13 +127,14 @@ class Task(object):
     def _get_done(self):
         """Get the status of the task."""
         # Indexes on booleans are not currently possible, so we convert to and
-        # from strings.
+        # from strings. TODO: LP #987412
         return True if self._content['done'] == DONE else False
 
     def _set_done(self, value):
         """Set the done status."""
         # Indexes on booleans are not currently possible, so we convert to and
         # from strings.
+        # from strings. TODO: LP #987412
         self._content['done'] = DONE if value else NOT_DONE
 
     done = property(_get_done, _set_done, doc="Done flag.")

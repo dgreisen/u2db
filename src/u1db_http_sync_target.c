@@ -25,7 +25,6 @@
 #include <curl/curl.h>
 #include <oauth.h>
 
-
 #ifndef max
 #define max(a, b) ((a) > (b) ? (a) : (b))
 #endif // max

@@ -223,10 +223,7 @@ se_free_seen_id(struct lh_entry *e)
         free((void *)e->k);
         e->k = NULL;
     }
-    if (e->v != NULL) {
-        free((void *)e->v);
-        e->v = NULL;
-    }
+    /* v is a (void*)int */
 }
 
 
@@ -267,15 +264,15 @@ u1db__sync_exchange_insert_doc_from_source(u1db_sync_exchange *se,
 {
     int status = U1DB_OK;
     int insert_state;
+    int at_gen;
     if (se == NULL || se->db == NULL || doc == NULL) {
         return U1DB_INVALID_PARAMETER;
     }
     // fprintf(stderr, "Inserting %s from source\n", doc->doc_id);
     status = u1db_put_doc_if_newer(se->db, doc, 0, se->source_replica_uid,
-                                   source_gen, &insert_state);
+                                   source_gen, &insert_state, &at_gen);
     if (insert_state == U1DB_INSERTED || insert_state == U1DB_CONVERGED) {
-        lh_table_insert(se->seen_ids, strdup(doc->doc_id),
-                        strdup(doc->doc_rev));
+	lh_table_insert(se->seen_ids, strdup(doc->doc_id), (void *)at_gen);
     } else {
         // state should be either U1DB_SUPERSEDED or U1DB_CONFLICTED, in either
         // case, we don't count this as a 'seen_id' because we will want to be
@@ -299,13 +296,15 @@ struct _whats_changed_doc_ids_state {
 static int
 whats_changed_to_doc_ids(void *context, const char *doc_id, int gen)
 {
+    struct lh_entry *e;
     struct _whats_changed_doc_ids_state *state;
     state = (struct _whats_changed_doc_ids_state *)context;
     if (state->exclude_ids != NULL
-            && lh_table_lookup(state->exclude_ids, doc_id) != NULL)
+	&& (e = lh_table_lookup_entry(state->exclude_ids, doc_id)) != NULL
+        && (int)e->v >= gen)
     {
-        // This document was already seen, so we don't need to return it
-        // TODO: See bug #944049
+        // This document was already seen at this gen,
+        // so we don't need to return it
         return 0;
     }
     if (state->num_doc_ids >= state->max_doc_ids) {
@@ -429,7 +428,7 @@ return_doc_to_insert_from_target(void *context, u1db_document *doc, int gen)
     // fprintf(stderr, "returning %s,%s to insert from %s:%d\n",
     //         doc->doc_id, doc->doc_rev, state->target_uid, gen);
     status = u1db_put_doc_if_newer(state->db, doc, 1, state->target_uid, gen,
-                                   &insert_state);
+                                   &insert_state, NULL);
     u1db_free_doc(&doc);
     if (status == U1DB_OK) {
         // fprintf(stderr, "put_doc_if_newer insert_state: %d\n", insert_state);
