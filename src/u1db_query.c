@@ -28,7 +28,6 @@
 #ifndef max
     #define max(a, b) (((a) > (b)) ? (a) : (b))
 #endif
-enum types {STR, INT, BOOL};
 
 typedef struct operation_
 {
@@ -60,10 +59,10 @@ static int op_bool(string_list *result, const string_list *value,
                    const string_list *args);
 
 static const operation OPERATIONS[OPS] = {
-    {op_lower, "lower", STR},
-    {op_number, "number", INT},
-    {op_split_words, "split_words", STR},
-    {op_bool, "bool", BOOL}};
+    {op_lower, "lower", json_type_string},
+    {op_number, "number", json_type_int},
+    {op_split_words, "split_words", json_type_string},
+    {op_bool, "bool", json_type_boolean}};
 
 
 typedef struct transformation_
@@ -181,10 +180,12 @@ extract_field_values(string_list *values, json_object *obj,
         if (val == NULL)
             goto finish;
     }
-    if (json_object_is_type(val, json_type_string) && value_type == STR) {
+    if (json_object_is_type(val, json_type_string) && value_type ==
+            json_type_string) {
         if ((status = append(values, json_object_get_string(val))) != U1DB_OK)
             goto finish;
-    } else if (json_object_is_type(val, json_type_int) && value_type == INT) {
+    } else if (json_object_is_type(val, json_type_int) && value_type ==
+            json_type_int) {
         integer_value = json_object_get_int(val);
         snprintf(string_value, MAX_INT_STR_LEN, "%d", integer_value);
         if (status != U1DB_OK)
@@ -192,7 +193,7 @@ extract_field_values(string_list *values, json_object *obj,
         if ((status = append(values, string_value)) != U1DB_OK)
             goto finish;
     } else if (json_object_is_type(val, json_type_boolean) &&
-               value_type == BOOL) {
+               value_type == json_type_boolean) {
         boolean_value = json_object_get_boolean(val);
         if (boolean_value) {
             status = append(values, "1");
@@ -748,7 +749,7 @@ parse(const char *field, transformation *result, int value_type)
     char *new_field, *new_ptr, *argptr, *argend, *word, *first_comma = NULL;
     int status = U1DB_OK;
     int i, size;
-    int new_value_type = STR;
+    int new_value_type = json_type_string;
     char *field_copy, *end = NULL;
     field_copy = strdup(field);
     end = field_copy;
@@ -884,7 +885,7 @@ sqlite_cb_to_field_cb(void *context, int n_cols, char **cols, char **rows)
     status = init_transformation(&tr);
     if (status != U1DB_OK)
         goto finish;
-    status = parse(expression, tr, STR);
+    status = parse(expression, tr, json_type_string);
     if (status != U1DB_OK)
         goto finish;
     status = ctx->user_cb(ctx->user_context, expression, tr);
@@ -1082,7 +1083,7 @@ u1db__index_all_docs(u1database *db, int n_expressions,
     transformations = (transformation**)calloc(n_expressions, sizeof(transformation*));
     for (i = 0; i < n_expressions; ++i) {
         init_transformation(&transformations[i]);
-        status = parse(expressions[i], transformations[i], STR);
+        status = parse(expressions[i], transformations[i], json_type_string);
         if (status != U1DB_OK)
             goto finish;
     }
