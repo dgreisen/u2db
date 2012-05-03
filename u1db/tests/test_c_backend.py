@@ -311,12 +311,15 @@ class TestSyncCtoHTTPViaC(tests.TestCaseWithServer):
 
     def test_trivial_sync(self):
         mem_db = self.request_state._create_database('test.db')
+        mem_doc = mem_db.create_doc(tests.nested_doc)
         url = self.getURL('test.db')
         target = c_backend_wrapper.create_http_sync_target(url)
         db = c_backend_wrapper.CDatabase(':memory:')
         doc = db.create_doc(tests.simple_doc)
         c_backend_wrapper.sync_db_to_target(db, target)
         self.assertGetDoc(mem_db, doc.doc_id, doc.rev, doc.content, False)
+        self.assertGetDoc(db, mem_doc.doc_id, mem_doc.rev, mem_doc.content,
+                          False)
 
 
 class TestSyncCtoOAuthHTTPViaC(tests.TestCaseWithServer):
@@ -331,6 +334,7 @@ class TestSyncCtoOAuthHTTPViaC(tests.TestCaseWithServer):
 
     def test_trivial_sync(self):
         mem_db = self.request_state._create_database('test.db')
+        mem_doc = mem_db.create_doc(tests.nested_doc)
         url = self.getURL('~/test.db')
         target = c_backend_wrapper.create_oauth_http_sync_target(url,
                 tests.consumer1.key, tests.consumer1.secret,
@@ -339,6 +343,8 @@ class TestSyncCtoOAuthHTTPViaC(tests.TestCaseWithServer):
         doc = db.create_doc(tests.simple_doc)
         c_backend_wrapper.sync_db_to_target(db, target)
         self.assertGetDoc(mem_db, doc.doc_id, doc.rev, doc.content, False)
+        self.assertGetDoc(db, mem_doc.doc_id, mem_doc.rev, mem_doc.content,
+                          False)
 
 
 
