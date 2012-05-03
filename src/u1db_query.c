@@ -23,12 +23,19 @@
 #include <ctype.h>
 #include <json/json.h>
 
-#define OPERATIONS 3
+#define OPS 4
 #define MAX_INT_STR_LEN 21
 #ifndef max
     #define max(a, b) (((a) > (b)) ? (a) : (b))
 #endif
-static const char *OPERATORS[OPERATIONS] = {"lower", "number", "split_words"};
+
+typedef struct operation_
+{
+    void *function;
+    char *name;
+    int value_type;
+} operation;
+
 
 typedef struct string_list_item_
 {
@@ -42,25 +49,32 @@ typedef struct string_list_
     string_list_item *tail;
 } string_list;
 
-typedef struct transformation_
-{
-    void *op;
-    struct transformation_ *next;
-    string_list *args;
-} transformation;
-
-typedef int(*operation)(string_list *, const string_list *,
-                        const string_list *);
 static int op_lower(string_list *result, const string_list *value,
                     const string_list *args);
 static int op_number(string_list *result, const string_list *value,
                      const string_list *args);
 static int op_split_words(string_list *result, const string_list *value,
                           const string_list *args);
+static int op_bool(string_list *result, const string_list *value,
+                   const string_list *args);
 
-static operation operations[OPERATIONS] = {
-    op_lower, op_number, op_split_words};
+static const operation OPERATIONS[OPS] = {
+    {op_lower, "lower", json_type_string},
+    {op_number, "number", json_type_int},
+    {op_split_words, "split_words", json_type_string},
+    {op_bool, "bool", json_type_boolean}};
 
+
+typedef struct transformation_
+{
+    void *op;
+    struct transformation_ *next;
+    string_list *args;
+    int value_type;
+} transformation;
+
+typedef int(*op_function)(string_list *, const string_list *,
+                        const string_list *);
 
 static int
 init_list(string_list **list)
@@ -149,13 +163,13 @@ destroy_transformation(transformation *tr)
 
 static int
 extract_field_values(string_list *values, json_object *obj,
-                     const string_list *field_path)
+                     const string_list *field_path, int value_type)
 {
     string_list_item *item = NULL;
     char string_value[MAX_INT_STR_LEN];
     struct array_list *list_val = NULL;
     json_object *val = NULL;
-    int i, integer_value;
+    int i, integer_value, boolean_value;
     int status = U1DB_OK;
     val = obj;
     if (val == NULL)
@@ -166,17 +180,32 @@ extract_field_values(string_list *values, json_object *obj,
         if (val == NULL)
             goto finish;
     }
-    if (json_object_is_type(val, json_type_string)) {
+    if (json_object_is_type(val, json_type_string) && value_type ==
+            json_type_string) {
         if ((status = append(values, json_object_get_string(val))) != U1DB_OK)
             goto finish;
-    } else if (json_object_is_type(val, json_type_int)) {
+    } else if (json_object_is_type(val, json_type_int) && value_type ==
+            json_type_int) {
         integer_value = json_object_get_int(val);
         snprintf(string_value, MAX_INT_STR_LEN, "%d", integer_value);
         if (status != U1DB_OK)
             goto finish;
         if ((status = append(values, string_value)) != U1DB_OK)
             goto finish;
+    } else if (json_object_is_type(val, json_type_boolean) &&
+               value_type == json_type_boolean) {
+        boolean_value = json_object_get_boolean(val);
+        if (boolean_value) {
+            status = append(values, "1");
+            if (status != U1DB_OK)
+                goto finish;
+        } else {
+            status = append(values, "0");
+            if (status != U1DB_OK)
+                goto finish;
+        }
     } else if (json_object_is_type(val, json_type_array)) {
+        // TODO: recursively check the types
         list_val = json_object_get_array(val);
         for (i = 0; i < list_val->length; i++)
         {
@@ -204,12 +233,12 @@ apply_transformation(transformation *tr, json_object *obj, string_list *result)
             goto finish;
         if (tr->args->head != NULL)
         {
-            status = ((operation)tr->op)(result, tmp_values, tr->args);
+            status = ((op_function)tr->op)(result, tmp_values, tr->args);
         } else {
-            status = ((operation)tr->op)(result, tmp_values, NULL);
+            status = ((op_function)tr->op)(result, tmp_values, NULL);
         }
     } else {
-        status = extract_field_values(result, obj, tr->args);
+        status = extract_field_values(result, obj, tr->args, tr->value_type);
     }
 finish:
     destroy_list(tmp_values);
@@ -386,6 +415,27 @@ op_split_words(string_list *result, const string_list *values,
     }
     return status;
 }
+
+static int
+op_bool(string_list *result, const string_list *values,
+         const string_list *args)
+{
+    string_list_item *item = NULL;
+    int status = U1DB_OK;
+
+    //just return all the strings which have been filtered and converted from
+    //booleans by extract_field_values.
+
+    for (item = values->head; item != NULL; item = item->next)
+    {
+        if ((status = append(result, item->data)) != U1DB_OK)
+        {
+            return status;
+        }
+    }
+    return status;
+}
+
 
 static int
 lookup_index_fields(u1database *db, u1query *query)
@@ -693,12 +743,13 @@ struct sqlcb_to_field_cb {
 };
 
 static int
-parse(const char *field, transformation *result)
+parse(const char *field, transformation *result, int value_type)
 {
     transformation *inner = NULL;
     char *new_field, *new_ptr, *argptr, *argend, *word, *first_comma = NULL;
     int status = U1DB_OK;
     int i, size;
+    int new_value_type = json_type_string;
     char *field_copy, *end = NULL;
     field_copy = strdup(field);
     end = field_copy;
@@ -735,15 +786,17 @@ parse(const char *field, transformation *result)
         // step into parens
         new_ptr++;
         new_field[strlen(new_field) - 1] = '\0';
-        for (i = 0; i < OPERATIONS; i++)
+        for (i = 0; i < OPS; i++)
         {
-            if (strcmp(OPERATORS[i], word) == 0)
+            if (strcmp(OPERATIONS[i].name, word) == 0)
             {
-                result->op = operations[i];
+                result->op = OPERATIONS[i].function;
+                result->value_type = value_type;
+                new_value_type = OPERATIONS[i].value_type;
                 break;
             }
         }
-        if (result == NULL)
+        if (result->op == NULL)
         {
             status = U1DB_UNKNOWN_OPERATION;
             goto finish;
@@ -780,7 +833,7 @@ parse(const char *field, transformation *result)
         status = init_transformation(&inner);
         if (status != U1DB_OK)
             goto finish;
-        status = parse(new_ptr, inner);
+        status = parse(new_ptr, inner, new_value_type);
         if (status != U1DB_OK)
         {
             // free the memory if the parsing fails. Otherwise, inner will be
@@ -806,10 +859,12 @@ parse(const char *field, transformation *result)
             goto finish;
         }
         status = split(result->args, word, '.');
+        result->value_type = value_type;
     }
 finish:
     free(word);
     free(field_copy);
+    if (new_field != NULL)
     free(new_field);
     return status;
 }
@@ -830,7 +885,7 @@ sqlite_cb_to_field_cb(void *context, int n_cols, char **cols, char **rows)
     status = init_transformation(&tr);
     if (status != U1DB_OK)
         goto finish;
-    status = parse(expression, tr);
+    status = parse(expression, tr, json_type_string);
     if (status != U1DB_OK)
         goto finish;
     status = ctx->user_cb(ctx->user_context, expression, tr);
@@ -1028,7 +1083,7 @@ u1db__index_all_docs(u1database *db, int n_expressions,
     transformations = (transformation**)calloc(n_expressions, sizeof(transformation*));
     for (i = 0; i < n_expressions; ++i) {
         init_transformation(&transformations[i]);
-        status = parse(expressions[i], transformations[i]);
+        status = parse(expressions[i], transformations[i], json_type_string);
         if (status != U1DB_OK)
             goto finish;
     }

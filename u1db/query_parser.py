@@ -165,6 +165,21 @@ class Number(Transformation):
         return [self.padding % (v,) for v in values if self._can_transform(v)]
 
 
+class Bool(Transformation):
+    """Convert bool to string."""
+
+    name = "bool"
+
+    def _can_transform(self, val):
+        return isinstance(val, bool)
+
+    def transform(self, values):
+        """Transform any booleans in values into strings."""
+        if not values:
+            return []
+        return [('1' if v else '0') for v in values if self._can_transform(v)]
+
+
 class SplitWords(Transformation):
     """Split a string on whitespace.
 
@@ -270,4 +285,5 @@ class Parser(object):
 Parser.register_transormation(SplitWords)
 Parser.register_transormation(Lower)
 Parser.register_transormation(Number)
+Parser.register_transormation(Bool)
 Parser.register_transormation(IsNull)

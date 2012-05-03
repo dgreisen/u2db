@@ -908,6 +908,36 @@ class DatabaseIndexTests(tests.DatabaseBaseTests):
         rows = self.db.get_from_index("index", [("123456", )])
         self.assertEqual([doc], rows)
 
+    def test_number_mapping_ignores_non_numbers(self):
+        self.db.create_index("index", ["number(foo, 5)"])
+        content = '{"foo": 56}'
+        doc1 = self.db.create_doc(content)
+        content = '{"foo": "this is not a maigret painting"}'
+        self.db.create_doc(content)
+        rows = self.db.get_from_index("index", [("*", )])
+        self.assertEqual([doc1], rows)
+
+    def test_get_from_index_with_bool(self):
+        self.db.create_index("index", ["bool(foo)"])
+        content = '{"foo": true}'
+        doc = self.db.create_doc(content)
+        rows = self.db.get_from_index("index", [("1", )])
+        self.assertEqual([doc], rows)
+
+    def test_get_from_index_with_bool_false(self):
+        self.db.create_index("index", ["bool(foo)"])
+        content = '{"foo": false}'
+        doc = self.db.create_doc(content)
+        rows = self.db.get_from_index("index", [("0", )])
+        self.assertEqual([doc], rows)
+
+    def test_get_from_index_with_non_bool(self):
+        self.db.create_index("index", ["bool(foo)"])
+        content = '{"foo": 42}'
+        self.db.create_doc(content)
+        rows = self.db.get_from_index("index", [("*", )])
+        self.assertEqual([], rows)
+
     def test_get_index_keys_from_index(self):
         self.db.create_index('test-idx', ['key'])
         content1 = '{"key": "value1"}'
