@@ -19,6 +19,9 @@ from u1db import (
     tests,
     )
 from u1db.tests import c_backend_wrapper, c_backend_error
+from u1db.tests.test_remote_sync_target import (
+    http_server_def,
+    )
 
 
 class TestCDatabaseExists(tests.TestCase):
@@ -293,6 +296,26 @@ class TestCHTTPSyncTarget(BackendTests):
         self.assertIn('oauth_version="1.0"', auth)
         self.assertIn('oauth_token="token-key"', auth)
         self.assertIn('oauth_signature="', auth)
+
+
+class TestSyncCtoHTTPC(tests.TestCaseWithServer):
+
+    server_def = staticmethod(http_server_def)
+
+    def setUp(self):
+        super(TestSyncCtoHTTPC, self).setUp()
+        if c_backend_wrapper is None:
+            self.skipTest("The c_backend_wrapper could not be imported")
+        self.startServer()
+
+    def test_trivial_sync(self):
+        mem_db = self.request_state._create_database('test.db')
+        url = self.getURL('test.db')
+        target = c_backend_wrapper.create_http_sync_target(url)
+        db = c_backend_wrapper.CDatabase(':memory:')
+        doc = db.create_doc(tests.simple_doc)
+        c_backend_wrapper.sync_db_to_target(db, target)
+        self.assertGetDoc(mem_db, doc.doc_id, doc.rev, doc.content, False)
 
 
 class TestVectorClock(BackendTests):
