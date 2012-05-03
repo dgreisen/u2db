@@ -27,8 +27,9 @@ pems:
 	openssl req -new -config ca.conf \
 		-multivalue-rdn \
 	-subj "/O=u1db LOCAL TESTING ONLY, DO NOT TRUST/CN=localhost" \
-		-nodes -keyout testing.key -out newreq.pem -days 5
-	openssl ca -batch -config ./ca.conf -days 5 -policy policy_anything \
+		-nodes -keyout testing.key -out newreq.pem $(ELEVEN_YEARS)
+	openssl ca -batch -config ./ca.conf $(ELEVEN_YEARS) \
+		-policy policy_anything \
 		-out testing.cert -infiles newreq.pem
 
 .PHONY: init pems
