@@ -17,7 +17,8 @@
 """Tests for u1todo example application."""
 
 from testtools import TestCase
-from u1todo import Task, TodoStore, INDEXES, EMPTY_TASK, DONE, NOT_DONE
+from u1todo import (
+    Task, TodoStore, INDEXES, TAGS_INDEX, EMPTY_TASK, extract_tags)
 from u1db.backends import inmemory
 
 
@@ -55,12 +56,61 @@ class TodoStoreTestCase(TestCase):
         store = TodoStore(self.db)
         store.initialize_db()
         new_expression = ['newtags']
-        INDEXES['tags'] = new_expression
+        INDEXES[TAGS_INDEX] = new_expression
         self.assertNotEqual(
             new_expression, dict(self.db.list_indexes())['tags'])
         store = TodoStore(self.db)
         store.initialize_db()
         self.assertEqual(new_expression, dict(self.db.list_indexes())['tags'])
+
+    def test_get_all_tags(self):
+        store = TodoStore(self.db)
+        store.initialize_db()
+        tags = ['foo', 'bar', 'bam']
+        task = store.new_task(tags=tags)
+        self.assertEqual(sorted(tags), sorted(store.get_all_tags()))
+        tags = ['foo', 'sball']
+        task.tags = tags
+        store.save_task(task)
+        self.assertEqual(sorted(tags), sorted(store.get_all_tags()))
+
+    def test_get_all_tags_duplicates(self):
+        store = TodoStore(self.db)
+        store.initialize_db()
+        tags = ['foo', 'bar', 'bam']
+        store.new_task(tags=tags)
+        self.assertEqual(sorted(tags), sorted(store.get_all_tags()))
+        tags2 = ['foo', 'sball']
+        store.new_task(tags=tags2)
+        self.assertEqual(set(tags + tags2), set(store.get_all_tags()))
+
+    def test_get_tasks_by_tags(self):
+        store = TodoStore(self.db)
+        store.initialize_db()
+        tags = ['foo', 'bar', 'bam']
+        task1 = store.new_task(tags=tags)
+        tags2 = ['foo', 'sball']
+        task2 = store.new_task(tags=tags2)
+        self.assertEqual(
+            sorted([task1.task_id, task2.task_id]),
+            sorted([t.task_id for t in store.get_tasks_by_tags(['foo'])]))
+        self.assertEqual(
+            [task1.task_id],
+            [t.task_id for t in store.get_tasks_by_tags(['foo', 'bar'])])
+        self.assertEqual(
+            [task2.task_id],
+            [t.task_id for t in store.get_tasks_by_tags(['foo', 'sball'])])
+
+    def test_get_tasks_by_empty_tags(self):
+        store = TodoStore(self.db)
+        store.initialize_db()
+        tags = ['foo', 'bar', 'bam']
+        task1 = store.new_task(tags=tags)
+        tags2 = ['foo', 'sball']
+        task2 = store.new_task(tags=tags2)
+        self.assertEqual(
+            sorted([task1.task_id, task2.task_id]),
+            sorted([t.task_id for t in store.get_tasks_by_tags([])]))
 
     def test_tag_task(self):
         """Sets the tags for a task."""
@@ -154,9 +204,14 @@ class TaskTestCase(TestCase):
     def test_set_done(self):
         """Changing the done property changes the underlying content."""
         task = Task(self.document)
-        self.assertEqual(NOT_DONE, task._content['done'])
+        self.assertEqual(False, task._content['done'])
         task.done = True
-        self.assertEqual(DONE, task._content['done'])
+        self.assertEqual(True, task._content['done'])
+
+    def test_extracts_tags(self):
+        """Tags are extracted from the item's text."""
+        title = "#buy beer at [liquor store]"
+        self.assertEqual(['buy', 'liquor store'], sorted(extract_tags(title)))
 
     def test_tags(self):
         """Tags property returns a list."""
@@ -168,18 +223,3 @@ class TaskTestCase(TestCase):
         task = Task(self.document)
         task.tags = ["foo", "bar"]
         self.assertEqual(["foo", "bar"], task._content['tags'])
-
-    def test_add_tag(self):
-        """Tag is added to task's tags."""
-        task = Task(self.document)
-        task.add_tag("foo")
-        self.assertEqual(["foo"], task.tags)
-
-    def test_remove_tag(self):
-        """Tag is removed from task's tags."""
-        task = Task(self.document)
-        task.add_tag("foo")
-        task.add_tag("bar")
-        self.assertEqual(["foo", "bar"], task.tags)
-        task.remove_tag("foo")
-        self.assertEqual(["bar"], task.tags)
