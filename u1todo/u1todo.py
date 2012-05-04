@@ -18,18 +18,20 @@
 
 import json
 import os
+import re
 import xdg.BaseDirectory
 from u1db.backends.sqlite_backend import SQLitePartialExpandDatabase
 
-DONE = 'true'
-NOT_DONE = 'false'
+EMPTY_TASK = json.dumps({"title": "", "done": False, "tags": []})
 
-EMPTY_TASK = json.dumps({"title": "", "done": NOT_DONE, "tags": []})
-
+TAGS_INDEX = 'tags'
+DONE_INDEX = 'done'
 INDEXES = {
-    'tags': ['tags'],
-    'done': ['done'],
+    TAGS_INDEX: ['tags'],
+    DONE_INDEX: ['bool(done)'],
 }
+
+TAGS = re.compile('#(\w+)|\[(.+)\]')
 
 
 def get_database():
@@ -38,6 +40,11 @@ def get_database():
     return SQLitePartialExpandDatabase(
         os.path.join(xdg.BaseDirectory.save_data_path("u1todo"),
         "u1todo.u1db"))
+
+
+def extract_tags(text):
+    """Extract the tags from the text."""
+    return [t[0] if t[0] else t[1] for t in TAGS.findall(text)]
 
 
 class TodoStore(object):
@@ -65,6 +72,27 @@ class TodoStore(object):
         """Set the tags of a task."""
         task.tags = tags
 
+    def get_all_tags(self):
+        """Get all the tags in use."""
+        return self.db.get_index_keys(TAGS_INDEX)
+
+    def get_tasks_by_tags(self, tags):
+        if not tags:
+            return self.get_all_tasks()
+        results = {
+            doc.doc_id: doc for doc in
+            self.db.get_from_index(TAGS_INDEX, [(tags[0],)])}
+        for tag in tags[1:]:
+            ids = [
+                doc.doc_id for doc in
+                self.db.get_from_index(TAGS_INDEX, [(tag,)])]
+            for key in results.keys():
+                if key not in ids:
+                    del results[key]
+                    if not results:
+                        return []
+        return [Task(doc) for doc in results.values()]
+
     def get_task(self, task_id):
         """Get a task from the database."""
         document = self.db.get_doc(task_id)
@@ -81,6 +109,8 @@ class TodoStore(object):
     def new_task(self, title=None, tags=None):
         """Create a new task document."""
         # Create the document in the u1db database
+        if tags is None:
+            tags = []
         content = EMPTY_TASK
         if title or tags:
             content_object = json.loads(content)
@@ -99,7 +129,7 @@ class TodoStore(object):
 
     def get_all_tasks(self):
         return [
-            Task(doc) for doc in self.db.get_from_index("done", ["*"])]
+            Task(doc) for doc in self.db.get_from_index(DONE_INDEX, ["*"])]
 
 
 class Task(object):
@@ -126,16 +156,11 @@ class Task(object):
 
     def _get_done(self):
         """Get the status of the task."""
-        # Indexes on booleans are not currently possible, so we convert to and
-        # from strings. TODO: LP #987412
-        return True if self._content['done'] == DONE else False
+        return self._content['done']
 
     def _set_done(self, value):
         """Set the done status."""
-        # Indexes on booleans are not currently possible, so we convert to and
-        # from strings.
-        # from strings. TODO: LP #987412
-        self._content['done'] = DONE if value else NOT_DONE
+        self._content['done'] = value
 
     done = property(_get_done, _set_done, doc="Done flag.")
 
@@ -148,23 +173,6 @@ class Task(object):
         self._content['tags'] = list(set(tags))
 
     tags = property(_get_tags, _set_tags, doc="Task tags.")
-
-    def add_tag(self, tag):
-        """Add a single tag to the task."""
-        tags = self._content['tags']
-        if tag in tags:
-            # Tasks cannot have the same tag more than once, so ignore the
-            # request to add it again.
-            return
-        tags.append(tag)
-
-    def remove_tag(self, tag):
-        """Remove a single tag from the task."""
-        tags = self._content['tags']
-        if tag not in tags:
-            # Can't remove a tag that the task does not have.
-            raise KeyError("Task has no tag '%s'." % (tag,))
-        tags.remove(tag)
 
     @property
     def document(self):

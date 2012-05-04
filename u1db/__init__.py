@@ -185,13 +185,13 @@ class Database(object):
     def get_from_index(self, index_name, key_values):
         """Return documents that match the keys supplied.
 
-        You must supply exactly the same number of values as the index has been
-        defined. It is possible to do a prefix match by using '*' to indicate a
-        wildcard match. You can only supply '*' to trailing entries, (eg
-        [('val', '*', '*')] is allowed, but [('*', 'val', 'val')] is not.)
+        You must supply exactly the same number of values as has been defined
+        in the index. It is possible to do a prefix match by using '*' to
+        indicate a wildcard match. You can only supply '*' to trailing entries,
+        (eg [('val', '*', '*')] is allowed, but [('*', 'val', 'val')] is not.)
         It is also possible to append a '*' to the last supplied value (eg
-        [('val*', '*', '*')] or [('val', 'val*', '*')], but not
-        [('val*', 'val', '*')])
+        [('val*', '*', '*')] or [('val', 'val*', '*')], but not [('val*',
+        'val', '*')])
 
         :return: List of [Document]
         :param index_name: The index to query
