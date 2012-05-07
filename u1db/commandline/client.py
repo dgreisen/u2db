@@ -17,6 +17,7 @@
 """Commandline bindings for the u1db-client program."""
 
 import argparse
+import os
 import sys
 
 from u1db import (
@@ -34,12 +35,24 @@ from u1db.remote import (
 client_commands = command.CommandGroup()
 
 
+def set_oauth_credentials(client):
+    keys = os.environ.get('OAUTH_CREDENTIALS', None)
+    if keys is not None:
+        consumer_key, consumer_secret, \
+            token_key, token_secret = keys.split(":")
+        client.set_oauth_credentials(consumer_key, consumer_secret,
+                      token_key, token_secret)
+
+
 class OneDbCmd(command.Command):
     """Base class for commands operating on one local or remote database."""
 
     def _open(self, database, create):
-        if database.startswith('http://'):
-            return http_database.HTTPDatabase.open_database(database, create)
+        if database.startswith(('http://', 'https://')):
+            db = http_database.HTTPDatabase(database)
+            set_oauth_credentials(db)
+            db.open(create)
+            return db
         else:
             return u1db_open(database, create)
 
@@ -185,8 +198,9 @@ class CmdSync(command.Command):
         parser.add_argument('target', help='database to sync to')
 
     def _open_target(self, target):
-        if target.startswith('http://'):
+        if target.startswith(('http://', 'https://')):
             st = http_target.HTTPSyncTarget.connect(target)
+            set_oauth_credentials(st)
         else:
             db = u1db_open(target, create=True)
             st = db.get_sync_target()
