@@ -41,11 +41,14 @@ class HTTPDatabase(http_client.HTTPClientBase, Database):
     @staticmethod
     def open_database(url, create):
         db = HTTPDatabase(url)
-        if create:
-            db._ensure()
-        else:
-            db._check()
+        db.open(create)
         return db
+
+    def open(self, create):
+        if create:
+            self._ensure()
+        else:
+            self._check()
 
     def _check(self):
         return self._request_json('GET', [])[0]
@@ -94,7 +97,8 @@ class HTTPDatabase(http_client.HTTPClientBase, Database):
         if doc.doc_id is None:
             raise errors.InvalidDocId()
         params = {'old_rev': doc.rev}
-        res, headers = self._request_json('DELETE', ['doc', doc.doc_id], params)
+        res, headers = self._request_json('DELETE',
+            ['doc', doc.doc_id], params)
         doc.content = None
         doc.rev = res['rev']
 
