@@ -208,7 +208,7 @@ cdef extern from "u1db/u1db_internal.h":
     int u1db__get_sync_target(u1database *db, u1db_sync_target **sync_target)
     int u1db__free_sync_target(u1db_sync_target **sync_target)
     int u1db__sync_db_to_target(u1database *db, u1db_sync_target *target,
-                                int *local_gen_before_sync)
+                                int *local_gen_before_sync) nogil
 
     int u1db__sync_exchange_insert_doc_from_source(u1db_sync_exchange *se,
             u1db_document *doc, int source_gen)
@@ -1122,12 +1122,13 @@ def sync_db_to_target(db, target):
     """Sync the data between a CDatabase and a CSyncTarget"""
     cdef CDatabase cdb
     cdef CSyncTarget ctarget
-    cdef int local_gen = 0
+    cdef int local_gen = 0, status
 
     cdb = db
     ctarget = target
-    handle_status("sync_db_to_target",
-        u1db__sync_db_to_target(cdb._db, ctarget._st, &local_gen))
+    with nogil:
+        status = u1db__sync_db_to_target(cdb._db, ctarget._st, &local_gen)
+    handle_status("sync_db_to_target", status)
     return local_gen
 
 
