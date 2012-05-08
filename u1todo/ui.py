@@ -42,7 +42,7 @@ class UITask(QtGui.QListWidgetItem):
             QtCore.Qt.Checked if task.done else QtCore.Qt.Unchecked)
         self.update()
 
-    def update(self):
+    def update_strikethrough(self):
         font = self.font()
         font.setStrikeOut(self.task.done)
         self.setFont(font)
@@ -93,7 +93,7 @@ class Main(QtGui.QMainWindow):
             item.task.done = True
         else:
             item.task.done = False
-        item.update()
+        item.update_strikethrough()
         item.setText(item.task.title)
         self.store.save_task(item.task)
         self.todo_list.setCurrentRow(-1)
