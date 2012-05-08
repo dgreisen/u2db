@@ -40,7 +40,7 @@ class UITask(QtGui.QListWidgetItem):
         self.setText(self.task.title)
         self.setCheckState(
             QtCore.Qt.Checked if task.done else QtCore.Qt.Unchecked)
-        self.update()
+        self.update_strikethrough()
 
     def update_strikethrough(self):
         font = self.font()
