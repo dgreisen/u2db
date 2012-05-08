@@ -161,7 +161,10 @@ class Main(QtGui.QMainWindow):
 
     def delete(self):
         """Delete a todo item."""
-        item = self.todo_list.takeItem(self.todo_list.currentRow())
+        row = self.todo_list.currentRow()
+        if not row:
+            return
+        item = self.todo_list.takeItem(row)
         self.store.delete_task(item.task)
         self.todo_list.setCurrentRow(-1)
         if self.todo_list.count() == 0:
