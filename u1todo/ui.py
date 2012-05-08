@@ -16,11 +16,19 @@
 
 """User interface for the u1todo example application."""
 
-from u1todo import TodoStore, get_database, extract_tags
 from collections import defaultdict
+from datetime import datetime
 import os
 import sys
 from PyQt4 import QtGui, QtCore, uic
+
+from u1todo import TodoStore, get_database, extract_tags
+import u1db
+from u1db.errors import DatabaseDoesNotExist
+from u1db.sync import Synchronizer
+from u1db.remote.http_target import HTTPSyncTarget
+from u1db.remote.http_database import HTTPDatabase
+from ubuntuone.platform.credentials import CredentialsManagementTool
 
 
 class UITask(QtGui.QListWidgetItem):
@@ -32,6 +40,9 @@ class UITask(QtGui.QListWidgetItem):
         self.setText(self.task.title)
         self.setCheckState(
             QtCore.Qt.Checked if task.done else QtCore.Qt.Unchecked)
+        font = self.font()
+        font.setStrikeOut(task.done)
+        self.setFont(font)
 
 
 class Main(QtGui.QMainWindow):
@@ -64,6 +75,7 @@ class Main(QtGui.QMainWindow):
         self.delete_button.clicked.connect(self.delete)
         self.todo_list.currentRowChanged.connect(self.row_changed)
         self.todo_list.itemChanged.connect(self.item_changed)
+        self.sync_button.clicked.connect(self.synchronize)
 
     def refresh_filter(self):
         while len(self.todo_list):
@@ -78,6 +90,10 @@ class Main(QtGui.QMainWindow):
             item.task.done = True
         else:
             item.task.done = False
+        font = item.font()
+        font.setStrikeOut(item.task.done)
+        item.setFont(font)
+        item.setText(item.task.title)
         self.store.save_task(item.task)
         self.todo_list.setCurrentRow(-1)
         self.task_edit.clear()
@@ -96,6 +112,51 @@ class Main(QtGui.QMainWindow):
         self.todo_list.setCurrentRow(-1)
         self.task_edit.clear()
         self.item = None
+
+    def get_ubuntuone_credentials(self):
+        cmt = CredentialsManagementTool()
+        return cmt.find_credentials()
+
+    def synchronize(self):
+        self.sync_button.setEnabled(False)
+        if self.u1_radio.isChecked():
+            d = self.get_ubuntuone_credentials()
+            d.addCallback(self._synchronize)
+        else:
+            # TODO: add ui for entering creds for non u1 servers.
+            self._synchronize()
+
+    def _synchronize(self, creds=None):
+        if self.u1_radio.isChecked():
+            # TODO: not hardcode
+            target = 'https://u1db.one.ubuntu.com/~/u1todo'
+        else:
+            target = self.url_edit.text()
+        if target.startswith('http://') or target.startswith('https://'):
+            st = HTTPSyncTarget.connect(target)
+            oauth_creds = {
+                'token_key': creds['token'],
+                'token_secret': creds['token_secret'],
+                'consumer_key': creds['consumer_key'],
+                'consumer_secret': creds['consumer_secret']}
+            if creds:
+                st.set_oauth_credentials(**oauth_creds)
+        else:
+            db = u1db.open(target, create=True)
+            st = db.get_sync_target()
+        syncer = Synchronizer(self.store.db, st)
+        try:
+            syncer.sync()
+        except DatabaseDoesNotExist:
+            # The server does not yet have the database, so create it.
+            if target.startswith('http://') or target.startswith('https://'):
+                HTTPDatabase.open_database(
+                    target, create=True, oauth_creds=oauth_creds)
+            syncer.sync()
+        self.refresh_filter()
+        self.last_synced.setText(
+            '<span style="color:green">%s</span>' % (datetime.now()))
+        self.sync_button.setEnabled(True)
 
     def delete(self):
         """Delete a todo item."""
@@ -179,6 +240,10 @@ class Main(QtGui.QMainWindow):
 
 
 if __name__ == "__main__":
+    # Unfortunately, to be able to use ubuntuone.platform.credentials on linux,
+    # we now depend on dbus. :(
+    from dbus.mainloop.qt import DBusQtMainLoop
+    main_loop = DBusQtMainLoop(set_as_default=True)
     app = QtGui.QApplication(sys.argv)
     main = Main()
     main.show()
