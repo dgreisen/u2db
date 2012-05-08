@@ -128,7 +128,10 @@ class CmdGet(OneDbCmd):
         if doc is None:
             self.stderr.write('Document not found (id: %s)\n' % (doc_id,))
             return 1  # failed
-        outfile.write(doc.content)
+        if doc.content is None:
+            outfile.write('[document deleted]\n')
+        else:
+            outfile.write(doc.content)
         self.stderr.write('rev: %s\n' % (doc.rev,))
         if doc.has_conflicts:
             # TODO: Probably want to write 'conflicts' or 'conflicted' to
