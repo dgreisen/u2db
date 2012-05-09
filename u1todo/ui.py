@@ -188,8 +188,9 @@ class Main(QtGui.QMainWindow):
         except DatabaseDoesNotExist:
             # The server does not yet have the database, so create it.
             if target.startswith('http://') or target.startswith('https://'):
-                HTTPDatabase.open_database(
-                    target, create=True, oauth_creds=oauth_creds)
+                db = HTTPDatabase(target)
+                db.set_oauth_credentials(**oauth_creds)
+                db.open(create=True)
             syncer.sync()
         self.refresh_filter()
         self.last_synced.setText(
