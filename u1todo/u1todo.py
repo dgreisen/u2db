@@ -20,7 +20,7 @@ import json
 import os
 import re
 import xdg.BaseDirectory
-from u1db.backends.sqlite_backend import SQLitePartialExpandDatabase
+import u1db
 
 EMPTY_TASK = json.dumps({"title": "", "done": False, "tags": []})
 
@@ -36,10 +36,9 @@ TAGS = re.compile('#(\w+)|\[(.+)\]')
 
 def get_database():
     """Get the path that the database is stored in."""
-    # TODO: Make this (at least somewhat) platform/backend independent.
-    return SQLitePartialExpandDatabase(
+    return u1db.open(
         os.path.join(xdg.BaseDirectory.save_data_path("u1todo"),
-        "u1todo.u1db"))
+        "u1todo.u1db"), create=True)
 
 
 def extract_tags(text):
