@@ -347,7 +347,6 @@ class TestSyncCtoOAuthHTTPViaC(tests.TestCaseWithServer):
                           False)
 
 
-
 class TestVectorClock(BackendTests):
 
     def create_vcr(self, rev):

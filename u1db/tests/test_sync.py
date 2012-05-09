@@ -164,6 +164,20 @@ class DatabaseSyncTargetTests(tests.DatabaseBaseTests,
         self.assertEqual(([], 1), (self.other_changes, new_gen))
         self.assertEqual(10, self.st.get_sync_info('replica')[-1])
 
+    def test_sync_exchange_deleted(self):
+        doc = self.db.create_doc('{}')
+        edit_rev = 'replica:1|' + doc.rev
+        docs_by_gen = [
+            (self.make_document(doc.doc_id, edit_rev, None), 10)]
+        new_gen = self.st.sync_exchange(docs_by_gen, 'replica',
+                                        last_known_generation=0,
+                                        return_doc_cb=self.receive_doc)
+        self.assertGetDoc(self.db, doc.doc_id, edit_rev, None, False)
+        self.assertEqual([doc.doc_id, doc.doc_id],
+                         self.db._get_transaction_log())
+        self.assertEqual(([], 2), (self.other_changes, new_gen))
+        self.assertEqual(10, self.st.get_sync_info('replica')[-1])
+
     def test_sync_exchange_push_many(self):
         docs_by_gen = [
             (self.make_document('doc-id', 'replica:1', simple_doc), 10),
@@ -216,6 +230,22 @@ class DatabaseSyncTargetTests(tests.DatabaseBaseTests,
         if self.whitebox:
             self.assertEqual(self.db._last_exchange_log['return'],
                              {'last_gen': 1, 'docs': [(doc.doc_id, doc.rev)]})
+
+    def test_sync_exchange_returns_deleted_docs(self):
+        doc = self.db.create_doc(simple_doc)
+        self.db.delete_doc(doc)
+        self.assertEqual([doc.doc_id, doc.doc_id],
+                         self.db._get_transaction_log())
+        new_gen = self.st.sync_exchange([], 'other-replica',
+                                        last_known_generation=0,
+                                        return_doc_cb=self.receive_doc)
+        self.assertEqual([doc.doc_id,
+                          doc.doc_id], self.db._get_transaction_log())
+        self.assertEqual(([(doc.doc_id, doc.rev, None, 2)], 2),
+                         (self.other_changes, new_gen))
+        if self.whitebox:
+            self.assertEqual(self.db._last_exchange_log['return'],
+                             {'last_gen': 2, 'docs': [(doc.doc_id, doc.rev)]})
 
     def test_sync_exchange_returns_many_new_docs(self):
         doc = self.db.create_doc(simple_doc)

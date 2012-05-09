@@ -244,6 +244,13 @@ class LocalDatabaseTests(tests.DatabaseBaseTests):
         self.assertEqual(('inserted', 1), state_at_gen)
         self.assertGetDoc(self.db, 'my-doc-id', 'test:1', simple_doc, False)
 
+    def test_simple_put_doc_if_newer_deleted(self):
+        self.db.create_doc('{}', doc_id='my-doc-id')
+        doc = self.make_document('my-doc-id', 'test:2', None)
+        state_at_gen = self.db.put_doc_if_newer(doc, save_conflict=False)
+        self.assertEqual(('inserted', 2), state_at_gen)
+        self.assertGetDoc(self.db, 'my-doc-id', 'test:2', None, False)
+
     def test_put_doc_if_newer_already_superseded(self):
         orig_doc = '{"new": "doc"}'
         doc1 = self.db.create_doc(orig_doc)
