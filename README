@@ -1,3 +1,37 @@
+Getting started
+===============
+
+The easiest way to get started is to use "setup.py install", preferably
+in a virtualenv (although that's up to you).
+
+
+Using the database interface
+============================
+
+Inserting documents::
+
+    import u1db
+    db = u1db.open(":memory:", create=True)
+    doc = db.create_doc('{"firstname": "Bob", "familyname": "Foo"}')
+    print doc
+
+Creating an index::
+
+    import u1db
+    db = u1db.open(":memory:", create=True)
+    # Indexes can be on a single field...
+    idx = db.create_index("firstname_idx", ("firstname",))
+    # ... or on several
+    idx2 = db_create_index("composed_idx", ("firstname", "familyname"))
+
+Querying using an index::
+
+    import u1db
+    db = u1db.open(":memory:", create=True)
+    doc = db.get_from_index("firstname_idx", "Bob*")  # There must be a '*'
+
+    
+
 Building the docs
 =================
 
