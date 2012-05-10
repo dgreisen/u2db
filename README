@@ -43,7 +43,8 @@ More information and comments can be found in the u1db/__init__.py file.
 Running the tests
 =================
 
-A simple `make check` should get you on the right tracks.
+A simple `make check` should get you on the right tracks. The dependencies can
+be infered from the output.
 
 
 Building the docs
