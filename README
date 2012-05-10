@@ -37,11 +37,18 @@ Querying using an index::
     # You can of course get a range of documents using wildcards
     docs = db.get_from_index("firstname_idx", [("Bo*",)])
 
+More information and comments can be found in the u1db/__init__.py file.
+
+
+Running the tests
+=================
+
+A simple `make check` should get you on the right tracks.
+
+
 Building the docs
 =================
 
 cd html-docs
 make doctest # check that the code examples all still work
 make html # build HTML documentation at _build/html/index.html
-
-
