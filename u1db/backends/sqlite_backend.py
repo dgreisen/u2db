@@ -130,7 +130,7 @@ class SQLiteDatabase(CommonBackend):
         try:
             c.execute("SELECT value FROM u1db_config"
                       " WHERE name = 'sql_schema'")
-        except dbapi2.OperationalError, e:
+        except dbapi2.OperationalError:
             # The table does not exist yet
             val = None
         else:
@@ -583,7 +583,7 @@ class SQLiteDatabase(CommonBackend):
             c.execute(SQL_INDEX_KEYS, (index,))
         except dbapi2.OperationalError, e:
             raise dbapi2.OperationalError(str(e) +
-                '\nstatement: %s\nargs: %s\n' % (statement, args))
+                '\nstatement: %s\nargs: %s\n' % (SQL_INDEX_KEYS, (index,)))
         res = c.fetchall()
         return [r[0] for r in res]
 
@@ -622,7 +622,6 @@ class SQLitePartialExpandDatabase(SQLiteDatabase):
         return set([x[0] for x in c.fetchall()])
 
     def _evaluate_index(self, raw_doc, field):
-        val = raw_doc
         parser = query_parser.Parser()
         getter = parser.parse(field)
         return getter.get(raw_doc)
