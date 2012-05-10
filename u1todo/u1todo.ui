@@ -30,7 +30,13 @@
           <item>
            <layout class="QVBoxLayout" name="verticalLayout">
             <item>
-             <widget class="QListWidget" name="todo_list"/>
+             <widget class="QTreeWidget" name="todo_list">
+              <column>
+               <property name="text">
+                <string notr="true">1</string>
+               </property>
+              </column>
+             </widget>
             </item>
             <item>
              <widget class="QLineEdit" name="task_edit"/>

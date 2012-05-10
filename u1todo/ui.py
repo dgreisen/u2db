@@ -31,23 +31,23 @@ from u1db.remote.http_database import HTTPDatabase
 from ubuntuone.platform.credentials import CredentialsManagementTool
 
 
-class UITask(QtGui.QListWidgetItem):
+class UITask(QtGui.QTreeWidgetItem):
     """Task list item."""
 
     def __init__(self, task):
         super(UITask, self).__init__()
         self.task = task
         # Set the list item's text to the task's title.
-        self.setText(self.task.title)
+        self.setText(0, self.task.title)
         # If the task is done, check off the list item.
         self.setCheckState(
-            QtCore.Qt.Checked if task.done else QtCore.Qt.Unchecked)
+            0, QtCore.Qt.Checked if task.done else QtCore.Qt.Unchecked)
         self.update_strikethrough()
 
     def update_strikethrough(self):
-        font = self.font()
+        font = self.font(0)
         font.setStrikeOut(self.task.done)
-        self.setFont(font)
+        self.setFont(0, font)
 
 
 class Main(QtGui.QMainWindow):
@@ -96,7 +96,7 @@ class Main(QtGui.QMainWindow):
         self.delete_button.clicked.connect(self.delete)
         # If a new row in the list is selected, change the currently selected
         # task, and put its contents in the edit field.
-        self.todo_list.currentRowChanged.connect(self.row_changed)
+        self.todo_list.currentItemChanged.connect(self.row_changed)
         # If the checked status of an item in the list changes, change the done
         # status of the task.
         self.todo_list.itemChanged.connect(self.item_changed)
@@ -217,7 +217,7 @@ class Main(QtGui.QMainWindow):
         """Add a new todo item."""
         # Wrap the task in a UITask object.
         item = UITask(task)
-        self.todo_list.addItem(item)
+        self.todo_list.addTopLevelItem(item)
         # We know there is at least one item now so we enable the delete
         # button.
         self.delete_button.setEnabled(True)
