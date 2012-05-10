@@ -8,29 +8,34 @@ in a virtualenv (although that's up to you).
 Using the database interface
 ============================
 
-Inserting documents::
+Inserting and retrieving documents::
 
     import u1db
     db = u1db.open(":memory:", create=True)
     doc = db.create_doc('{"firstname": "Bob", "familyname": "Foo"}')
-    print doc
+    print "document id: %s" % doc.doc_id
+    print "document revision: %s" % doc.revision
+
+    doc2 = db.get_doc(doc.doc_id)
+    print (doc == doc2)
 
 Creating an index::
 
     import u1db
     db = u1db.open(":memory:", create=True)
     # Indexes can be on a single field...
-    idx = db.create_index("firstname_idx", ("firstname",))
+    idx = db.create_index("firstname_idx", ["firstname"])
     # ... or on several
-    idx2 = db_create_index("composed_idx", ("firstname", "familyname"))
+    idx2 = db_create_index("composed_idx", ["firstname", "familyname"])
 
 Querying using an index::
 
     import u1db
     db = u1db.open(":memory:", create=True)
-    doc = db.get_from_index("firstname_idx", "Bob*")  # There must be a '*'
-
-    
+    doc = db.get_from_index("firstname_idx", [("Bob",)])
+    print doc
+    # You can of course get a range of documents using wildcards
+    docs = db.get_from_index("firstname_idx", [("Bo*",)])
 
 Building the docs
 =================
