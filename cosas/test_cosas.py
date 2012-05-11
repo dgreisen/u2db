@@ -14,10 +14,10 @@
 # You should have received a copy of the GNU Lesser General Public License
 # along with u1db.  If not, see <http://www.gnu.org/licenses/>.
 
-"""Tests for u1todo example application."""
+"""Tests for cosas example application."""
 
 from testtools import TestCase
-from u1todo import (
+from cosas import (
     Task, TodoStore, INDEXES, TAGS_INDEX, EMPTY_TASK, extract_tags)
 from u1db.backends import inmemory
 
@@ -26,7 +26,7 @@ class TodoStoreTestCase(TestCase):
 
     def setUp(self):
         super(TodoStoreTestCase, self).setUp()
-        self.db = inmemory.InMemoryDatabase("u1todo")
+        self.db = inmemory.InMemoryDatabase("cosas")
 
     def test_initialize_db(self):
         """Creates indexes."""
@@ -179,7 +179,7 @@ class TaskTestCase(TestCase):
 
     def setUp(self):
         super(TaskTestCase, self).setUp()
-        self.db = inmemory.InMemoryDatabase("u1todo")
+        self.db = inmemory.InMemoryDatabase("cosas")
         self.document = self.db.create_doc(EMPTY_TASK)
 
     def test_task(self):

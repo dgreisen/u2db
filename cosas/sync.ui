@@ -1,0 +1,122 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ui version="4.0">
+ <class>Dialog</class>
+ <widget class="QDialog" name="Dialog">
+  <property name="geometry">
+   <rect>
+    <x>0</x>
+    <y>0</y>
+    <width>329</width>
+    <height>169</height>
+   </rect>
+  </property>
+  <property name="windowTitle">
+   <string>synchronize</string>
+  </property>
+  <property name="styleSheet">
+   <string notr="true">QToolButton {
+	background-color: rgb(203,203,203);
+	border: 1px solid rgb(102, 102, 102);
+}
+
+QFrame#drop_frame{
+	border: 0px;
+	border-top: 1px dotted rgb(102,102,102);
+	border-bottom: 1px dotted rgb(102,102,102);
+}
+
+QPushButton {
+	background-color: rgb(61, 133, 198);
+	color: white;
+	border: 1px solid rgb(7, 55, 99);
+	border-radius: 6 6 px;
+	padding: 5 px;
+}
+
+QFrame#buttons_frame &gt; QPushButton {
+	background-color: rgb(204, 204, 204);
+	color: black;
+	border: 1px solid rgb(102,102,102);
+	border-radius: 0px;
+}
+
+QTreeView::item{
+	border: 1px dotted rgb(102, 102, 102);
+	border-top: 0px;
+	background-color: white;
+}
+
+QLineEdit, QTextEdit {
+	background-color: white;
+	border-radius: 0;
+   border: 1px solid rgb(102,102,102);
+}
+
+* {
+	background-color: rgb(239, 239, 239);
+}</string>
+  </property>
+  <layout class="QVBoxLayout" name="verticalLayout">
+   <item>
+    <widget class="QGroupBox" name="target_group">
+     <property name="title">
+      <string>Synchronization target</string>
+     </property>
+     <layout class="QVBoxLayout" name="verticalLayout_5">
+      <item>
+       <widget class="QRadioButton" name="u1_radio">
+        <property name="text">
+         <string>Ubuntu One</string>
+        </property>
+        <property name="checked">
+         <bool>true</bool>
+        </property>
+       </widget>
+      </item>
+      <item>
+       <layout class="QHBoxLayout" name="horizontalLayout_3">
+        <item>
+         <widget class="QRadioButton" name="url_radio">
+          <property name="text">
+           <string>url:</string>
+          </property>
+         </widget>
+        </item>
+        <item>
+         <widget class="QLineEdit" name="url_edit"/>
+        </item>
+       </layout>
+      </item>
+      <item>
+       <layout class="QHBoxLayout" name="horizontalLayout_4">
+        <item>
+         <widget class="QLabel" name="label">
+          <property name="text">
+           <string>Last Synced:</string>
+          </property>
+         </widget>
+        </item>
+        <item>
+         <widget class="QLabel" name="last_synced">
+          <property name="text">
+           <string>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;&lt;br/&gt;&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</string>
+          </property>
+         </widget>
+        </item>
+       </layout>
+      </item>
+     </layout>
+    </widget>
+   </item>
+   <item>
+    <widget class="QPushButton" name="sync_button">
+     <property name="text">
+      <string>Syn&amp;chronize</string>
+     </property>
+    </widget>
+   </item>
+  </layout>
+ </widget>
+ <resources/>
+ <connections/>
+</ui>

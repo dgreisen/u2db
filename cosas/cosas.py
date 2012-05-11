@@ -14,7 +14,7 @@
 # You should have received a copy of the GNU Lesser General Public License
 # along with u1db.  If not, see <http://www.gnu.org/licenses/>.
 
-"""u1todo example application."""
+"""cosas example application."""
 
 import json
 import os
@@ -37,8 +37,8 @@ TAGS = re.compile('#(\w+)|\[(.+)\]')
 def get_database():
     """Get the path that the database is stored in."""
     return u1db.open(
-        os.path.join(xdg.BaseDirectory.save_data_path("u1todo"),
-        "u1todo.u1db"), create=True)
+        os.path.join(xdg.BaseDirectory.save_data_path("cosas"),
+        "cosas.u1db"), create=True)
 
 
 def extract_tags(text):
