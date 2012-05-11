@@ -54,19 +54,10 @@ QFrame#buttons_frame QPushButton {
 	border-radius: 0px;
 }
 
-QTreeWidget::item{
-	border: 1px dotted rgb(102, 102, 102);
-	border-top: 0px;
-}
-
 QLineEdit, QTextEdit {
 	background-color: white;
 	border-radius: 0;
    border: 1px solid rgb(102,102,102);
-}
-
-* {
-	background-color: rgb(239, 239, 239);
 }
 </string>
   </property>
@@ -218,9 +209,6 @@ p, li { white-space: pre-wrap; }
            </layout>
           </item>
          </layout>
-         <zorder>textEdit</zorder>
-         <zorder></zorder>
-         <zorder>comboBox</zorder>
         </widget>
        </item>
        <item>
@@ -247,7 +235,7 @@ p, li { white-space: pre-wrap; }
           <number>0</number>
          </property>
          <attribute name="headerVisible">
-          <bool>true</bool>
+          <bool>false</bool>
          </attribute>
          <column>
           <property name="text">
@@ -286,7 +274,4 @@ p, li { white-space: pre-wrap; }
  </widget>
  <resources/>
  <connections/>
- <buttongroups>
-  <buttongroup name="sync_targets"/>
- </buttongroups>
 </ui>

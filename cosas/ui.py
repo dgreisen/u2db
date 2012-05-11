@@ -58,15 +58,37 @@ class UITask(QtGui.QTreeWidgetItem):
         self.setCheckState(
             0, QtCore.Qt.Checked if task.done else QtCore.Qt.Unchecked)
         self.update_strikethrough()
+        self._bg_color = WHITE
 
     def update_strikethrough(self):
         font = self.font(0)
         font.setStrikeOut(self.task.done)
-        self.setForeground(0, DONE_COLOR if self.task.done else NOT_DONE_COLOR)
         self.setFont(0, font)
 
     def set_color(self, color):
-        self.setBackground(0, color)
+        self._bg_color = color
+
+    def data(self, column, role):
+        if role == QtCore.Qt.BackgroundRole:
+            return self._bg_color
+        if role == QtCore.Qt.ForegroundRole:
+            return DONE_COLOR if self.task.done else NOT_DONE_COLOR
+        else:
+            return super(UITask, self).data(column, role)
+
+
+class TaskDelegate(QtGui.QStyledItemDelegate):
+    """Delegate for rendering tasks."""
+
+    pen = QtGui.QPen(QtGui.QColor(102, 102, 102), 2, style=QtCore.Qt.DotLine)
+
+    def paint(self, painter, option, index):
+        # Save current state of painter before we modify anything.
+        painter.save()
+        painter.setPen(self.pen)
+        super(TaskDelegate, self).paint(painter, option, index)
+        # Return painter to original stats.
+        painter.restore()
 
 
 class Sync(QtGui.QDialog):
@@ -150,6 +172,8 @@ class Main(QtGui.QMainWindow):
         self.store = TodoStore(db)
         # create or update the indexes if they are not up-to-date
         self.store.initialize_db()
+        # hook up the delegate
+        self.todo_list.setItemDelegate(TaskDelegate())
         # Initialize some variables we will use to keep track of the tags.
         self._tag_docs = defaultdict(list)
         self._tag_buttons = {}
@@ -279,7 +303,6 @@ class Main(QtGui.QMainWindow):
             item.set_color(self._tag_colors[task.tags[0]]['qcolor'])
         else:
             item.set_color(WHITE)
-        print self.todo_list.topLevelItemCount()
 
     def add_tag(self, task_id, tag):
         """Create a link between the task with id task_id and the tag, and
