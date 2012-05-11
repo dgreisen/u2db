@@ -86,9 +86,8 @@ class TodoStore(object):
             # No tags specified, so return all tasks.
             return self.get_all_tasks()
         # Get all tasks for the first tag.
-        results = {
-            doc.doc_id: doc for doc in
-            self.db.get_from_index(TAGS_INDEX, [(tags[0],)])}
+        results = dict((doc.doc_id, doc) for doc in
+            self.db.get_from_index(TAGS_INDEX, [(tags[0],)]))
         # Now loop over the rest of the tags (if any) and remove from the
         # results any document that does not have that particular tag.
         for tag in tags[1:]:
