@@ -49,30 +49,37 @@ TAG_COLORS = [
 class UITask(QtGui.QTreeWidgetItem):
     """Task list item."""
 
-    def __init__(self, task, parent):
+    def __init__(self, task, parent, store):
         super(UITask, self).__init__(parent)
         self.task = task
-        # Set the list item's text to the task's title.
-        self.setText(0, self.task.title)
         # If the task is done, check off the list item.
-        self.setCheckState(
-            0, QtCore.Qt.Checked if task.done else QtCore.Qt.Unchecked)
-        self.update_strikethrough()
+        self.store = store
         self._bg_color = WHITE
-
-    def update_strikethrough(self):
-        font = self.font(0)
-        font.setStrikeOut(self.task.done)
-        self.setFont(0, font)
 
     def set_color(self, color):
         self._bg_color = color
 
+    def setData(self, column, role, value):
+        if role == QtCore.Qt.CheckStateRole:
+            if value == QtCore.Qt.Checked:
+                self.task.done = True
+            else:
+                self.task.done = False
+            self.store.save_task(self.task)
+
     def data(self, column, role):
-        if role == QtCore.Qt.BackgroundRole:
+        if role == QtCore.Qt.DisplayRole:
+            return self.task.title
+        if role == QtCore.Qt.FontRole:
+            font = self.font(0)
+            font.setStrikeOut(self.task.done)
+            return font
+        elif role == QtCore.Qt.BackgroundRole:
             return self._bg_color
-        if role == QtCore.Qt.ForegroundRole:
+        elif role == QtCore.Qt.ForegroundRole:
             return DONE_COLOR if self.task.done else NOT_DONE_COLOR
+        elif role == QtCore.Qt.CheckStateRole:
+            return QtCore.Qt.Checked if self.task.done else QtCore.Qt.Unchecked
         else:
             return super(UITask, self).data(column, role)
 
@@ -86,9 +93,10 @@ class TaskDelegate(QtGui.QStyledItemDelegate):
         # Save current state of painter before we modify anything.
         painter.save()
         painter.setPen(self.pen)
+        painter.drawRect(option.rect)
+        painter.restore()
         super(TaskDelegate, self).paint(painter, option, index)
         # Return painter to original stats.
-        painter.restore()
 
 
 class Sync(QtGui.QDialog):
@@ -252,7 +260,6 @@ class Main(QtGui.QMainWindow):
         # Save the task to the database.
         item.update_strikethrough()
         item.setText(item.task.title)
-        self.store.save_task(item.task)
         # Clear the current selection.
         self.todo_list.setCurrentRow(-1)
         self.task_edit.clear()
@@ -291,7 +298,7 @@ class Main(QtGui.QMainWindow):
     def add_task(self, task):
         """Add a new todo item."""
         # Wrap the task in a UITask object.
-        item = UITask(task, self.todo_list)
+        item = UITask(task, self.todo_list, self.store)
         self.todo_list.addTopLevelItem(item)
         if not task.tags:
             return

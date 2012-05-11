@@ -59,6 +59,8 @@ QLineEdit, QTextEdit {
 	border-radius: 0;
    border: 1px solid rgb(102,102,102);
 }
+
+*[foo=&quot;bar&quot;] {color:red;}
 </string>
   </property>
   <property name="toolButtonStyle">
