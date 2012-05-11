@@ -32,6 +32,7 @@ from ubuntuone.platform.credentials import CredentialsManagementTool
 
 DONE_COLOR = QtGui.QColor(183, 183, 183)
 NOT_DONE_COLOR = QtGui.QColor(0, 0, 0)
+WHITE = QtGui.QColor(255, 255, 255)
 TAG_COLORS = [
     (234, 153, 153),
     (221, 126, 107),
@@ -45,25 +46,27 @@ TAG_COLORS = [
     (213, 166, 189)]
 
 
-class UITask(QtGui.QStandardItem):
+class UITask(QtGui.QTreeWidgetItem):
     """Task list item."""
 
-    def __init__(self, task):
-        super(UITask, self).__init__()
+    def __init__(self, task, parent):
+        super(UITask, self).__init__(parent)
         self.task = task
         # Set the list item's text to the task's title.
-        self.setText(self.task.title)
-        self.setCheckable(True)
+        self.setText(0, self.task.title)
         # If the task is done, check off the list item.
         self.setCheckState(
-            QtCore.Qt.Checked if task.done else QtCore.Qt.Unchecked)
+            0, QtCore.Qt.Checked if task.done else QtCore.Qt.Unchecked)
         self.update_strikethrough()
 
     def update_strikethrough(self):
-        font = self.font()
+        font = self.font(0)
         font.setStrikeOut(self.task.done)
-        self.setForeground(DONE_COLOR if self.task.done else NOT_DONE_COLOR)
-        self.setFont(font)
+        self.setForeground(0, DONE_COLOR if self.task.done else NOT_DONE_COLOR)
+        self.setFont(0, font)
+
+    def set_color(self, color):
+        self.setBackground(0, color)
 
 
 class Sync(QtGui.QDialog):
@@ -139,9 +142,6 @@ class Main(QtGui.QMainWindow):
         # set the model for the treeview
         self.drop_frame.hide()
         self.buttons_frame.hide()
-        model = QtGui.QStandardItemModel()
-        self.todo_list.setModel(model)
-        self.root = model.invisibleRootItem()
         # hook up the signals to the signal handlers.
         self.connect_events()
         # Load the cosas database.
@@ -170,6 +170,8 @@ class Main(QtGui.QMainWindow):
     def get_tag_color(self):
         """Get a color number to use for a new tag."""
         # Remove a color from the list of available ones and return it.
+        if not self.colors:
+            return WHITE
         return self.colors.pop(0)
 
     def connect_events(self):
@@ -265,14 +267,19 @@ class Main(QtGui.QMainWindow):
     def add_task(self, task):
         """Add a new todo item."""
         # Wrap the task in a UITask object.
-        item = UITask(task)
-        self.root.appendRow(item)
+        item = UITask(task, self.todo_list)
+        self.todo_list.addTopLevelItem(item)
         if not task.tags:
             return
         # If the task has tags, we add them as filter buttons to the UI, if
         # they are new.
         for tag in task.tags:
             self.add_tag(task.task_id, tag)
+        if task.tags:
+            item.set_color(self._tag_colors[task.tags[0]]['qcolor'])
+        else:
+            item.set_color(WHITE)
+        print self.todo_list.topLevelItemCount()
 
     def add_tag(self, task_id, tag):
         """Create a link between the task with id task_id and the tag, and
@@ -350,8 +357,9 @@ class Main(QtGui.QMainWindow):
         for tag in new_tags - old_tags:
             self.add_tag(item.task.task_id, tag)
         if new_tags:
-            print dir(item)
-            item.setBackground(self._tag_colors[new_tags[0]]['qcolor'])
+            item.set_color(self._tag_colors[new_tags[0]]['qcolor'])
+            return
+        item.set_color(WHITE)
 
     def update_task_text(self, text):
         """Edit an existing todo item."""

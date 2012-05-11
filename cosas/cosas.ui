@@ -27,14 +27,22 @@
 
 QFrame#drop_frame{
 	border: 0px;
-	border-top: 1px dotted rgb(102,102,102);
-	border-bottom: 1px dotted rgb(102,102,102);
+	border-top: 2px dotted rgb(102,102,102);
+	border-bottom: 2px dotted rgb(102,102,102);
 }
 
 QPushButton {
 	background-color: rgb(61, 133, 198);
 	color: white;
-	border: 1px solid rgb(7, 55, 99);
+	border: 2px solid rgb(7, 55, 99);
+	border-radius: 6 6 px;
+	padding: 5 px;
+}
+
+QComboBox {
+	background-color: rgb(204, 204, 204);
+	color: black;
+	border: 2px solid rgb(102,102,102);
 	border-radius: 6 6 px;
 	padding: 5 px;
 }
@@ -42,14 +50,13 @@ QPushButton {
 QFrame#buttons_frame QPushButton {
 	background-color: rgb(204, 204, 204);
 	color: black;
-	border: 1px solid rgb(102,102,102);
+	border: 2px solid rgb(102,102,102);
 	border-radius: 0px;
 }
 
-QTreeView::item{
+QTreeWidget::item{
 	border: 1px dotted rgb(102, 102, 102);
 	border-top: 0px;
-	background-color: white;
 }
 
 QLineEdit, QTextEdit {
@@ -184,6 +191,9 @@ p, li { white-space: pre-wrap; }
            </widget>
           </item>
           <item>
+           <widget class="QComboBox" name="comboBox"/>
+          </item>
+          <item>
            <layout class="QHBoxLayout" name="horizontalLayout">
             <item>
              <widget class="QPushButton" name="edit_button">
@@ -210,10 +220,11 @@ p, li { white-space: pre-wrap; }
          </layout>
          <zorder>textEdit</zorder>
          <zorder></zorder>
+         <zorder>comboBox</zorder>
         </widget>
        </item>
        <item>
-        <widget class="QTreeView" name="todo_list">
+        <widget class="QTreeWidget" name="todo_list">
          <property name="frameShape">
           <enum>QFrame::StyledPanel</enum>
          </property>
@@ -229,15 +240,20 @@ p, li { white-space: pre-wrap; }
          <property name="animated">
           <bool>true</bool>
          </property>
-         <attribute name="headerVisible">
-          <bool>false</bool>
-         </attribute>
-         <attribute name="headerCascadingSectionResizes">
-          <bool>false</bool>
-         </attribute>
-         <attribute name="headerDefaultSectionSize">
+         <property name="columnCount">
+          <number>1</number>
+         </property>
+         <property name="topLevelItemCount" stdset="0">
           <number>0</number>
+         </property>
+         <attribute name="headerVisible">
+          <bool>true</bool>
          </attribute>
+         <column>
+          <property name="text">
+           <string>title</string>
+          </property>
+         </column>
         </widget>
        </item>
       </layout>

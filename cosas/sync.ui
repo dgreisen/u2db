@@ -21,22 +21,30 @@
 
 QFrame#drop_frame{
 	border: 0px;
-	border-top: 1px dotted rgb(102,102,102);
-	border-bottom: 1px dotted rgb(102,102,102);
+	border-top: 2px dotted rgb(102,102,102);
+	border-bottom: 2px dotted rgb(102,102,102);
 }
 
 QPushButton {
 	background-color: rgb(61, 133, 198);
 	color: white;
-	border: 1px solid rgb(7, 55, 99);
+	border: 2px solid rgb(7, 55, 99);
 	border-radius: 6 6 px;
 	padding: 5 px;
 }
 
-QFrame#buttons_frame &gt; QPushButton {
+QComboBox {
 	background-color: rgb(204, 204, 204);
 	color: black;
-	border: 1px solid rgb(102,102,102);
+	border: 2px solid rgb(102,102,102);
+	border-radius: 6 6 px;
+	padding: 5 px;
+}
+
+QFrame#buttons_frame QPushButton {
+	background-color: rgb(204, 204, 204);
+	color: black;
+	border: 2px solid rgb(102,102,102);
 	border-radius: 0px;
 }
 
@@ -54,7 +62,8 @@ QLineEdit, QTextEdit {
 
 * {
 	background-color: rgb(239, 239, 239);
-}</string>
+}
+</string>
   </property>
   <layout class="QVBoxLayout" name="verticalLayout">
    <item>
