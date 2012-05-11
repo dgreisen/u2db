@@ -54,6 +54,13 @@ class HTTPSyncTarget(http_client.HTTPClientBase, SyncTarget):
         if not parts or parts[0] != '[':
             raise BrokenSyncStream
         if parts[-1] != ']':
+            try:
+                partdic = simplejson.loads(parts[-1])
+            except ValueError:
+                pass
+            else:
+                if isinstance(partdic, dict):
+                    self._error(partdic)
             raise BrokenSyncStream
         data = parts[1:-1]
         line, comma = utils.check_and_strip_comma(data[0])

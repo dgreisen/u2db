@@ -106,6 +106,13 @@ class HTTPClientBase(object):
 
     # xxx retry mechanism?
 
+    def _error(self, respdic):
+        descr = respdic.get("error")
+        exc_cls = errors.wire_description_to_exc.get(descr)
+        if exc_cls is not None:
+            message = respdic.get("message")
+            raise exc_cls(message)
+
     def _response(self):
         resp = self._conn.getresponse()
         body = resp.read()
@@ -118,11 +125,7 @@ class HTTPClientBase(object):
             except ValueError:
                 pass
             else:
-                descr = respdic.get("error")
-                exc_cls = errors.wire_description_to_exc.get(descr)
-                if exc_cls is not None:
-                    message = respdic.get("message")
-                    raise exc_cls(message)
+                self._error(respdic)
         # special case
         if resp.status == 503:
             raise errors.Unavailable(body, headers)
