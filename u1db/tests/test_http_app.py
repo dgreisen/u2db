@@ -494,6 +494,21 @@ class TestHTTPResponder(tests.TestCase):
                           '\r\n]\r\n'], self.response_body)
         self.assertEqual([], responder.content)
 
+    def test_send_stream_w_error(self):
+        responder = http_app.HTTPResponder(self.start_response)
+        responder.content_type = "application/x-u1db-multi-json"
+        responder.start_response(200)
+        responder.start_stream()
+        responder.stream_entry({'entry': 1})
+        responder.send_response_json(503, error="unavailable")
+        self.assertEqual('200 OK', self.status)
+        self.assertEqual({'content-type': 'application/x-u1db-multi-json',
+                          'cache-control': 'no-cache'}, self.headers)
+        self.assertEqual(['[',
+                           '\r\n', '{"entry": 1}'], self.response_body)
+        self.assertEqual([',\r\n', '{"error": "unavailable"}\r\n'],
+                         responder.content)
+
 
 class TestHTTPApp(tests.TestCase):
 
