@@ -331,7 +331,7 @@ cdef int _trace_hook(void *context, const_char_ptr state) with gil:
     return U1DB_OK
 
 
-cdef char *_ensure_utf_8(object obj, object extra_objs) except NULL:
+cdef char *_ensure_str(object obj, object extra_objs) except NULL:
     """Ensure that we have the UTF-8 representation of a parameter.
 
     :param obj: A Unicode or String object.
@@ -340,7 +340,7 @@ cdef char *_ensure_utf_8(object obj, object extra_objs) except NULL:
         we know the char* lifetime will be correct.
     :return: A C pointer to the UTF-8 representation.
     """
-    if not isinstance(obj, str):
+    if isinstance(obj, unicode):
         obj = obj.encode('utf-8')
         extra_objs.append(obj)
     return PyString_AsString(obj)
@@ -1007,25 +1007,25 @@ cdef class CDatabase(object):
             elif len(entry) == 1:
                 status = u1db_get_from_index(self._db, query._query,
                     <void*>res, _append_doc_to_list, 1,
-                    _ensure_utf_8(entry[0], extra))
+                    _ensure_str(entry[0], extra))
             elif len(entry) == 2:
                 status = u1db_get_from_index(self._db, query._query,
                     <void*>res, _append_doc_to_list, 2,
-                    _ensure_utf_8(entry[0], extra),
-                    _ensure_utf_8(entry[1], extra))
+                    _ensure_str(entry[0], extra),
+                    _ensure_str(entry[1], extra))
             elif len(entry) == 3:
                 status = u1db_get_from_index(self._db, query._query,
                     <void*>res, _append_doc_to_list, 3,
-                    _ensure_utf_8(entry[0], extra),
-                    _ensure_utf_8(entry[1], extra),
-                    _ensure_utf_8(entry[2], extra))
+                    _ensure_str(entry[0], extra),
+                    _ensure_str(entry[1], extra),
+                    _ensure_str(entry[2], extra))
             elif len(entry) == 4:
                 status = u1db_get_from_index(self._db, query._query,
                     <void*>res, _append_doc_to_list, 4,
-                    _ensure_utf_8(entry[0], extra),
-                    _ensure_utf_8(entry[1], extra),
-                    _ensure_utf_8(entry[2], extra),
-                    _ensure_utf_8(entry[3], extra))
+                    _ensure_str(entry[0], extra),
+                    _ensure_str(entry[1], extra),
+                    _ensure_str(entry[2], extra),
+                    _ensure_str(entry[3], extra))
             else:
                 status = U1DB_NOT_IMPLEMENTED
             handle_status("get_from_index", status)
