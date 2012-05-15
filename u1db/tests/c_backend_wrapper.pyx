@@ -279,6 +279,19 @@ cdef _list_to_array(lst, const_char_ptr **res, int *count):
         tmp[idx] = x
     res[0] = tmp
 
+cdef _list_to_str_array(lst, const_char_ptr **res, int *count):
+    cdef const_char_ptr *tmp
+    count[0] = len(lst)
+    tmp = <const_char_ptr*>calloc(sizeof(char*), count[0])
+    new_objs = []
+    for idx, x in enumerate(lst):
+        if isinstance(x, unicode):
+            x = x.encode('utf-8')
+            new_objs.append(x)
+        tmp[idx] = x
+    res[0] = tmp
+    return new_objs
+
 
 cdef int _append_index_definition_to_list(void *context,
         const_char_ptr index_name, int n_expressions,
@@ -288,7 +301,8 @@ cdef int _append_index_definition_to_list(void *context,
     a_list = <object>(context)
     exp_list = []
     for i from 0 <= i < n_expressions:
-        exp_list.append(expressions[i])
+        s = expressions[i]
+        exp_list.append(s.decode('utf-8'))
     a_list.append((index_name, exp_list))
     return 0
 
@@ -329,6 +343,21 @@ cdef int _trace_hook(void *context, const_char_ptr state) with gil:
         #       something in C
         return U1DB_INTERNAL_ERROR
     return U1DB_OK
+
+
+cdef char *_ensure_str(object obj, object extra_objs) except NULL:
+    """Ensure that we have the UTF-8 representation of a parameter.
+
+    :param obj: A Unicode or String object.
+    :param extra_objs: This should be a Python list. If we have to convert obj
+        from being a Unicode object, this will hold the PyString object so that
+        we know the char* lifetime will be correct.
+    :return: A C pointer to the UTF-8 representation.
+    """
+    if isinstance(obj, unicode):
+        obj = obj.encode('utf-8')
+        extra_objs.append(obj)
+    return PyString_AsString(obj)
 
 
 def _format_query(fields):
@@ -962,7 +991,10 @@ cdef class CDatabase(object):
         cdef const_char_ptr *expressions
         cdef int n_expressions
 
-        _list_to_array(index_expression, &expressions, &n_expressions)
+        # keep a reference to new_objs so that the pointers in expressions
+        # remain valid.
+        new_objs = _list_to_str_array(
+            index_expression, &expressions, &n_expressions)
         handle_status("create_index",
             u1db_create_index(self._db, index_name, n_expressions, expressions))
         free(<void*>expressions)
@@ -981,6 +1013,7 @@ cdef class CDatabase(object):
     def get_from_index(self, index_name, key_values):
         cdef CQuery query
         cdef int status
+        extra = []
         query = self._query_init(index_name)
         res = []
         status = U1DB_OK
@@ -990,20 +1023,26 @@ cdef class CDatabase(object):
                     <void*>res, _append_doc_to_list, 0, NULL)
             elif len(entry) == 1:
                 status = u1db_get_from_index(self._db, query._query,
-                    <void*>res, _append_doc_to_list, 1, <char*>entry[0])
+                    <void*>res, _append_doc_to_list, 1,
+                    _ensure_str(entry[0], extra))
             elif len(entry) == 2:
                 status = u1db_get_from_index(self._db, query._query,
                     <void*>res, _append_doc_to_list, 2,
-                    <char*>entry[0], <char*>entry[1])
+                    _ensure_str(entry[0], extra),
+                    _ensure_str(entry[1], extra))
             elif len(entry) == 3:
                 status = u1db_get_from_index(self._db, query._query,
                     <void*>res, _append_doc_to_list, 3,
-                    <char*>entry[0], <char*>entry[1], <char*>entry[2])
+                    _ensure_str(entry[0], extra),
+                    _ensure_str(entry[1], extra),
+                    _ensure_str(entry[2], extra))
             elif len(entry) == 4:
                 status = u1db_get_from_index(self._db, query._query,
                     <void*>res, _append_doc_to_list, 4,
-                    <char*>entry[0], <char*>entry[1], <char*>entry[2],
-                    <char*>entry[3])
+                    _ensure_str(entry[0], extra),
+                    _ensure_str(entry[1], extra),
+                    _ensure_str(entry[2], extra),
+                    _ensure_str(entry[3], extra))
             else:
                 status = U1DB_NOT_IMPLEMENTED
             handle_status("get_from_index", status)

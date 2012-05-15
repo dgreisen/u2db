@@ -16,6 +16,7 @@
 
 """The backend class for U1DB. This deals with hiding storage details."""
 
+import simplejson
 from u1db import (
     errors,
     tests,
@@ -38,8 +39,6 @@ try:
     from u1db.tests import c_backend_wrapper
 except ImportError:
     c_backend_wrapper = None
-
-import simplejson
 
 
 def http_create_database(test, replica_uid, path='test'):
@@ -610,16 +609,34 @@ class DatabaseIndexTests(tests.DatabaseBaseTests):
         self.assertEqual([('test-idx', ['name'])],
                          self.db.list_indexes())
 
+    def test_create_index_on_non_ascii_field_name(self):
+        doc = self.db.create_doc(simplejson.dumps({u'\xe5': 'value'}))
+        self.db.create_index('test-idx', [u'\xe5'])
+        self.assertEqual([doc],
+                         self.db.get_from_index('test-idx', [('value',)]))
+
+    def test_list_indexes_with_non_ascii_field_names(self):
+        self.db.create_index('test-idx', [u'\xe5'])
+        self.assertEqual(
+            [('test-idx', [u'\xe5'])], self.db.list_indexes())
+
     def test_create_index_evaluates_it(self):
         doc = self.db.create_doc(simple_doc)
         self.db.create_index('test-idx', ['key'])
         self.assertEqual([doc],
                          self.db.get_from_index('test-idx', [('value',)]))
 
-    def test_create_index_on_non_ascii_field_name(self):
-        self.db.create_index('test-idx', [u'\xe5'])
+    def test_wildcard_matches_unicode_value(self):
+        doc = self.db.create_doc(simplejson.dumps({"key": u"valu\xe5"}))
+        self.db.create_index('test-idx', ['key'])
         self.assertEqual(
-            [('test-idx', [u'\xe5'])], self.db.list_indexes())
+            [doc], self.db.get_from_index('test-idx', [('*',)]))
+
+    def test_retrieve_unicode_value_from_index(self):
+        doc = self.db.create_doc(simplejson.dumps({"key": u"valu\xe5"}))
+        self.db.create_index('test-idx', ['key'])
+        self.assertEqual(
+            [doc], self.db.get_from_index('test-idx', [(u"valu\xe5",)]))
 
     def test_create_index_after_deleting_document(self):
         doc = self.db.create_doc(simple_doc)
