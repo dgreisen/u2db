@@ -272,7 +272,7 @@ u1db__sync_exchange_insert_doc_from_source(u1db_sync_exchange *se,
     status = u1db_put_doc_if_newer(se->db, doc, 0, se->source_replica_uid,
                                    source_gen, &insert_state, &at_gen);
     if (insert_state == U1DB_INSERTED || insert_state == U1DB_CONVERGED) {
-	lh_table_insert(se->seen_ids, strdup(doc->doc_id), (void *)at_gen);
+	lh_table_insert(se->seen_ids, strdup(doc->doc_id), (void *)(intptr_t)at_gen);
     } else {
         // state should be either U1DB_SUPERSEDED or U1DB_CONFLICTED, in either
         // case, we don't count this as a 'seen_id' because we will want to be
@@ -301,7 +301,7 @@ whats_changed_to_doc_ids(void *context, const char *doc_id, int gen)
     state = (struct _whats_changed_doc_ids_state *)context;
     if (state->exclude_ids != NULL
 	&& (e = lh_table_lookup_entry(state->exclude_ids, doc_id)) != NULL
-        && (int)e->v >= gen)
+        && (intptr_t)e->v >= gen)
     {
         // This document was already seen at this gen,
         // so we don't need to return it
