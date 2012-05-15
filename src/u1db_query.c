@@ -282,20 +282,6 @@ list_index(string_list *list, char *data)
 }
 
 static int
-is_word_char(char c)
-{
-    if (isalnum(c))
-    {
-        return 0;
-    }
-    if (c == '.')
-        return 0;
-    if (c == '_')
-        return 0;
-    return -1;
-}
-
-static int
 op_lower(string_list *result, const string_list *values,
          const string_list *args)
 {
@@ -754,7 +740,7 @@ parse(const char *field, transformation *result, int value_type)
     char *field_copy, *end = NULL;
     field_copy = strdup(field);
     end = field_copy;
-    while (is_word_char(*end) == 0)
+    while (*end != '(' && *end != ')' && *end != '\0')
     {
         end++;
     }

@@ -16,8 +16,6 @@
 
 """Code for parsing Index definitions."""
 
-import string
-
 from u1db import (
     errors,
     )
@@ -223,11 +221,11 @@ class Parser(object):
     """Parse an index expression into a sequence of transformations."""
 
     _transformations = {}
-    _word_chars = string.lowercase + string.uppercase + "._" + string.digits
+    _delimiters = '()'
 
     def _take_word(self, partial):
         for idx, char in enumerate(partial):
-            if char not in self._word_chars:
+            if char in self._delimiters:
                 return partial[:idx], partial[idx:]
         return partial, ''
 

@@ -40,8 +40,6 @@ try:
 except ImportError:
     c_backend_wrapper = None
 
-import simplejson
-
 
 def http_create_database(test, replica_uid, path='test'):
     test.startServer()
@@ -611,10 +609,16 @@ class DatabaseIndexTests(tests.DatabaseBaseTests):
         self.assertEqual([('test-idx', ['name'])],
                          self.db.list_indexes())
 
-#   def test_create_index_on_non_ascii_field_name(self):
-#       self.db.create_index('test-idx', [u'\xe5'])
-#       self.assertEqual(
-#           [('test-idx', [u'\xe5'])], self.db.list_indexes())
+    def test_create_index_on_non_ascii_field_name(self):
+        doc = self.db.create_doc(simplejson.dumps({u'\xe5': 'value'}))
+        self.db.create_index('test-idx', [u'\xe5'])
+        self.assertEqual([doc],
+                         self.db.get_from_index('test-idx', [('value',)]))
+
+    def test_list_indexes_with_non_ascii_field_names(self):
+        self.db.create_index('test-idx', [u'\xe5'])
+        self.assertEqual(
+            [('test-idx', [u'\xe5'])], self.db.list_indexes())
 
     def test_create_index_evaluates_it(self):
         doc = self.db.create_doc(simple_doc)

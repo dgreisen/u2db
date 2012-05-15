@@ -279,6 +279,19 @@ cdef _list_to_array(lst, const_char_ptr **res, int *count):
         tmp[idx] = x
     res[0] = tmp
 
+cdef _list_to_str_array(lst, const_char_ptr **res, int *count):
+    cdef const_char_ptr *tmp
+    count[0] = len(lst)
+    tmp = <const_char_ptr*>calloc(sizeof(char*), count[0])
+    new_objs = []
+    for idx, x in enumerate(lst):
+        if isinstance(x, unicode):
+            x = x.encode('utf-8')
+            new_objs.append(x)
+        tmp[idx] = x
+    res[0] = tmp
+    return new_objs
+
 
 cdef int _append_index_definition_to_list(void *context,
         const_char_ptr index_name, int n_expressions,
@@ -288,7 +301,8 @@ cdef int _append_index_definition_to_list(void *context,
     a_list = <object>(context)
     exp_list = []
     for i from 0 <= i < n_expressions:
-        exp_list.append(expressions[i])
+        s = expressions[i]
+        exp_list.append(s.decode('utf-8'))
     a_list.append((index_name, exp_list))
     return 0
 
@@ -977,7 +991,10 @@ cdef class CDatabase(object):
         cdef const_char_ptr *expressions
         cdef int n_expressions
 
-        _list_to_array(index_expression, &expressions, &n_expressions)
+        # keep a reference to new_objs so that the pointers in expressions
+        # remain valid.
+        new_objs = _list_to_str_array(
+            index_expression, &expressions, &n_expressions)
         handle_status("create_index",
             u1db_create_index(self._db, index_name, n_expressions, expressions))
         free(<void*>expressions)
