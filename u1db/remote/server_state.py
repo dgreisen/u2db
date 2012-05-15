@@ -61,11 +61,6 @@ class ServerState(object):
 
     def delete_database(self, path):
         """Delete database at the given location."""
-        from u1db.errors import DatabaseDoesNotExist
+        from u1db.backends import sqlite_backend
         full_path = self._relpath(path)
-        try:
-            os.unlink(full_path)
-        except OSError as ex:
-            if ex.errno == errno.ENOENT:
-                raise DatabaseDoesNotExist()
-            raise
+        sqlite_backend.SQLiteDatabase.delete_database(full_path)
