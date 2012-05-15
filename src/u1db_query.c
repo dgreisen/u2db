@@ -732,7 +732,8 @@ static int
 parse(const char *field, transformation *result, int value_type)
 {
     transformation *inner = NULL;
-    char *new_field, *new_ptr, *argptr, *argend, *word, *first_comma = NULL;
+    char *new_field = NULL, *new_ptr, *argptr, *argend;
+    char *word, *first_comma;
     int status = U1DB_OK;
     int i, size;
     int new_value_type = json_type_string;
