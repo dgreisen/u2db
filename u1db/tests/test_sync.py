@@ -359,9 +359,12 @@ class DatabaseSyncTargetTests(tests.DatabaseBaseTests,
             called.append(state)
         self.set_trace_hook(cb)
         self.st.sync_exchange([], 'replica', 0, self.receive_doc)
+        self.st.record_sync_info('replica', 0)
         self.assertEqual(['before whats_changed',
                           'after whats_changed',
-                          'before get_docs'],
+                          'before get_docs',
+                          'record_sync_info',
+                          ],
                          called)
 
 

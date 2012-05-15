@@ -131,12 +131,19 @@ static int
 st_record_sync_info(u1db_sync_target *st, const char *source_replica_uid,
                     int source_gen)
 {
+    int status;
     u1database *db;
     if (st == NULL || source_replica_uid == NULL) {
         return U1DB_INVALID_PARAMETER;
     }
+    if (st->trace_cb) {
+        status = st->trace_cb(st->trace_context, "record_sync_info");
+        if (status != U1DB_OK) { goto finish; }
+    }
     db = (u1database *)st->implementation;
-    return u1db__set_sync_generation(db, source_replica_uid, source_gen);
+    status = u1db__set_sync_generation(db, source_replica_uid, source_gen);
+finish:
+    return status;
 }
 
 
