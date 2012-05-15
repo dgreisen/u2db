@@ -39,6 +39,8 @@ try:
 except ImportError:
     c_backend_wrapper = None
 
+import simplejson
+
 
 def http_create_database(test, replica_uid, path='test'):
     test.startServer()
@@ -112,6 +114,16 @@ class AllDatabaseTests(tests.DatabaseBaseTests, tests.TestCaseWithServer):
         self.assertGetDoc(self.db, 'my_doc_id', new_rev,
                           '{"updated": "stuff"}', False)
         self.assertEqual(doc.rev, new_rev)
+
+    def test_put_non_ascii_key(self):
+        content = simplejson.dumps({u'key\xe5': u'val'})
+        doc = self.db.create_doc(content, doc_id='my_doc')
+        self.assertGetDoc(self.db, 'my_doc', doc.rev, content, False)
+
+    def test_put_non_ascii_value(self):
+        content = simplejson.dumps({'key': u'\xe5'})
+        doc = self.db.create_doc(content, doc_id='my_doc')
+        self.assertGetDoc(self.db, 'my_doc', doc.rev, content, False)
 
     def test_put_doc_refuses_no_id(self):
         doc = self.make_document(None, None, simple_doc)
