@@ -87,7 +87,7 @@ class HTTPDatabase(http_client.HTTPClientBase, Database):
 
     def create_doc(self, content, doc_id=None):
         if doc_id is None:
-            doc_id = str(uuid.uuid4())
+            doc_id = 'D-%s' % (uuid.uuid4().hex,)
         res, headers = self._request_json('PUT', ['doc', doc_id], {},
                                           content, 'application/json')
         new_doc = Document(doc_id, res['rev'], content)

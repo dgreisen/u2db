@@ -137,6 +137,7 @@ class TestHTTPDatabaseSimpleOperations(tests.TestCase):
     def test_create_doc_without_id(self):
         self.response_val = {'rev': 'doc-rev-2'}, {}
         new_doc = self.db.create_doc('{"v": 3}')
+        self.assertEqual('D-', new_doc.doc_id[:2])
         self.assertEqual('doc-rev-2', new_doc.rev)
         self.assertEqual('{"v": 3}', new_doc.content)
         self.assertEqual(('PUT', ['doc', new_doc.doc_id], {},
