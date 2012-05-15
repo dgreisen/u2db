@@ -535,6 +535,12 @@ class TestHTTPApp(tests.TestCase):
         self.assertEqual('application/json', resp.header('content-type'))
         self.assertEqual({'ok': True}, simplejson.loads(resp.body))
 
+    def test_delete_database(self):
+        resp = self.app.delete('/db0')
+        self.assertEqual(200, resp.status)
+        self.assertRaises(errors.DatabaseDoesNotExist,
+                          self.state.check_database, 'db0')
+
     def test_get_database(self):
         resp = self.app.get('/db0')
         self.assertEqual(200, resp.status)

@@ -210,6 +210,11 @@ class DatabaseResource(object):
         self.state.ensure_database(self.dbname)
         self.responder.send_response_json(200, ok=True)
 
+    @http_method()
+    def delete(self):
+        self.state.delete_database(self.dbname)
+        self.responder.send_response_json(200, ok=True)
+
 
 @url_to_resource.register
 class DocResource(object):
