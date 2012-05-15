@@ -1521,6 +1521,7 @@ int
 u1db__is_doc_id_valid(const char *doc_id)
 {
     int len, i;
+    unsigned char c;
     if (doc_id == NULL) {
         return U1DB_INVALID_DOC_ID;
     }
@@ -1529,10 +1530,12 @@ u1db__is_doc_id_valid(const char *doc_id)
         return U1DB_INVALID_DOC_ID;
     }
     for (i = 0; i < len; ++i) {
-        if (doc_id[i] == '\\' || doc_id[i] == '/') {
+        c = (unsigned char)(doc_id[i]);
+        if (c == '\\' || c == '/' || c < ' ' || c > '~') {
             return U1DB_INVALID_DOC_ID;
         }
     }
+
     return U1DB_OK;
 }
 
