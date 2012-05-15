@@ -24,6 +24,7 @@ import StringIO
 from u1db import (
     __version__ as _u1db_version,
     errors,
+    sync,
     tests,
     )
 
@@ -493,6 +494,21 @@ class TestHTTPResponder(tests.TestCase):
                           '\r\n]\r\n'], self.response_body)
         self.assertEqual([], responder.content)
 
+    def test_send_stream_w_error(self):
+        responder = http_app.HTTPResponder(self.start_response)
+        responder.content_type = "application/x-u1db-multi-json"
+        responder.start_response(200)
+        responder.start_stream()
+        responder.stream_entry({'entry': 1})
+        responder.send_response_json(503, error="unavailable")
+        self.assertEqual('200 OK', self.status)
+        self.assertEqual({'content-type': 'application/x-u1db-multi-json',
+                          'cache-control': 'no-cache'}, self.headers)
+        self.assertEqual(['[',
+                           '\r\n', '{"entry": 1}'], self.response_body)
+        self.assertEqual([',\r\n', '{"error": "unavailable"}\r\n'],
+                         responder.content)
+
 
 class TestHTTPApp(tests.TestCase):
 
@@ -740,6 +756,27 @@ class TestHTTPApp(tests.TestCase):
                           'rev': doc2.rev, 'id': doc2.doc_id, 'gen': 2},
                          simplejson.loads(parts[3].rstrip(",")))
         self.assertEqual(']', parts[4])
+
+    def test_sync_exchange_error_in_stream(self):
+        args = dict(last_known_generation=0)
+        body = "[\r\n%s\r\n]" % simplejson.dumps(args)
+        def boom(self, return_doc_cb):
+            raise errors.Unavailable
+        self.patch(sync.SyncExchange, 'return_docs',
+                   boom)
+        resp = self.app.post('/db0/sync-from/replica',
+                            params=body,
+                            headers={'content-type':
+                                     'application/x-u1db-sync-stream'})
+        self.assertEqual(200, resp.status)
+        self.assertEqual('application/x-u1db-sync-stream',
+                         resp.header('content-type'))
+        parts = resp.body.splitlines()
+        self.assertEqual(3, len(parts))
+        self.assertEqual('[', parts[0])
+        self.assertEqual({'new_generation': 0},
+                         simplejson.loads(parts[1].rstrip(",")))
+        self.assertEqual({'error': 'unavailable'}, simplejson.loads(parts[2]))
 
 
 class TestRequestHooks(tests.TestCase):

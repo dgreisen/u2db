@@ -366,7 +366,10 @@ class HTTPResponder(object):
         """send and finish response with content"""
         headers['content-length'] = str(len(content))
         self.start_response(status, headers=headers)
-        self.content = [content]
+        if self._stream_state == 1:
+            self.content = [',\r\n', content]
+        else:
+            self.content = [content]
         self.finish_response()
 
     def start_stream(self):

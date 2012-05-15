@@ -84,6 +84,22 @@ class TestParsingSyncStream(tests.TestCase):
                           '"content": "c", "gen": 3},\r\n]',
                           lambda doc, gen: None)
 
+    def test_error_in_stream(self):
+        tgt = http_target.HTTPSyncTarget("http://foo/foo")
+
+        self.assertRaises(errors.Unavailable,
+                          tgt._parse_sync_stream,
+                          '[\r\n{"new_generation": 0},'
+                          '\r\n{"error": "unavailable"}\r\n', None)
+
+        self.assertRaises(errors.Unavailable,
+                          tgt._parse_sync_stream,
+                          '[\r\n{"error": "unavailable"}\r\n', None)
+
+        self.assertRaises(errors.BrokenSyncStream,
+                          tgt._parse_sync_stream,
+                          '[\r\n{"error": "?"}\r\n', None)
+
 
 def http_server_def():
     def make_server(host_port, handler, state):
@@ -220,6 +236,29 @@ class TestRemoteSyncTargets(tests.TestCaseWithServer):
         self.assertEqual(2, new_gen)
         # bounced back to us
         self.assertEqual([('doc-here', 'replica:1', '{"value": "here"}', 1)],
+                         other_changes)
+
+    def test_sync_exchange_in_stream_error(self):
+        self.startServer()
+        def blackhole_getstderr(inst):
+            return cStringIO.StringIO()
+        self.patch(self.server.RequestHandlerClass, 'get_stderr',
+                   blackhole_getstderr)
+        db = self.request_state._create_database('test')
+        doc = db.create_doc('{"value": "there"}')
+        def bomb_get_docs(doc_ids, check_for_conflicts=None):
+            yield doc
+            # delayed failure case
+            raise errors.Unavailable
+        self.patch(db, 'get_docs', bomb_get_docs)
+        remote_target = self.getSyncTarget('test')
+        other_changes = []
+        def receive_doc(doc, gen):
+            other_changes.append((doc.doc_id, doc.rev, doc.content, gen))
+        self.assertRaises(errors.Unavailable, remote_target.sync_exchange,
+                          [], 'replica', last_known_generation=0,
+                          return_doc_cb=receive_doc)
+        self.assertEqual([(doc.doc_id, doc.rev, '{"value": "there"}', 1)],
                          other_changes)
 
     def test_sync_exchange_receive(self):

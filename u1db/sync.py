@@ -15,6 +15,7 @@
 # along with u1db.  If not, see <http://www.gnu.org/licenses/>.
 
 """The synchronization utilities for U1DB."""
+from itertools import izip
 
 import u1db
 
@@ -227,7 +228,7 @@ class SyncExchange(object):
         self._trace('before get_docs')
         docs = self._db.get_docs(changed_doc_ids, check_for_conflicts=False)
 
-        docs_by_gen = zip(docs, (gen for _, gen in changes_to_return))
+        docs_by_gen = izip(docs, (gen for _, gen in changes_to_return))
         for doc, gen in docs_by_gen:
             return_doc_cb(doc, gen)
         # for tests

@@ -53,18 +53,26 @@ class HTTPSyncTarget(http_client.HTTPClientBase, SyncTarget):
         parts = data.splitlines()  # one at a time
         if not parts or parts[0] != '[':
             raise BrokenSyncStream
-        if parts[-1] != ']':
-            raise BrokenSyncStream
         data = parts[1:-1]
-        line, comma = utils.check_and_strip_comma(data[0])
-        res = simplejson.loads(line)
-        for entry in data[1:]:
-            if not comma:  # missing in between comma
-                raise BrokenSyncStream
-            line, comma = utils.check_and_strip_comma(entry)
-            entry = simplejson.loads(line)
-            doc = Document(entry['id'], entry['rev'], entry['content'])
-            return_doc_cb(doc, entry['gen'])
+        if data:
+            line, comma = utils.check_and_strip_comma(data[0])
+            res = simplejson.loads(line)
+            for entry in data[1:]:
+                if not comma:  # missing in between comma
+                    raise BrokenSyncStream
+                line, comma = utils.check_and_strip_comma(entry)
+                entry = simplejson.loads(line)
+                doc = Document(entry['id'], entry['rev'], entry['content'])
+                return_doc_cb(doc, entry['gen'])
+        if parts[-1] != ']':
+            try:
+                partdic = simplejson.loads(parts[-1])
+            except ValueError:
+                pass
+            else:
+                if isinstance(partdic, dict):
+                    self._error(partdic)
+            raise BrokenSyncStream
         if comma:  # bad extra comma
             raise BrokenSyncStream
         return res
