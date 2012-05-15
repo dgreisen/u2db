@@ -479,6 +479,8 @@ class DatabaseSyncTests(tests.DatabaseBaseTests):
             self.fail('SyncTarget.record_sync_info was called')
         self.assertEqual(1, self.sync(self.db1, self.db2,
                                       trace_hook=no_record_sync_info))
+        self.assertEqual(1,
+                         self.db2.get_sync_generation(self.db1._replica_uid))
 
     def test_sync_ignores_convergence(self):
         doc = self.db1.create_doc(simple_doc)
