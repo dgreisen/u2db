@@ -600,7 +600,6 @@ u1db__sync_db_to_target(u1database *db, u1db_sync_target *target,
             ((*local_gen_before_sync + return_doc_state.num_inserted)
               == local_gen))
     {
-        // fprintf(stderr, "Informing target of local_gen\n", local_gen);
         status = target->record_sync_info(target, local_uid, local_gen);
         if (status != U1DB_OK) { goto finish; }
     }

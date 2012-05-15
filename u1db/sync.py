@@ -82,7 +82,8 @@ class Synchronizer(object):
         new generation.
         """
         cur_gen = self.source._get_generation()
-        if cur_gen == start_generation + self.num_inserted:
+        if (cur_gen == start_generation + self.num_inserted
+            and self.num_inserted > 0):
             self.sync_target.record_sync_info(self.source._replica_uid,
                                               cur_gen)
 
