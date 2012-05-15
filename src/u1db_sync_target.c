@@ -28,7 +28,7 @@ static int st_get_sync_info(u1db_sync_target *st,
 static int st_record_sync_info(u1db_sync_target *st,
         const char *source_replica_uid, int source_gen);
 
-static int st_sync_exchange(u1db_sync_target *st, 
+static int st_sync_exchange(u1db_sync_target *st,
                           const char *source_replica_uid, int n_docs,
                           u1db_document **docs, int *generations,
                           int *target_gen, void *context,
@@ -566,11 +566,11 @@ u1db__sync_db_to_target(u1database *db, u1db_sync_target *target,
     status = u1db_whats_changed(db, &local_gen, (void*)&to_send_state,
                                 whats_changed_to_doc_ids);
     if (status != U1DB_OK) { goto finish; }
-    // TODO: Shortcut when both sides know that they are at the same revision
-    //       eg:
-    //          if (local_gen == local_gen_known_by_target
-    //              && target_gen == target_gen_known_by_local)
-    //          { return U1DB_OK; }
+    if (local_gen == local_gen_known_by_target
+        && target_gen == target_gen_known_by_local)
+    {
+        return U1DB_OK;
+    }
     *local_gen_before_sync = local_gen;
     return_doc_state.db = db;
     return_doc_state.target_uid = target_uid;

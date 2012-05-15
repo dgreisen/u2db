@@ -95,15 +95,18 @@ class Synchronizer(object):
          target_my_gen) = sync_target.get_sync_info(self.source._replica_uid)
         # what's changed since that generation and this current gen
         my_gen, changes = self.source.whats_changed(target_my_gen)
+
+        # this source last-seen database generation for the target
+        target_last_known_gen = self.source.get_sync_generation(
+            self.target_replica_uid)
+        if not changes and target_last_known_gen == target_gen:
+            return my_gen
         changed_doc_ids = [doc_id for doc_id, _ in changes]
         # prepare to send all the changed docs
         docs_to_send = self.source.get_docs(changed_doc_ids,
             check_for_conflicts=False)
         docs_by_generation = zip(docs_to_send, (gen for _, gen in changes))
 
-        # this source last-seen database generation for the target
-        target_last_known_gen = self.source.get_sync_generation(
-            self.target_replica_uid)
         # exchange documents and try to insert the returned ones with
         # the target, return target synced-up-to gen
         new_gen = sync_target.sync_exchange(docs_by_generation,
@@ -195,7 +198,8 @@ class SyncExchange(object):
             'last_known_gen': self.source_last_known_generation
             })
         self._trace('before whats_changed')
-        gen, changes = self._db.whats_changed(self.source_last_known_generation)
+        gen, changes = self._db.whats_changed(
+            self.source_last_known_generation)
         self._trace('after whats_changed')
         self.new_gen = gen
         seen_ids = self.seen_ids
