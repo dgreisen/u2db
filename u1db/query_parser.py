@@ -133,7 +133,7 @@ class Lower(Transformation):
     name = "lower"
 
     def _can_transform(self, val):
-        return not isinstance(val, (int, bool, float, list, dict))
+        return isinstance(val, basestring)
 
     def transform(self, values):
         if not values:
@@ -156,7 +156,7 @@ class Number(Transformation):
         self.padding = "%%0%sd" % number
 
     def _can_transform(self, val):
-        return not isinstance(val, (str, bool, float, list, dict))
+        return isinstance(val, int) and not isinstance(val, bool)
 
     def transform(self, values):
         """Transform any integers in values into zero padded strings."""
@@ -191,7 +191,7 @@ class SplitWords(Transformation):
     name = "split_words"
 
     def _can_transform(self, val):
-        return not isinstance(val, (int, bool, float, list, dict))
+        return isinstance(val, basestring)
 
     def transform(self, values):
         if not values:
