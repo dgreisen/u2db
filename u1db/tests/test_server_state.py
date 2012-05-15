@@ -75,3 +75,17 @@ class TestServerState(tests.TestCase):
         self.assertTrue(os.path.exists(path))
         db2 = self.state.open_database('test.db')
         self.assertIsInstance(db2, sqlite_backend.SQLitePartialExpandDatabase)
+
+    def test_delete_database(self):
+        tempdir = self.createTempDir()
+        self.state.set_workingdir(tempdir)
+        path = tempdir + '/test.db'
+        db = self.state.ensure_database('test.db')
+        self.state.delete_database('test.db')
+        self.assertFalse(os.path.exists(path))
+
+    def test_delete_database_DoesNotExist(self):
+        tempdir = self.createTempDir()
+        self.state.set_workingdir(tempdir)
+        self.assertRaises(errors.DatabaseDoesNotExist,
+                          self.state.delete_database, 'test.db')

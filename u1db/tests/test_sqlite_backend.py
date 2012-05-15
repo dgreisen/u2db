@@ -319,6 +319,21 @@ class TestSQLitePartialExpandDatabase(tests.TestCase):
                           sqlite_backend.SQLiteDatabase.open_database, path,
                           create=False)
 
+    def test_delete_database_existent(self):
+        temp_dir = self.createTempDir(prefix='u1db-test-')
+        path = temp_dir + '/new.sqlite'
+        db = sqlite_backend.SQLiteDatabase.open_database(path, create=True)
+        sqlite_backend.SQLiteDatabase.delete_database(path)
+        self.assertRaises(errors.DatabaseDoesNotExist,
+                          sqlite_backend.SQLiteDatabase.open_database, path,
+                          create=False)
+
+    def test_delete_database_nonexistent(self):
+        temp_dir = self.createTempDir(prefix='u1db-test-')
+        path = temp_dir + '/non-existent.sqlite'
+        self.assertRaises(errors.DatabaseDoesNotExist,
+                          sqlite_backend.SQLiteDatabase.delete_database, path)
+
     def assertTransform(self, sql_value, value):
         transformed = sqlite_backend.SQLiteDatabase._transform_glob(value)
         self.assertEqual(sql_value, transformed)

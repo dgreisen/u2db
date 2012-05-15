@@ -72,6 +72,11 @@ class TestHTTPDatabaseSimpleOperations(tests.TestCase):
         self.db._ensure()
         self.assertEqual(('PUT', [], {}, {}, None), self.got)
 
+    def test__delete(self):
+        self.response_val = {'ok': True}, {}
+        self.db._delete()
+        self.assertEqual(('DELETE', [], {}, {}, None), self.got)
+
     def test__check(self):
         self.response_val = {}, {}
         res = self.db._check()
@@ -181,6 +186,13 @@ class TestHTTPDatabaseIntegration(tests.TestCaseWithServer):
         db._ensure()
         self.assertIs(None, db.get_doc('doc1'))
 
+    def test__delete(self):
+        self.request_state._create_database('db0')
+        db = http_database.HTTPDatabase(self.getURL('db0'))
+        db._delete()
+        self.assertRaises(errors.DatabaseDoesNotExist,
+                          self.request_state.check_database, 'db0')
+
     def test_open_database_existing(self):
         self.request_state._create_database('db0')
         db = http_database.HTTPDatabase.open_database(self.getURL('db0'),
@@ -197,6 +209,12 @@ class TestHTTPDatabaseIntegration(tests.TestCaseWithServer):
         db = http_database.HTTPDatabase.open_database(self.getURL('new'),
                                                       create=True)
         self.assertIs(None, db.get_doc('doc1'))
+
+    def test_delete_database_existing(self):
+        self.request_state._create_database('db0')
+        http_database.HTTPDatabase.delete_database(self.getURL('db0'))
+        self.assertRaises(errors.DatabaseDoesNotExist,
+                          self.request_state.check_database, 'db0')
 
     def test_doc_ids_needing_quoting(self):
         db0 = self.request_state._create_database('db0')

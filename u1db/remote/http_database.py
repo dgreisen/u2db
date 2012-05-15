@@ -44,6 +44,12 @@ class HTTPDatabase(http_client.HTTPClientBase, Database):
         db.open(create)
         return db
 
+    @staticmethod
+    def delete_database(url):
+        db = HTTPDatabase(url)
+        db._delete()
+        db.close()
+
     def open(self, create):
         if create:
             self._ensure()
@@ -55,6 +61,9 @@ class HTTPDatabase(http_client.HTTPClientBase, Database):
 
     def _ensure(self):
         self._request_json('PUT', [], {}, {})
+
+    def _delete(self):
+        self._request_json('DELETE', [], {}, {})
 
     def put_doc(self, doc):
         if doc.doc_id is None:

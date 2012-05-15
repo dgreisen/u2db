@@ -190,6 +190,9 @@ class ServerStateForTests(server_state.ServerState):
         self._dbs[path] = db
         return db
 
+    def delete_database(self, path):
+        del self._dbs[path]
+
 
 class ResponderForTests(object):
     """Responder for tests."""

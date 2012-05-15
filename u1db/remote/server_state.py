@@ -15,7 +15,8 @@
 # along with u1db.  If not, see <http://www.gnu.org/licenses/>.
 
 """State for servers exposing a set of U1DB databases."""
-
+import os
+import errno
 
 class ServerState(object):
     """Passed to a Request when it is instantiated.
@@ -57,3 +58,9 @@ class ServerState(object):
         full_path = self._relpath(path)
         return sqlite_backend.SQLiteDatabase.open_database(full_path,
                                                            create=True)
+
+    def delete_database(self, path):
+        """Delete database at the given location."""
+        from u1db.backends import sqlite_backend
+        full_path = self._relpath(path)
+        sqlite_backend.SQLiteDatabase.delete_database(full_path)

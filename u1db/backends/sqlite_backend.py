@@ -16,6 +16,7 @@
 
 """A U1DB implementation that uses SQLite as its persistence layer."""
 
+import errno
 import os
 import simplejson
 from sqlite3 import dbapi2
@@ -100,6 +101,15 @@ class SQLiteDatabase(CommonBackend):
                 # default is SQLitePartialExpandDatabase
                 backend_cls = SQLitePartialExpandDatabase
             return backend_cls(sqlite_file)
+
+    @staticmethod
+    def delete_database(sqlite_file):
+        try:
+            os.unlink(sqlite_file)
+        except OSError as ex:
+            if ex.errno == errno.ENOENT:
+                raise errors.DatabaseDoesNotExist()
+            raise
 
     @staticmethod
     def register_implementation(klass):
