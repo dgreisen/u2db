@@ -359,9 +359,12 @@ class DatabaseSyncTargetTests(tests.DatabaseBaseTests,
             called.append(state)
         self.set_trace_hook(cb)
         self.st.sync_exchange([], 'replica', 0, self.receive_doc)
+        self.st.record_sync_info('replica', 0)
         self.assertEqual(['before whats_changed',
                           'after whats_changed',
-                          'before get_docs'],
+                          'before get_docs',
+                          'record_sync_info',
+                          ],
                          called)
 
 
@@ -467,6 +470,17 @@ class DatabaseSyncTests(tests.DatabaseBaseTests):
         # local database had been updated more than just by the messages
         # returned from c2.
         self.assertEqual(0, self.db2.get_sync_generation('test1'))
+
+    def test_sync_doesnt_update_other_if_nothing_pulled(self):
+        doc = self.db1.create_doc(simple_doc)
+        def no_record_sync_info(state):
+            if state != 'record_sync_info':
+                return
+            self.fail('SyncTarget.record_sync_info was called')
+        self.assertEqual(1, self.sync(self.db1, self.db2,
+                                      trace_hook=no_record_sync_info))
+        self.assertEqual(1,
+                         self.db2.get_sync_generation(self.db1._replica_uid))
 
     def test_sync_ignores_convergence(self):
         doc = self.db1.create_doc(simple_doc)

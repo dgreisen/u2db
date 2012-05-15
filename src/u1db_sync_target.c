@@ -131,12 +131,19 @@ static int
 st_record_sync_info(u1db_sync_target *st, const char *source_replica_uid,
                     int source_gen)
 {
+    int status;
     u1database *db;
     if (st == NULL || source_replica_uid == NULL) {
         return U1DB_INVALID_PARAMETER;
     }
+    if (st->trace_cb) {
+        status = st->trace_cb(st->trace_context, "record_sync_info");
+        if (status != U1DB_OK) { goto finish; }
+    }
     db = (u1database *)st->implementation;
-    return u1db__set_sync_generation(db, source_replica_uid, source_gen);
+    status = u1db__set_sync_generation(db, source_replica_uid, source_gen);
+finish:
+    return status;
 }
 
 
@@ -593,7 +600,6 @@ u1db__sync_db_to_target(u1database *db, u1db_sync_target *target,
             ((*local_gen_before_sync + return_doc_state.num_inserted)
               == local_gen))
     {
-        // fprintf(stderr, "Informing target of local_gen\n", local_gen);
         status = target->record_sync_info(target, local_uid, local_gen);
         if (status != U1DB_OK) { goto finish; }
     }
