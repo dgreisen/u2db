@@ -647,6 +647,15 @@ class DatabaseSyncTests(tests.DatabaseBaseTests):
         # original doc1 should have been removed from conflicts
         self.assertEqual(3, len(db3.get_doc_conflicts('the-doc')))
 
+    def test_sync_stops_after_get_sync_info(self):
+        self.db1.create_doc(tests.simple_doc)
+        self.sync(self.db1, self.db2)
+
+        def put_hook(state):
+            self.fail("Tracehook triggered for %s" % (state,))
+
+        self.sync(self.db1, self.db2, trace_hook=put_hook)
+
 
 class TestDbSync(tests.TestCaseWithServer):
     """Test db.sync remote sync shortcut"""
