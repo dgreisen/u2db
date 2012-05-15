@@ -129,6 +129,10 @@ class AllDatabaseTests(tests.DatabaseBaseTests, tests.TestCaseWithServer):
         doc = self.make_document('doc-id', 'test:4', simple_doc)
         self.assertRaises(errors.RevisionConflict, self.db.put_doc, doc)
 
+    def test_put_doc_refuses_non_ascii_doc_id(self):
+        doc = self.make_document('d\xc3\xa5c-id', None, simple_doc)
+        self.assertRaises(errors.InvalidDocId, self.db.put_doc, doc)
+
     def test_put_fails_with_bad_old_rev(self):
         doc = self.db.create_doc(simple_doc, doc_id='my_doc_id')
         old_rev = doc.rev

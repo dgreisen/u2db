@@ -27,7 +27,7 @@ import u1db.sync
 from u1db.vectorclock import VectorClockRev
 
 
-check_doc_id_re = re.compile("^" + u1db.DOC_ID_CONSTRAINTS + "$")
+check_doc_id_re = re.compile("^" + u1db.DOC_ID_CONSTRAINTS + "$", re.UNICODE)
 
 
 class CommonSyncTarget(u1db.sync.LocalSyncTarget):
