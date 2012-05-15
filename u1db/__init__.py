@@ -39,6 +39,7 @@ def open(path, create):
 DBNAME_CONSTRAINTS = r"[a-zA-Z0-9][a-zA-Z0-9.-]*"
 
 # constraints on doc ids (as regex)
+# (no slashes, and no characters outside the ascii range)
 DOC_ID_CONSTRAINTS = ur"[^/\\\u0001-\u0019\u007f-\uffff]+"
 
 

@@ -1531,6 +1531,7 @@ u1db__is_doc_id_valid(const char *doc_id)
     }
     for (i = 0; i < len; ++i) {
         c = (unsigned char)(doc_id[i]);
+        // doc_id cannot contain slashes or characters outside the ascii range
         if (c == '\\' || c == '/' || c < ' ' || c > '~') {
             return U1DB_INVALID_DOC_ID;
         }
