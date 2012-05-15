@@ -616,6 +616,11 @@ class DatabaseIndexTests(tests.DatabaseBaseTests):
         self.assertEqual([doc],
                          self.db.get_from_index('test-idx', [('value',)]))
 
+    def test_create_index_on_non_ascii_field_name(self):
+        self.db.create_index('test-idx', [u'\xe5'])
+        self.assertEqual(
+            [('test-idx', [u'\xe5'])], self.db.list_indexes())
+
     def test_create_index_after_deleting_document(self):
         doc = self.db.create_doc(simple_doc)
         doc2 = self.db.create_doc(simple_doc)
