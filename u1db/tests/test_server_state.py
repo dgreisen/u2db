@@ -81,6 +81,7 @@ class TestServerState(tests.TestCase):
         self.state.set_workingdir(tempdir)
         path = tempdir + '/test.db'
         db = self.state.ensure_database('test.db')
+        db.close()
         self.state.delete_database('test.db')
         self.assertFalse(os.path.exists(path))
 
