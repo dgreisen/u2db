@@ -165,6 +165,32 @@ struct _u1db_sync_exchange {
 };
 
 /**
+ * Update content if the revision is newer than what is already present.
+ *
+ * @param doc (IN/OUT) The document we want added to the database. If
+ *            save_conflict is true and this conflicts, we will set
+ *            doc->has_conflicts
+ * @param save_conflict If 1, when a document would conflict, it is saved as
+ *                      the current version and marked as a conflict.
+ *                      Otherwise the document is just rejected as not newer.
+ * @param replica_uid Used during synchronization to indicate what replica
+ *                    this document came from. (Can be NULL)
+ * @param replica_gen Generation of the replica. Only meaningful if
+ *                    replica_uid is set.
+ * @param state (OUT) Return one of:
+ *  U1DB_INSERTED   The document is newer than what we have
+ *  U1DB_SUPERSEDED We already have a newer document than what was passed
+ *  U1DB_CONVERGED  We have exactly the same document
+ *  U1DB_CONFLICTED Neither document is strictly newer than the other. If
+ *                  save_conflict is false, then we will ignore the document.
+ * @param at_gen (OUT) For INSERTED or CONVERGED states used to return
+ *                     the insertion/current generation. Ignored if NULL.
+ */
+int u1db__put_doc_if_newer(u1database *db, u1db_document *doc,
+                           int save_conflict, const char *replica_uid,
+                           int replica_gen, int *state, int *at_gen);
+
+/**
  * Internal API, Get the global database rev.
  */
 int u1db__get_generation(u1database *db, int *generation);

@@ -76,9 +76,9 @@ cdef extern from "u1db/u1db.h":
                       int check_for_conflicts, void *context,
                       u1db_doc_callback cb)
     int u1db_put_doc(u1database *db, u1db_document *doc)
-    int u1db_put_doc_if_newer(u1database *db, u1db_document *doc,
-                              int save_conflict, char *replica_uid,
-                              int replica_gen, int *state, int *at_gen)
+    int u1db__put_doc_if_newer(u1database *db, u1db_document *doc,
+                               int save_conflict, char *replica_uid,
+                               int replica_gen, int *state, int *at_gen)
     int u1db_resolve_doc(u1database *db, u1db_document *doc,
                          int n_revs, const_char_ptr *revs)
     int u1db_delete_doc(u1database *db, u1db_document *doc)
@@ -874,7 +874,7 @@ cdef class CDatabase(object):
         else:
             gen = replica_gen
         handle_status("Failed to _put_doc_if_newer",
-            u1db_put_doc_if_newer(self._db, doc._doc, save_conflict,
+            u1db__put_doc_if_newer(self._db, doc._doc, save_conflict,
                 c_uid, gen, &state, &at_gen))
         if state == U1DB_INSERTED:
             return 'inserted', at_gen

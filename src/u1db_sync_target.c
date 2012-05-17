@@ -276,8 +276,8 @@ u1db__sync_exchange_insert_doc_from_source(u1db_sync_exchange *se,
         return U1DB_INVALID_PARAMETER;
     }
     // fprintf(stderr, "Inserting %s from source\n", doc->doc_id);
-    status = u1db_put_doc_if_newer(se->db, doc, 0, se->source_replica_uid,
-                                   source_gen, &insert_state, &at_gen);
+    status = u1db__put_doc_if_newer(se->db, doc, 0, se->source_replica_uid,
+                                    source_gen, &insert_state, &at_gen);
     if (insert_state == U1DB_INSERTED || insert_state == U1DB_CONVERGED) {
 	lh_table_insert(se->seen_ids, strdup(doc->doc_id), (void *)(intptr_t)at_gen);
     } else {
@@ -432,19 +432,15 @@ return_doc_to_insert_from_target(void *context, u1db_document *doc, int gen)
     struct _return_doc_state *state;
     state = (struct _return_doc_state *)context;
 
-    // fprintf(stderr, "returning %s,%s to insert from %s:%d\n",
-    //         doc->doc_id, doc->doc_rev, state->target_uid, gen);
-    status = u1db_put_doc_if_newer(state->db, doc, 1, state->target_uid, gen,
-                                   &insert_state, NULL);
+    status = u1db__put_doc_if_newer(state->db, doc, 1, state->target_uid, gen,
+                                    &insert_state, NULL);
     u1db_free_doc(&doc);
     if (status == U1DB_OK) {
-        // fprintf(stderr, "put_doc_if_newer insert_state: %d\n", insert_state);
         if (insert_state == U1DB_INSERTED || insert_state == U1DB_CONFLICTED) {
             // Either it was directly inserted, or it was saved as a conflict
             state->num_inserted++;
         }
     } else {
-        // fprintf(stderr, "put_doc_if_newer not ok: %d\n", status);
     }
     return status;
 }
