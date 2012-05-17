@@ -296,7 +296,7 @@ class LocalDatabaseTests(tests.DatabaseBaseTests):
 
     def test_put_doc_if_newer_replica_uid(self):
         doc1 = self.db.create_doc(simple_doc)
-        self.db.set_sync_generation('other', 1)
+        self.db._set_sync_generation('other', 1)
         doc2 = self.make_document(doc1.doc_id, doc1.rev + '|other:1',
                                   nested_doc)
         self.assertEqual('inserted',
@@ -320,7 +320,7 @@ class LocalDatabaseTests(tests.DatabaseBaseTests):
 
     def test__get_sync_generation(self):
         self.assertEqual(0, self.db._get_sync_generation('other-db'))
-        self.db.set_sync_generation('other-db', 2)
+        self.db._set_sync_generation('other-db', 2)
         self.assertEqual(2, self.db._get_sync_generation('other-db'))
 
     def test_put_updates_transaction_log(self):
@@ -569,7 +569,7 @@ class LocalDatabaseWithConflictsTests(tests.DatabaseBaseTests):
 
     def test_put_doc_if_newer_replica_uid(self):
         doc1 = self.db.create_doc(simple_doc)
-        self.db.set_sync_generation('other', 1)
+        self.db._set_sync_generation('other', 1)
         doc2 = self.make_document(doc1.doc_id, doc1.rev + '|other:1',
                                   nested_doc)
         self.db._put_doc_if_newer(doc2, save_conflict=True,

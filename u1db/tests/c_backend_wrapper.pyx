@@ -964,8 +964,8 @@ cdef class CDatabase(object):
             u1db__get_sync_generation(self._db, replica_uid, &generation))
         return generation
 
-    def set_sync_generation(self, replica_uid, generation):
-        handle_status("set_sync_generation",
+    def _set_sync_generation(self, replica_uid, generation):
+        handle_status("_set_sync_generation",
             u1db__set_sync_generation(self._db, replica_uid, generation))
 
     def _sync_exchange(self, docs_info, from_replica_uid, from_machine_rev,

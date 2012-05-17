@@ -664,7 +664,7 @@ class TestHTTPApp(tests.TestCase):
                          simplejson.loads(resp.body))
 
     def test_get_sync_info(self):
-        self.db0.set_sync_generation('other-id', 1)
+        self.db0._set_sync_generation('other-id', 1)
         resp = self.app.get('/db0/sync-from/other-id')
         self.assertEqual(200, resp.status)
         self.assertEqual('application/json', resp.header('content-type'))

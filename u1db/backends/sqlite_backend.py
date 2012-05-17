@@ -420,7 +420,7 @@ class SQLiteDatabase(CommonBackend):
             other_gen = val[0]
         return other_gen
 
-    def set_sync_generation(self, other_replica_uid, other_generation):
+    def _set_sync_generation(self, other_replica_uid, other_generation):
         with self._db_handle:
             self._do_set_sync_generation(other_replica_uid, other_generation)
 
@@ -614,8 +614,8 @@ class SQLiteSyncTarget(CommonSyncTarget):
     def record_sync_info(self, source_replica_uid, source_replica_generation):
         if self._trace_hook:
             self._trace_hook('record_sync_info')
-        self._db.set_sync_generation(source_replica_uid,
-                                     source_replica_generation)
+        self._db._set_sync_generation(source_replica_uid,
+                                      source_replica_generation)
 
 
 class SQLitePartialExpandDatabase(SQLiteDatabase):
