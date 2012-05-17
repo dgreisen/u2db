@@ -422,9 +422,9 @@ class SQLiteDatabase(CommonBackend):
 
     def set_sync_generation(self, other_replica_uid, other_generation):
         with self._db_handle:
-            self._set_sync_generation(other_replica_uid, other_generation)
+            self._do_set_sync_generation(other_replica_uid, other_generation)
 
-    def _set_sync_generation(self, other_replica_uid, other_generation):
+    def _do_set_sync_generation(self, other_replica_uid, other_generation):
             c = self._db_handle.cursor()
             c.execute("INSERT OR REPLACE INTO sync_log VALUES (?, ?)",
                       (other_replica_uid, other_generation))
