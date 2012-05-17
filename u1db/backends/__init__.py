@@ -40,6 +40,9 @@ class CommonBackend(u1db.Database):
         """Generate a unique identifier for this document."""
         return 'D-' + uuid.uuid4().hex  # 'D-' stands for document
 
+    def _allocate_transaction_id(self):
+        return 'T-' + uuid.uuid4().hex  # 'T-' stands for transaction
+
     def _allocate_doc_rev(self, old_doc_rev):
         vcr = VectorClockRev(old_doc_rev)
         vcr.increment(self._replica_uid)

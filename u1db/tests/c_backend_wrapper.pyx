@@ -949,7 +949,7 @@ cdef class CDatabase(object):
         handle_status("get_transaction_log",
             u1db__get_transaction_log(self._db, <void*>a_list,
                                       _append_doc_gen_to_list))
-        return [doc_id for doc_id, gen in a_list]
+        return [(doc_id, '') for doc_id, gen in a_list]
 
     def _get_generation(self):
         cdef int generation

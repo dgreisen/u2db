@@ -264,8 +264,9 @@ class SQLiteDatabase(CommonBackend):
 
     def _get_transaction_log(self):
         c = self._db_handle.cursor()
-        c.execute("SELECT doc_id FROM transaction_log ORDER BY generation")
-        return [v[0] for v in c.fetchall()]
+        c.execute("SELECT doc_id, transaction_id FROM transaction_log"
+                  " ORDER BY generation")
+        return c.fetchall()
 
     def _get_doc(self, doc_id):
         """Get just the document content, without fancy handling."""
