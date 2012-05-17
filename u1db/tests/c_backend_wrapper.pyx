@@ -158,7 +158,7 @@ cdef extern from "u1db/u1db_internal.h":
             char *source_replica_uid,
             const_char_ptr *st_replica_uid, int *st_gen, int *source_gen) nogil
         int (*record_sync_info)(u1db_sync_target *st,
-            char *source_replica_uid, int source_gen) nogil
+            char *source_replica_uid, int source_gen, char *trans_id) nogil
         int (*sync_exchange)(u1db_sync_target *st,
                              char *source_replica_uid, int n_docs,
                              u1db_document **docs, int *generations,
@@ -193,8 +193,8 @@ cdef extern from "u1db/u1db_internal.h":
 
     int u1db__get_sync_generation(u1database *db, char *replica_uid,
                                   int *generation)
-    int u1db__set_sync_generation(u1database *db, char *replica_uid,
-                                  int generation)
+    int u1db__set_sync_info(u1database *db, char *replica_uid, int generation,
+                            char *trans_id)
     int u1db__sync_get_machine_info(u1database *db, char *other_replica_uid,
                                     int *other_db_rev, char **my_replica_uid,
                                     int *my_db_rev)
@@ -680,7 +680,7 @@ cdef class CSyncTarget(object):
         assert self._st.record_sync_info != NULL, "record_sync_info is NULL?"
         with nogil:
             status = self._st.record_sync_info(self._st, source_replica_uid,
-                                               source_gen)
+                                               source_gen, source_trans_id)
         handle_status("record_sync_info", status)
 
     def _get_sync_exchange(self, source_replica_uid, source_gen):
@@ -977,7 +977,7 @@ cdef class CDatabase(object):
 
     def _set_sync_info(self, replica_uid, generation, trans_id):
         handle_status("_set_sync_info",
-            u1db__set_sync_generation(self._db, replica_uid, generation))
+            u1db__set_sync_info(self._db, replica_uid, generation, trans_id))
 
     def _sync_exchange(self, docs_info, from_replica_uid, from_machine_rev,
                        last_known_rev):

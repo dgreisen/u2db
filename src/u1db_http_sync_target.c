@@ -37,14 +37,14 @@ static int st_http_get_sync_info(u1db_sync_target *st,
         const char **st_replica_uid, int *st_gen, int *source_gen);
 
 static int st_http_record_sync_info(u1db_sync_target *st,
-        const char *source_replica_uid, int source_gen);
+        const char *source_replica_uid, int source_gen, const char *trans_id);
 
 static int st_http_get_sync_exchange(u1db_sync_target *st,
                          const char *source_replica_uid,
                          int source_gen,
                          u1db_sync_exchange **exchange);
 static int st_http_sync_exchange(u1db_sync_target *st,
-                      const char *source_replica_uid, 
+                      const char *source_replica_uid,
                       int n_docs, u1db_document **docs,
                       int *generations, int *target_gen, void *context,
                       u1db_doc_gen_callback cb);
@@ -508,7 +508,7 @@ finish:
 
 static int
 st_http_record_sync_info(u1db_sync_target *st,
-        const char *source_replica_uid, int source_gen)
+        const char *source_replica_uid, int source_gen, const char *trans_id)
 {
     struct _http_state *state;
     struct _http_request req = {0};

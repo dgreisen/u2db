@@ -78,9 +78,10 @@ struct _u1db_sync_target {
      *                              want to synchronize from.
      * @param source_gen        The last generation of source_replica_uid
      *                          that st has synchronized with.
+     * @param trans_id          The transaction id associated with source_gen
      */
     int (*record_sync_info)(u1db_sync_target *st,
-        const char *source_replica_uid, int source_gen);
+        const char *source_replica_uid, int source_gen, const char *trans_id);
 
     /**
      * Send documents to the target, and receive the response.
@@ -257,8 +258,8 @@ int u1db__get_sync_generation(u1database *db, const char *replica_uid,
  * Set the known sync generation for another replica.
  *
  */
-int u1db__set_sync_generation(u1database *db, const char *replica_uid,
-                              int generation);
+int u1db__set_sync_info(u1database *db, const char *replica_uid,
+                        int generation, const char *trans_id);
 
 /**
  * Internal sync api, get the stored information about another machine.

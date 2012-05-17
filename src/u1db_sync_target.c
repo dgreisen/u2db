@@ -26,7 +26,7 @@ static int st_get_sync_info(u1db_sync_target *st,
         const char **st_replica_uid, int *st_gen, int *source_gen);
 
 static int st_record_sync_info(u1db_sync_target *st,
-        const char *source_replica_uid, int source_gen);
+        const char *source_replica_uid, int source_gen, const char *trans_id);
 
 static int st_sync_exchange(u1db_sync_target *st,
                           const char *source_replica_uid, int n_docs,
@@ -129,7 +129,7 @@ finish:
 
 static int
 st_record_sync_info(u1db_sync_target *st, const char *source_replica_uid,
-                    int source_gen)
+                    int source_gen, const char *trans_id)
 {
     int status;
     u1database *db;
@@ -141,7 +141,7 @@ st_record_sync_info(u1db_sync_target *st, const char *source_replica_uid,
         if (status != U1DB_OK) { goto finish; }
     }
     db = (u1database *)st->implementation;
-    status = u1db__set_sync_generation(db, source_replica_uid, source_gen);
+    status = u1db__set_sync_info(db, source_replica_uid, source_gen, trans_id);
 finish:
     return status;
 }
@@ -589,14 +589,15 @@ u1db__sync_db_to_target(u1database *db, u1db_sync_target *target,
     if (status != U1DB_OK) { goto finish; }
     // Now we successfully sent and received docs, make sure we record the
     // current remote generation
-    status = u1db__set_sync_generation(db, target_uid,
-                                       target_gen_known_by_local);
+    status = u1db__set_sync_info(db, target_uid, target_gen_known_by_local,
+                                 "T-sid");
     if (status != U1DB_OK) { goto finish; }
     if (return_doc_state.num_inserted > 0 &&
             ((*local_gen_before_sync + return_doc_state.num_inserted)
               == local_gen))
     {
-        status = target->record_sync_info(target, local_uid, local_gen);
+        status = target->record_sync_info(target, local_uid, local_gen,
+                                          "T-sid");
         if (status != U1DB_OK) { goto finish; }
     }
 finish:

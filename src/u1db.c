@@ -810,7 +810,7 @@ u1db__put_doc_if_newer(u1database *db, u1db_document *doc, int save_conflict,
                            (stored_doc_rev != NULL));
     }
     if (status == U1DB_OK && replica_uid != NULL) {
-        status = u1db__set_sync_generation(db, replica_uid, replica_gen);
+        status = u1db__set_sync_info(db, replica_uid, replica_gen, "T-sid");
     }
     if (status == U1DB_OK && at_gen != NULL) {
         status = u1db__get_generation(db, at_gen);
@@ -1345,8 +1345,8 @@ finish:
 
 
 int
-u1db__set_sync_generation(u1database *db, const char *replica_uid,
-                          int generation)
+u1db__set_sync_info(u1database *db, const char *replica_uid,
+                    int generation, const char *trans_id)
 {
     int status;
     sqlite3_stmt *statement;
@@ -1364,7 +1364,7 @@ u1db__set_sync_generation(u1database *db, const char *replica_uid,
     if (status != SQLITE_OK) { goto finish; }
     status = sqlite3_bind_int(statement, 2, generation);
     if (status != SQLITE_OK) { goto finish; }
-    status = sqlite3_bind_text(statement, 3, "", -1, SQLITE_TRANSIENT);
+    status = sqlite3_bind_text(statement, 3, trans_id, -1, SQLITE_TRANSIENT);
     if (status != SQLITE_OK) { goto finish; }
     status = sqlite3_step(statement);
     if (status == SQLITE_DONE) {
