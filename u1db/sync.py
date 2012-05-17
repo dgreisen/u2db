@@ -86,7 +86,7 @@ class Synchronizer(object):
         if (cur_gen == start_generation + self.num_inserted
             and self.num_inserted > 0):
             self.sync_target.record_sync_info(self.source._replica_uid,
-                                              cur_gen)
+                                              cur_gen, 'T-sid')
 
     def sync(self, callback=None):
         """Synchronize documents between source and target."""

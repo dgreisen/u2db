@@ -674,7 +674,7 @@ cdef class CSyncTarget(object):
         handle_status("get_sync_info", status)
         return (safe_str(st_replica_uid), st_gen, source_gen, 'T-id')
 
-    def record_sync_info(self, source_replica_uid, source_gen):
+    def record_sync_info(self, source_replica_uid, source_gen, source_trans_id):
         cdef int status
         self._check()
         assert self._st.record_sync_info != NULL, "record_sync_info is NULL?"

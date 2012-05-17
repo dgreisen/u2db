@@ -295,7 +295,8 @@ class SyncResource(object):
     @http_method(generation=int,
                  content_as_args=True, no_query=True)
     def put(self, generation):
-        self.target.record_sync_info(self.source_replica_uid, generation)
+        self.target.record_sync_info(self.source_replica_uid, generation,
+                                     'T-sid')
         self.responder.send_response_json(ok=True)
 
     # Implements the same logic as LocalSyncTarget.sync_exchange

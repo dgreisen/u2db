@@ -339,7 +339,8 @@ class InMemorySyncTarget(CommonSyncTarget):
             self._db._replica_uid, len(self._db._transaction_log), source_gen,
             'T-id')
 
-    def record_sync_info(self, source_replica_uid, source_replica_generation):
+    def record_sync_info(self, source_replica_uid, source_replica_generation,
+                         source_transaction_id):
         if self._trace_hook:
             self._trace_hook('record_sync_info')
         self._db._set_sync_generation(source_replica_uid,

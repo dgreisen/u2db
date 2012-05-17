@@ -150,7 +150,7 @@ class DatabaseSyncTargetTests(tests.DatabaseBaseTests,
 
     def test_record_sync_info(self):
         self.assertEqual(('test', 0, 0, 'T-id'), self.st.get_sync_info('replica'))
-        self.st.record_sync_info('replica', 10)
+        self.st.record_sync_info('replica', 10, 'T-sid')
         self.assertEqual(('test', 0, 10, 'T-id'), self.st.get_sync_info('replica'))
 
     def test_sync_exchange(self):
@@ -353,7 +353,7 @@ class DatabaseSyncTargetTests(tests.DatabaseBaseTests,
             called.append(state)
         self.set_trace_hook(cb)
         self.st.sync_exchange([], 'replica', 0, self.receive_doc)
-        self.st.record_sync_info('replica', 0)
+        self.st.record_sync_info('replica', 0, 'T-sid')
         self.assertEqual(['before whats_changed',
                           'after whats_changed',
                           'before get_docs',

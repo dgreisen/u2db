@@ -343,7 +343,8 @@ class SyncTarget(object):
         """
         raise NotImplementedError(self.get_sync_info)
 
-    def record_sync_info(self, source_replica_uid, source_replica_generation):
+    def record_sync_info(self, source_replica_uid, source_replica_generation,
+                         source_replica_transaction_id):
         """Record tip information for another replica.
 
         After sync_exchange has been processed, the caller will have
@@ -359,6 +360,8 @@ class SyncTarget(object):
         :param source_replica_uid: The identifier for the source replica.
         :param source_replica_generation:
              The database generation for the source replica.
+        :param source_replica_transaction_id: The transaction id associated
+            with the source replica generation.
         :return: None
         """
         raise NotImplementedError(self.record_sync_info)

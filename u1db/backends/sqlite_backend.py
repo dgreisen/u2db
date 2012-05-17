@@ -612,7 +612,8 @@ class SQLiteSyncTarget(CommonSyncTarget):
         my_gen = self._db._get_generation()
         return self._db._replica_uid, my_gen, source_gen, 'T-id'
 
-    def record_sync_info(self, source_replica_uid, source_replica_generation):
+    def record_sync_info(self, source_replica_uid, source_replica_generation,
+                         source_replica_transaction_id):
         if self._trace_hook:
             self._trace_hook('record_sync_info')
         self._db._set_sync_generation(source_replica_uid,

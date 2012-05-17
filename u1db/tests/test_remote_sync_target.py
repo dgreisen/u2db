@@ -173,7 +173,7 @@ class TestRemoteSyncTargets(tests.TestCaseWithServer):
         self.startServer()
         db = self.request_state._create_database('test')
         remote_target = self.getSyncTarget('test')
-        remote_target.record_sync_info('other-id', 2)
+        remote_target.record_sync_info('other-id', 2, 'T-sid')
         self.assertEqual(db._get_sync_generation('other-id'), 2)
 
     def test_sync_exchange_send(self):
