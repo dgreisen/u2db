@@ -681,7 +681,7 @@ class TestHTTPApp(tests.TestCase):
         self.assertEqual(200, resp.status)
         self.assertEqual('application/json', resp.header('content-type'))
         self.assertEqual({'ok': True}, simplejson.loads(resp.body))
-        self.assertEqual(self.db0.get_sync_generation('other-id'), 2)
+        self.assertEqual(self.db0._get_sync_generation('other-id'), 2)
 
     def test_sync_exchange_send(self):
         entries = {

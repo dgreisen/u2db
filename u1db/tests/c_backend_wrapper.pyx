@@ -957,10 +957,10 @@ cdef class CDatabase(object):
             u1db__get_generation(self._db, &generation))
         return generation
 
-    def get_sync_generation(self, replica_uid):
+    def _get_sync_generation(self, replica_uid):
         cdef int generation
 
-        handle_status("get_sync_generation",
+        handle_status("_get_sync_generation",
             u1db__get_sync_generation(self._db, replica_uid, &generation))
         return generation
 

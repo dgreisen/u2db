@@ -416,8 +416,8 @@ class DatabaseSyncTests(tests.DatabaseBaseTests):
 
     def test_sync_tracks_db_generation_of_other(self):
         self.assertEqual(0, self.sync(self.db1, self.db2))
-        self.assertEqual(0, self.db1.get_sync_generation('test2'))
-        self.assertEqual(0, self.db2.get_sync_generation('test1'))
+        self.assertEqual(0, self.db1._get_sync_generation('test2'))
+        self.assertEqual(0, self.db2._get_sync_generation('test1'))
         self.assertLastExchangeLog(self.db2,
             {'receive': {'docs': [], 'last_known_gen': 0},
              'return': {'docs': [], 'last_gen': 0}})
@@ -426,8 +426,8 @@ class DatabaseSyncTests(tests.DatabaseBaseTests):
         doc = self.db1.create_doc(simple_doc)
         self.assertEqual(1, self.sync(self.db1, self.db2))
         self.assertGetDoc(self.db2, doc.doc_id, doc.rev, simple_doc, False)
-        self.assertEqual(1, self.db1.get_sync_generation('test2'))
-        self.assertEqual(1, self.db2.get_sync_generation('test1'))
+        self.assertEqual(1, self.db1._get_sync_generation('test2'))
+        self.assertEqual(1, self.db2._get_sync_generation('test1'))
         self.assertLastExchangeLog(self.db2,
             {'receive': {'docs': [(doc.doc_id, doc.rev)],
                          'source_uid': 'test1',
@@ -439,8 +439,8 @@ class DatabaseSyncTests(tests.DatabaseBaseTests):
         self.db1.create_index('test-idx', ['key'])
         self.assertEqual(0, self.sync(self.db1, self.db2))
         self.assertGetDoc(self.db1, doc.doc_id, doc.rev, simple_doc, False)
-        self.assertEqual(1, self.db1.get_sync_generation('test2'))
-        self.assertEqual(1, self.db2.get_sync_generation('test1'))
+        self.assertEqual(1, self.db1._get_sync_generation('test2'))
+        self.assertEqual(1, self.db2._get_sync_generation('test1'))
         self.assertLastExchangeLog(self.db2,
             {'receive': {'docs': [], 'last_known_gen': 0},
              'return': {'docs': [(doc.doc_id, doc.rev)],
@@ -465,11 +465,11 @@ class DatabaseSyncTests(tests.DatabaseBaseTests):
             {'receive': {'docs': [], 'last_known_gen': 0},
              'return': {'docs': [(doc.doc_id, doc.rev)],
                         'last_gen': 1}})
-        self.assertEqual(1, self.db1.get_sync_generation('test2'))
+        self.assertEqual(1, self.db1._get_sync_generation('test2'))
         # c2 should not have gotten a '_record_sync_info' call, because the
         # local database had been updated more than just by the messages
         # returned from c2.
-        self.assertEqual(0, self.db2.get_sync_generation('test1'))
+        self.assertEqual(0, self.db2._get_sync_generation('test1'))
 
     def test_sync_doesnt_update_other_if_nothing_pulled(self):
         doc = self.db1.create_doc(simple_doc)
@@ -480,7 +480,7 @@ class DatabaseSyncTests(tests.DatabaseBaseTests):
         self.assertEqual(1, self.sync(self.db1, self.db2,
                                       trace_hook=no_record_sync_info))
         self.assertEqual(1,
-                         self.db2.get_sync_generation(self.db1._replica_uid))
+                         self.db2._get_sync_generation(self.db1._replica_uid))
 
     def test_sync_ignores_convergence(self):
         doc = self.db1.create_doc(simple_doc)

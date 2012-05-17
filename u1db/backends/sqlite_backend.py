@@ -408,7 +408,7 @@ class SQLiteDatabase(CommonBackend):
             this_doc.has_conflicts = True
             return [this_doc] + conflict_docs
 
-    def get_sync_generation(self, other_replica_uid):
+    def _get_sync_generation(self, other_replica_uid):
         c = self._db_handle.cursor()
         c.execute("SELECT known_generation FROM sync_log"
                   " WHERE replica_uid = ?",
@@ -607,7 +607,7 @@ class SQLiteDatabase(CommonBackend):
 class SQLiteSyncTarget(CommonSyncTarget):
 
     def get_sync_info(self, source_replica_uid):
-        source_gen = self._db.get_sync_generation(source_replica_uid)
+        source_gen = self._db._get_sync_generation(source_replica_uid)
         my_gen = self._db._get_generation()
         return self._db._replica_uid, my_gen, source_gen
 

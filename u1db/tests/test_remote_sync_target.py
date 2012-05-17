@@ -174,7 +174,7 @@ class TestRemoteSyncTargets(tests.TestCaseWithServer):
         db = self.request_state._create_database('test')
         remote_target = self.getSyncTarget('test')
         remote_target.record_sync_info('other-id', 2)
-        self.assertEqual(db.get_sync_generation('other-id'), 2)
+        self.assertEqual(db._get_sync_generation('other-id'), 2)
 
     def test_sync_exchange_send(self):
         self.startServer()
@@ -222,7 +222,7 @@ class TestRemoteSyncTargets(tests.TestCaseWithServer):
                 return_doc_cb=receive_doc)
         self.assertGetDoc(db, 'doc-here', 'replica:1', '{"value": "here"}',
                           False)
-        self.assertEqual(10, db.get_sync_generation('replica'))
+        self.assertEqual(10, db._get_sync_generation('replica'))
         self.assertEqual([], other_changes)
         # retry
         trigger_ids = []
@@ -232,7 +232,7 @@ class TestRemoteSyncTargets(tests.TestCaseWithServer):
                 return_doc_cb=receive_doc)
         self.assertGetDoc(db, 'doc-here2', 'replica:1', '{"value": "here2"}',
                           False)
-        self.assertEqual(11, db.get_sync_generation('replica'))
+        self.assertEqual(11, db._get_sync_generation('replica'))
         self.assertEqual(2, new_gen)
         # bounced back to us
         self.assertEqual([('doc-here', 'replica:1', '{"value": "here"}', 1)],

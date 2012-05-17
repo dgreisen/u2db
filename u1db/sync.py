@@ -99,7 +99,7 @@ class Synchronizer(object):
         my_gen, changes = self.source.whats_changed(target_my_gen)
 
         # this source last-seen database generation for the target
-        target_last_known_gen = self.source.get_sync_generation(
+        target_last_known_gen = self.source._get_sync_generation(
             self.target_replica_uid)
         if not changes and target_last_known_gen == target_gen:
             return my_gen
