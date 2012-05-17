@@ -537,6 +537,8 @@ st_http_record_sync_info(u1db_sync_target *st,
         goto finish;
     }
     json_object_object_add(json, "generation", json_object_new_int(source_gen));
+    json_object_object_add(json, "transaction_id",
+                           json_object_new_string(trans_id));
     raw_body = json_object_to_json_string(json);
     raw_len = strlen(raw_body);
     req.state = state;
@@ -561,7 +563,7 @@ st_http_record_sync_info(u1db_sync_target *st,
     status = curl_easy_setopt(state->curl, CURLOPT_INFILESIZE_LARGE,
                               (curl_off_t)req.num_put_bytes);
     if (status != CURLE_OK) { goto finish; }
-    status = maybe_sign_url(st, "PUT", url, &headers); 
+    status = maybe_sign_url(st, "PUT", url, &headers);
     if (status != U1DB_OK) { goto finish; }
 
     // Now actually send the data

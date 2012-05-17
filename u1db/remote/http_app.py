@@ -290,13 +290,14 @@ class SyncResource(object):
         self.responder.send_response_json(target_replica_uid=result[0],
                                      target_replica_generation=result[1],
                                      source_replica_uid=self.source_replica_uid,
-                                     source_replica_generation=result[2])
+                                     source_replica_generation=result[2],
+                                     source_transaction_id=result[3])
 
     @http_method(generation=int,
                  content_as_args=True, no_query=True)
-    def put(self, generation):
+    def put(self, generation, transaction_id):
         self.target.record_sync_info(self.source_replica_uid, generation,
-                                     'T-sid')
+                                     transaction_id)
         self.responder.send_response_json(ok=True)
 
     # Implements the same logic as LocalSyncTarget.sync_exchange

@@ -664,24 +664,26 @@ class TestHTTPApp(tests.TestCase):
                          simplejson.loads(resp.body))
 
     def test_get_sync_info(self):
-        self.db0._set_sync_info('other-id', 1, 'T-sid')
+        self.db0._set_sync_info('other-id', 1, 'T-transid')
         resp = self.app.get('/db0/sync-from/other-id')
         self.assertEqual(200, resp.status)
         self.assertEqual('application/json', resp.header('content-type'))
         self.assertEqual(dict(target_replica_uid='db0',
                               target_replica_generation=0,
                               source_replica_uid='other-id',
-                              source_replica_generation=1),
+                              source_replica_generation=1,
+                              source_transaction_id='T-transid'),
                               simplejson.loads(resp.body))
 
     def test_record_sync_info(self):
         resp = self.app.put('/db0/sync-from/other-id',
-                            params='{"generation": 2}',
-                            headers={'content-type': 'application/json'})
+            params='{"generation": 2, "transaction_id": "T-transid"}',
+            headers={'content-type': 'application/json'})
         self.assertEqual(200, resp.status)
         self.assertEqual('application/json', resp.header('content-type'))
         self.assertEqual({'ok': True}, simplejson.loads(resp.body))
-        self.assertEqual(self.db0._get_sync_generation('other-id'), 2)
+        self.assertEqual((2, 'T-transid'),
+                         self.db0._get_sync_gen_info('other-id'))
 
     def test_sync_exchange_send(self):
         entries = {

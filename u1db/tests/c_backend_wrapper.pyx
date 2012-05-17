@@ -191,8 +191,8 @@ cdef extern from "u1db/u1db_internal.h":
                                            char *content, int has_conflicts)
     int u1db__generate_hex_uuid(char *)
 
-    int u1db__get_sync_generation(u1database *db, char *replica_uid,
-                                  int *generation)
+    int u1db__get_sync_gen_info(u1database *db, char *replica_uid,
+                                int *generation, char **trans_id)
     int u1db__set_sync_info(u1database *db, char *replica_uid, int generation,
                             char *trans_id)
     int u1db__sync_get_machine_info(u1database *db, char *other_replica_uid,
@@ -672,7 +672,12 @@ cdef class CSyncTarget(object):
             status = self._st.get_sync_info(self._st, source_replica_uid,
                 &st_replica_uid, &st_gen, &source_gen)
         handle_status("get_sync_info", status)
-        return (safe_str(st_replica_uid), st_gen, source_gen, 'T-id')
+        if source_gen == 0:
+            # XXX:
+            trans_id = ''
+        else:
+            trans_id = 'T-id'
+        return (safe_str(st_replica_uid), st_gen, source_gen, trans_id)
 
     def record_sync_info(self, source_replica_uid, source_gen, source_trans_id):
         cdef int status
@@ -968,12 +973,18 @@ cdef class CDatabase(object):
             u1db__get_generation(self._db, &generation))
         return generation
 
-    def _get_sync_generation(self, replica_uid):
-        cdef int generation
+    def _get_sync_gen_info(self, replica_uid):
+        cdef int generation, status
+        cdef char *trans_id = NULL
 
-        handle_status("_get_sync_generation",
-            u1db__get_sync_generation(self._db, replica_uid, &generation))
-        return generation
+        status = u1db__get_sync_gen_info(self._db, replica_uid, &generation,
+                                         &trans_id)
+        handle_status("_get_sync_gen_info", status)
+        raw_trans_id = None
+        if trans_id != NULL:
+            raw_trans_id = trans_id
+            free(trans_id)
+        return generation, raw_trans_id
 
     def _set_sync_info(self, replica_uid, generation, trans_id):
         handle_status("_set_sync_info",

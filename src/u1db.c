@@ -1315,18 +1315,22 @@ u1db__free_table(u1db_table **table)
 
 
 int
-u1db__get_sync_generation(u1database *db, const char *replica_uid,
-                          int *generation)
+u1db__get_sync_gen_info(u1database *db, const char *replica_uid,
+                        int *generation, char **trans_id)
 {
     int status;
     sqlite3_stmt *statement;
+    const char *tmp;
 
-    if (db == NULL || replica_uid == NULL || generation == NULL) {
+    if (db == NULL || replica_uid == NULL || generation == NULL
+        || trans_id == NULL)
+    {
         return U1DB_INVALID_PARAMETER;
     }
     status = sqlite3_prepare_v2(db->sql_handle,
-        "SELECT known_generation FROM sync_log WHERE replica_uid = ?", -1,
-        &statement, NULL);
+        "SELECT known_generation, known_transaction_id"
+        " FROM sync_log WHERE replica_uid = ?",
+        -1, &statement, NULL);
     if (status != SQLITE_OK) { goto finish; }
     status = sqlite3_bind_text(statement, 1, replica_uid, -1, SQLITE_TRANSIENT);
     if (status != SQLITE_OK) { goto finish; }
@@ -1334,9 +1338,15 @@ u1db__get_sync_generation(u1database *db, const char *replica_uid,
     if (status == SQLITE_DONE) {
         status = SQLITE_OK;
         *generation = 0;
+        *trans_id = strdup("");
     } else if (status == SQLITE_ROW) {
         *generation = sqlite3_column_int(statement, 0);
+        tmp = (const char *)sqlite3_column_text(statement, 1);
+        *trans_id = strdup(tmp);
         status = SQLITE_OK;
+    }
+    if (*trans_id == NULL) {
+        status = U1DB_NOMEM;
     }
 finish:
     sqlite3_finalize(statement);

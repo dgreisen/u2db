@@ -250,9 +250,11 @@ int u1db__get_transaction_log(u1database *db, void *context,
  * @param replica_uid The identifier for the other database
  * @param generation  (OUT) The last generation that we know we synchronized
  *                    with the other database.
+ * @param trans_id    (OUT) The transaction id associated with the generation.
+ *                    Callers must free the data.
  */
-int u1db__get_sync_generation(u1database *db, const char *replica_uid,
-                              int *generation);
+int u1db__get_sync_gen_info(u1database *db, const char *replica_uid,
+                            int *generation, char **trans_id);
 
 /**
  * Set the known sync generation for another replica.

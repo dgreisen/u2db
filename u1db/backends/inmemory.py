@@ -45,8 +45,8 @@ class InMemoryDatabase(CommonBackend):
         # may be closing it, while another wants to inspect the results.
         pass
 
-    def _get_sync_generation(self, other_replica_uid):
-        return self._other_generations.get(other_replica_uid, 0)
+    def _get_sync_gen_info(self, other_replica_uid):
+        return self._other_generations.get(other_replica_uid, (0, ''))
 
     def _set_sync_info(self, other_replica_uid, other_generation,
                        other_transaction_id):
@@ -57,7 +57,8 @@ class InMemoryDatabase(CommonBackend):
                           other_transaction_id):
         # TODO: to handle race conditions, we may want to check if the current
         #       value is greater than this new value.
-        self._other_generations[other_replica_uid] = other_generation
+        self._other_generations[other_replica_uid] = (other_generation,
+                                                      other_transaction_id)
 
     def get_sync_target(self):
         return InMemorySyncTarget(self)
@@ -337,10 +338,9 @@ class InMemoryIndex(object):
 class InMemorySyncTarget(CommonSyncTarget):
 
     def get_sync_info(self, source_replica_uid):
-        source_gen = self._db._get_sync_generation(source_replica_uid)
-        return (
-            self._db._replica_uid, len(self._db._transaction_log), source_gen,
-            'T-id')
+        source_gen, trans_id = self._db._get_sync_gen_info(source_replica_uid)
+        return (self._db._replica_uid, len(self._db._transaction_log),
+                source_gen, trans_id)
 
     def record_sync_info(self, source_replica_uid, source_replica_generation,
                          source_transaction_id):

@@ -409,17 +409,19 @@ class SQLiteDatabase(CommonBackend):
             this_doc.has_conflicts = True
             return [this_doc] + conflict_docs
 
-    def _get_sync_generation(self, other_replica_uid):
+    def _get_sync_gen_info(self, other_replica_uid):
         c = self._db_handle.cursor()
-        c.execute("SELECT known_generation FROM sync_log"
+        c.execute("SELECT known_generation, known_transaction_id FROM sync_log"
                   " WHERE replica_uid = ?",
                   (other_replica_uid,))
         val = c.fetchone()
         if val is None:
             other_gen = 0
+            trans_id = ''
         else:
             other_gen = val[0]
-        return other_gen
+            trans_id = val[1]
+        return other_gen, trans_id
 
     def _set_sync_info(self, other_replica_uid, other_generation,
                        other_transaction_id):
@@ -612,9 +614,9 @@ class SQLiteDatabase(CommonBackend):
 class SQLiteSyncTarget(CommonSyncTarget):
 
     def get_sync_info(self, source_replica_uid):
-        source_gen = self._db._get_sync_generation(source_replica_uid)
+        source_gen, trans_id = self._db._get_sync_gen_info(source_replica_uid)
         my_gen = self._db._get_generation()
-        return self._db._replica_uid, my_gen, source_gen, 'T-id'
+        return self._db._replica_uid, my_gen, source_gen, trans_id
 
     def record_sync_info(self, source_replica_uid, source_replica_generation,
                          source_replica_transaction_id):

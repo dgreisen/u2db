@@ -104,6 +104,7 @@ st_get_sync_info(u1db_sync_target *st, const char *source_replica_uid,
 {
     int status = U1DB_OK;
     u1database *db;
+    char *trans_id = NULL;
     if (st == NULL || source_replica_uid == NULL || st_replica_uid == NULL
             || st_gen == NULL || source_gen == NULL)
     {
@@ -119,10 +120,12 @@ st_get_sync_info(u1db_sync_target *st, const char *source_replica_uid,
     db = (u1database *)st->implementation;
     status = u1db_get_replica_uid(db, st_replica_uid);
     if (status != U1DB_OK) { goto finish; }
-    status = u1db__get_sync_generation(db, source_replica_uid, source_gen);
+    status = u1db__get_sync_gen_info(db, source_replica_uid, source_gen,
+                                     &trans_id);
     if (status != U1DB_OK) { goto finish; }
     status = u1db__get_generation(db, st_gen);
 finish:
+    if (trans_id != NULL) { free(trans_id); }
     return status;
 }
 
@@ -543,6 +546,7 @@ u1db__sync_db_to_target(u1database *db, u1db_sync_target *target,
     struct _whats_changed_doc_ids_state to_send_state = {0};
     struct _return_doc_state return_doc_state = {0};
     const char *target_uid, *local_uid;
+    char *trans_id;
     int target_gen, local_gen;
     int local_gen_known_by_target, target_gen_known_by_local;
 
@@ -558,8 +562,8 @@ u1db__sync_db_to_target(u1database *db, u1db_sync_target *target,
     status = target->get_sync_info(target, local_uid, &target_uid, &target_gen,
                                    &local_gen_known_by_target);
     if (status != U1DB_OK) { goto finish; }
-    status = u1db__get_sync_generation(db, target_uid,
-                                       &target_gen_known_by_local);
+    status = u1db__get_sync_gen_info(db, target_uid,
+        &target_gen_known_by_local, &trans_id);
     if (status != U1DB_OK) { goto finish; }
     local_gen = local_gen_known_by_target;
 
@@ -601,6 +605,9 @@ u1db__sync_db_to_target(u1database *db, u1db_sync_target *target,
         if (status != U1DB_OK) { goto finish; }
     }
 finish:
+    if (trans_id != NULL) {
+        free(trans_id);
+    }
     if (to_send_state.doc_ids_to_return != NULL) {
         int i;
 
