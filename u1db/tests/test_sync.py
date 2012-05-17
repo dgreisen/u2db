@@ -141,17 +141,17 @@ class DatabaseSyncTargetTests(tests.DatabaseBaseTests,
         self.assertIsNot(None, self.st)
 
     def test_get_sync_info(self):
-        self.assertEqual(('test', 0, 0), self.st.get_sync_info('other'))
+        self.assertEqual(('test', 0, 0, 'T-id'), self.st.get_sync_info('other'))
 
     def test_create_doc_updates_sync_info(self):
-        self.assertEqual(('test', 0, 0), self.st.get_sync_info('other'))
+        self.assertEqual(('test', 0, 0, 'T-id'), self.st.get_sync_info('other'))
         doc = self.db.create_doc(simple_doc)
-        self.assertEqual(('test', 1, 0), self.st.get_sync_info('other'))
+        self.assertEqual(('test', 1, 0, 'T-id'), self.st.get_sync_info('other'))
 
     def test_record_sync_info(self):
-        self.assertEqual(('test', 0, 0), self.st.get_sync_info('replica'))
+        self.assertEqual(('test', 0, 0, 'T-id'), self.st.get_sync_info('replica'))
         self.st.record_sync_info('replica', 10)
-        self.assertEqual(('test', 0, 10), self.st.get_sync_info('replica'))
+        self.assertEqual(('test', 0, 10, 'T-id'), self.st.get_sync_info('replica'))
 
     def test_sync_exchange(self):
         docs_by_gen = [
@@ -162,7 +162,7 @@ class DatabaseSyncTargetTests(tests.DatabaseBaseTests,
         self.assertGetDoc(self.db, 'doc-id', 'replica:1', simple_doc, False)
         self.assertTransactionLog(['doc-id'], self.db)
         self.assertEqual(([], 1), (self.other_changes, new_gen))
-        self.assertEqual(10, self.st.get_sync_info('replica')[-1])
+        self.assertEqual(10, self.st.get_sync_info('replica')[2])
 
     def test_sync_exchange_deleted(self):
         doc = self.db.create_doc('{}')
@@ -175,7 +175,7 @@ class DatabaseSyncTargetTests(tests.DatabaseBaseTests,
         self.assertGetDoc(self.db, doc.doc_id, edit_rev, None, False)
         self.assertTransactionLog([doc.doc_id, doc.doc_id], self.db)
         self.assertEqual(([], 2), (self.other_changes, new_gen))
-        self.assertEqual(10, self.st.get_sync_info('replica')[-1])
+        self.assertEqual(10, self.st.get_sync_info('replica')[2])
 
     def test_sync_exchange_push_many(self):
         docs_by_gen = [
@@ -188,7 +188,7 @@ class DatabaseSyncTargetTests(tests.DatabaseBaseTests,
         self.assertGetDoc(self.db, 'doc-id2', 'replica:1', nested_doc, False)
         self.assertTransactionLog(['doc-id', 'doc-id2'], self.db)
         self.assertEqual(([], 2), (self.other_changes, new_gen))
-        self.assertEqual(11, self.st.get_sync_info('replica')[-1])
+        self.assertEqual(11, self.st.get_sync_info('replica')[2])
 
     def test_sync_exchange_refuses_conflicts(self):
         doc = self.db.create_doc(simple_doc)
@@ -345,7 +345,7 @@ class DatabaseSyncTargetTests(tests.DatabaseBaseTests,
         self.assertGetDoc(self.db, doc.doc_id, doc.rev, simple_doc, False)
         self.assertTransactionLog([doc.doc_id], self.db)
         self.assertEqual(([], 1), (self.other_changes, new_gen))
-        self.assertEqual(10, self.st.get_sync_info(db2._replica_uid)[-1])
+        self.assertEqual(10, self.st.get_sync_info(db2._replica_uid)[2])
 
     def test__set_trace_hook(self):
         called = []

@@ -672,7 +672,7 @@ cdef class CSyncTarget(object):
             status = self._st.get_sync_info(self._st, source_replica_uid,
                 &st_replica_uid, &st_gen, &source_gen)
         handle_status("get_sync_info", status)
-        return (safe_str(st_replica_uid), st_gen, source_gen)
+        return (safe_str(st_replica_uid), st_gen, source_gen, 'T-id')
 
     def record_sync_info(self, source_replica_uid, source_gen):
         cdef int status

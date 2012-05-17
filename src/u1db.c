@@ -39,6 +39,9 @@ typedef struct _u1db_document_internal
 
 static int increment_doc_rev(u1database *db, const char *cur_rev,
                              char **doc_rev);
+static int generate_transaction_id(char buf[35]);
+
+
 static int
 initialize(u1database *db)
 {
@@ -391,7 +394,7 @@ write_doc(u1database *db, const char *doc_id, const char *doc_rev,
     sqlite3_finalize(statement);
     status = u1db__update_indexes(db, doc_id, content);
     if (status != U1DB_OK) { goto finish; }
-    status = u1db__generate_transaction_id(transaction_id);
+    status = generate_transaction_id(transaction_id);
     if (status != U1DB_OK) { goto finish; }
     status = sqlite3_prepare_v2(db->sql_handle,
         "INSERT INTO transaction_log(doc_id, transaction_id) VALUES (?, ?)",
@@ -1230,15 +1233,13 @@ u1db__allocate_doc_id(u1database *db)
     return buf;
 }
 
-
-int
-u1db__generate_transaction_id(char buf[35])
+static int
+generate_transaction_id(char buf[35])
 {
     buf[0] = 'T';
     buf[1] = '-';
     return u1db__generate_hex_uuid(&buf[2]);
 }
-
 
 u1db_table *
 u1db__sql_run(u1database *db, const char *sql, size_t n)

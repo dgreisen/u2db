@@ -93,8 +93,8 @@ class Synchronizer(object):
         sync_target = self.sync_target
         # get target identifier, its current generation,
         # and its last-seen database generation for this source
-        (self.target_replica_uid, target_gen,
-         target_my_gen) = sync_target.get_sync_info(self.source._replica_uid)
+        (self.target_replica_uid, target_gen, target_my_gen,
+         target_my_trans_id) = sync_target.get_sync_info(self.source._replica_uid)
         # what's changed since that generation and this current gen
         my_gen, changes = self.source.whats_changed(target_my_gen)
 

@@ -338,7 +338,8 @@ class SyncTarget(object):
         :param source_replica_uid: Another replica which we might have
             synchronized with in the past.
         :return: (target_replica_uid, target_replica_generation,
-                  source_replica_last_known_generation)
+                  source_replica_last_known_generation,
+                  source_replica_last_known_transaction_id)
         """
         raise NotImplementedError(self.get_sync_info)
 
