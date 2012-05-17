@@ -421,14 +421,18 @@ class SQLiteDatabase(CommonBackend):
             other_gen = val[0]
         return other_gen
 
-    def _set_sync_generation(self, other_replica_uid, other_generation):
+    def _set_sync_info(self, other_replica_uid, other_generation,
+                       other_transaction_id):
         with self._db_handle:
-            self._do_set_sync_generation(other_replica_uid, other_generation)
+            self._do_set_sync_info(other_replica_uid, other_generation,
+                                   other_transaction_id)
 
-    def _do_set_sync_generation(self, other_replica_uid, other_generation):
+    def _do_set_sync_info(self, other_replica_uid, other_generation,
+                          other_transaction_id):
             c = self._db_handle.cursor()
             c.execute("INSERT OR REPLACE INTO sync_log VALUES (?, ?, ?)",
-                      (other_replica_uid, other_generation, ''))
+                      (other_replica_uid, other_generation,
+                       other_transaction_id))
 
     def _put_doc_if_newer(self, doc, save_conflict, replica_uid=None,
                           replica_gen=None):
@@ -616,8 +620,8 @@ class SQLiteSyncTarget(CommonSyncTarget):
                          source_replica_transaction_id):
         if self._trace_hook:
             self._trace_hook('record_sync_info')
-        self._db._set_sync_generation(source_replica_uid,
-                                      source_replica_generation)
+        self._db._set_sync_info(source_replica_uid, source_replica_generation,
+                                source_replica_transaction_id)
 
 
 class SQLitePartialExpandDatabase(SQLiteDatabase):

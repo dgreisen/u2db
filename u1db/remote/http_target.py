@@ -45,8 +45,9 @@ class HTTPSyncTarget(http_client.HTTPClientBase, SyncTarget):
                 res['source_replica_generation'], 'T-id')
 
     def record_sync_info(self, source_replica_uid, source_replica_generation,
-                         source_replica_transaction_id):
+                         source_transaction_id):
         self._ensure_connection()
+        # , 'trans_id': source_transaction_id
         self._request_json('PUT', ['sync-from', source_replica_uid], {},
                                   {'generation': source_replica_generation})
 

@@ -707,20 +707,20 @@ class TestRemoteSyncIntegration(tests.TestCaseWithServer):
         self.assertEqual(2, len(self.db2._get_transaction_log()))
         progress1 = []
         progress2 = []
-        _do_set_sync_generation1 = self.db1._do_set_sync_generation
-        def set_sync_generation_witness1(other_uid, other_gen):
+        _do_set_sync_info = self.db1._do_set_sync_info
+        def set_sync_generation_witness1(other_uid, other_gen, trans_id):
             progress1.append((other_uid, other_gen,
                 [d for d, t in self.db1._get_transaction_log()[2:]]))
-            _do_set_sync_generation1(other_uid, other_gen)
-        self.patch(self.db1, '_do_set_sync_generation',
+            _do_set_sync_info(other_uid, other_gen, trans_id)
+        self.patch(self.db1, '_do_set_sync_info',
                    set_sync_generation_witness1)
 
-        _do_set_sync_generation2 = self.db2._do_set_sync_generation
-        def set_sync_generation_witness2(other_uid, other_gen):
+        _do_set_sync_info2 = self.db2._do_set_sync_info
+        def set_sync_generation_witness2(other_uid, other_gen, trans_id):
             progress2.append((other_uid, other_gen,
                 [d for d, t in self.db2._get_transaction_log()[2:]]))
-            _do_set_sync_generation2(other_uid, other_gen)
-        self.patch(self.db2, '_do_set_sync_generation',
+            _do_set_sync_info2(other_uid, other_gen, trans_id)
+        self.patch(self.db2, '_do_set_sync_info',
                    set_sync_generation_witness2)
 
         db2_url = self.getURL('test2')

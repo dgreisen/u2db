@@ -664,7 +664,7 @@ class TestHTTPApp(tests.TestCase):
                          simplejson.loads(resp.body))
 
     def test_get_sync_info(self):
-        self.db0._set_sync_generation('other-id', 1)
+        self.db0._set_sync_info('other-id', 1, 'T-sid')
         resp = self.app.get('/db0/sync-from/other-id')
         self.assertEqual(200, resp.status)
         self.assertEqual('application/json', resp.header('content-type'))
@@ -692,16 +692,15 @@ class TestHTTPApp(tests.TestCase):
             }
 
         gens = []
-        _do_set_sync_generation = self.db0._do_set_sync_generation
-        def set_sync_generation_witness(other_uid, other_gen):
+        _do_set_sync_info = self.db0._do_set_sync_info
+        def set_sync_generation_witness(other_uid, other_gen, other_trans_id):
             gens.append((other_uid, other_gen))
-            _do_set_sync_generation(other_uid, other_gen)
+            _do_set_sync_info(other_uid, other_gen, other_trans_id)
             self.assertGetDoc(self.db0, entries[other_gen]['id'],
                               entries[other_gen]['rev'],
                               entries[other_gen]['content'], False)
 
-        self.patch(self.db0, '_do_set_sync_generation',
-                   set_sync_generation_witness)
+        self.patch(self.db0, '_do_set_sync_info', set_sync_generation_witness)
 
         args = dict(last_known_generation=0)
         body = ("[\r\n" +

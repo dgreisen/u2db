@@ -48,10 +48,13 @@ class InMemoryDatabase(CommonBackend):
     def _get_sync_generation(self, other_replica_uid):
         return self._other_generations.get(other_replica_uid, 0)
 
-    def _set_sync_generation(self, other_replica_uid, other_generation):
-        self._do_set_sync_generation(other_replica_uid, other_generation)
+    def _set_sync_info(self, other_replica_uid, other_generation,
+                       other_transaction_id):
+        self._do_set_sync_info(other_replica_uid, other_generation,
+                               other_transaction_id)
 
-    def _do_set_sync_generation(self, other_replica_uid, other_generation):
+    def _do_set_sync_info(self, other_replica_uid, other_generation,
+                          other_transaction_id):
         # TODO: to handle race conditions, we may want to check if the current
         #       value is greater than this new value.
         self._other_generations[other_replica_uid] = other_generation
@@ -343,5 +346,5 @@ class InMemorySyncTarget(CommonSyncTarget):
                          source_transaction_id):
         if self._trace_hook:
             self._trace_hook('record_sync_info')
-        self._db._set_sync_generation(source_replica_uid,
-                                      source_replica_generation)
+        self._db._set_sync_info(source_replica_uid, source_replica_generation,
+                                source_transaction_id)

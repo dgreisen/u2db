@@ -115,7 +115,7 @@ class CommonBackend(u1db.Database):
             if save_conflict:
                 self._force_doc_sync_conflict(doc)
         if replica_uid is not None and replica_gen is not None:
-            self._do_set_sync_generation(replica_uid, replica_gen)
+            self._do_set_sync_info(replica_uid, replica_gen, 'T-sid')
         return state, self._get_generation()
 
     def _ensure_maximal_rev(self, cur_rev, extra_revs):

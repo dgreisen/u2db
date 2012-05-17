@@ -115,7 +115,7 @@ class Synchronizer(object):
                         self.source._replica_uid, target_last_known_gen,
                         return_doc_cb=self._insert_doc_from_target)
         # record target synced-up-to generation including applying what we sent
-        self.source._set_sync_generation(self.target_replica_uid, new_gen)
+        self.source._set_sync_info(self.target_replica_uid, new_gen, 'T-sid')
 
         # if gapless record current reached generation with target
         self._record_sync_info_with_the_target(my_gen)

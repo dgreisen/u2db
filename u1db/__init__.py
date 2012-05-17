@@ -229,16 +229,19 @@ class Database(object):
         """
         raise NotImplementedError(self._get_sync_generation)
 
-    def _set_sync_generation(self, other_replica_uid, other_generation):
+    def _set_sync_info(self, other_replica_uid, other_generation,
+                       other_transaction_id):
         """Set the last-known generation for the other database replica.
 
         We have just performed some synchronization, and we want to track what
         generation the other replica was at. See also get_sync_generation.
         :param other_replica_uid: The U1DB identifier for the other replica.
         :param other_generation: The generation number for the other replica.
+        :param other_transaction_id: The transaction id associated with the
+            generation.
         :return: None
         """
-        raise NotImplementedError(self._set_sync_generation)
+        raise NotImplementedError(self._set_sync_info)
 
     def _put_doc_if_newer(self, doc, save_conflict, replica_uid=None,
                           replica_gen=None):
