@@ -429,10 +429,10 @@ class SQLiteDatabase(CommonBackend):
             c.execute("INSERT OR REPLACE INTO sync_log VALUES (?, ?)",
                       (other_replica_uid, other_generation))
 
-    def put_doc_if_newer(self, doc, save_conflict, replica_uid=None,
-                         replica_gen=None):
+    def _put_doc_if_newer(self, doc, save_conflict, replica_uid=None,
+                          replica_gen=None):
         with self._db_handle:
-            return super(SQLiteDatabase, self).put_doc_if_newer(doc,
+            return super(SQLiteDatabase, self)._put_doc_if_newer(doc,
                 save_conflict=save_conflict,
                 replica_uid=replica_uid, replica_gen=replica_gen)
 
@@ -471,7 +471,7 @@ class SQLiteDatabase(CommonBackend):
             #       Specifically, cur_doc.rev is always in the final vector
             #       clock of revisions that we supersede, even if it wasn't in
             #       conflicted_doc_revs. We still add it as a conflict, but the
-            #       fact that put_doc_if_newer propagates resolutions means I
+            #       fact that _put_doc_if_newer propagates resolutions means I
             #       think that conflict could accidentally be resolved. We need
             #       to add a test for this case first. (create a rev, create a
             #       conflict, create another conflict, resolve the first rev

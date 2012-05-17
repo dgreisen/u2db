@@ -860,8 +860,8 @@ cdef class CDatabase(object):
             u1db_put_doc(self._db, doc._doc))
         return doc.rev
 
-    def put_doc_if_newer(self, CDocument doc, save_conflict, replica_uid=None,
-                         replica_gen=None):
+    def _put_doc_if_newer(self, CDocument doc, save_conflict, replica_uid=None,
+                          replica_gen=None):
         cdef char *c_uid
         cdef int gen, state = 0, at_gen = -1
 
@@ -873,7 +873,7 @@ cdef class CDatabase(object):
             gen = 0
         else:
             gen = replica_gen
-        handle_status("Failed to put_doc_if_newer",
+        handle_status("Failed to _put_doc_if_newer",
             u1db_put_doc_if_newer(self._db, doc._doc, save_conflict,
                 c_uid, gen, &state, &at_gen))
         if state == U1DB_INSERTED:
@@ -885,7 +885,7 @@ cdef class CDatabase(object):
         elif state == U1DB_CONFLICTED:
             return 'conflicted', at_gen
         else:
-            raise RuntimeError("Unknown put_doc_if_newer state: %d" % (state,))
+            raise RuntimeError("Unknown _put_doc_if_newer state: %d" % (state,))
 
     def get_doc(self, doc_id):
         cdef u1db_document *doc = NULL

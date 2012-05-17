@@ -199,7 +199,7 @@ class TestRemoteSyncTargets(tests.TestCaseWithServer):
         self.patch(self.server.RequestHandlerClass, 'get_stderr',
                    blackhole_getstderr)
         db = self.request_state._create_database('test')
-        _put_doc_if_newer = db.put_doc_if_newer
+        _put_doc_if_newer = db._put_doc_if_newer
         trigger_ids = ['doc-here2']
         def bomb_put_doc_if_newer(doc, save_conflict,
                                   replica_uid=None, replica_gen=None):
@@ -207,7 +207,7 @@ class TestRemoteSyncTargets(tests.TestCaseWithServer):
                 raise Exception
             return _put_doc_if_newer(doc, save_conflict=save_conflict,
                 replica_uid=replica_uid, replica_gen=replica_gen)
-        self.patch(db, 'put_doc_if_newer', bomb_put_doc_if_newer)
+        self.patch(db, '_put_doc_if_newer', bomb_put_doc_if_newer)
         remote_target = self.getSyncTarget('test')
         other_changes = []
         def receive_doc(doc, gen):

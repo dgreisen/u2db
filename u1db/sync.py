@@ -52,7 +52,7 @@ class Synchronizer(object):
         """
         # Increases self.num_inserted depending whether the document
         # was effectively inserted.
-        state, _ = self.source.put_doc_if_newer(doc, save_conflict=True,
+        state, _ = self.source._put_doc_if_newer(doc, save_conflict=True,
             replica_uid=self.target_replica_uid, replica_gen=replica_gen)
         if state == 'inserted':
             self.num_inserted += 1
@@ -165,7 +165,7 @@ class SyncExchange(object):
         :param source_gen: The source generation of doc.
         :return: None
         """
-        state, at_gen = self._db.put_doc_if_newer(doc, save_conflict=False,
+        state, at_gen = self._db._put_doc_if_newer(doc, save_conflict=False,
             replica_uid=self.source_replica_uid, replica_gen=source_gen)
         if state == 'inserted':
             self.seen_ids[doc.doc_id] = at_gen
