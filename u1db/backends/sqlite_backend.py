@@ -426,8 +426,8 @@ class SQLiteDatabase(CommonBackend):
 
     def _do_set_sync_generation(self, other_replica_uid, other_generation):
             c = self._db_handle.cursor()
-            c.execute("INSERT OR REPLACE INTO sync_log VALUES (?, ?)",
-                      (other_replica_uid, other_generation))
+            c.execute("INSERT OR REPLACE INTO sync_log VALUES (?, ?, ?)",
+                      (other_replica_uid, other_generation, ''))
 
     def _put_doc_if_newer(self, doc, save_conflict, replica_uid=None,
                           replica_gen=None):

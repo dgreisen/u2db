@@ -1338,12 +1338,14 @@ u1db__set_sync_generation(u1database *db, const char *replica_uid,
     // TODO: Do we need BEGIN & COMMIT here? There is a single mutation, it
     //       doesn't seem like it needs anything but autocommit...
     status = sqlite3_prepare_v2(db->sql_handle,
-        "INSERT OR REPLACE INTO sync_log VALUES (?, ?)", -1,
+        "INSERT OR REPLACE INTO sync_log VALUES (?, ?, ?)", -1,
         &statement, NULL);
     if (status != SQLITE_OK) { goto finish; }
     status = sqlite3_bind_text(statement, 1, replica_uid, -1, SQLITE_TRANSIENT);
     if (status != SQLITE_OK) { goto finish; }
     status = sqlite3_bind_int(statement, 2, generation);
+    if (status != SQLITE_OK) { goto finish; }
+    status = sqlite3_bind_text(statement, 3, "", -1, SQLITE_TRANSIENT);
     if (status != SQLITE_OK) { goto finish; }
     status = sqlite3_step(statement);
     if (status == SQLITE_DONE) {
