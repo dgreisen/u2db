@@ -662,8 +662,9 @@ class SQLitePartialExpandDatabase(SQLiteDatabase):
             getters = [(field, self._parse_index_definition(field))
                        for field in indexed_fields]
             self._update_indexes(doc.doc_id, raw_doc, getters, c)
-        c.execute("INSERT INTO transaction_log(doc_id) VALUES (?)",
-                  (doc.doc_id,))
+        trans_id = self._allocate_transaction_id()
+        c.execute("INSERT INTO transaction_log(doc_id, transaction_id)"
+                  " VALUES (?, ?)", (doc.doc_id, trans_id))
 
     def create_index(self, index_name, index_expression):
         with self._db_handle:

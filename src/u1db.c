@@ -356,6 +356,7 @@ write_doc(u1database *db, const char *doc_id, const char *doc_rev,
 {
     sqlite3_stmt *statement;
     int status;
+    char transaction_id[35] = "\0";
 
     if (is_update) {
         status = sqlite3_prepare_v2(db->sql_handle,
@@ -386,20 +387,21 @@ write_doc(u1database *db, const char *doc_id, const char *doc_rev,
     if (status == SQLITE_DONE) {
         status = SQLITE_OK;
     }
-    sqlite3_finalize(statement);
     if (status != SQLITE_OK) { goto finish; }
+    sqlite3_finalize(statement);
     status = u1db__update_indexes(db, doc_id, content);
+    if (status != U1DB_OK) { goto finish; }
+    status = u1db__generate_transaction_id(transaction_id);
+    if (status != U1DB_OK) { goto finish; }
     status = sqlite3_prepare_v2(db->sql_handle,
-        "INSERT INTO transaction_log(doc_id) VALUES (?)", -1,
-        &statement, NULL);
-    if (status != SQLITE_OK) {
-        return status;
-    }
+        "INSERT INTO transaction_log(doc_id, transaction_id) VALUES (?, ?)",
+        -1, &statement, NULL);
+    if (status != SQLITE_OK) { goto finish; }
     status = sqlite3_bind_text(statement, 1, doc_id, -1, SQLITE_TRANSIENT);
-    if (status != SQLITE_OK) {
-        sqlite3_finalize(statement);
-        return status;
-    }
+    if (status != SQLITE_OK) { goto finish; }
+    status = sqlite3_bind_text(statement, 2, transaction_id, -1,
+                               SQLITE_TRANSIENT);
+    if (status != SQLITE_OK) { goto finish; }
     status = sqlite3_step(statement);
     if (status == SQLITE_DONE) {
         status = SQLITE_OK;
@@ -1145,7 +1147,7 @@ u1db_whats_changed(u1database *db, int *gen, void *context,
 
 int
 u1db__get_transaction_log(u1database *db, void *context,
-                          u1db_doc_id_gen_callback cb)
+                          u1db_trans_info_callback cb)
 {
     int status;
     sqlite3_stmt *statement;
@@ -1153,7 +1155,7 @@ u1db__get_transaction_log(u1database *db, void *context,
         return -1; // Bad parameters
     }
     status = sqlite3_prepare_v2(db->sql_handle,
-        "SELECT generation, doc_id FROM transaction_log"
+        "SELECT generation, doc_id, transaction_id FROM transaction_log"
         " ORDER BY generation",
         -1, &statement, NULL);
     if (status != SQLITE_OK) {
@@ -1163,14 +1165,20 @@ u1db__get_transaction_log(u1database *db, void *context,
     while (status == SQLITE_ROW) {
         int local_gen;
         const char *doc_id;
+        const char *trans_id;
         local_gen = sqlite3_column_int(statement, 0);
         doc_id = (const char *)sqlite3_column_text(statement, 1);
-        cb(context, doc_id, local_gen);
+        trans_id = (const char *)sqlite3_column_text(statement, 2);
+        status = cb(context, doc_id, local_gen, trans_id);
+        if (status != U1DB_OK) {
+            goto finish;
+        }
         status = sqlite3_step(statement);
     }
     if (status == SQLITE_DONE) {
         status = SQLITE_OK;
     }
+finish:
     sqlite3_finalize(statement);
     return status;
 }
@@ -1221,6 +1229,16 @@ u1db__allocate_doc_id(u1database *db)
     }
     return buf;
 }
+
+
+int
+u1db__generate_transaction_id(char buf[35])
+{
+    buf[0] = 'T';
+    buf[1] = '-';
+    return u1db__generate_hex_uuid(&buf[2]);
+}
+
 
 u1db_table *
 u1db__sql_run(u1database *db, const char *sql, size_t n)

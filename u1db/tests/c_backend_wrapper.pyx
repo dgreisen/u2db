@@ -63,6 +63,8 @@ cdef extern from "u1db/u1db.h":
         u1db_document *doc, int gen)
     ctypedef int (*u1db_doc_id_gen_callback)(void *context,
         const_char_ptr doc_id, int gen)
+    ctypedef int (*u1db_trans_info_callback)(void *context,
+        const_char_ptr doc_id, int gen, const_char_ptr trans_id)
 
     u1database * u1db_open(char *fname)
     void u1db_free(u1database **)
@@ -85,7 +87,7 @@ cdef extern from "u1db/u1db.h":
     int u1db_whats_changed(u1database *db, int *gen, void *context,
                            u1db_doc_id_gen_callback cb)
     int u1db__get_transaction_log(u1database *db, void *context,
-                                  u1db_doc_id_gen_callback cb)
+                                  u1db_trans_info_callback cb)
     int u1db_get_doc_conflicts(u1database *db, char *doc_id, void *context,
                                u1db_doc_callback cb)
 
@@ -256,6 +258,15 @@ cdef int _append_doc_gen_to_list(void *context, const_char_ptr doc_id,
     a_list = <object>(context)
     doc = doc_id
     a_list.append((doc, generation))
+    return 0
+
+
+cdef int _append_trans_info_to_list(void *context, const_char_ptr doc_id,
+                                    int generation,
+                                    const_char_ptr trans_id) with gil:
+    a_list = <object>(context)
+    doc = doc_id
+    a_list.append((doc, generation, trans_id))
     return 0
 
 
@@ -946,10 +957,10 @@ cdef class CDatabase(object):
 
     def _get_transaction_log(self):
         a_list = []
-        handle_status("get_transaction_log",
+        handle_status("_get_transaction_log",
             u1db__get_transaction_log(self._db, <void*>a_list,
-                                      _append_doc_gen_to_list))
-        return [(doc_id, '') for doc_id, gen in a_list]
+                                      _append_trans_info_to_list))
+        return [(doc_id, trans_id) for doc_id, gen, trans_id in a_list]
 
     def _get_generation(self):
         cdef int generation
