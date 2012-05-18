@@ -202,11 +202,13 @@ class TestRemoteSyncTargets(tests.TestCaseWithServer):
         _put_doc_if_newer = db._put_doc_if_newer
         trigger_ids = ['doc-here2']
         def bomb_put_doc_if_newer(doc, save_conflict,
-                                  replica_uid=None, replica_gen=None):
+                                  replica_uid=None, replica_gen=None,
+                                  replica_trans_id=None):
             if doc.doc_id in trigger_ids:
                 raise Exception
             return _put_doc_if_newer(doc, save_conflict=save_conflict,
-                replica_uid=replica_uid, replica_gen=replica_gen)
+                replica_uid=replica_uid, replica_gen=replica_gen,
+                replica_trans_id=replica_trans_id)
         self.patch(db, '_put_doc_if_newer', bomb_put_doc_if_newer)
         remote_target = self.getSyncTarget('test')
         other_changes = []
@@ -222,7 +224,7 @@ class TestRemoteSyncTargets(tests.TestCaseWithServer):
                 return_doc_cb=receive_doc)
         self.assertGetDoc(db, 'doc-here', 'replica:1', '{"value": "here"}',
                           False)
-        self.assertEqual((10, 'T-sid'), db._get_sync_gen_info('replica'))
+        self.assertEqual((10, None), db._get_sync_gen_info('replica'))
         self.assertEqual([], other_changes)
         # retry
         trigger_ids = []
@@ -232,7 +234,7 @@ class TestRemoteSyncTargets(tests.TestCaseWithServer):
                 return_doc_cb=receive_doc)
         self.assertGetDoc(db, 'doc-here2', 'replica:1', '{"value": "here2"}',
                           False)
-        self.assertEqual((11, 'T-sid'), db._get_sync_gen_info('replica'))
+        self.assertEqual((11, None), db._get_sync_gen_info('replica'))
         self.assertEqual(2, new_gen)
         # bounced back to us
         self.assertEqual([('doc-here', 'replica:1', '{"value": "here"}', 1)],

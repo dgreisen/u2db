@@ -182,6 +182,7 @@ struct _u1db_sync_exchange {
  *                    this document came from. (Can be NULL)
  * @param replica_gen Generation of the replica. Only meaningful if
  *                    replica_uid is set.
+ * @param replica_trans_id Transaction id associated with generation.
  * @param state (OUT) Return one of:
  *  U1DB_INSERTED   The document is newer than what we have
  *  U1DB_SUPERSEDED We already have a newer document than what was passed
@@ -193,7 +194,8 @@ struct _u1db_sync_exchange {
  */
 int u1db__put_doc_if_newer(u1database *db, u1db_document *doc,
                            int save_conflict, const char *replica_uid,
-                           int replica_gen, int *state, int *at_gen);
+                           int replica_gen, const char *replica_trans_id,
+                           int *state, int *at_gen);
 
 /**
  * Internal API, Get the global database rev.
