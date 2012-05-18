@@ -361,7 +361,8 @@ st_http_get_sync_info(u1db_sync_target *st,
 {
     struct _http_state *state;
     struct _http_request req = {0};
-    char *url = NULL, *tmp = NULL;
+    char *url = NULL;
+    const char *tmp = NULL;
     int status;
     long http_code;
     struct curl_slist *headers = NULL;
