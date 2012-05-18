@@ -30,6 +30,9 @@ from u1db.remote.http_target import HTTPSyncTarget
 from u1db.remote.http_database import HTTPDatabase
 from ubuntuone.platform.credentials import CredentialsManagementTool
 
+sys.setrecursionlimit(100)
+sys.excepthook = sys.__excepthook__
+
 DONE_COLOR = QtGui.QColor(183, 183, 183)
 NOT_DONE_COLOR = QtGui.QColor(0, 0, 0)
 WHITE = QtGui.QColor(255, 255, 255)
@@ -68,20 +71,25 @@ class UITask(QtGui.QTreeWidgetItem):
             self.store.save_task(self.task)
 
     def data(self, column, role):
-        if role == QtCore.Qt.DisplayRole:
-            return self.task.title
-        if role == QtCore.Qt.FontRole:
-            font = self.font(0)
-            font.setStrikeOut(self.task.done)
-            return font
-        elif role == QtCore.Qt.BackgroundRole:
-            return self._bg_color
-        elif role == QtCore.Qt.ForegroundRole:
-            return DONE_COLOR if self.task.done else NOT_DONE_COLOR
-        elif role == QtCore.Qt.CheckStateRole:
-            return QtCore.Qt.Checked if self.task.done else QtCore.Qt.Unchecked
-        else:
+        try:
+            print repr(role)
+            print repr(QtCore.Qt.CheckStateRole)
+            if role == QtCore.Qt.DisplayRole:
+                return self.task.title
+            if role == QtCore.Qt.FontRole:
+                font = self.font(0)
+                font.setStrikeOut(self.task.done)
+                return font
+            if role == QtCore.Qt.BackgroundRole:
+                return self._bg_color
+            if role == QtCore.Qt.ForegroundRole:
+                return DONE_COLOR if self.task.done else NOT_DONE_COLOR
+            if role == QtCore.Qt.CheckStateRole:
+                return QtCore.Qt.Checked if self.task.done else QtCore.Qt.Unchecked
             return super(UITask, self).data(column, role)
+        except RuntimeError:
+            import pdb; pdb.set_trace()
+            raise
 
 
 class TaskDelegate(QtGui.QStyledItemDelegate):
