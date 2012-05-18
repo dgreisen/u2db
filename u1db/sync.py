@@ -97,7 +97,7 @@ class Synchronizer(object):
         (self.target_replica_uid, target_gen, target_my_gen,
          target_my_trans_id) = sync_target.get_sync_info(self.source._replica_uid)
         # what's changed since that generation and this current gen
-        my_gen, changes = self.source.whats_changed(target_my_gen)
+        my_gen, _, changes = self.source.whats_changed(target_my_gen)
 
         # this source last-seen database generation for the target
         target_last_known_gen, target_trans_id = self.source._get_sync_gen_info(
@@ -202,7 +202,7 @@ class SyncExchange(object):
             'last_known_gen': self.source_last_known_generation
             })
         self._trace('before whats_changed')
-        gen, changes = self._db.whats_changed(
+        gen, trans_id, changes = self._db.whats_changed(
             self.source_last_known_generation)
         self._trace('after whats_changed')
         self.new_gen = gen

@@ -334,28 +334,28 @@ class LocalDatabaseTests(tests.DatabaseBaseTests):
         self.db.put_doc(doc)
         self.assertTransactionLog([doc.doc_id, doc.doc_id], self.db)
         last_trans_id = self.getLastTransId(self.db)
-        self.assertEqual((2, [(doc.doc_id, 2, last_trans_id)]),
+        self.assertEqual((2, last_trans_id, [(doc.doc_id, 2, last_trans_id)]),
                          self.db.whats_changed())
 
     def test_delete_updates_transaction_log(self):
         doc = self.db.create_doc(simple_doc)
-        db_gen, _ = self.db.whats_changed()
+        db_gen, _, _ = self.db.whats_changed()
         self.db.delete_doc(doc)
         last_trans_id = self.getLastTransId(self.db)
-        self.assertEqual((2, [(doc.doc_id, 2, last_trans_id)]),
+        self.assertEqual((2, last_trans_id, [(doc.doc_id, 2, last_trans_id)]),
                          self.db.whats_changed(db_gen))
 
     def test_whats_changed_initial_database(self):
-        self.assertEqual((0, []), self.db.whats_changed())
+        self.assertEqual((0, '', []), self.db.whats_changed())
 
     def test_whats_changed_returns_one_id_for_multiple_changes(self):
         doc = self.db.create_doc(simple_doc)
         doc.content = '{"new": "contents"}'
         self.db.put_doc(doc)
         last_trans_id = self.getLastTransId(self.db)
-        self.assertEqual((2, [(doc.doc_id, 2, last_trans_id)]),
+        self.assertEqual((2, last_trans_id, [(doc.doc_id, 2, last_trans_id)]),
                          self.db.whats_changed())
-        self.assertEqual((2, []), self.db.whats_changed(2))
+        self.assertEqual((2, last_trans_id, []), self.db.whats_changed(2))
 
     def test_whats_changed_returns_last_edits_ascending(self):
         doc = self.db.create_doc(simple_doc)
@@ -365,8 +365,9 @@ class LocalDatabaseTests(tests.DatabaseBaseTests):
         delete_trans_id = self.getLastTransId(self.db)
         self.db.put_doc(doc)
         put_trans_id = self.getLastTransId(self.db)
-        self.assertEqual((4, [(doc1.doc_id, 3, delete_trans_id),
-                              (doc.doc_id, 4, put_trans_id)]),
+        self.assertEqual((4, put_trans_id,
+                          [(doc1.doc_id, 3, delete_trans_id),
+                           (doc.doc_id, 4, put_trans_id)]),
                          self.db.whats_changed())
 
     def test_whats_changed_doesnt_include_old_gen(self):
@@ -374,7 +375,7 @@ class LocalDatabaseTests(tests.DatabaseBaseTests):
         self.db.create_doc(simple_doc)
         doc2 = self.db.create_doc(simple_doc)
         last_trans_id = self.getLastTransId(self.db)
-        self.assertEqual((3, [(doc2.doc_id, 3, last_trans_id)]),
+        self.assertEqual((3, last_trans_id, [(doc2.doc_id, 3, last_trans_id)]),
                          self.db.whats_changed(2))
 
 
