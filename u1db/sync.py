@@ -134,6 +134,7 @@ class SyncExchange(object):
         self.seen_ids = {}  # incoming ids not superseded
         self.changes_to_return = None
         self.new_gen = None
+        self.new_trans_id = None
         # for tests
         self._incoming_trace = []
         self._trace_hook = None
@@ -206,6 +207,7 @@ class SyncExchange(object):
             self.source_last_known_generation)
         self._trace('after whats_changed')
         self.new_gen = gen
+        self.new_trans_id = trans_id
         seen_ids = self.seen_ids
         # changed docs that weren't superseded by or converged with
         self.changes_to_return = [(doc_id, gen) for (doc_id, gen, _) in changes
@@ -261,7 +263,7 @@ class LocalSyncTarget(u1db.SyncTarget):
         new_gen = sync_exch.find_changes_to_return()
         # final step: return docs and record source replica sync point
         sync_exch.return_docs(return_doc_cb)
-        return new_gen, 'T-id'
+        return new_gen, sync_exch.new_trans_id
 
     def _set_trace_hook(self, cb):
         self._trace_hook = cb

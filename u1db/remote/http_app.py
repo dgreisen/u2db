@@ -323,7 +323,8 @@ class SyncResource(object):
         self.responder.content_type = 'application/x-u1db-sync-stream'
         self.responder.start_response(200)
         self.responder.start_stream(),
-        self.responder.stream_entry({"new_generation": new_gen})
+        self.responder.stream_entry({"new_generation": new_gen,
+                     "new_transaction_id": self.sync_exch.new_trans_id})
         new_gen = self.sync_exch.return_docs(send_doc)
         self.responder.end_stream()
         self.responder.finish_response()

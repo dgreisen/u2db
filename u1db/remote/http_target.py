@@ -109,4 +109,4 @@ class HTTPSyncTarget(http_client.HTTPClientBase, SyncTarget):
         data, _ = self._response()
         res = self._parse_sync_stream(data, return_doc_cb)
         data = None
-        return res['new_generation'], 'T-id'
+        return res['new_generation'], res['new_transaction_id']

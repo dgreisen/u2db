@@ -731,6 +731,7 @@ cdef class CSyncTarget(object):
         self._check()
         assert self._st.sync_exchange != NULL, "sync_exchange is NULL?"
         count = len(docs_by_generations)
+        res_trans_id = ''
         try:
             docs = <u1db_document **>calloc(count, sizeof(u1db_document*))
             if docs == NULL:
@@ -755,8 +756,9 @@ cdef class CSyncTarget(object):
             if generations != NULL:
                 free(generations)
             if trans_id != NULL:
+                res_trans_id = trans_id
                 free(trans_id)
-        return target_gen, 'T-id'
+        return target_gen, res_trans_id
 
     def _set_trace_hook(self, cb):
         self._check()
