@@ -664,7 +664,7 @@ class TestHTTPApp(tests.TestCase):
                          simplejson.loads(resp.body))
 
     def test_get_sync_info(self):
-        self.db0.set_sync_generation('other-id', 1)
+        self.db0._set_sync_generation('other-id', 1)
         resp = self.app.get('/db0/sync-from/other-id')
         self.assertEqual(200, resp.status)
         self.assertEqual('application/json', resp.header('content-type'))
@@ -681,7 +681,7 @@ class TestHTTPApp(tests.TestCase):
         self.assertEqual(200, resp.status)
         self.assertEqual('application/json', resp.header('content-type'))
         self.assertEqual({'ok': True}, simplejson.loads(resp.body))
-        self.assertEqual(self.db0.get_sync_generation('other-id'), 2)
+        self.assertEqual(self.db0._get_sync_generation('other-id'), 2)
 
     def test_sync_exchange_send(self):
         entries = {
@@ -692,15 +692,15 @@ class TestHTTPApp(tests.TestCase):
             }
 
         gens = []
-        _set_sync_generation = self.db0._set_sync_generation
+        _do_set_sync_generation = self.db0._do_set_sync_generation
         def set_sync_generation_witness(other_uid, other_gen):
             gens.append((other_uid, other_gen))
-            _set_sync_generation(other_uid, other_gen)
+            _do_set_sync_generation(other_uid, other_gen)
             self.assertGetDoc(self.db0, entries[other_gen]['id'],
                               entries[other_gen]['rev'],
                               entries[other_gen]['content'], False)
 
-        self.patch(self.db0, '_set_sync_generation',
+        self.patch(self.db0, '_do_set_sync_generation',
                    set_sync_generation_witness)
 
         args = dict(last_known_generation=0)

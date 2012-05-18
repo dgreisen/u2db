@@ -52,7 +52,7 @@ class Synchronizer(object):
         """
         # Increases self.num_inserted depending whether the document
         # was effectively inserted.
-        state, _ = self.source.put_doc_if_newer(doc, save_conflict=True,
+        state, _ = self.source._put_doc_if_newer(doc, save_conflict=True,
             replica_uid=self.target_replica_uid, replica_gen=replica_gen)
         if state == 'inserted':
             self.num_inserted += 1
@@ -99,7 +99,7 @@ class Synchronizer(object):
         my_gen, changes = self.source.whats_changed(target_my_gen)
 
         # this source last-seen database generation for the target
-        target_last_known_gen = self.source.get_sync_generation(
+        target_last_known_gen = self.source._get_sync_generation(
             self.target_replica_uid)
         if not changes and target_last_known_gen == target_gen:
             return my_gen
@@ -115,7 +115,7 @@ class Synchronizer(object):
                         self.source._replica_uid, target_last_known_gen,
                         return_doc_cb=self._insert_doc_from_target)
         # record target synced-up-to generation including applying what we sent
-        self.source.set_sync_generation(self.target_replica_uid, new_gen)
+        self.source._set_sync_generation(self.target_replica_uid, new_gen)
 
         # if gapless record current reached generation with target
         self._record_sync_info_with_the_target(my_gen)
@@ -165,7 +165,7 @@ class SyncExchange(object):
         :param source_gen: The source generation of doc.
         :return: None
         """
-        state, at_gen = self._db.put_doc_if_newer(doc, save_conflict=False,
+        state, at_gen = self._db._put_doc_if_newer(doc, save_conflict=False,
             replica_uid=self.source_replica_uid, replica_gen=source_gen)
         if state == 'inserted':
             self.seen_ids[doc.doc_id] = at_gen

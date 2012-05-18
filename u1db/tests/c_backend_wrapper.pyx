@@ -76,9 +76,9 @@ cdef extern from "u1db/u1db.h":
                       int check_for_conflicts, void *context,
                       u1db_doc_callback cb)
     int u1db_put_doc(u1database *db, u1db_document *doc)
-    int u1db_put_doc_if_newer(u1database *db, u1db_document *doc,
-                              int save_conflict, char *replica_uid,
-                              int replica_gen, int *state, int *at_gen)
+    int u1db__put_doc_if_newer(u1database *db, u1db_document *doc,
+                               int save_conflict, char *replica_uid,
+                               int replica_gen, int *state, int *at_gen)
     int u1db_resolve_doc(u1database *db, u1db_document *doc,
                          int n_revs, const_char_ptr *revs)
     int u1db_delete_doc(u1database *db, u1db_document *doc)
@@ -860,8 +860,8 @@ cdef class CDatabase(object):
             u1db_put_doc(self._db, doc._doc))
         return doc.rev
 
-    def put_doc_if_newer(self, CDocument doc, save_conflict, replica_uid=None,
-                         replica_gen=None):
+    def _put_doc_if_newer(self, CDocument doc, save_conflict, replica_uid=None,
+                          replica_gen=None):
         cdef char *c_uid
         cdef int gen, state = 0, at_gen = -1
 
@@ -873,8 +873,8 @@ cdef class CDatabase(object):
             gen = 0
         else:
             gen = replica_gen
-        handle_status("Failed to put_doc_if_newer",
-            u1db_put_doc_if_newer(self._db, doc._doc, save_conflict,
+        handle_status("Failed to _put_doc_if_newer",
+            u1db__put_doc_if_newer(self._db, doc._doc, save_conflict,
                 c_uid, gen, &state, &at_gen))
         if state == U1DB_INSERTED:
             return 'inserted', at_gen
@@ -885,7 +885,7 @@ cdef class CDatabase(object):
         elif state == U1DB_CONFLICTED:
             return 'conflicted', at_gen
         else:
-            raise RuntimeError("Unknown put_doc_if_newer state: %d" % (state,))
+            raise RuntimeError("Unknown _put_doc_if_newer state: %d" % (state,))
 
     def get_doc(self, doc_id):
         cdef u1db_document *doc = NULL
@@ -957,15 +957,15 @@ cdef class CDatabase(object):
             u1db__get_generation(self._db, &generation))
         return generation
 
-    def get_sync_generation(self, replica_uid):
+    def _get_sync_generation(self, replica_uid):
         cdef int generation
 
-        handle_status("get_sync_generation",
+        handle_status("_get_sync_generation",
             u1db__get_sync_generation(self._db, replica_uid, &generation))
         return generation
 
-    def set_sync_generation(self, replica_uid, generation):
-        handle_status("set_sync_generation",
+    def _set_sync_generation(self, replica_uid, generation):
+        handle_status("_set_sync_generation",
             u1db__set_sync_generation(self._db, replica_uid, generation))
 
     def _sync_exchange(self, docs_info, from_replica_uid, from_machine_rev,

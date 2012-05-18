@@ -105,46 +105,6 @@ class Database(object):
         """
         raise NotImplementedError(self.put_doc)
 
-    def put_doc_if_newer(self, doc, save_conflict, replica_uid=None,
-                         replica_gen=None):
-        """Insert/update document into the database with a given revision.
-
-        This api is used during synchronization operations.
-
-        If a document would conflict and save_conflict is set to True, the
-        content will be selected as the 'current' content for doc.doc_id,
-        even though doc.rev doesn't supersede the currently stored revision.
-        The currently stored document will be added to the list of conflict
-        alternatives for the given doc_id.
-
-        This forces the new content to be 'current' so that we get convergence
-        after synchronizing, even if people don't resolve conflicts. Users can
-        then notice that their content is out of date, update it, and
-        synchronize again. (The alternative is that users could synchronize and
-        think the data has propagated, but their local copy looks fine, and the
-        remote copy is never updated again.)
-
-        :param doc: A Document object
-        :param save_conflict: If this document is a conflict, do you want to
-            save it as a conflict, or just ignore it.
-        :param replica_uid: A unique replica identifier.
-        :param replica_gen: The generation of the replica corresponding to the
-            this document. The replica arguments are optional, but are used
-            during synchronization.
-        :return: (state, at_gen) -  If we don't have doc_id already,
-            or if doc_rev supersedes the existing document revision,
-            then the content will be inserted, and state is 'inserted'.
-            If doc_rev is less than or equal to the existing revision,
-            then the put is ignored and state is respecitvely 'superseded'
-            or 'converged'.
-            If doc_rev is not strictly superseded or supersedes, then
-            state is 'conflicted'. The document will not be inserted if
-            save_conflict is False.
-            For 'inserted' or 'converged', at_gen is the insertion/current
-            generation.
-        """
-        raise NotImplementedError(self.put_doc_if_newer)
-
     def delete_doc(self, doc):
         """Mark a document as deleted.
         Will abort if the current revision doesn't match doc.rev.
@@ -211,8 +171,6 @@ class Database(object):
         """
         raise NotImplementedError(self.get_index_keys)
 
-    # XXX: get_doc_conflicts still uses tuples, we need to change this to using
-    #      Document objects
     def get_doc_conflicts(self, doc_id):
         """Get the list of conflict texts for the given document.
 
@@ -248,7 +206,17 @@ class Database(object):
         """
         raise NotImplementedError(self.get_sync_target)
 
-    def get_sync_generation(self, other_replica_uid):
+    def close(self):
+        """Release any resources associated with this database."""
+        raise NotImplementedError(self.close)
+
+    def sync(self, url):
+        """Synchronize documents with remote replica exposed at url."""
+        from u1db.sync import Synchronizer
+        from u1db.remote.http_target import HTTPSyncTarget
+        return Synchronizer(self, HTTPSyncTarget(url)).sync()
+
+    def _get_sync_generation(self, other_replica_uid):
         """Return the last known database generation of the other db replica.
 
         When you do a synchronization with another replica, the Database keeps
@@ -259,9 +227,9 @@ class Database(object):
         :return: The generation we encountered during synchronization. If we've
             never synchronized with the replica, this is 0.
         """
-        raise NotImplementedError(self.get_sync_generation)
+        raise NotImplementedError(self._get_sync_generation)
 
-    def set_sync_generation(self, other_replica_uid, other_generation):
+    def _set_sync_generation(self, other_replica_uid, other_generation):
         """Set the last-known generation for the other database replica.
 
         We have just performed some synchronization, and we want to track what
@@ -270,17 +238,48 @@ class Database(object):
         :param other_generation: The generation number for the other replica.
         :return: None
         """
-        raise NotImplementedError(self.get_sync_generation)
+        raise NotImplementedError(self._set_sync_generation)
 
-    def close(self):
-        """Release any resources associated with this database."""
-        raise NotImplementedError(self.close)
+    def _put_doc_if_newer(self, doc, save_conflict, replica_uid=None,
+                          replica_gen=None):
+        """Insert/update document into the database with a given revision.
 
-    def sync(self, url):
-        """Synchronize documents with remote replica exposed at url."""
-        from u1db.sync import Synchronizer
-        from u1db.remote.http_target import HTTPSyncTarget
-        return Synchronizer(self, HTTPSyncTarget(url)).sync()
+        This api is used during synchronization operations.
+
+        If a document would conflict and save_conflict is set to True, the
+        content will be selected as the 'current' content for doc.doc_id,
+        even though doc.rev doesn't supersede the currently stored revision.
+        The currently stored document will be added to the list of conflict
+        alternatives for the given doc_id.
+
+        This forces the new content to be 'current' so that we get convergence
+        after synchronizing, even if people don't resolve conflicts. Users can
+        then notice that their content is out of date, update it, and
+        synchronize again. (The alternative is that users could synchronize and
+        think the data has propagated, but their local copy looks fine, and the
+        remote copy is never updated again.)
+
+        :param doc: A Document object
+        :param save_conflict: If this document is a conflict, do you want to
+            save it as a conflict, or just ignore it.
+        :param replica_uid: A unique replica identifier.
+        :param replica_gen: The generation of the replica corresponding to the
+            this document. The replica arguments are optional, but are used
+            during synchronization.
+        :return: (state, at_gen) -  If we don't have doc_id already,
+            or if doc_rev supersedes the existing document revision,
+            then the content will be inserted, and state is 'inserted'.
+            If doc_rev is less than or equal to the existing revision,
+            then the put is ignored and state is respecitvely 'superseded'
+            or 'converged'.
+            If doc_rev is not strictly superseded or supersedes, then
+            state is 'conflicted'. The document will not be inserted if
+            save_conflict is False.
+            For 'inserted' or 'converged', at_gen is the insertion/current
+            generation.
+        """
+        raise NotImplementedError(self._put_doc_if_newer)
+
 
 
 class Document(object):

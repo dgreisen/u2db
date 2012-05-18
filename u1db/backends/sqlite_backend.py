@@ -408,7 +408,7 @@ class SQLiteDatabase(CommonBackend):
             this_doc.has_conflicts = True
             return [this_doc] + conflict_docs
 
-    def get_sync_generation(self, other_replica_uid):
+    def _get_sync_generation(self, other_replica_uid):
         c = self._db_handle.cursor()
         c.execute("SELECT known_generation FROM sync_log"
                   " WHERE replica_uid = ?",
@@ -420,19 +420,19 @@ class SQLiteDatabase(CommonBackend):
             other_gen = val[0]
         return other_gen
 
-    def set_sync_generation(self, other_replica_uid, other_generation):
-        with self._db_handle:
-            self._set_sync_generation(other_replica_uid, other_generation)
-
     def _set_sync_generation(self, other_replica_uid, other_generation):
+        with self._db_handle:
+            self._do_set_sync_generation(other_replica_uid, other_generation)
+
+    def _do_set_sync_generation(self, other_replica_uid, other_generation):
             c = self._db_handle.cursor()
             c.execute("INSERT OR REPLACE INTO sync_log VALUES (?, ?)",
                       (other_replica_uid, other_generation))
 
-    def put_doc_if_newer(self, doc, save_conflict, replica_uid=None,
-                         replica_gen=None):
+    def _put_doc_if_newer(self, doc, save_conflict, replica_uid=None,
+                          replica_gen=None):
         with self._db_handle:
-            return super(SQLiteDatabase, self).put_doc_if_newer(doc,
+            return super(SQLiteDatabase, self)._put_doc_if_newer(doc,
                 save_conflict=save_conflict,
                 replica_uid=replica_uid, replica_gen=replica_gen)
 
@@ -471,7 +471,7 @@ class SQLiteDatabase(CommonBackend):
             #       Specifically, cur_doc.rev is always in the final vector
             #       clock of revisions that we supersede, even if it wasn't in
             #       conflicted_doc_revs. We still add it as a conflict, but the
-            #       fact that put_doc_if_newer propagates resolutions means I
+            #       fact that _put_doc_if_newer propagates resolutions means I
             #       think that conflict could accidentally be resolved. We need
             #       to add a test for this case first. (create a rev, create a
             #       conflict, create another conflict, resolve the first rev
@@ -607,15 +607,15 @@ class SQLiteDatabase(CommonBackend):
 class SQLiteSyncTarget(CommonSyncTarget):
 
     def get_sync_info(self, source_replica_uid):
-        source_gen = self._db.get_sync_generation(source_replica_uid)
+        source_gen = self._db._get_sync_generation(source_replica_uid)
         my_gen = self._db._get_generation()
         return self._db._replica_uid, my_gen, source_gen
 
     def record_sync_info(self, source_replica_uid, source_replica_generation):
         if self._trace_hook:
             self._trace_hook('record_sync_info')
-        self._db.set_sync_generation(source_replica_uid,
-                                     source_replica_generation)
+        self._db._set_sync_generation(source_replica_uid,
+                                      source_replica_generation)
 
 
 class SQLitePartialExpandDatabase(SQLiteDatabase):

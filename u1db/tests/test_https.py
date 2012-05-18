@@ -84,7 +84,7 @@ class TestHttpSyncTargetHttpsSupport(tests.TestCaseWithServer):
         self.patch(http_client, 'CA_CERTS', self.cacert_pem)
         remote_target = self.getSyncTarget('localhost', 'test')
         remote_target.record_sync_info('other-id', 2)
-        self.assertEqual(db.get_sync_generation('other-id'), 2)
+        self.assertEqual(db._get_sync_generation('other-id'), 2)
 
     def test_cannot_verify_cert(self):
         if not sys.platform.startswith('linux'):
