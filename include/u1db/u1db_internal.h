@@ -65,10 +65,14 @@ struct _u1db_sync_target {
      *                          target, matches st_replica_uid
      * @param source_gen        (OUT) The last generation of source_replica_uid
      *                          that st has synchronized with.
+     * @param trans_id          (OUT) The transaction id associated with the
+     *                          source generation, the memory must be freed by
+     *                          the caller.
      */
     int (*get_sync_info)(u1db_sync_target *st,
         const char *source_replica_uid,
-        const char **st_replica_uid, int *st_gen, int *source_gen);
+        const char **st_replica_uid, int *st_gen, int *source_gen,
+        char **trans_id);
     /**
      * Set the synchronization information about another replica.
      *

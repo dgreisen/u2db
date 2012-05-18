@@ -156,7 +156,8 @@ cdef extern from "u1db/u1db_internal.h":
     ctypedef struct u1db_sync_target:
         int (*get_sync_info)(u1db_sync_target *st,
             char *source_replica_uid,
-            const_char_ptr *st_replica_uid, int *st_gen, int *source_gen) nogil
+            const_char_ptr *st_replica_uid, int *st_gen, int *source_gen,
+            char **source_trans_id) nogil
         int (*record_sync_info)(u1db_sync_target *st,
             char *source_replica_uid, int source_gen, char *trans_id) nogil
         int (*sync_exchange)(u1db_sync_target *st,
@@ -665,19 +666,19 @@ cdef class CSyncTarget(object):
     def get_sync_info(self, source_replica_uid):
         cdef const_char_ptr st_replica_uid = NULL
         cdef int st_gen = 0, source_gen = 0, status
+        cdef char *trans_id = NULL
 
         self._check()
         assert self._st.get_sync_info != NULL, "get_sync_info is NULL?"
         with nogil:
             status = self._st.get_sync_info(self._st, source_replica_uid,
-                &st_replica_uid, &st_gen, &source_gen)
+                &st_replica_uid, &st_gen, &source_gen, &trans_id)
         handle_status("get_sync_info", status)
-        if source_gen == 0:
-            # XXX:
-            trans_id = ''
-        else:
-            trans_id = 'T-id'
-        return (safe_str(st_replica_uid), st_gen, source_gen, trans_id)
+        res_trans_id = None
+        if trans_id != NULL:
+            res_trans_id = trans_id
+            free(trans_id)
+        return (safe_str(st_replica_uid), st_gen, source_gen, res_trans_id)
 
     def record_sync_info(self, source_replica_uid, source_gen, source_trans_id):
         cdef int status

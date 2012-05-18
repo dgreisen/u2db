@@ -1341,6 +1341,7 @@ u1db__get_sync_gen_info(u1database *db, const char *replica_uid,
         *trans_id = strdup("");
     } else if (status == SQLITE_ROW) {
         *generation = sqlite3_column_int(statement, 0);
+        // Note: We may want to handle the column containing NULL
         tmp = (const char *)sqlite3_column_text(statement, 1);
         *trans_id = strdup(tmp);
         status = SQLITE_OK;

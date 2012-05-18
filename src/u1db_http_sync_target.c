@@ -34,7 +34,8 @@ struct _http_request;
 
 static int st_http_get_sync_info(u1db_sync_target *st,
         const char *source_replica_uid,
-        const char **st_replica_uid, int *st_gen, int *source_gen);
+        const char **st_replica_uid, int *st_gen, int *source_gen,
+        char **trans_id);
 
 static int st_http_record_sync_info(u1db_sync_target *st,
         const char *source_replica_uid, int source_gen, const char *trans_id);
@@ -355,7 +356,8 @@ maybe_sign_url(u1db_sync_target *st, const char *http_method,
 static int
 st_http_get_sync_info(u1db_sync_target *st,
         const char *source_replica_uid,
-        const char **st_replica_uid, int *st_gen, int *source_gen)
+        const char **st_replica_uid, int *st_gen, int *source_gen,
+        char **trans_id)
 {
     struct _http_state *state;
     struct _http_request req = {0};
@@ -451,6 +453,15 @@ st_http_get_sync_info(u1db_sync_target *st,
         goto finish;
     }
     *source_gen = json_object_get_int(obj);
+    obj = json_object_object_get(json, "source_transaction_id");
+    if (obj == NULL) {
+        status = U1DB_INVALID_HTTP_RESPONSE;
+        goto finish;
+    }
+    *trans_id = strdup(json_object_get_string(obj));
+    if (*trans_id == NULL) {
+        status = U1DB_NOMEM;
+    }
 finish:
     if (req.header_buffer != NULL) {
         free(req.header_buffer);
