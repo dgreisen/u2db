@@ -86,20 +86,20 @@ class Synchronizer(object):
         if (cur_gen == start_generation + self.num_inserted
             and self.num_inserted > 0):
             self.sync_target.record_sync_info(self.source._replica_uid,
-                                              cur_gen)
+                                              cur_gen, 'T-sid')
 
     def sync(self, callback=None):
         """Synchronize documents between source and target."""
         sync_target = self.sync_target
         # get target identifier, its current generation,
         # and its last-seen database generation for this source
-        (self.target_replica_uid, target_gen,
-         target_my_gen) = sync_target.get_sync_info(self.source._replica_uid)
+        (self.target_replica_uid, target_gen, target_my_gen,
+         target_my_trans_id) = sync_target.get_sync_info(self.source._replica_uid)
         # what's changed since that generation and this current gen
         my_gen, changes = self.source.whats_changed(target_my_gen)
 
         # this source last-seen database generation for the target
-        target_last_known_gen = self.source._get_sync_generation(
+        target_last_known_gen, target_trans_id = self.source._get_sync_gen_info(
             self.target_replica_uid)
         if not changes and target_last_known_gen == target_gen:
             return my_gen
@@ -115,7 +115,7 @@ class Synchronizer(object):
                         self.source._replica_uid, target_last_known_gen,
                         return_doc_cb=self._insert_doc_from_target)
         # record target synced-up-to generation including applying what we sent
-        self.source._set_sync_generation(self.target_replica_uid, new_gen)
+        self.source._set_sync_info(self.target_replica_uid, new_gen, 'T-sid')
 
         # if gapless record current reached generation with target
         self._record_sync_info_with_the_target(my_gen)

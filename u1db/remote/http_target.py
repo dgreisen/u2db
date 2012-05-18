@@ -42,12 +42,14 @@ class HTTPSyncTarget(http_client.HTTPClientBase, SyncTarget):
         self._ensure_connection()
         res, _ = self._request_json('GET', ['sync-from', source_replica_uid])
         return (res['target_replica_uid'], res['target_replica_generation'],
-                res['source_replica_generation'])
+                res['source_replica_generation'], res['source_transaction_id'])
 
-    def record_sync_info(self, source_replica_uid, source_replica_generation):
+    def record_sync_info(self, source_replica_uid, source_replica_generation,
+                         source_transaction_id):
         self._ensure_connection()
         self._request_json('PUT', ['sync-from', source_replica_uid], {},
-                                  {'generation': source_replica_generation})
+                              {'generation': source_replica_generation,
+                               'transaction_id': source_transaction_id})
 
     def _parse_sync_stream(self, data, return_doc_cb):
         parts = data.splitlines()  # one at a time

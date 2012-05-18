@@ -810,7 +810,7 @@ u1db__put_doc_if_newer(u1database *db, u1db_document *doc, int save_conflict,
                            (stored_doc_rev != NULL));
     }
     if (status == U1DB_OK && replica_uid != NULL) {
-        status = u1db__set_sync_generation(db, replica_uid, replica_gen);
+        status = u1db__set_sync_info(db, replica_uid, replica_gen, "T-sid");
     }
     if (status == U1DB_OK && at_gen != NULL) {
         status = u1db__get_generation(db, at_gen);
@@ -1315,18 +1315,22 @@ u1db__free_table(u1db_table **table)
 
 
 int
-u1db__get_sync_generation(u1database *db, const char *replica_uid,
-                          int *generation)
+u1db__get_sync_gen_info(u1database *db, const char *replica_uid,
+                        int *generation, char **trans_id)
 {
     int status;
     sqlite3_stmt *statement;
+    const char *tmp;
 
-    if (db == NULL || replica_uid == NULL || generation == NULL) {
+    if (db == NULL || replica_uid == NULL || generation == NULL
+        || trans_id == NULL)
+    {
         return U1DB_INVALID_PARAMETER;
     }
     status = sqlite3_prepare_v2(db->sql_handle,
-        "SELECT known_generation FROM sync_log WHERE replica_uid = ?", -1,
-        &statement, NULL);
+        "SELECT known_generation, known_transaction_id"
+        " FROM sync_log WHERE replica_uid = ?",
+        -1, &statement, NULL);
     if (status != SQLITE_OK) { goto finish; }
     status = sqlite3_bind_text(statement, 1, replica_uid, -1, SQLITE_TRANSIENT);
     if (status != SQLITE_OK) { goto finish; }
@@ -1334,9 +1338,16 @@ u1db__get_sync_generation(u1database *db, const char *replica_uid,
     if (status == SQLITE_DONE) {
         status = SQLITE_OK;
         *generation = 0;
+        *trans_id = strdup("");
     } else if (status == SQLITE_ROW) {
         *generation = sqlite3_column_int(statement, 0);
+        // Note: We may want to handle the column containing NULL
+        tmp = (const char *)sqlite3_column_text(statement, 1);
+        *trans_id = strdup(tmp);
         status = SQLITE_OK;
+    }
+    if (*trans_id == NULL) {
+        status = U1DB_NOMEM;
     }
 finish:
     sqlite3_finalize(statement);
@@ -1345,8 +1356,8 @@ finish:
 
 
 int
-u1db__set_sync_generation(u1database *db, const char *replica_uid,
-                          int generation)
+u1db__set_sync_info(u1database *db, const char *replica_uid,
+                    int generation, const char *trans_id)
 {
     int status;
     sqlite3_stmt *statement;
@@ -1364,7 +1375,7 @@ u1db__set_sync_generation(u1database *db, const char *replica_uid,
     if (status != SQLITE_OK) { goto finish; }
     status = sqlite3_bind_int(statement, 2, generation);
     if (status != SQLITE_OK) { goto finish; }
-    status = sqlite3_bind_text(statement, 3, "", -1, SQLITE_TRANSIENT);
+    status = sqlite3_bind_text(statement, 3, trans_id, -1, SQLITE_TRANSIENT);
     if (status != SQLITE_OK) { goto finish; }
     status = sqlite3_step(statement);
     if (status == SQLITE_DONE) {

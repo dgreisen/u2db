@@ -141,17 +141,18 @@ class DatabaseSyncTargetTests(tests.DatabaseBaseTests,
         self.assertIsNot(None, self.st)
 
     def test_get_sync_info(self):
-        self.assertEqual(('test', 0, 0), self.st.get_sync_info('other'))
+        self.assertEqual(('test', 0, 0, ''), self.st.get_sync_info('other'))
 
     def test_create_doc_updates_sync_info(self):
-        self.assertEqual(('test', 0, 0), self.st.get_sync_info('other'))
+        self.assertEqual(('test', 0, 0, ''), self.st.get_sync_info('other'))
         doc = self.db.create_doc(simple_doc)
-        self.assertEqual(('test', 1, 0), self.st.get_sync_info('other'))
+        self.assertEqual(('test', 1, 0, ''), self.st.get_sync_info('other'))
 
     def test_record_sync_info(self):
-        self.assertEqual(('test', 0, 0), self.st.get_sync_info('replica'))
-        self.st.record_sync_info('replica', 10)
-        self.assertEqual(('test', 0, 10), self.st.get_sync_info('replica'))
+        self.assertEqual(('test', 0, 0, ''), self.st.get_sync_info('replica'))
+        self.st.record_sync_info('replica', 10, 'T-transid')
+        self.assertEqual(('test', 0, 10, 'T-transid'),
+                         self.st.get_sync_info('replica'))
 
     def test_sync_exchange(self):
         docs_by_gen = [
@@ -162,7 +163,7 @@ class DatabaseSyncTargetTests(tests.DatabaseBaseTests,
         self.assertGetDoc(self.db, 'doc-id', 'replica:1', simple_doc, False)
         self.assertTransactionLog(['doc-id'], self.db)
         self.assertEqual(([], 1), (self.other_changes, new_gen))
-        self.assertEqual(10, self.st.get_sync_info('replica')[-1])
+        self.assertEqual(10, self.st.get_sync_info('replica')[2])
 
     def test_sync_exchange_deleted(self):
         doc = self.db.create_doc('{}')
@@ -175,7 +176,7 @@ class DatabaseSyncTargetTests(tests.DatabaseBaseTests,
         self.assertGetDoc(self.db, doc.doc_id, edit_rev, None, False)
         self.assertTransactionLog([doc.doc_id, doc.doc_id], self.db)
         self.assertEqual(([], 2), (self.other_changes, new_gen))
-        self.assertEqual(10, self.st.get_sync_info('replica')[-1])
+        self.assertEqual(10, self.st.get_sync_info('replica')[2])
 
     def test_sync_exchange_push_many(self):
         docs_by_gen = [
@@ -188,7 +189,7 @@ class DatabaseSyncTargetTests(tests.DatabaseBaseTests,
         self.assertGetDoc(self.db, 'doc-id2', 'replica:1', nested_doc, False)
         self.assertTransactionLog(['doc-id', 'doc-id2'], self.db)
         self.assertEqual(([], 2), (self.other_changes, new_gen))
-        self.assertEqual(11, self.st.get_sync_info('replica')[-1])
+        self.assertEqual(11, self.st.get_sync_info('replica')[2])
 
     def test_sync_exchange_refuses_conflicts(self):
         doc = self.db.create_doc(simple_doc)
@@ -345,7 +346,7 @@ class DatabaseSyncTargetTests(tests.DatabaseBaseTests,
         self.assertGetDoc(self.db, doc.doc_id, doc.rev, simple_doc, False)
         self.assertTransactionLog([doc.doc_id], self.db)
         self.assertEqual(([], 1), (self.other_changes, new_gen))
-        self.assertEqual(10, self.st.get_sync_info(db2._replica_uid)[-1])
+        self.assertEqual(10, self.st.get_sync_info(db2._replica_uid)[2])
 
     def test__set_trace_hook(self):
         called = []
@@ -353,7 +354,7 @@ class DatabaseSyncTargetTests(tests.DatabaseBaseTests,
             called.append(state)
         self.set_trace_hook(cb)
         self.st.sync_exchange([], 'replica', 0, self.receive_doc)
-        self.st.record_sync_info('replica', 0)
+        self.st.record_sync_info('replica', 0, 'T-sid')
         self.assertEqual(['before whats_changed',
                           'after whats_changed',
                           'before get_docs',
@@ -410,8 +411,8 @@ class DatabaseSyncTests(tests.DatabaseBaseTests):
 
     def test_sync_tracks_db_generation_of_other(self):
         self.assertEqual(0, self.sync(self.db1, self.db2))
-        self.assertEqual(0, self.db1._get_sync_generation('test2'))
-        self.assertEqual(0, self.db2._get_sync_generation('test1'))
+        self.assertEqual((0, ''), self.db1._get_sync_gen_info('test2'))
+        self.assertEqual((0, ''), self.db2._get_sync_gen_info('test1'))
         self.assertLastExchangeLog(self.db2,
             {'receive': {'docs': [], 'last_known_gen': 0},
              'return': {'docs': [], 'last_gen': 0}})
@@ -420,8 +421,8 @@ class DatabaseSyncTests(tests.DatabaseBaseTests):
         doc = self.db1.create_doc(simple_doc)
         self.assertEqual(1, self.sync(self.db1, self.db2))
         self.assertGetDoc(self.db2, doc.doc_id, doc.rev, simple_doc, False)
-        self.assertEqual(1, self.db1._get_sync_generation('test2'))
-        self.assertEqual(1, self.db2._get_sync_generation('test1'))
+        self.assertEqual(1, self.db1._get_sync_gen_info('test2')[0])
+        self.assertEqual(1, self.db2._get_sync_gen_info('test1')[0])
         self.assertLastExchangeLog(self.db2,
             {'receive': {'docs': [(doc.doc_id, doc.rev)],
                          'source_uid': 'test1',
@@ -433,8 +434,8 @@ class DatabaseSyncTests(tests.DatabaseBaseTests):
         self.db1.create_index('test-idx', ['key'])
         self.assertEqual(0, self.sync(self.db1, self.db2))
         self.assertGetDoc(self.db1, doc.doc_id, doc.rev, simple_doc, False)
-        self.assertEqual(1, self.db1._get_sync_generation('test2'))
-        self.assertEqual(1, self.db2._get_sync_generation('test1'))
+        self.assertEqual(1, self.db1._get_sync_gen_info('test2')[0])
+        self.assertEqual(1, self.db2._get_sync_gen_info('test1')[0])
         self.assertLastExchangeLog(self.db2,
             {'receive': {'docs': [], 'last_known_gen': 0},
              'return': {'docs': [(doc.doc_id, doc.rev)],
@@ -459,11 +460,11 @@ class DatabaseSyncTests(tests.DatabaseBaseTests):
             {'receive': {'docs': [], 'last_known_gen': 0},
              'return': {'docs': [(doc.doc_id, doc.rev)],
                         'last_gen': 1}})
-        self.assertEqual(1, self.db1._get_sync_generation('test2'))
+        self.assertEqual(1, self.db1._get_sync_gen_info('test2')[0])
         # c2 should not have gotten a '_record_sync_info' call, because the
         # local database had been updated more than just by the messages
         # returned from c2.
-        self.assertEqual(0, self.db2._get_sync_generation('test1'))
+        self.assertEqual((0, ''), self.db2._get_sync_gen_info('test1'))
 
     def test_sync_doesnt_update_other_if_nothing_pulled(self):
         doc = self.db1.create_doc(simple_doc)
@@ -474,7 +475,7 @@ class DatabaseSyncTests(tests.DatabaseBaseTests):
         self.assertEqual(1, self.sync(self.db1, self.db2,
                                       trace_hook=no_record_sync_info))
         self.assertEqual(1,
-                         self.db2._get_sync_generation(self.db1._replica_uid))
+                         self.db2._get_sync_gen_info(self.db1._replica_uid)[0])
 
     def test_sync_ignores_convergence(self):
         doc = self.db1.create_doc(simple_doc)
@@ -707,20 +708,20 @@ class TestRemoteSyncIntegration(tests.TestCaseWithServer):
         self.assertEqual(2, len(self.db2._get_transaction_log()))
         progress1 = []
         progress2 = []
-        _do_set_sync_generation1 = self.db1._do_set_sync_generation
-        def set_sync_generation_witness1(other_uid, other_gen):
+        _do_set_sync_info = self.db1._do_set_sync_info
+        def set_sync_generation_witness1(other_uid, other_gen, trans_id):
             progress1.append((other_uid, other_gen,
                 [d for d, t in self.db1._get_transaction_log()[2:]]))
-            _do_set_sync_generation1(other_uid, other_gen)
-        self.patch(self.db1, '_do_set_sync_generation',
+            _do_set_sync_info(other_uid, other_gen, trans_id)
+        self.patch(self.db1, '_do_set_sync_info',
                    set_sync_generation_witness1)
 
-        _do_set_sync_generation2 = self.db2._do_set_sync_generation
-        def set_sync_generation_witness2(other_uid, other_gen):
+        _do_set_sync_info2 = self.db2._do_set_sync_info
+        def set_sync_generation_witness2(other_uid, other_gen, trans_id):
             progress2.append((other_uid, other_gen,
                 [d for d, t in self.db2._get_transaction_log()[2:]]))
-            _do_set_sync_generation2(other_uid, other_gen)
-        self.patch(self.db2, '_do_set_sync_generation',
+            _do_set_sync_info2(other_uid, other_gen, trans_id)
+        self.patch(self.db2, '_do_set_sync_info',
                    set_sync_generation_witness2)
 
         db2_url = self.getURL('test2')

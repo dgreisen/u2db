@@ -65,10 +65,14 @@ struct _u1db_sync_target {
      *                          target, matches st_replica_uid
      * @param source_gen        (OUT) The last generation of source_replica_uid
      *                          that st has synchronized with.
+     * @param trans_id          (OUT) The transaction id associated with the
+     *                          source generation, the memory must be freed by
+     *                          the caller.
      */
     int (*get_sync_info)(u1db_sync_target *st,
         const char *source_replica_uid,
-        const char **st_replica_uid, int *st_gen, int *source_gen);
+        const char **st_replica_uid, int *st_gen, int *source_gen,
+        char **trans_id);
     /**
      * Set the synchronization information about another replica.
      *
@@ -78,9 +82,10 @@ struct _u1db_sync_target {
      *                              want to synchronize from.
      * @param source_gen        The last generation of source_replica_uid
      *                          that st has synchronized with.
+     * @param trans_id          The transaction id associated with source_gen
      */
     int (*record_sync_info)(u1db_sync_target *st,
-        const char *source_replica_uid, int source_gen);
+        const char *source_replica_uid, int source_gen, const char *trans_id);
 
     /**
      * Send documents to the target, and receive the response.
@@ -249,16 +254,18 @@ int u1db__get_transaction_log(u1database *db, void *context,
  * @param replica_uid The identifier for the other database
  * @param generation  (OUT) The last generation that we know we synchronized
  *                    with the other database.
+ * @param trans_id    (OUT) The transaction id associated with the generation.
+ *                    Callers must free the data.
  */
-int u1db__get_sync_generation(u1database *db, const char *replica_uid,
-                              int *generation);
+int u1db__get_sync_gen_info(u1database *db, const char *replica_uid,
+                            int *generation, char **trans_id);
 
 /**
  * Set the known sync generation for another replica.
  *
  */
-int u1db__set_sync_generation(u1database *db, const char *replica_uid,
-                              int generation);
+int u1db__set_sync_info(u1database *db, const char *replica_uid,
+                        int generation, const char *trans_id);
 
 /**
  * Internal sync api, get the stored information about another machine.

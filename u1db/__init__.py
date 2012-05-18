@@ -216,29 +216,35 @@ class Database(object):
         from u1db.remote.http_target import HTTPSyncTarget
         return Synchronizer(self, HTTPSyncTarget(url)).sync()
 
-    def _get_sync_generation(self, other_replica_uid):
-        """Return the last known database generation of the other db replica.
+    def _get_sync_gen_info(self, other_replica_uid):
+        """Return the last known information about the other db replica.
 
         When you do a synchronization with another replica, the Database keeps
-        track of what generation the other database replica  was at.
-        This way we only have to request data that is newer.
+        track of what generation the other database replica was at, and what
+        the associated transaction id was.  This is used to determine what data
+        needs to be sent, and if two databases are claiming to be the same
+        replica.
 
         :param other_replica_uid: The identifier for the other replica.
-        :return: The generation we encountered during synchronization. If we've
-            never synchronized with the replica, this is 0.
+        :return: (gen, trans_id) The generation and transaction id we
+            encountered during synchronization. If we've never synchronized
+            with the replica, this is (0, '').
         """
-        raise NotImplementedError(self._get_sync_generation)
+        raise NotImplementedError(self._get_sync_gen_info)
 
-    def _set_sync_generation(self, other_replica_uid, other_generation):
+    def _set_sync_info(self, other_replica_uid, other_generation,
+                       other_transaction_id):
         """Set the last-known generation for the other database replica.
 
         We have just performed some synchronization, and we want to track what
-        generation the other replica was at. See also get_sync_generation.
+        generation the other replica was at. See also _get_sync_gen_info.
         :param other_replica_uid: The U1DB identifier for the other replica.
         :param other_generation: The generation number for the other replica.
+        :param other_transaction_id: The transaction id associated with the
+            generation.
         :return: None
         """
-        raise NotImplementedError(self._set_sync_generation)
+        raise NotImplementedError(self._set_sync_info)
 
     def _put_doc_if_newer(self, doc, save_conflict, replica_uid=None,
                           replica_gen=None):
@@ -338,11 +344,13 @@ class SyncTarget(object):
         :param source_replica_uid: Another replica which we might have
             synchronized with in the past.
         :return: (target_replica_uid, target_replica_generation,
-                  source_replica_last_known_generation)
+                  source_replica_last_known_generation,
+                  source_replica_last_known_transaction_id)
         """
         raise NotImplementedError(self.get_sync_info)
 
-    def record_sync_info(self, source_replica_uid, source_replica_generation):
+    def record_sync_info(self, source_replica_uid, source_replica_generation,
+                         source_replica_transaction_id):
         """Record tip information for another replica.
 
         After sync_exchange has been processed, the caller will have
@@ -358,6 +366,8 @@ class SyncTarget(object):
         :param source_replica_uid: The identifier for the source replica.
         :param source_replica_generation:
              The database generation for the source replica.
+        :param source_replica_transaction_id: The transaction id associated
+            with the source replica generation.
         :return: None
         """
         raise NotImplementedError(self.record_sync_info)

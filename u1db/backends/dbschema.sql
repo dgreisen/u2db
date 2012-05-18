@@ -1,17 +1,17 @@
 -- Database schema
 CREATE TABLE transaction_log (
     generation INTEGER PRIMARY KEY AUTOINCREMENT,
-    doc_id TEXT,
-    transaction_id TEXT
+    doc_id TEXT NOT NULL,
+    transaction_id TEXT NOT NULL
 );
 CREATE TABLE document (
     doc_id TEXT PRIMARY KEY,
-    doc_rev TEXT,
+    doc_rev TEXT NOT NULL,
     content TEXT
 );
 CREATE TABLE document_fields (
-    doc_id TEXT,
-    field_name TEXT,
+    doc_id TEXT NOT NULL,
+    field_name TEXT NOT NULL,
     value TEXT
 );
 CREATE INDEX document_fields_field_value_doc_idx

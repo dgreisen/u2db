@@ -23,10 +23,11 @@
 
 static int st_get_sync_info(u1db_sync_target *st,
         const char *source_replica_uid,
-        const char **st_replica_uid, int *st_gen, int *source_gen);
+        const char **st_replica_uid, int *st_gen, int *source_gen,
+        char **trans_id);
 
 static int st_record_sync_info(u1db_sync_target *st,
-        const char *source_replica_uid, int source_gen);
+        const char *source_replica_uid, int source_gen, const char *trans_id);
 
 static int st_sync_exchange(u1db_sync_target *st,
                           const char *source_replica_uid, int n_docs,
@@ -100,7 +101,8 @@ u1db__free_sync_target(u1db_sync_target **sync_target)
 
 static int
 st_get_sync_info(u1db_sync_target *st, const char *source_replica_uid,
-        const char **st_replica_uid, int *st_gen, int *source_gen)
+        const char **st_replica_uid, int *st_gen, int *source_gen,
+        char **trans_id)
 {
     int status = U1DB_OK;
     u1database *db;
@@ -119,7 +121,8 @@ st_get_sync_info(u1db_sync_target *st, const char *source_replica_uid,
     db = (u1database *)st->implementation;
     status = u1db_get_replica_uid(db, st_replica_uid);
     if (status != U1DB_OK) { goto finish; }
-    status = u1db__get_sync_generation(db, source_replica_uid, source_gen);
+    status = u1db__get_sync_gen_info(db, source_replica_uid, source_gen,
+                                     trans_id);
     if (status != U1DB_OK) { goto finish; }
     status = u1db__get_generation(db, st_gen);
 finish:
@@ -129,7 +132,7 @@ finish:
 
 static int
 st_record_sync_info(u1db_sync_target *st, const char *source_replica_uid,
-                    int source_gen)
+                    int source_gen, const char *trans_id)
 {
     int status;
     u1database *db;
@@ -141,7 +144,7 @@ st_record_sync_info(u1db_sync_target *st, const char *source_replica_uid,
         if (status != U1DB_OK) { goto finish; }
     }
     db = (u1database *)st->implementation;
-    status = u1db__set_sync_generation(db, source_replica_uid, source_gen);
+    status = u1db__set_sync_info(db, source_replica_uid, source_gen, trans_id);
 finish:
     return status;
 }
@@ -543,6 +546,8 @@ u1db__sync_db_to_target(u1database *db, u1db_sync_target *target,
     struct _whats_changed_doc_ids_state to_send_state = {0};
     struct _return_doc_state return_doc_state = {0};
     const char *target_uid, *local_uid;
+    char *target_trans_id_known_by_local = NULL;
+    char *local_trans_id_known_by_target = NULL;
     int target_gen, local_gen;
     int local_gen_known_by_target, target_gen_known_by_local;
 
@@ -556,10 +561,10 @@ u1db__sync_db_to_target(u1database *db, u1db_sync_target *target,
     if (status != U1DB_OK) { goto finish; }
     // fprintf(stderr, "Local uid: %s\n", local_uid);
     status = target->get_sync_info(target, local_uid, &target_uid, &target_gen,
-                                   &local_gen_known_by_target);
+                   &local_gen_known_by_target, &local_trans_id_known_by_target);
     if (status != U1DB_OK) { goto finish; }
-    status = u1db__get_sync_generation(db, target_uid,
-                                       &target_gen_known_by_local);
+    status = u1db__get_sync_gen_info(db, target_uid,
+        &target_gen_known_by_local, &target_trans_id_known_by_local);
     if (status != U1DB_OK) { goto finish; }
     local_gen = local_gen_known_by_target;
 
@@ -589,17 +594,24 @@ u1db__sync_db_to_target(u1database *db, u1db_sync_target *target,
     if (status != U1DB_OK) { goto finish; }
     // Now we successfully sent and received docs, make sure we record the
     // current remote generation
-    status = u1db__set_sync_generation(db, target_uid,
-                                       target_gen_known_by_local);
+    status = u1db__set_sync_info(db, target_uid, target_gen_known_by_local,
+                                 "T-sid");
     if (status != U1DB_OK) { goto finish; }
     if (return_doc_state.num_inserted > 0 &&
             ((*local_gen_before_sync + return_doc_state.num_inserted)
               == local_gen))
     {
-        status = target->record_sync_info(target, local_uid, local_gen);
+        status = target->record_sync_info(target, local_uid, local_gen,
+                                          "T-sid");
         if (status != U1DB_OK) { goto finish; }
     }
 finish:
+    if (local_trans_id_known_by_target != NULL) {
+        free(local_trans_id_known_by_target);
+    }
+    if (target_trans_id_known_by_local != NULL) {
+        free(target_trans_id_known_by_local);
+    }
     if (to_send_state.doc_ids_to_return != NULL) {
         int i;
 

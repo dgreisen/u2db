@@ -156,9 +156,10 @@ cdef extern from "u1db/u1db_internal.h":
     ctypedef struct u1db_sync_target:
         int (*get_sync_info)(u1db_sync_target *st,
             char *source_replica_uid,
-            const_char_ptr *st_replica_uid, int *st_gen, int *source_gen) nogil
+            const_char_ptr *st_replica_uid, int *st_gen, int *source_gen,
+            char **source_trans_id) nogil
         int (*record_sync_info)(u1db_sync_target *st,
-            char *source_replica_uid, int source_gen) nogil
+            char *source_replica_uid, int source_gen, char *trans_id) nogil
         int (*sync_exchange)(u1db_sync_target *st,
                              char *source_replica_uid, int n_docs,
                              u1db_document **docs, int *generations,
@@ -191,10 +192,10 @@ cdef extern from "u1db/u1db_internal.h":
                                            char *content, int has_conflicts)
     int u1db__generate_hex_uuid(char *)
 
-    int u1db__get_sync_generation(u1database *db, char *replica_uid,
-                                  int *generation)
-    int u1db__set_sync_generation(u1database *db, char *replica_uid,
-                                  int generation)
+    int u1db__get_sync_gen_info(u1database *db, char *replica_uid,
+                                int *generation, char **trans_id)
+    int u1db__set_sync_info(u1database *db, char *replica_uid, int generation,
+                            char *trans_id)
     int u1db__sync_get_machine_info(u1database *db, char *other_replica_uid,
                                     int *other_db_rev, char **my_replica_uid,
                                     int *my_db_rev)
@@ -665,22 +666,27 @@ cdef class CSyncTarget(object):
     def get_sync_info(self, source_replica_uid):
         cdef const_char_ptr st_replica_uid = NULL
         cdef int st_gen = 0, source_gen = 0, status
+        cdef char *trans_id = NULL
 
         self._check()
         assert self._st.get_sync_info != NULL, "get_sync_info is NULL?"
         with nogil:
             status = self._st.get_sync_info(self._st, source_replica_uid,
-                &st_replica_uid, &st_gen, &source_gen)
+                &st_replica_uid, &st_gen, &source_gen, &trans_id)
         handle_status("get_sync_info", status)
-        return (safe_str(st_replica_uid), st_gen, source_gen)
+        res_trans_id = None
+        if trans_id != NULL:
+            res_trans_id = trans_id
+            free(trans_id)
+        return (safe_str(st_replica_uid), st_gen, source_gen, res_trans_id)
 
-    def record_sync_info(self, source_replica_uid, source_gen):
+    def record_sync_info(self, source_replica_uid, source_gen, source_trans_id):
         cdef int status
         self._check()
         assert self._st.record_sync_info != NULL, "record_sync_info is NULL?"
         with nogil:
             status = self._st.record_sync_info(self._st, source_replica_uid,
-                                               source_gen)
+                                               source_gen, source_trans_id)
         handle_status("record_sync_info", status)
 
     def _get_sync_exchange(self, source_replica_uid, source_gen):
@@ -968,16 +974,22 @@ cdef class CDatabase(object):
             u1db__get_generation(self._db, &generation))
         return generation
 
-    def _get_sync_generation(self, replica_uid):
-        cdef int generation
+    def _get_sync_gen_info(self, replica_uid):
+        cdef int generation, status
+        cdef char *trans_id = NULL
 
-        handle_status("_get_sync_generation",
-            u1db__get_sync_generation(self._db, replica_uid, &generation))
-        return generation
+        status = u1db__get_sync_gen_info(self._db, replica_uid, &generation,
+                                         &trans_id)
+        handle_status("_get_sync_gen_info", status)
+        raw_trans_id = None
+        if trans_id != NULL:
+            raw_trans_id = trans_id
+            free(trans_id)
+        return generation, raw_trans_id
 
-    def _set_sync_generation(self, replica_uid, generation):
-        handle_status("_set_sync_generation",
-            u1db__set_sync_generation(self._db, replica_uid, generation))
+    def _set_sync_info(self, replica_uid, generation, trans_id):
+        handle_status("_set_sync_info",
+            u1db__set_sync_info(self._db, replica_uid, generation, trans_id))
 
     def _sync_exchange(self, docs_info, from_replica_uid, from_machine_rev,
                        last_known_rev):
