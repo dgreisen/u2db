@@ -325,11 +325,10 @@ class LocalDatabaseTests(tests.DatabaseBaseTests):
 
     def test_put_updates_transaction_log(self):
         doc = self.db.create_doc(simple_doc)
-        self.assertEqual([doc.doc_id], self.db._get_transaction_log())
+        self.assertTransactionLog([doc.doc_id], self.db)
         doc.content = '{"something": "else"}'
         self.db.put_doc(doc)
-        self.assertEqual([doc.doc_id, doc.doc_id],
-                         self.db._get_transaction_log())
+        self.assertTransactionLog([doc.doc_id, doc.doc_id], self.db)
         self.assertEqual((2, [(doc.doc_id, 2)]), self.db.whats_changed())
 
     def test_delete_updates_transaction_log(self):

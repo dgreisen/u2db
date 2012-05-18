@@ -241,7 +241,7 @@ void u1db__free_table(u1db_table **table);
  * Get the list of everything that has changed that we've recorded.
  */
 int u1db__get_transaction_log(u1database *db, void *context,
-                              u1db_doc_id_gen_callback cb);
+                              u1db_trans_info_callback cb);
 
 /**
  * Get the known generation we synchronized with another implementation.

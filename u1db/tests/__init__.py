@@ -161,6 +161,22 @@ class DatabaseBaseTests(TestCase):
         # self.close_database(self.db)
         super(DatabaseBaseTests, self).tearDown()
 
+    def assertTransactionLog(self, doc_ids, db):
+        """Assert that the given docs are in the transaction log."""
+        log = db._get_transaction_log()
+        just_ids = []
+        seen_transactions = set()
+        for doc_id, transaction_id in log:
+            just_ids.append(doc_id)
+            self.assertIsNot(None, transaction_id,
+                             "Transaction id should not be None")
+            self.assertNotEqual('', transaction_id,
+                                "Transaction id should be a unique string")
+            self.assertTrue(transaction_id.startswith('T-'))
+            self.assertNotIn(transaction_id, seen_transactions)
+            seen_transactions.add(transaction_id)
+        self.assertEqual(doc_ids, just_ids)
+
 
 class ServerStateForTests(server_state.ServerState):
     """Used in the test suite, so we don't have to touch disk, etc."""

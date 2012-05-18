@@ -90,8 +90,9 @@ class InMemoryDatabase(CommonBackend):
                 index.remove_json(old_doc.doc_id, old_doc.content)
             if doc.content is not None:
                 index.add_json(doc.doc_id, doc.content)
+        trans_id = self._allocate_transaction_id()
         self._docs[doc.doc_id] = (doc.rev, doc.content)
-        self._transaction_log.append(doc.doc_id)
+        self._transaction_log.append((doc.doc_id, trans_id))
 
     def _get_doc(self, doc_id):
         try:
@@ -200,7 +201,7 @@ class InMemoryDatabase(CommonBackend):
         cur_generation = old_generation + len(relevant_tail)
         seen = set()
         generation = cur_generation
-        for doc_id in reversed(relevant_tail):
+        for doc_id, trans_id in reversed(relevant_tail):
             if doc_id not in seen:
                 changes.append((doc_id, generation))
                 seen.add(doc_id)

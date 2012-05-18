@@ -1,7 +1,8 @@
 -- Database schema
 CREATE TABLE transaction_log (
     generation INTEGER PRIMARY KEY AUTOINCREMENT,
-    doc_id TEXT
+    doc_id TEXT,
+    transaction_id TEXT
 );
 CREATE TABLE document (
     doc_id TEXT PRIMARY KEY,
@@ -18,7 +19,8 @@ CREATE INDEX document_fields_field_value_doc_idx
 
 CREATE TABLE sync_log (
     replica_uid TEXT PRIMARY KEY,
-    known_generation INTEGER
+    known_generation INTEGER,
+    known_transaction_id TEXT
 );
 CREATE TABLE conflicts (
     doc_id TEXT,

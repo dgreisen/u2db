@@ -264,8 +264,9 @@ class SQLiteDatabase(CommonBackend):
 
     def _get_transaction_log(self):
         c = self._db_handle.cursor()
-        c.execute("SELECT doc_id FROM transaction_log ORDER BY generation")
-        return [v[0] for v in c.fetchall()]
+        c.execute("SELECT doc_id, transaction_id FROM transaction_log"
+                  " ORDER BY generation")
+        return c.fetchall()
 
     def _get_doc(self, doc_id):
         """Get just the document content, without fancy handling."""
@@ -426,8 +427,8 @@ class SQLiteDatabase(CommonBackend):
 
     def _do_set_sync_generation(self, other_replica_uid, other_generation):
             c = self._db_handle.cursor()
-            c.execute("INSERT OR REPLACE INTO sync_log VALUES (?, ?)",
-                      (other_replica_uid, other_generation))
+            c.execute("INSERT OR REPLACE INTO sync_log VALUES (?, ?, ?)",
+                      (other_replica_uid, other_generation, ''))
 
     def _put_doc_if_newer(self, doc, save_conflict, replica_uid=None,
                           replica_gen=None):
@@ -661,8 +662,9 @@ class SQLitePartialExpandDatabase(SQLiteDatabase):
             getters = [(field, self._parse_index_definition(field))
                        for field in indexed_fields]
             self._update_indexes(doc.doc_id, raw_doc, getters, c)
-        c.execute("INSERT INTO transaction_log(doc_id) VALUES (?)",
-                  (doc.doc_id,))
+        trans_id = self._allocate_transaction_id()
+        c.execute("INSERT INTO transaction_log(doc_id, transaction_id)"
+                  " VALUES (?, ?)", (doc.doc_id, trans_id))
 
     def create_index(self, index_name, index_expression):
         with self._db_handle:
