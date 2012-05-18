@@ -279,6 +279,16 @@ class LocalDatabaseTests(tests.DatabaseBaseTests):
         self.assertEqual('superseded', state)
         self.assertGetDoc(self.db, doc1.doc_id, doc1_rev2, simple_doc, False)
 
+    def test_put_doc_if_newer_automerge(self):
+        doc1 = self.db.create_doc(simple_doc)
+        rev = doc1.rev
+        doc = self.make_document(doc1.doc_id, "whatever:1", doc1.content)
+        state, _ = self.db._put_doc_if_newer(doc, save_conflict=False)
+        self.assertEqual('superseded', state)
+        doc2 = self.db.get_doc(doc1.doc_id)
+        self.assertNotEqual(doc2.rev, "whatever:1")
+        self.assertNotEqual(doc2.rev, rev)
+
     def test_put_doc_if_newer_already_converged(self):
         orig_doc = '{"new": "doc"}'
         doc1 = self.db.create_doc(orig_doc)
