@@ -1108,7 +1108,7 @@ finish:
 
 int
 u1db_whats_changed(u1database *db, int *gen, void *context,
-                   int (*cb)(void *, const char *doc_id, int gen))
+                   u1db_trans_info_callback cb)
 {
     int status;
     sqlite3_stmt *statement;
@@ -1116,8 +1116,8 @@ u1db_whats_changed(u1database *db, int *gen, void *context,
         return -1; // Bad parameters
     }
     status = sqlite3_prepare_v2(db->sql_handle,
-        "SELECT max(generation) as g, doc_id FROM transaction_log"
-        " WHERE generation > ?"
+        "SELECT max(generation) as g, doc_id, transaction_id"
+        " FROM transaction_log WHERE generation > ?"
         " GROUP BY doc_id ORDER BY g",
         -1, &statement, NULL);
     if (status != SQLITE_OK) {
@@ -1131,13 +1131,15 @@ u1db_whats_changed(u1database *db, int *gen, void *context,
     status = sqlite3_step(statement);
     while (status == SQLITE_ROW) {
         int local_gen;
-        char *doc_id;
+        const char *doc_id;
+        const char *trans_id;
         local_gen = sqlite3_column_int(statement, 0);
         if (local_gen > *gen) {
             *gen = local_gen;
         }
-        doc_id = (char *)sqlite3_column_text(statement, 1);
-        cb(context, doc_id, local_gen);
+        doc_id = (const char *)sqlite3_column_text(statement, 1);
+        trans_id = (const char *)sqlite3_column_text(statement, 2);
+        cb(context, doc_id, local_gen, trans_id);
         status = sqlite3_step(statement);
     }
     if (status == SQLITE_DONE) {

@@ -57,11 +57,12 @@ class Database(object):
 
         :param old_generation: The generation of the database in the old
             state.
-        :return: (cur_generation, [(doc_id, generation),...])
+        :return: (cur_generation, [(doc_id, generation, trans_id),...])
             The current generation of the database, and a list of of
             changed documents since old_generation, represented by tuples
-            with for each document its doc_id and the generation corresponding
-            to the last intervening change and sorted by generation
+            with for each document its doc_id and the generation and
+            transaction id corresponding to the last intervening change and
+            sorted by generation (old changes first)
         """
         raise NotImplementedError(self.whats_changed)
 

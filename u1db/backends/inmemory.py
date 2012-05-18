@@ -207,7 +207,7 @@ class InMemoryDatabase(CommonBackend):
         generation = cur_generation
         for doc_id, trans_id in reversed(relevant_tail):
             if doc_id not in seen:
-                changes.append((doc_id, generation))
+                changes.append((doc_id, generation, trans_id))
                 seen.add(doc_id)
             generation -= 1
         changes.reverse()

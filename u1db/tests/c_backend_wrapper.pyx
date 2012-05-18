@@ -61,8 +61,6 @@ cdef extern from "u1db/u1db.h":
     ctypedef int (*u1db_key_callback)(void *context, char *key)
     ctypedef int (*u1db_doc_gen_callback)(void *context,
         u1db_document *doc, int gen)
-    ctypedef int (*u1db_doc_id_gen_callback)(void *context,
-        const_char_ptr doc_id, int gen)
     ctypedef int (*u1db_trans_info_callback)(void *context,
         const_char_ptr doc_id, int gen, const_char_ptr trans_id)
 
@@ -85,7 +83,7 @@ cdef extern from "u1db/u1db.h":
                          int n_revs, const_char_ptr *revs)
     int u1db_delete_doc(u1database *db, u1db_document *doc)
     int u1db_whats_changed(u1database *db, int *gen, void *context,
-                           u1db_doc_id_gen_callback cb)
+                           u1db_trans_info_callback cb)
     int u1db__get_transaction_log(u1database *db, void *context,
                                   u1db_trans_info_callback cb)
     int u1db_get_doc_conflicts(u1database *db, char *doc_id, void *context,
@@ -252,14 +250,6 @@ cdef extern from "u1db/u1db_vectorclock.h":
 
 from u1db import errors
 from sqlite3 import dbapi2
-
-
-cdef int _append_doc_gen_to_list(void *context, const_char_ptr doc_id,
-                                 int generation) with gil:
-    a_list = <object>(context)
-    doc = doc_id
-    a_list.append((doc, generation))
-    return 0
 
 
 cdef int _append_trans_info_to_list(void *context, const_char_ptr doc_id,
@@ -958,7 +948,7 @@ cdef class CDatabase(object):
         c_generation = generation
         handle_status("whats_changed",
             u1db_whats_changed(self._db, &c_generation, <void*>a_list,
-                               _append_doc_gen_to_list))
+                               _append_trans_info_to_list))
         return c_generation, a_list
 
     def _get_transaction_log(self):

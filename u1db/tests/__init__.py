@@ -177,6 +177,10 @@ class DatabaseBaseTests(TestCase):
             seen_transactions.add(transaction_id)
         self.assertEqual(doc_ids, just_ids)
 
+    def getLastTransId(self, db):
+        """Return the transaction id for the last database update."""
+        return self.db._get_transaction_log()[-1][-1]
+
 
 class ServerStateForTests(server_state.ServerState):
     """Used in the test suite, so we don't have to touch disk, etc."""

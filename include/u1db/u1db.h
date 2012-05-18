@@ -198,15 +198,16 @@ int u1db_delete_doc(u1database *db, u1db_document *doc);
  *               get all changes in the database. The integer will be updated
  *               to point at the current generation.
  * @param cb     A callback function. This will be called passing in 'context',
- *               and a document identifier for each document that has been modified.
- *               The doc_id string is transient, so callers must copy it to
- *               their own memory if they want to keep it.
- *               If a document is changed more than once, it is currently
- *               undefined whether this will call cb() once per change, or just
- *               once per doc_id.
+ *               and a document identifier for each document that has been
+ *               modified. This includes the generation and associated
+ *               transaction id for each change. If a document is modified more
+ *               than once, only the most recent change will be given.
+ *               Note that the strings passed are transient, so must be copied
+ *               if callers want to use them after they return.
  * @param context Opaque context, passed back to the caller.
  */
-int u1db_whats_changed(u1database *db, int *gen, void *context, u1db_doc_id_gen_callback cb);
+int u1db_whats_changed(u1database *db, int *gen, void *context,
+                       u1db_trans_info_callback cb);
 
 
 /**

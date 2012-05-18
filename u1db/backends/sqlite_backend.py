@@ -355,16 +355,17 @@ class SQLiteDatabase(CommonBackend):
 
     def whats_changed(self, old_generation=0):
         c = self._db_handle.cursor()
-        c.execute("SELECT generation, doc_id FROM transaction_log"
+        c.execute("SELECT generation, doc_id, transaction_id"
+                  " FROM transaction_log"
                   " WHERE generation > ? ORDER BY generation DESC",
                   (old_generation,))
         results = c.fetchall()
         cur_gen = old_generation
         seen = set()
         changes = []
-        for generation, doc_id in results:
+        for generation, doc_id, trans_id in results:
             if doc_id not in seen:
-                changes.append((doc_id, generation))
+                changes.append((doc_id, generation, trans_id))
                 seen.add(doc_id)
         if changes:
             cur_gen = changes[0][1]  # max generation

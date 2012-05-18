@@ -103,11 +103,11 @@ class Synchronizer(object):
             self.target_replica_uid)
         if not changes and target_last_known_gen == target_gen:
             return my_gen
-        changed_doc_ids = [doc_id for doc_id, _ in changes]
+        changed_doc_ids = [doc_id for doc_id, _, _ in changes]
         # prepare to send all the changed docs
         docs_to_send = self.source.get_docs(changed_doc_ids,
             check_for_conflicts=False)
-        docs_by_generation = zip(docs_to_send, (gen for _, gen in changes))
+        docs_by_generation = zip(docs_to_send, (gen for _, gen, _ in changes))
 
         # exchange documents and try to insert the returned ones with
         # the target, return target synced-up-to gen
@@ -206,10 +206,10 @@ class SyncExchange(object):
         self.new_gen = gen
         seen_ids = self.seen_ids
         # changed docs that weren't superseded by or converged with
-        self.changes_to_return = [(doc_id, gen) for (doc_id, gen)  in changes
-                                         if doc_id not in seen_ids or
-                                         # there was a subsequent update
-                                            seen_ids.get(doc_id) < gen]
+        self.changes_to_return = [(doc_id, gen) for (doc_id, gen, _) in changes
+                                  # there was a subsequent update
+                                  if doc_id not in seen_ids or
+                                     seen_ids.get(doc_id) < gen]
         return self.new_gen
 
     def return_docs(self, return_doc_cb):
