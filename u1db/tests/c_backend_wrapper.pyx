@@ -162,8 +162,8 @@ cdef extern from "u1db/u1db_internal.h":
         int (*sync_exchange)(u1db_sync_target *st,
                              char *source_replica_uid, int n_docs,
                              u1db_document **docs, int *generations,
-                             int *target_gen, void *context,
-                             u1db_doc_gen_callback cb) nogil
+                             int *target_gen, char **target_trans_id,
+                             void *context, u1db_doc_gen_callback cb) nogil
         int (*sync_exchange_doc_ids)(u1db_sync_target *st,
                 u1database *source_db, int n_doc_ids, const_char_ptr *doc_ids,
                 int *generations, int *target_gen,
@@ -599,7 +599,7 @@ cdef class CSyncExchange(object):
 
     def insert_doc_from_source(self, CDocument doc, source_gen):
         self._check()
-        handle_status("sync_exchange",
+        handle_status("insert_doc_from_source",
             u1db__sync_exchange_insert_doc_from_source(self._exchange,
                 doc._doc, source_gen))
 
@@ -725,6 +725,7 @@ cdef class CSyncTarget(object):
         cdef CDocument cur_doc
         cdef u1db_document **docs = NULL
         cdef int *generations = NULL
+        cdef char *trans_id = NULL
         cdef int i, count, status, target_gen
 
         self._check()
@@ -745,14 +746,16 @@ cdef class CSyncTarget(object):
             with nogil:
                 status = self._st.sync_exchange(self._st,
                         source_replica_uid, count,
-                        docs, generations, &target_gen, <void *>return_doc_cb,
-                        return_doc_cb_wrapper)
+                        docs, generations, &target_gen, &trans_id,
+                        <void *>return_doc_cb, return_doc_cb_wrapper)
             handle_status("sync_exchange", status)
         finally:
             if docs != NULL:
                 free(docs)
             if generations != NULL:
                 free(generations)
+            if trans_id != NULL:
+                free(trans_id)
         return target_gen, 'T-id'
 
     def _set_trace_hook(self, cb):

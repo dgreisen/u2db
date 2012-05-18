@@ -47,8 +47,8 @@ static int st_http_get_sync_exchange(u1db_sync_target *st,
 static int st_http_sync_exchange(u1db_sync_target *st,
                       const char *source_replica_uid,
                       int n_docs, u1db_document **docs,
-                      int *generations, int *target_gen, void *context,
-                      u1db_doc_gen_callback cb);
+                      int *generations, int *target_gen, char **target_trans_id,
+                      void *context, u1db_doc_gen_callback cb);
 static int st_http_sync_exchange_doc_ids(u1db_sync_target *st,
         u1database *source_db, int n_doc_ids, const char **doc_ids,
         int *generations, int *target_gen,
@@ -361,7 +361,8 @@ st_http_get_sync_info(u1db_sync_target *st,
 {
     struct _http_state *state;
     struct _http_request req = {0};
-    char *url = NULL, *tmp = NULL;
+    char *url = NULL;
+    const char *tmp = NULL;
     int status;
     long http_code;
     struct curl_slist *headers = NULL;
@@ -860,9 +861,10 @@ cleanup_temp_files(char tmpname[], FILE *temp_fd, struct _http_request *req)
 
 static int
 st_http_sync_exchange(u1db_sync_target *st,
-                      const char *source_replica_uid, 
+                      const char *source_replica_uid,
                       int n_docs, u1db_document **docs,
-                      int *generations, int *target_gen, void *context,
+                      int *generations, int *target_gen, char **target_trans_id,
+                      void *context,
                       u1db_doc_gen_callback cb)
 {
     int status, i;
@@ -871,7 +873,7 @@ st_http_sync_exchange(u1db_sync_target *st,
     char tmpname[1024] = {0};
 
     if (st == NULL || generations == NULL || target_gen == NULL
-            || cb == NULL)
+            || target_trans_id == NULL || cb == NULL)
     {
         return U1DB_INVALID_PARAMETER;
     }

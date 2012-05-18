@@ -32,8 +32,8 @@ static int st_record_sync_info(u1db_sync_target *st,
 static int st_sync_exchange(u1db_sync_target *st,
                           const char *source_replica_uid, int n_docs,
                           u1db_document **docs, int *generations,
-                          int *target_gen, void *context,
-                          u1db_doc_gen_callback cb);
+                          int *target_gen, char **target_trans_id,
+                          void *context, u1db_doc_gen_callback cb);
 static int st_sync_exchange_doc_ids(u1db_sync_target *st,
         u1database *source_db,
         int n_doc_ids, const char **doc_ids, int *generations,
@@ -471,13 +471,13 @@ get_and_insert_docs(u1database *source_db, u1db_sync_exchange *se,
 static int
 st_sync_exchange(u1db_sync_target *st, const char *source_replica_uid,
                  int n_docs, u1db_document **docs,
-                 int *generations, int *target_gen, void *context,
-                 u1db_doc_gen_callback cb)
+                 int *generations, int *target_gen, char **target_trans_id,
+                 void *context, u1db_doc_gen_callback cb)
 {
     int status, i;
     u1db_sync_exchange *exchange = NULL;
     if (st == NULL || generations == NULL || target_gen == NULL
-            || cb == NULL)
+            || target_trans_id == NULL || cb == NULL)
     {
         return U1DB_INVALID_PARAMETER;
     }
