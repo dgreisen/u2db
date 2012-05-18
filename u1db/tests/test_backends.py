@@ -286,8 +286,9 @@ class LocalDatabaseTests(tests.DatabaseBaseTests):
         state, _ = self.db._put_doc_if_newer(doc, save_conflict=False)
         self.assertEqual('superseded', state)
         doc2 = self.db.get_doc(doc1.doc_id)
-        self.assertNotEqual(doc2.rev, "whatever:1")
-        self.assertNotEqual(doc2.rev, rev)
+        v2 = vectorclock.VectorClockRev(doc2.rev)
+        self.assertTrue(v2.is_newer(vectorclock.VectorClockRev("whatever:1")))
+        self.assertTrue(v2.is_newer(vectorclock.VectorClockRev(rev)))
 
     def test_put_doc_if_newer_already_converged(self):
         orig_doc = '{"new": "doc"}'

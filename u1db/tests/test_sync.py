@@ -23,6 +23,7 @@ from u1db import (
     errors,
     sync,
     tests,
+    vectorclock,
     )
 from u1db.backends import (
     inmemory,
@@ -425,11 +426,10 @@ class DatabaseSyncTests(tests.DatabaseBaseTests):
         self.sync(self.db1, self.db2)
         doc = self.db1.get_doc('doc')
         self.assertFalse(doc.has_conflicts)
-        new_rev = doc.rev
-        self.assertEqual(new_rev,
-                         self.db2.get_doc('doc').rev)
-        self.assertNotEqual(new_rev, rev1)
-        self.assertNotEqual(new_rev, rev2)
+        self.assertEqual(doc.rev, self.db2.get_doc('doc').rev)
+        v = vectorclock.VectorClockRev(doc.rev)
+        self.assertTrue(v.is_newer(vectorclock.VectorClockRev(rev1)))
+        self.assertTrue(v.is_newer(vectorclock.VectorClockRev(rev2)))
 
     def test_sync_puts_changes(self):
         doc = self.db1.create_doc(simple_doc)

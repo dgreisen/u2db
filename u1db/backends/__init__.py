@@ -116,7 +116,6 @@ class CommonBackend(u1db.Database):
             doc_vcr.increment(self._replica_uid)
             doc.rev = doc_vcr.as_str()
             self._put_and_update_indexes(cur_doc, doc)
-            self._prune_conflicts(doc, doc_vcr)
             state = 'superseded'
         else:
             state = 'conflicted'

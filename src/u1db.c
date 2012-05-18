@@ -793,7 +793,6 @@ u1db__put_doc_if_newer(u1database *db, u1db_document *doc, int save_conflict,
             if (status != SQLITE_OK) { goto finish; }
             store = 1;
             *state = U1DB_SUPERSEDED;
-            status = prune_conflicts(db, doc, new_vc);
         } else {
             // TODO: Handle the case where the vc strings are not identical,
             //       but they are functionally equivalent.
