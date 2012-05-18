@@ -723,8 +723,8 @@ finish:
 
 int
 u1db__put_doc_if_newer(u1database *db, u1db_document *doc, int save_conflict,
-                       const char *replica_uid, int replica_gen, int *state,
-                       int *at_gen)
+                       const char *replica_uid, int replica_gen,
+                       const char *replica_trans_id, int *state, int *at_gen)
 {
     const char *stored_content = NULL, *stored_doc_rev = NULL;
     int status = U1DB_INVALID_PARAMETER, store = 0;
@@ -810,7 +810,8 @@ u1db__put_doc_if_newer(u1database *db, u1db_document *doc, int save_conflict,
                            (stored_doc_rev != NULL));
     }
     if (status == U1DB_OK && replica_uid != NULL) {
-        status = u1db__set_sync_info(db, replica_uid, replica_gen, "T-sid");
+        status = u1db__set_sync_info(db, replica_uid, replica_gen,
+                                     replica_trans_id);
     }
     if (status == U1DB_OK && at_gen != NULL) {
         status = u1db__get_generation(db, at_gen);
@@ -1341,15 +1342,22 @@ u1db__get_sync_gen_info(u1database *db, const char *replica_uid,
         status = SQLITE_OK;
         *generation = 0;
         *trans_id = strdup("");
+        if (*trans_id == NULL) {
+            status = U1DB_NOMEM;
+        }
     } else if (status == SQLITE_ROW) {
         *generation = sqlite3_column_int(statement, 0);
         // Note: We may want to handle the column containing NULL
         tmp = (const char *)sqlite3_column_text(statement, 1);
-        *trans_id = strdup(tmp);
+        if (tmp == NULL) {
+            *trans_id = NULL;
+        } else {
+            *trans_id = strdup(tmp);
+            if (*trans_id == NULL) {
+                status = U1DB_NOMEM;
+            }
+        }
         status = SQLITE_OK;
-    }
-    if (*trans_id == NULL) {
-        status = U1DB_NOMEM;
     }
 finish:
     sqlite3_finalize(statement);

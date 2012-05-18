@@ -361,7 +361,7 @@ st_http_get_sync_info(u1db_sync_target *st,
 {
     struct _http_state *state;
     struct _http_request req = {0};
-    char *url = NULL;
+    char *url = NULL, *tmp = NULL;
     int status;
     long http_code;
     struct curl_slist *headers = NULL;
@@ -455,12 +455,17 @@ st_http_get_sync_info(u1db_sync_target *st,
     *source_gen = json_object_get_int(obj);
     obj = json_object_object_get(json, "source_transaction_id");
     if (obj == NULL) {
-        status = U1DB_INVALID_HTTP_RESPONSE;
-        goto finish;
-    }
-    *trans_id = strdup(json_object_get_string(obj));
-    if (*trans_id == NULL) {
-        status = U1DB_NOMEM;
+        *trans_id = NULL;
+    } else {
+        tmp = json_object_get_string(obj);
+        if (tmp == NULL) {
+            *trans_id = NULL;
+        } else {
+            *trans_id = strdup(tmp);
+            if (*trans_id == NULL) {
+                status = U1DB_NOMEM;
+            }
+        }
     }
 finish:
     if (req.header_buffer != NULL) {

@@ -438,11 +438,12 @@ class SQLiteDatabase(CommonBackend):
                        other_transaction_id))
 
     def _put_doc_if_newer(self, doc, save_conflict, replica_uid=None,
-                          replica_gen=None):
+                          replica_gen=None, replica_trans_id=None):
         with self._db_handle:
             return super(SQLiteDatabase, self)._put_doc_if_newer(doc,
                 save_conflict=save_conflict,
-                replica_uid=replica_uid, replica_gen=replica_gen)
+                replica_uid=replica_uid, replica_gen=replica_gen,
+                replica_trans_id=replica_trans_id)
 
     def _add_conflict(self, c, doc_id, my_doc_rev, my_content):
         c.execute("INSERT INTO conflicts VALUES (?, ?, ?)",

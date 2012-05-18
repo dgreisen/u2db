@@ -280,7 +280,7 @@ u1db__sync_exchange_insert_doc_from_source(u1db_sync_exchange *se,
     }
     // fprintf(stderr, "Inserting %s from source\n", doc->doc_id);
     status = u1db__put_doc_if_newer(se->db, doc, 0, se->source_replica_uid,
-                                    source_gen, &insert_state, &at_gen);
+                                    source_gen, NULL, &insert_state, &at_gen);
     if (insert_state == U1DB_INSERTED || insert_state == U1DB_CONVERGED) {
 	lh_table_insert(se->seen_ids, strdup(doc->doc_id), (void *)(intptr_t)at_gen);
     } else {
@@ -437,7 +437,7 @@ return_doc_to_insert_from_target(void *context, u1db_document *doc, int gen)
     state = (struct _return_doc_state *)context;
 
     status = u1db__put_doc_if_newer(state->db, doc, 1, state->target_uid, gen,
-                                    &insert_state, NULL);
+                                    NULL, &insert_state, NULL);
     u1db_free_doc(&doc);
     if (status == U1DB_OK) {
         if (insert_state == U1DB_INSERTED || insert_state == U1DB_CONFLICTED) {

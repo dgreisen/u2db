@@ -301,22 +301,25 @@ class LocalDatabaseTests(tests.DatabaseBaseTests):
                                   nested_doc)
         self.assertEqual('inserted',
             self.db._put_doc_if_newer(doc2, save_conflict=False,
-                                      replica_uid='other', replica_gen=2)[0])
-        self.assertEqual(2, self.db._get_sync_gen_info('other')[0])
+                                      replica_uid='other', replica_gen=2,
+                                      replica_trans_id='T-id2')[0])
+        self.assertEqual((2, 'T-id2'), self.db._get_sync_gen_info('other'))
         # Compare to the old rev, should be superseded
         doc2 = self.make_document(doc1.doc_id, doc1.rev, nested_doc)
         self.assertEqual('superseded',
             self.db._put_doc_if_newer(doc2, save_conflict=False,
-                                      replica_uid='other', replica_gen=3)[0])
-        self.assertEqual(3, self.db._get_sync_gen_info('other')[0])
+                                      replica_uid='other', replica_gen=3,
+                                      replica_trans_id='T-id3')[0])
+        self.assertEqual((3, 'T-id3'), self.db._get_sync_gen_info('other'))
         # A conflict that isn't saved still records the sync gen, because we
         # don't need to see it again
         doc2 = self.make_document(doc1.doc_id, doc1.rev + '|fourth:1',
                                   nested_doc)
         self.assertEqual('conflicted',
             self.db._put_doc_if_newer(doc2, save_conflict=False,
-                                      replica_uid='other', replica_gen=4)[0])
-        self.assertEqual(4, self.db._get_sync_gen_info('other')[0])
+                                      replica_uid='other', replica_gen=4,
+                                      replica_trans_id='T-id4')[0])
+        self.assertEqual((4, 'T-id4'), self.db._get_sync_gen_info('other'))
 
     def test__get_sync_gen_info(self):
         self.assertEqual((0, ''), self.db._get_sync_gen_info('other-db'))
@@ -579,18 +582,20 @@ class LocalDatabaseWithConflictsTests(tests.DatabaseBaseTests):
 
     def test_put_doc_if_newer_replica_uid(self):
         doc1 = self.db.create_doc(simple_doc)
-        self.db._set_sync_info('other', 1, 'T-sid')
+        self.db._set_sync_info('other', 1, 'T-id')
         doc2 = self.make_document(doc1.doc_id, doc1.rev + '|other:1',
                                   nested_doc)
         self.db._put_doc_if_newer(doc2, save_conflict=True,
-                                  replica_uid='other', replica_gen=2)
+                                  replica_uid='other', replica_gen=2,
+                                  replica_trans_id='T-id2')
         # Conflict vs the current update
         doc2 = self.make_document(doc1.doc_id, doc1.rev + '|third:3',
                                   nested_doc)
         self.assertEqual('conflicted',
             self.db._put_doc_if_newer(doc2, save_conflict=True,
-                replica_uid='other', replica_gen=3)[0])
-        self.assertEqual(3, self.db._get_sync_gen_info('other')[0])
+                replica_uid='other', replica_gen=3,
+                replica_trans_id='T-id3')[0])
+        self.assertEqual((3, 'T-id3'), self.db._get_sync_gen_info('other'))
 
     def test_put_refuses_to_update_conflicted(self):
         doc1 = self.db.create_doc(simple_doc)

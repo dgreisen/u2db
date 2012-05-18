@@ -78,7 +78,8 @@ cdef extern from "u1db/u1db.h":
     int u1db_put_doc(u1database *db, u1db_document *doc)
     int u1db__put_doc_if_newer(u1database *db, u1db_document *doc,
                                int save_conflict, char *replica_uid,
-                               int replica_gen, int *state, int *at_gen)
+                               int replica_gen, char *replica_trans_id,
+                               int *state, int *at_gen)
     int u1db_resolve_doc(u1database *db, u1db_document *doc,
                          int n_revs, const_char_ptr *revs)
     int u1db_delete_doc(u1database *db, u1db_document *doc)
@@ -868,21 +869,25 @@ cdef class CDatabase(object):
         return doc.rev
 
     def _put_doc_if_newer(self, CDocument doc, save_conflict, replica_uid=None,
-                          replica_gen=None):
-        cdef char *c_uid
+                          replica_gen=None, replica_trans_id=None):
+        cdef char *c_uid, *c_trans_id
         cdef int gen, state = 0, at_gen = -1
 
         if replica_uid is None:
             c_uid = NULL
         else:
             c_uid = replica_uid
+        if replica_trans_id is None:
+            c_trans_id = NULL
+        else:
+            c_trans_id = replica_trans_id
         if replica_gen is None:
             gen = 0
         else:
             gen = replica_gen
         handle_status("Failed to _put_doc_if_newer",
             u1db__put_doc_if_newer(self._db, doc._doc, save_conflict,
-                c_uid, gen, &state, &at_gen))
+                c_uid, gen, c_trans_id, &state, &at_gen))
         if state == U1DB_INSERTED:
             return 'inserted', at_gen
         elif state == U1DB_SUPERSEDED:
