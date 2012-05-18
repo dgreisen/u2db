@@ -951,16 +951,21 @@ cdef class CDatabase(object):
 
     def whats_changed(self, generation=0):
         cdef int c_generation
+        cdef int status
         cdef char *trans_id = NULL
 
         a_list = []
         c_generation = generation
-        handle_status("whats_changed",
-            u1db_whats_changed(self._db, &c_generation, &trans_id,
-                               <void*>a_list, _append_trans_info_to_list))
-        if trans_id != NULL:
-            free(trans_id)
-        return c_generation, a_list
+        res_trans_id = ''
+        status = u1db_whats_changed(self._db, &c_generation, &trans_id,
+                                    <void*>a_list, _append_trans_info_to_list)
+        try:
+            handle_status("whats_changed", status)
+        finally:
+            if trans_id != NULL:
+                res_trans_id = trans_id
+                free(trans_id)
+        return c_generation, res_trans_id, a_list
 
     def _get_transaction_log(self):
         a_list = []

@@ -96,7 +96,7 @@ class TestHttpSyncTargetHttpsSupport(tests.TestCaseWithServer):
         db = self.request_state._create_database('test')
         remote_target = self.getSyncTarget('localhost', 'test')
         try:
-            remote_target.record_sync_info('other-id', 2)
+            remote_target.record_sync_info('other-id', 2, 'T-id')
         except ssl.SSLError, e:
             self.assertIn("certificate verify failed", str(e))
         else:
@@ -111,7 +111,7 @@ class TestHttpSyncTargetHttpsSupport(tests.TestCaseWithServer):
         self.patch(http_client, 'CA_CERTS', self.cacert_pem)
         remote_target = self.getSyncTarget('127.0.0.1', 'test')
         self.assertRaises(http_client.CertificateError,
-                          remote_target.record_sync_info, 'other-id', 2)
+                          remote_target.record_sync_info, 'other-id', 2, 'T-id')
 
 
 load_tests = tests.load_with_scenarios

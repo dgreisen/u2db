@@ -197,7 +197,7 @@ int u1db_delete_doc(u1database *db, u1db_document *doc);
  * @param gen    The global database revision to start at. You can pass '0' to
  *               get all changes in the database. The integer will be updated
  *               to point at the current generation.
- * @param trans_id  The transaction identifier associated with gen.
+ * @param trans_id The transaction identifier associated with the generation.
  * @param cb     A callback function. This will be called passing in 'context',
  *               and a document identifier for each document that has been
  *               modified. This includes the generation and associated

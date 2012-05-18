@@ -1107,6 +1107,40 @@ finish:
     return status;
 }
 
+static int
+get_last_transaction_id(u1database *db, int *gen, char **trans_id)
+{
+    int status = U1DB_OK;
+    const char *tmp = NULL;
+    sqlite3_stmt *statement;
+
+    status = sqlite3_prepare_v2(db->sql_handle,
+        "SELECT generation, transaction_id"
+        " FROM transaction_log"
+        " ORDER BY generation DESC LIMIT 1",
+        -1, &statement, NULL);
+    if (status != SQLITE_OK) { goto finish; }
+    status = sqlite3_step(statement);
+    if (status == SQLITE_DONE) {
+        status = U1DB_OK;
+        *gen = 0;
+        *trans_id = strdup("");
+    } else if (status == SQLITE_ROW) {
+        status = U1DB_OK;
+        *gen = sqlite3_column_int(statement, 0);
+        tmp = (const char *)sqlite3_column_text(statement, 1);
+        if (tmp == NULL) {
+            *trans_id = strdup("");
+        } else {
+            *trans_id = strdup(tmp);
+        }
+    }
+finish:
+    sqlite3_finalize(statement);
+    return status;
+}
+
+
 int
 u1db_whats_changed(u1database *db, int *gen, char **trans_id,
                    void *context, u1db_trans_info_callback cb)
@@ -1161,6 +1195,10 @@ u1db_whats_changed(u1database *db, int *gen, char **trans_id,
     }
     if (status == SQLITE_DONE) {
         status = SQLITE_OK;
+    }
+    if (status == SQLITE_OK && *trans_id == NULL) {
+        // We didn't get any transaction ids, we need to double check
+        status = get_last_transaction_id(db, gen, trans_id);
     }
 finish:
     sqlite3_finalize(statement);

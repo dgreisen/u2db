@@ -202,7 +202,14 @@ class InMemoryDatabase(CommonBackend):
     def whats_changed(self, old_generation=0):
         changes = []
         relevant_tail = self._transaction_log[old_generation:]
+        # We don't use len(self._transaction_log) because _transaction_log may
+        # get mutated by a concurrent operation.
         cur_generation = old_generation + len(relevant_tail)
+        last_trans_id = ''
+        if relevant_tail:
+            last_trans_id = relevant_tail[-1][1]
+        elif self._transaction_log:
+            last_trans_id = self._transaction_log[-1][1]
         seen = set()
         generation = cur_generation
         for doc_id, trans_id in reversed(relevant_tail):
@@ -211,7 +218,7 @@ class InMemoryDatabase(CommonBackend):
                 seen.add(doc_id)
             generation -= 1
         changes.reverse()
-        return (cur_generation, changes)
+        return (cur_generation, last_trans_id, changes)
 
     def _force_doc_sync_conflict(self, doc):
         my_doc = self._get_doc(doc.doc_id)

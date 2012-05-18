@@ -354,6 +354,7 @@ u1db__sync_exchange_find_doc_ids_to_return(u1db_sync_exchange *se)
 {
     int status;
     struct _whats_changed_doc_ids_state state = {0};
+    char *target_trans_id = NULL;
     if (se == NULL) {
         return U1DB_INVALID_PARAMETER;
     }
@@ -377,6 +378,9 @@ u1db__sync_exchange_find_doc_ids_to_return(u1db_sync_exchange *se)
     se->doc_ids_to_return = state.doc_ids_to_return;
     se->gen_for_doc_ids = state.gen_for_doc_ids;
 finish:
+    if (target_trans_id != NULL) {
+        free(target_trans_id);
+    }
     return status;
 }
 
