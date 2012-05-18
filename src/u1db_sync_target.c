@@ -304,7 +304,8 @@ struct _whats_changed_doc_ids_state {
 // Callback for whats_changed to map the callback into the sync_exchange
 // doc_ids_to_return array.
 static int
-whats_changed_to_doc_ids(void *context, const char *doc_id, int gen)
+whats_changed_to_doc_ids(void *context, const char *doc_id, int gen,
+                         const char *trans_id)
 {
     struct lh_entry *e;
     struct _whats_changed_doc_ids_state *state;
