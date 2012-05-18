@@ -312,7 +312,7 @@ class LocalDatabaseTests(tests.DatabaseBaseTests):
         # A conflict that isn't saved still records the sync gen, because we
         # don't need to see it again
         doc2 = self.make_document(doc1.doc_id, doc1.rev + '|fourth:1',
-                                  nested_doc)
+                                  '{}')
         self.assertEqual('conflicted',
             self.db._put_doc_if_newer(doc2, save_conflict=False,
                                       replica_uid='other', replica_gen=4)[0])
@@ -575,7 +575,7 @@ class LocalDatabaseWithConflictsTests(tests.DatabaseBaseTests):
                                   replica_uid='other', replica_gen=2)
         # Conflict vs the current update
         doc2 = self.make_document(doc1.doc_id, doc1.rev + '|third:3',
-                                  nested_doc)
+                                  '{}')
         self.assertEqual('conflicted',
             self.db._put_doc_if_newer(doc2, save_conflict=True,
                 replica_uid='other', replica_gen=3)[0])

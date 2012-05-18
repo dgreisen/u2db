@@ -761,6 +761,7 @@ u1db__put_doc_if_newer(u1database *db, u1db_document *doc, int save_conflict,
         store = 0;
     } else {
         u1db_vectorclock *stored_vc = NULL, *new_vc = NULL;
+        const char *replica_uid;
         // TODO: u1db__vectorclock_from_str returns NULL if there is an error
         //       in the vector clock, or if we run out of memory... Probably
         //       shouldn't be U1DB_NOMEM
@@ -785,6 +786,38 @@ u1db__put_doc_if_newer(u1database *db, u1db_document *doc, int save_conflict,
             store = 0;
             status = U1DB_OK;
             *state = U1DB_SUPERSEDED;
+        } else if ((doc->content == NULL && stored_content == NULL)
+                   || (doc->content != NULL && stored_content != NULL
+                       && strcmp(doc->content, stored_content) == 0)) {
+            // The contents have converged by divine intervention!
+            status = u1db__vectorclock_maximize(new_vc, stored_vc);
+            if (status != U1DB_OK) {
+                u1db__free_vectorclock(&stored_vc);
+                u1db__free_vectorclock(&new_vc);
+                goto finish;
+            }
+            status = u1db_get_replica_uid(db, &replica_uid);
+            if (status != U1DB_OK) {
+                u1db__free_vectorclock(&stored_vc);
+                u1db__free_vectorclock(&new_vc);
+                goto finish;
+            }
+            status = u1db__vectorclock_increment(new_vc, replica_uid);
+            if (status != U1DB_OK) {
+                u1db__free_vectorclock(&stored_vc);
+                u1db__free_vectorclock(&new_vc);
+                goto finish;
+            }
+            free(doc->doc_rev);
+            status = u1db__vectorclock_as_str(new_vc, &doc->doc_rev);
+            if (status != U1DB_OK) {
+                u1db__free_vectorclock(&stored_vc);
+                u1db__free_vectorclock(&new_vc);
+                goto finish;
+            }
+            store = 1;
+            *state = U1DB_SUPERSEDED;
+            status = prune_conflicts(db, doc, new_vc);
         } else {
             // TODO: Handle the case where the vc strings are not identical,
             //       but they are functionally equivalent.

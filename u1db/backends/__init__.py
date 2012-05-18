@@ -14,7 +14,7 @@
 # You should have received a copy of the GNU Lesser General Public License
 # along with u1db.  If not, see <http://www.gnu.org/licenses/>.
 
-""""""
+"""Abstract classes and common implementations for the backends."""
 
 import re
 import uuid
@@ -109,6 +109,14 @@ class CommonBackend(u1db.Database):
             # Don't add this to seen_ids, because we have something newer,
             # so we should send it back, and we should not generate a
             # conflict
+            state = 'superseded'
+        elif cur_doc.content == doc.content:
+            # the documents have been edited to the same thing at both ends
+            doc_vcr.maximize(cur_vcr)
+            doc_vcr.increment(self._replica_uid)
+            doc.rev = doc_vcr.as_str()
+            self._put_and_update_indexes(cur_doc, doc)
+            self._prune_conflicts(doc, doc_vcr)
             state = 'superseded'
         else:
             state = 'conflicted'
