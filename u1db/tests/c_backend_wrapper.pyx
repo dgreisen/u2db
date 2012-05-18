@@ -83,8 +83,8 @@ cdef extern from "u1db/u1db.h":
     int u1db_resolve_doc(u1database *db, u1db_document *doc,
                          int n_revs, const_char_ptr *revs)
     int u1db_delete_doc(u1database *db, u1db_document *doc)
-    int u1db_whats_changed(u1database *db, int *gen, void *context,
-                           u1db_trans_info_callback cb)
+    int u1db_whats_changed(u1database *db, int *gen, char **trans_id,
+                           void *context, u1db_trans_info_callback cb)
     int u1db__get_transaction_log(u1database *db, void *context,
                                   u1db_trans_info_callback cb)
     int u1db_get_doc_conflicts(u1database *db, char *doc_id, void *context,
@@ -951,12 +951,15 @@ cdef class CDatabase(object):
 
     def whats_changed(self, generation=0):
         cdef int c_generation
+        cdef char *trans_id = NULL
 
         a_list = []
         c_generation = generation
         handle_status("whats_changed",
-            u1db_whats_changed(self._db, &c_generation, <void*>a_list,
-                               _append_trans_info_to_list))
+            u1db_whats_changed(self._db, &c_generation, &trans_id,
+                               <void*>a_list, _append_trans_info_to_list))
+        if trans_id != NULL:
+            free(trans_id)
         return c_generation, a_list
 
     def _get_transaction_log(self):

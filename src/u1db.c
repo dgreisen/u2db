@@ -1108,11 +1108,14 @@ finish:
 }
 
 int
-u1db_whats_changed(u1database *db, int *gen, void *context,
-                   u1db_trans_info_callback cb)
+u1db_whats_changed(u1database *db, int *gen, char **trans_id,
+                   void *context, u1db_trans_info_callback cb)
 {
     int status;
     sqlite3_stmt *statement;
+    const char *tmp;
+    int new_len;
+    int trans_id_buf_len = 0;
     if (db == NULL || gen == NULL || cb == NULL) {
         return -1; // Bad parameters
     }
@@ -1133,19 +1136,33 @@ u1db_whats_changed(u1database *db, int *gen, void *context,
     while (status == SQLITE_ROW) {
         int local_gen;
         const char *doc_id;
-        const char *trans_id;
         local_gen = sqlite3_column_int(statement, 0);
+        doc_id = (const char *)sqlite3_column_text(statement, 1);
+        tmp = (const char *)sqlite3_column_text(statement, 2);
         if (local_gen > *gen) {
             *gen = local_gen;
+            new_len = strlen(tmp);
+            if (new_len + 1 > trans_id_buf_len) {
+                trans_id_buf_len = new_len + 1;
+                *trans_id = realloc(*trans_id, trans_id_buf_len);
+                if (*trans_id == NULL) {
+                    status = U1DB_NOMEM;
+                    goto finish;
+                }
+            }
+            memcpy(*trans_id, tmp, new_len);
+            (*trans_id)[new_len] = '\0';
         }
-        doc_id = (const char *)sqlite3_column_text(statement, 1);
-        trans_id = (const char *)sqlite3_column_text(statement, 2);
-        cb(context, doc_id, local_gen, trans_id);
+        status = cb(context, doc_id, local_gen, *trans_id);
+        if (status != U1DB_OK) {
+            goto finish;
+        }
         status = sqlite3_step(statement);
     }
     if (status == SQLITE_DONE) {
         status = SQLITE_OK;
     }
+finish:
     sqlite3_finalize(statement);
     return status;
 }

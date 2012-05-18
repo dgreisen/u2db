@@ -161,6 +161,7 @@ struct _u1db_sync_exchange {
     u1database *db;
     const char *source_replica_uid;
     int target_gen;
+    char *target_trans_id;
     struct lh_table *seen_ids;
     int num_doc_ids;
     int *gen_for_doc_ids;

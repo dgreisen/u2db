@@ -202,6 +202,10 @@ st_finalize_sync_exchange(u1db_sync_target *st, u1db_sync_exchange **exchange)
         free((*exchange)->gen_for_doc_ids);
         (*exchange)->gen_for_doc_ids = NULL;
     }
+    if ((*exchange)->target_trans_id != NULL) {
+        free((*exchange)->target_trans_id);
+        (*exchange)->target_trans_id = NULL;
+    }
     free(*exchange);
     *exchange = NULL;
 }
@@ -358,8 +362,8 @@ u1db__sync_exchange_find_doc_ids_to_return(u1db_sync_exchange *se)
         if (status != U1DB_OK) { goto finish; }
     }
     state.exclude_ids = se->seen_ids;
-    status = u1db_whats_changed(se->db, &se->target_gen, (void*)&state,
-            whats_changed_to_doc_ids);
+    status = u1db_whats_changed(se->db, &se->target_gen, &se->target_trans_id,
+            (void*)&state, whats_changed_to_doc_ids);
     if (status != U1DB_OK) {
         free(state.doc_ids_to_return);
         free(state.gen_for_doc_ids);
@@ -547,6 +551,7 @@ u1db__sync_db_to_target(u1database *db, u1db_sync_target *target,
     struct _whats_changed_doc_ids_state to_send_state = {0};
     struct _return_doc_state return_doc_state = {0};
     const char *target_uid, *local_uid;
+    char *local_trans_id = NULL;
     char *target_trans_id_known_by_local = NULL;
     char *local_trans_id_known_by_target = NULL;
     int target_gen, local_gen;
@@ -572,8 +577,8 @@ u1db__sync_db_to_target(u1database *db, u1db_sync_target *target,
     // Before we start the sync exchange, get the list of doc_ids that we want
     // to send. We have to do this first, so that local_gen_before_sync will
     // match exactly the list of doc_ids we send
-    status = u1db_whats_changed(db, &local_gen, (void*)&to_send_state,
-                                whats_changed_to_doc_ids);
+    status = u1db_whats_changed(db, &local_gen, &local_trans_id,
+                            (void*)&to_send_state, whats_changed_to_doc_ids);
     if (status != U1DB_OK) { goto finish; }
     if (local_gen == local_gen_known_by_target
         && target_gen == target_gen_known_by_local)
@@ -607,6 +612,9 @@ u1db__sync_db_to_target(u1database *db, u1db_sync_target *target,
         if (status != U1DB_OK) { goto finish; }
     }
 finish:
+    if (local_trans_id != NULL) {
+        free(local_trans_id);
+    }
     if (local_trans_id_known_by_target != NULL) {
         free(local_trans_id_known_by_target);
     }
