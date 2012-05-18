@@ -347,11 +347,13 @@ class DatabaseSyncTargetTests(tests.DatabaseBaseTests,
             self.skipTest("sync_exchange_doc_ids not implemented")
         db2 = self.create_database('test2')
         doc = db2.create_doc(simple_doc)
-        new_gen = sync_exchange_doc_ids(db2, [(doc.doc_id, 10)], 0,
+        new_gen, trans_id = sync_exchange_doc_ids(db2, [(doc.doc_id, 10)], 0,
                 return_doc_cb=self.receive_doc)
         self.assertGetDoc(self.db, doc.doc_id, doc.rev, simple_doc, False)
         self.assertTransactionLog([doc.doc_id], self.db)
-        self.assertEqual(([], 1), (self.other_changes, new_gen))
+        last_trans_id = self.getLastTransId(self.db)
+        self.assertEqual(([], 1, last_trans_id),
+                         (self.other_changes, new_gen, trans_id))
         self.assertEqual(10, self.st.get_sync_info(db2._replica_uid)[2])
 
     def test__set_trace_hook(self):

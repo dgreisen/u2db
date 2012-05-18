@@ -37,7 +37,8 @@ static int st_sync_exchange(u1db_sync_target *st,
 static int st_sync_exchange_doc_ids(u1db_sync_target *st,
         u1database *source_db,
         int n_doc_ids, const char **doc_ids, int *generations,
-        int *target_gen, void *context, u1db_doc_gen_callback cb);
+        int *target_gen, char **target_trans_id,
+        void *context, u1db_doc_gen_callback cb);
 static int st_get_sync_exchange(u1db_sync_target *st,
                          const char *source_replica_uid,
                          int source_gen,
@@ -519,12 +520,14 @@ finish:
 static int
 st_sync_exchange_doc_ids(u1db_sync_target *st, u1database *source_db,
         int n_doc_ids, const char **doc_ids, int *generations,
-        int *target_gen, void *context, u1db_doc_gen_callback cb)
+        int *target_gen, char **target_trans_id,
+        void *context, u1db_doc_gen_callback cb)
 {
     int status;
     const char *source_replica_uid = NULL;
     u1db_sync_exchange *exchange = NULL;
-    if (st == NULL || source_db == NULL || target_gen == NULL || cb == NULL)
+    if (st == NULL || source_db == NULL || target_gen == NULL
+        || target_trans_id == NULL || cb == NULL)
     {
         return U1DB_INVALID_PARAMETER;
     }
@@ -546,6 +549,12 @@ st_sync_exchange_doc_ids(u1db_sync_target *st, u1database *source_db,
     status = u1db__sync_exchange_return_docs(exchange, context, cb);
     if (status != U1DB_OK) { goto finish; }
     *target_gen = exchange->target_gen;
+    if (status == U1DB_OK) {
+        *target_gen = exchange->target_gen;
+        *target_trans_id = exchange->target_trans_id;
+        // We set this to NULL, because the caller is now responsible for it
+        exchange->target_trans_id = NULL;
+    }
 finish:
     st->finalize_sync_exchange(st, &exchange);
     return status;
@@ -602,7 +611,7 @@ u1db__sync_db_to_target(u1database *db, u1db_sync_target *target,
         to_send_state.num_doc_ids,
         (const char**)to_send_state.doc_ids_to_return,
         to_send_state.gen_for_doc_ids,
-        &target_gen_known_by_local,
+        &target_gen_known_by_local, &target_trans_id_known_by_local,
         &return_doc_state, return_doc_to_insert_from_target);
     if (status != U1DB_OK) { goto finish; }
     status = u1db__get_generation(db, &local_gen);

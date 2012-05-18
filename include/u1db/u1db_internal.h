@@ -109,7 +109,7 @@ struct _u1db_sync_target {
      */
     int (*sync_exchange_doc_ids)(u1db_sync_target *st, u1database *source_db,
             int n_doc_ids, const char **doc_ids, int *generations,
-            int *target_gen,
+            int *target_gen, char **target_trans_id,
             void *context, u1db_doc_gen_callback cb);
 
     /**

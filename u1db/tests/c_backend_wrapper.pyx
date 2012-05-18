@@ -166,7 +166,7 @@ cdef extern from "u1db/u1db_internal.h":
                              void *context, u1db_doc_gen_callback cb) nogil
         int (*sync_exchange_doc_ids)(u1db_sync_target *st,
                 u1database *source_db, int n_doc_ids, const_char_ptr *doc_ids,
-                int *generations, int *target_gen,
+                int *generations, int *target_gen, char **target_trans_id,
                 void *context, u1db_doc_gen_callback cb) nogil
         int (*get_sync_exchange)(u1db_sync_target *st,
                                  char *source_replica_uid,
@@ -690,6 +690,7 @@ cdef class CSyncTarget(object):
         cdef int *generations
         cdef int num_doc_ids
         cdef int target_gen
+        cdef char *target_trans_id
         cdef int status
         cdef CDatabase sdb
 
@@ -704,6 +705,7 @@ cdef class CSyncTarget(object):
         if generations == NULL:
             free(<void *>doc_ids)
             raise MemoryError
+        res_trans_id = ''
         try:
             for i, (doc_id, gen) in enumerate(doc_id_generations):
                 doc_ids[i] = PyString_AsString(doc_id)
@@ -711,14 +713,18 @@ cdef class CSyncTarget(object):
             target_gen = last_known_generation
             with nogil:
                 status = self._st.sync_exchange_doc_ids(self._st, sdb._db,
-                    num_doc_ids, doc_ids, generations, &target_gen,
+                    num_doc_ids, doc_ids, generations,
+                    &target_gen, &target_trans_id,
                     <void*>return_doc_cb, return_doc_cb_wrapper)
             handle_status("sync_exchange_doc_ids", status)
         finally:
             free(<void *>doc_ids)
             free(generations)
+            if target_trans_id != NULL:
+                res_trans_id = target_trans_id
+                free(target_trans_id)
 
-        return target_gen
+        return target_gen, res_trans_id
 
     def sync_exchange(self, docs_by_generations, source_replica_uid,
                       last_known_generation, return_doc_cb):
