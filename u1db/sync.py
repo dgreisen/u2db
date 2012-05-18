@@ -112,7 +112,7 @@ class Synchronizer(object):
 
         # exchange documents and try to insert the returned ones with
         # the target, return target synced-up-to gen
-        new_gen = sync_target.sync_exchange(docs_by_generation,
+        new_gen, new_trans_id = sync_target.sync_exchange(docs_by_generation,
                         self.source._replica_uid, target_last_known_gen,
                         return_doc_cb=self._insert_doc_from_target)
         # record target synced-up-to generation including applying what we sent
@@ -261,7 +261,7 @@ class LocalSyncTarget(u1db.SyncTarget):
         new_gen = sync_exch.find_changes_to_return()
         # final step: return docs and record source replica sync point
         sync_exch.return_docs(return_doc_cb)
-        return new_gen
+        return new_gen, 'T-id'
 
     def _set_trace_hook(self, cb):
         self._trace_hook = cb

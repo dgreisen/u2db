@@ -753,7 +753,7 @@ cdef class CSyncTarget(object):
                 free(docs)
             if generations != NULL:
                 free(generations)
-        return target_gen
+        return target_gen, 'T-id'
 
     def _set_trace_hook(self, cb):
         self._check()
