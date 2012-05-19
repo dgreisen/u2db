@@ -726,31 +726,26 @@ u1db__put_doc_if_newer(u1database *db, u1db_document *doc, int save_conflict,
                        const char *replica_uid, int replica_gen,
                        const char *replica_trans_id, int *state, int *at_gen)
 {
-    const char *stored_content = NULL, *stored_doc_rev = NULL;
+    const char *stored_content = NULL;
+    const char *stored_doc_rev = NULL;
+    const char *local_replica_uid = NULL;
     int status = U1DB_INVALID_PARAMETER, store = 0;
     int stored_content_len;
-    sqlite3_stmt *statement;
+    sqlite3_stmt *statement = NULL;
+    u1db_vectorclock *stored_vc = NULL, *new_vc = NULL;
 
     if (db == NULL || doc == NULL || state == NULL || doc->doc_rev == NULL) {
         return U1DB_INVALID_PARAMETER;
     }
 
     status = u1db__is_doc_id_valid(doc->doc_id);
-    if (status != U1DB_OK) {
-        return status;
-    }
+    if (status != SQLITE_OK) { goto finish; }
     status = sqlite3_exec(db->sql_handle, "BEGIN", NULL, NULL, NULL);
-    if (status != SQLITE_OK) {
-        return status;
-    }
+    if (status != SQLITE_OK) { goto finish; }
     stored_content = NULL;
     status = lookup_doc(db, doc->doc_id, &stored_doc_rev, &stored_content,
                         &stored_content_len, &statement);
-    if (status != SQLITE_OK) {
-        sqlite3_exec(db->sql_handle, "ROLLBACK", NULL, NULL, NULL);
-        sqlite3_finalize(statement);
-        return status;
-    }
+    if (status != SQLITE_OK) { goto finish; }
     if (stored_doc_rev == NULL) {
         status = U1DB_OK;
         *state = U1DB_INSERTED;
@@ -760,7 +755,6 @@ u1db__put_doc_if_newer(u1database *db, u1db_document *doc, int save_conflict,
         *state = U1DB_CONVERGED;
         store = 0;
     } else {
-        u1db_vectorclock *stored_vc = NULL, *new_vc = NULL;
         // TODO: u1db__vectorclock_from_str returns NULL if there is an error
         //       in the vector clock, or if we run out of memory... Probably
         //       shouldn't be U1DB_NOMEM
@@ -772,7 +766,6 @@ u1db__put_doc_if_newer(u1database *db, u1db_document *doc, int save_conflict,
         new_vc = u1db__vectorclock_from_str(doc->doc_rev);
         if (new_vc == NULL) {
             status = U1DB_NOMEM;
-            u1db__free_vectorclock(&stored_vc);
             goto finish;
         }
         if (u1db__vectorclock_is_newer(new_vc, stored_vc)) {
@@ -784,6 +777,21 @@ u1db__put_doc_if_newer(u1database *db, u1db_document *doc, int save_conflict,
             // The existing version is newer than the one supplied
             store = 0;
             status = U1DB_OK;
+            *state = U1DB_SUPERSEDED;
+        } else if ((doc->content == NULL && stored_content == NULL)
+                   || (doc->content != NULL && stored_content != NULL
+                       && strcmp(doc->content, stored_content) == 0)) {
+            // The contents have converged by divine intervention!
+            status = u1db__vectorclock_maximize(new_vc, stored_vc);
+            if (status != SQLITE_OK) { goto finish; }
+            status = u1db_get_replica_uid(db, &local_replica_uid);
+            if (status != SQLITE_OK) { goto finish; }
+            status = u1db__vectorclock_increment(new_vc, local_replica_uid);
+            if (status != SQLITE_OK) { goto finish; }
+            free(doc->doc_rev);
+            status = u1db__vectorclock_as_str(new_vc, &doc->doc_rev);
+            if (status != SQLITE_OK) { goto finish; }
+            store = 1;
             *state = U1DB_SUPERSEDED;
         } else {
             // TODO: Handle the case where the vc strings are not identical,
@@ -801,8 +809,6 @@ u1db__put_doc_if_newer(u1database *db, u1db_document *doc, int save_conflict,
                 }
             }
         }
-        u1db__free_vectorclock(&stored_vc);
-        u1db__free_vectorclock(&new_vc);
     }
     if (status == U1DB_OK && store) {
         status = write_doc(db, doc->doc_id, doc->doc_rev,
@@ -823,6 +829,8 @@ finish:
     } else {
         sqlite3_exec(db->sql_handle, "ROLLBACK", NULL, NULL, NULL);
     }
+    u1db__free_vectorclock(&stored_vc);
+    u1db__free_vectorclock(&new_vc);
     return status;
 }
 

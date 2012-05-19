@@ -23,6 +23,7 @@ from u1db import (
     errors,
     sync,
     tests,
+    vectorclock,
     )
 from u1db.backends import (
     inmemory,
@@ -397,6 +398,7 @@ if tests.c_backend_wrapper is not None:
 class DatabaseSyncTests(tests.DatabaseBaseTests):
 
     scenarios = sync_scenarios
+    sync = None                 # set by scenarios
 
     def setUp(self):
         super(DatabaseSyncTests, self).setUp()
@@ -416,6 +418,19 @@ class DatabaseSyncTests(tests.DatabaseBaseTests):
         self.assertLastExchangeLog(self.db2,
             {'receive': {'docs': [], 'last_known_gen': 0},
              'return': {'docs': [], 'last_gen': 0}})
+
+    def test_sync_autoresolves(self):
+        doc1 = self.db1.create_doc(simple_doc, doc_id='doc')
+        rev1 = doc1.rev
+        doc2 = self.db2.create_doc(simple_doc, doc_id='doc')
+        rev2 = doc2.rev
+        self.sync(self.db1, self.db2)
+        doc = self.db1.get_doc('doc')
+        self.assertFalse(doc.has_conflicts)
+        self.assertEqual(doc.rev, self.db2.get_doc('doc').rev)
+        v = vectorclock.VectorClockRev(doc.rev)
+        self.assertTrue(v.is_newer(vectorclock.VectorClockRev(rev1)))
+        self.assertTrue(v.is_newer(vectorclock.VectorClockRev(rev2)))
 
     def test_sync_puts_changes(self):
         doc = self.db1.create_doc(simple_doc)

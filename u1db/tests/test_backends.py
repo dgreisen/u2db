@@ -279,6 +279,17 @@ class LocalDatabaseTests(tests.DatabaseBaseTests):
         self.assertEqual('superseded', state)
         self.assertGetDoc(self.db, doc1.doc_id, doc1_rev2, simple_doc, False)
 
+    def test_put_doc_if_newer_automerge(self):
+        doc1 = self.db.create_doc(simple_doc)
+        rev = doc1.rev
+        doc = self.make_document(doc1.doc_id, "whatever:1", doc1.content)
+        state, _ = self.db._put_doc_if_newer(doc, save_conflict=False)
+        self.assertEqual('superseded', state)
+        doc2 = self.db.get_doc(doc1.doc_id)
+        v2 = vectorclock.VectorClockRev(doc2.rev)
+        self.assertTrue(v2.is_newer(vectorclock.VectorClockRev("whatever:1")))
+        self.assertTrue(v2.is_newer(vectorclock.VectorClockRev(rev)))
+
     def test_put_doc_if_newer_already_converged(self):
         orig_doc = '{"new": "doc"}'
         doc1 = self.db.create_doc(orig_doc)
@@ -314,7 +325,7 @@ class LocalDatabaseTests(tests.DatabaseBaseTests):
         # A conflict that isn't saved still records the sync gen, because we
         # don't need to see it again
         doc2 = self.make_document(doc1.doc_id, doc1.rev + '|fourth:1',
-                                  nested_doc)
+                                  '{}')
         self.assertEqual('conflicted',
             self.db._put_doc_if_newer(doc2, save_conflict=False,
                                       replica_uid='other', replica_gen=4,
@@ -591,7 +602,7 @@ class LocalDatabaseWithConflictsTests(tests.DatabaseBaseTests):
                                   replica_trans_id='T-id2')
         # Conflict vs the current update
         doc2 = self.make_document(doc1.doc_id, doc1.rev + '|third:3',
-                                  nested_doc)
+                                  '{}')
         self.assertEqual('conflicted',
             self.db._put_doc_if_newer(doc2, save_conflict=True,
                 replica_uid='other', replica_gen=3,
