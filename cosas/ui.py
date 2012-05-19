@@ -30,9 +30,6 @@ from u1db.remote.http_target import HTTPSyncTarget
 from u1db.remote.http_database import HTTPDatabase
 from ubuntuone.platform.credentials import CredentialsManagementTool
 
-sys.setrecursionlimit(100)
-sys.excepthook = sys.__excepthook__
-
 DONE_COLOR = QtGui.QColor(183, 183, 183)
 NOT_DONE_COLOR = QtGui.QColor(0, 0, 0)
 WHITE = QtGui.QColor(255, 255, 255)
@@ -52,12 +49,13 @@ TAG_COLORS = [
 class UITask(QtGui.QTreeWidgetItem):
     """Task list item."""
 
-    def __init__(self, task, parent, store):
+    def __init__(self, task, parent, store, font):
         super(UITask, self).__init__(parent)
         self.task = task
         # If the task is done, check off the list item.
         self.store = store
         self._bg_color = WHITE
+        self._font = font
 
     def set_color(self, color):
         self._bg_color = color
@@ -71,25 +69,19 @@ class UITask(QtGui.QTreeWidgetItem):
             self.store.save_task(self.task)
 
     def data(self, column, role):
-        try:
-            print repr(role)
-            print repr(QtCore.Qt.CheckStateRole)
-            if role == QtCore.Qt.DisplayRole:
-                return self.task.title
-            if role == QtCore.Qt.FontRole:
-                font = self.font(0)
-                font.setStrikeOut(self.task.done)
-                return font
-            if role == QtCore.Qt.BackgroundRole:
-                return self._bg_color
-            if role == QtCore.Qt.ForegroundRole:
-                return DONE_COLOR if self.task.done else NOT_DONE_COLOR
-            if role == QtCore.Qt.CheckStateRole:
-                return QtCore.Qt.Checked if self.task.done else QtCore.Qt.Unchecked
-            return super(UITask, self).data(column, role)
-        except RuntimeError:
-            import pdb; pdb.set_trace()
-            raise
+        if role == QtCore.Qt.DisplayRole:
+            return self.task.title
+        if role == QtCore.Qt.FontRole:
+            font = self._font
+            font.setStrikeOut(self.task.done)
+            return font
+        if role == QtCore.Qt.BackgroundRole:
+            return self._bg_color
+        if role == QtCore.Qt.ForegroundRole:
+            return DONE_COLOR if self.task.done else NOT_DONE_COLOR
+        if role == QtCore.Qt.CheckStateRole:
+            return QtCore.Qt.Checked if self.task.done else QtCore.Qt.Unchecked
+        return QtGui.QTreeWidgetItem.data(self, column, role)
 
 
 class TaskDelegate(QtGui.QStyledItemDelegate):
@@ -306,7 +298,8 @@ class Main(QtGui.QMainWindow):
     def add_task(self, task):
         """Add a new todo item."""
         # Wrap the task in a UITask object.
-        item = UITask(task, self.todo_list, self.store)
+        item = UITask(
+            task, self.todo_list, self.store, self.todo_list.font())
         self.todo_list.addTopLevelItem(item)
         if not task.tags:
             return
