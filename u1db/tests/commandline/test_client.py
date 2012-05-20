@@ -117,6 +117,7 @@ class TestArgs(tests.TestCase):
     def test_create_index(self):
         args = self.parse_args(['create-index', 'db', 'index', 'expression'])
         self.assertEqual(client.CmdCreateIndex, args.subcommand)
+        self.assertEqual('db', args.database)
         self.assertEqual('index', args.index)
         self.assertEqual(['expression'], args.expression)
 
@@ -126,6 +127,11 @@ class TestArgs(tests.TestCase):
         self.assertEqual('db', args.database)
         self.assertEqual('index', args.index)
         self.assertEqual(['e1', 'e2'], args.expression)
+
+    def test_list_indexes(self):
+        args = self.parse_args(['list-indexes', 'db'])
+        self.assertEqual(client.CmdListIndexes, args.subcommand)
+        self.assertEqual('db', args.database)
 
 
 class TestCaseWithDB(tests.TestCase):
@@ -346,13 +352,52 @@ class TestCmdCreateIndex(TestCaseWithDB):
         self.assertEqual(cmd.stderr.getvalue(),
                          "There is already a different index named 'foo'.\n")
 
-    def test_creat_index_bad_expression(self):
+    def test_create_index_bad_expression(self):
         cmd = self.make_command(client.CmdCreateIndex)
         retval = cmd.run(self.db_path, "foo", ["WAT()"])
         self.assertEqual(retval, 1)
         self.assertEqual(cmd.stdout.getvalue(), '')
         self.assertEqual(cmd.stderr.getvalue(),
                          'Bad index expression.\n')
+
+
+class TestCmdListIndexes(TestCaseWithDB):
+
+    def test_list_no_indexes(self):
+        cmd = self.make_command(client.CmdListIndexes)
+        retval = cmd.run(self.db_path)
+        self.assertEqual(retval, None)
+        self.assertEqual(cmd.stdout.getvalue(), '')
+        self.assertEqual(cmd.stderr.getvalue(), '')
+
+    def test_list_indexes(self):
+        self.db.create_index("foo", ["bar", "baz"])
+        cmd = self.make_command(client.CmdListIndexes)
+        retval = cmd.run(self.db_path)
+        self.assertEqual(retval, None)
+        self.assertEqual(cmd.stdout.getvalue(), 'foo: bar, baz\n')
+        self.assertEqual(cmd.stderr.getvalue(), '')
+
+    def test_list_several_indexes(self):
+        self.db.create_index("foo", ["bar", "baz"])
+        self.db.create_index("bar", ["baz", "foo"])
+        self.db.create_index("baz", ["foo", "bar"])
+        cmd = self.make_command(client.CmdListIndexes)
+        retval = cmd.run(self.db_path)
+        self.assertEqual(retval, None)
+        self.assertEqual(cmd.stdout.getvalue(),
+                         'bar: baz, foo\n'
+                         'baz: foo, bar\n'
+                         'foo: bar, baz\n'
+                         )
+        self.assertEqual(cmd.stderr.getvalue(), '')
+
+    def test_list_indexes_no_db(self):
+        cmd = self.make_command(client.CmdListIndexes)
+        retval = cmd.run(self.db_path + "__DOES_NOT_EXIST")
+        self.assertEqual(retval, 1)
+        self.assertEqual(cmd.stdout.getvalue(), '')
+        self.assertEqual(cmd.stderr.getvalue(), 'Database does not exist.\n')
 
 
 class RunMainHelper(object):
