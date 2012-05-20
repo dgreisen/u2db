@@ -133,6 +133,12 @@ class TestArgs(tests.TestCase):
         self.assertEqual(client.CmdListIndexes, args.subcommand)
         self.assertEqual('db', args.database)
 
+    def test_delete_index(self):
+        args = self.parse_args(['delete-index', 'db', 'index'])
+        self.assertEqual(client.CmdDeleteIndex, args.subcommand)
+        self.assertEqual('db', args.database)
+        self.assertEqual('index', args.index)
+
 
 class TestCaseWithDB(tests.TestCase):
     """These next tests are meant to have one class per Command.
@@ -360,6 +366,8 @@ class TestCmdCreateIndex(TestCaseWithDB):
         self.assertEqual(cmd.stderr.getvalue(),
                          'Bad index expression.\n')
 
+class TestCmdListIndexes(TestCaseWithDB):
+
     def test_list_no_indexes(self):
         cmd = self.make_command(client.CmdListIndexes)
         retval = cmd.run(self.db_path)
@@ -381,6 +389,32 @@ class TestCmdCreateIndex(TestCaseWithDB):
         self.assertEqual(retval, 1)
         self.assertEqual(cmd.stdout.getvalue(), '')
         self.assertEqual(cmd.stderr.getvalue(), 'Database does not exist.\n')
+
+
+class TestCmdDeleteIndex(TestCaseWithDB):
+
+    def test_delete_index(self):
+        self.db.create_index("foo", ["bar", "baz"])
+        cmd = self.make_command(client.CmdDeleteIndex)
+        retval = cmd.run(self.db_path, "foo")
+        self.assertEqual(retval, None)
+        self.assertEqual(cmd.stdout.getvalue(), '')
+        self.assertEqual(cmd.stderr.getvalue(), '')
+        self.assertEqual([], self.db.list_indexes())
+
+    def test_delete_index_no_db(self):
+        cmd = self.make_command(client.CmdDeleteIndex)
+        retval = cmd.run(self.db_path + "__DOES_NOT_EXIST", "foo")
+        self.assertEqual(retval, 1)
+        self.assertEqual(cmd.stdout.getvalue(), '')
+        self.assertEqual(cmd.stderr.getvalue(), 'Database does not exist.\n')
+
+    def test_delete_index_no_index(self):
+        cmd = self.make_command(client.CmdDeleteIndex)
+        retval = cmd.run(self.db_path, "foo")
+        self.assertEqual(retval, None)
+        self.assertEqual(cmd.stdout.getvalue(), '')
+        self.assertEqual(cmd.stderr.getvalue(), '')
 
 
 class RunMainHelper(object):
