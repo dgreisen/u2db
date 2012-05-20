@@ -114,6 +114,19 @@ class TestArgs(tests.TestCase):
         self.assertEqual('source', args.source)
         self.assertEqual('target', args.target)
 
+    def test_create_index(self):
+        args = self.parse_args(['create-index', 'db', 'index', 'expression'])
+        self.assertEqual(client.CmdCreateIndex, args.subcommand)
+        self.assertEqual('index', args.index)
+        self.assertEqual(['expression'], args.expression)
+
+    def test_create_index_multi_expression(self):
+        args = self.parse_args(['create-index', 'db', 'index', 'e1', 'e2'])
+        self.assertEqual(client.CmdCreateIndex, args.subcommand)
+        self.assertEqual('db', args.database)
+        self.assertEqual('index', args.index)
+        self.assertEqual(['e1', 'e2'], args.expression)
+
 
 class TestCaseWithDB(tests.TestCase):
     """These next tests are meant to have one class per Command.
@@ -297,6 +310,49 @@ class TestCmdSyncRemote(tests.TestCaseWithServer, TestCaseWithDB):
                           False)
         self.assertGetDoc(self.db, doc2.doc_id, doc2.rev, tests.nested_doc,
                           False)
+
+
+class TestCmdCreateIndex(TestCaseWithDB):
+
+    def test_create_index(self):
+        cmd = self.make_command(client.CmdCreateIndex)
+        retval = cmd.run(self.db_path, "foo", ["bar", "baz"])
+        self.assertEqual(self.db.list_indexes(), [('foo', ['bar', "baz"])])
+        self.assertEqual(retval, None) # conveniently mapped to 0
+        self.assertEqual(cmd.stdout.getvalue(), '')
+        self.assertEqual(cmd.stderr.getvalue(), '')
+
+    def test_create_index_no_db(self):
+        cmd = self.make_command(client.CmdCreateIndex)
+        retval = cmd.run(self.db_path + "__DOES_NOT_EXIST", "foo", ["bar"])
+        self.assertEqual(retval, 1)
+        self.assertEqual(cmd.stdout.getvalue(), '')
+        self.assertEqual(cmd.stderr.getvalue(), 'Database does not exist.\n')
+
+    def test_create_dupe_index(self):
+        self.db.create_index("foo", ["bar"])
+        cmd = self.make_command(client.CmdCreateIndex)
+        retval = cmd.run(self.db_path, "foo", ["bar"])
+        self.assertEqual(retval, None)
+        self.assertEqual(cmd.stdout.getvalue(), '')
+        self.assertEqual(cmd.stderr.getvalue(), '')
+
+    def test_create_dupe_index_different_expression(self):
+        self.db.create_index("foo", ["bar"])
+        cmd = self.make_command(client.CmdCreateIndex)
+        retval = cmd.run(self.db_path, "foo", ["baz"])
+        self.assertEqual(retval, 1)
+        self.assertEqual(cmd.stdout.getvalue(), '')
+        self.assertEqual(cmd.stderr.getvalue(),
+                         'A different index is called that.\n')
+
+    def test_creat_index_bad_expression(self):
+        cmd = self.make_command(client.CmdCreateIndex)
+        retval = cmd.run(self.db_path, "foo", ["WAT()"])
+        self.assertEqual(retval, 1)
+        self.assertEqual(cmd.stdout.getvalue(), '')
+        self.assertEqual(cmd.stderr.getvalue(),
+                         'Bad index expression.\n')
 
 
 class RunMainHelper(object):
