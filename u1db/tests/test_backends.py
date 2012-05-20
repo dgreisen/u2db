@@ -648,6 +648,12 @@ class DatabaseIndexTests(tests.DatabaseBaseTests):
         self.assertEqual(
             [doc], self.db.get_from_index('test-idx', [(u"valu\xe5",)]))
 
+    def test_create_index_fails_if_name_taken(self):
+        self.db.create_index('test-idx', ['key'])
+        self.assertRaises(errors.IndexNameTakenError,
+                          self.db.create_index,
+                          'test-idx', ['stuff'])
+
     def test_create_index_after_deleting_document(self):
         doc = self.db.create_doc(simple_doc)
         doc2 = self.db.create_doc(simple_doc)
