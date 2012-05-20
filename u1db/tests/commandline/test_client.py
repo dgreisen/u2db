@@ -344,7 +344,7 @@ class TestCmdCreateIndex(TestCaseWithDB):
         self.assertEqual(retval, 1)
         self.assertEqual(cmd.stdout.getvalue(), '')
         self.assertEqual(cmd.stderr.getvalue(),
-                         'A different index is called that.\n')
+                         "There is already a different index named 'foo'.\n")
 
     def test_creat_index_bad_expression(self):
         cmd = self.make_command(client.CmdCreateIndex)
