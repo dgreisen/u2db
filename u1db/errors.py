@@ -69,6 +69,10 @@ class DatabaseDoesNotExist(U1DBError):
     wire_description = "database does not exist"
 
 
+class IndexNameTakenError(U1DBError):
+    """The given index name is already taken."""
+
+
 class IndexDefinitionParseError(U1DBError):
     """The index definition cannot be parsed."""
 

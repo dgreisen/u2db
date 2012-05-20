@@ -171,6 +171,8 @@ class InMemoryDatabase(CommonBackend):
         self.put_doc(doc)
 
     def create_index(self, index_name, index_expression):
+        if index_name in self._indexes:
+            raise errors.IndexNameTakenError
         index = InMemoryIndex(index_name, index_expression)
         for doc_id, (doc_rev, doc) in self._docs.iteritems():
             if doc is not None:

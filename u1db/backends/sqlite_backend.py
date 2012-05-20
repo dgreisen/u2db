@@ -20,6 +20,7 @@ import errno
 import os
 import simplejson
 from sqlite3 import dbapi2
+import sys
 import time
 import uuid
 
@@ -693,8 +694,11 @@ class SQLitePartialExpandDatabase(SQLiteDatabase):
             cur_fields = self._get_indexed_fields()
             definition = [(index_name, idx, field)
                           for idx, field in enumerate(index_expression)]
-            c.executemany("INSERT INTO index_definitions VALUES (?, ?, ?)",
-                          definition)
+            try:
+                c.executemany("INSERT INTO index_definitions VALUES (?, ?, ?)",
+                              definition)
+            except dbapi2.IntegrityError as e:
+                raise errors.IndexNameTakenError, e, sys.exc_info()[2]
             new_fields = set([f for f in index_expression
                               if f not in cur_fields])
             if new_fields:

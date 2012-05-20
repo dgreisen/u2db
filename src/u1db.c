@@ -1673,7 +1673,7 @@ u1db_create_index(u1database *db, const char *index_name, int n_expressions,
         "INSERT INTO index_definitions VALUES (?, ?, ?)", -1,
         &statement, NULL);
     if (status != SQLITE_OK) {
-        return status;
+        goto finish;
     }
     status = sqlite3_bind_text(statement, 1, index_name, -1, SQLITE_TRANSIENT);
     if (status != SQLITE_OK) { goto finish; }
@@ -1684,7 +1684,13 @@ u1db_create_index(u1database *db, const char *index_name, int n_expressions,
                                    SQLITE_TRANSIENT);
         if (status != SQLITE_OK) { goto finish; }
         status = sqlite3_step(statement);
-        if (status != SQLITE_DONE) { goto finish; }
+        if (status != SQLITE_DONE) {
+            if (status == SQLITE_CONSTRAINT) {
+                // duplicate index definition
+                status = U1DB_DUPLICATE_INDEX_NAME;
+            }
+            goto finish;
+        }
         status = sqlite3_reset(statement);
         if (status != SQLITE_OK) { goto finish; }
     }
