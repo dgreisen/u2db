@@ -253,5 +253,27 @@ class CmdCreateIndex(OneDbCmd):
 client_commands.register(CmdCreateIndex)
 
 
+class CmdListIndexes(OneDbCmd):
+    """List existing indexes"""
+
+    name = "list-indexes"
+
+    @classmethod
+    def _populate_subparser(cls, parser):
+        parser.add_argument('database', help='The local database to query',
+                            metavar='database-path')
+
+    def run(self, database):
+        try:
+            db = self._open(database, create=False)
+        except errors.DatabaseDoesNotExist:
+            print >> self.stderr, "Database does not exist."
+            return 1
+        for (index, expression) in db.list_indexes():
+            print >> self.stdout, "%s: %s" % (index, ", ".join(expression))
+
+client_commands.register(CmdListIndexes)
+
+
 def main(args):
     return client_commands.run_argv(args, sys.stdin, sys.stdout, sys.stderr)
