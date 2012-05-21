@@ -622,7 +622,8 @@ class SQLiteDatabase(CommonBackend):
                 '\nstatement: %s\nargs: %s\n' % (SQL_INDEX_KEYS, (index,)))
         res = c.fetchall()
         if not res:
-            raise errors.IndexDoesNotExist
+            # raise IndexDoesNotExist if appropriate
+            self._get_index_definition(index)
         return [r[0] for r in res]
 
     def delete_index(self, index_name):

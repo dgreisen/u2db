@@ -631,7 +631,26 @@ u1db_get_index_keys(u1database *db, char *index_name,
     }
     status = sqlite3_step(statement);
     if (status == SQLITE_DONE) {
-        status = U1DB_INDEX_DOES_NOT_EXIST;
+        sqlite3_finalize(statement);
+        status = sqlite3_prepare_v2(
+            db->sql_handle,
+            "SELECT field FROM index_definitions WHERE name = ?;",
+            -1, &statement, NULL);
+        if (status != SQLITE_OK) {
+            goto finish;
+        }
+        status = sqlite3_bind_text(
+            statement, 1, index_name, -1, SQLITE_TRANSIENT);
+        if (status != SQLITE_OK) {
+            goto finish;
+        }
+        status = sqlite3_step(statement);
+        if (status == SQLITE_DONE) {
+            status = U1DB_INDEX_DOES_NOT_EXIST;
+        } else {
+            status = U1DB_OK;
+        }
+        goto finish;
     }
     while (status == SQLITE_ROW) {
         key = (char*)sqlite3_column_text(statement, 0);
