@@ -24,6 +24,7 @@ from u1db import (
     Document,
     open as u1db_open,
     sync,
+    errors,
     )
 from u1db.commandline import command
 from u1db.remote import (
@@ -218,6 +219,39 @@ class CmdSync(command.Command):
         source_db.close()
 
 client_commands.register(CmdSync)
+
+
+class CmdCreateIndex(OneDbCmd):
+    """Create an index"""
+
+    name = "create-index"
+
+    @classmethod
+    def _populate_subparser(cls, parser):
+        parser.add_argument('database', help='The local database to update',
+                            metavar='database-path')
+        parser.add_argument('index', help='the name of the index')
+        parser.add_argument('expression', help='an index expression',
+                            nargs='+')
+
+    def run(self, database, index, expression):
+        try:
+            db = self._open(database, create=False)
+            if (index, expression) in db.list_indexes():
+                return
+            db.create_index(index, expression)
+        except errors.DatabaseDoesNotExist:
+            self.stderr.write("Database does not exist.\n")
+            return 1
+        except errors.IndexNameTakenError:
+            self.stderr.write("There is already a different index named %r.\n"
+                              % (index,))
+            return 1
+        except errors.IndexDefinitionParseError:
+            self.stderr.write("Bad index expression.\n")
+            return 1
+
+client_commands.register(CmdCreateIndex)
 
 
 def main(args):
