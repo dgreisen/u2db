@@ -276,5 +276,28 @@ class CmdListIndexes(OneDbCmd):
 client_commands.register(CmdListIndexes)
 
 
+class CmdDeleteIndex(OneDbCmd):
+    """Delete an index"""
+
+    name = "delete-index"
+
+    @classmethod
+    def _populate_subparser(cls, parser):
+        parser.add_argument('database', help='The local database to update',
+                            metavar='database-path')
+        parser.add_argument('index', help='the name of the index')
+
+    def run(self, database, index):
+        try:
+            db = self._open(database, create=False)
+        except errors.DatabaseDoesNotExist:
+            self.stderr.write("Database does not exist.\n")
+            return 1
+        db.delete_index(index)
+
+
+client_commands.register(CmdDeleteIndex)
+
+
 def main(args):
     return client_commands.run_argv(args, sys.stdin, sys.stdout, sys.stderr)
