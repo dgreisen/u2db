@@ -295,8 +295,35 @@ class CmdDeleteIndex(OneDbCmd):
             return 1
         db.delete_index(index)
 
-
 client_commands.register(CmdDeleteIndex)
+
+
+class CmdGetIndexKeys(OneDbCmd):
+    """Get the index's keys"""
+
+    name = "get-index-keys"
+
+    @classmethod
+    def _populate_subparser(cls, parser):
+        parser.add_argument('database', help='The local database to query',
+                            metavar='database-path')
+        parser.add_argument('index', help='the name of the index')
+
+    def run(self, database, index):
+        try:
+            db = self._open(database, create=False)
+            for i in db.get_index_keys(index):
+                self.stdout.write("%s\n" % (i,))
+        except errors.DatabaseDoesNotExist:
+            self.stderr.write("Database does not exist.\n")
+        except errors.IndexDoesNotExist:
+            self.stderr.write("Index does not exist.\n")
+        else:
+            return
+        return 1
+
+
+client_commands.register(CmdGetIndexKeys)
 
 
 def main(args):
