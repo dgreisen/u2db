@@ -139,6 +139,12 @@ class TestArgs(tests.TestCase):
         self.assertEqual('db', args.database)
         self.assertEqual('index', args.index)
 
+    def test_get_index_keys(self):
+        args = self.parse_args(['get-index-keys', 'db', 'index'])
+        self.assertEqual(client.CmdGetIndexKeys, args.subcommand)
+        self.assertEqual('db', args.database)
+        self.assertEqual('index', args.index)
+
 
 class TestCaseWithDB(tests.TestCase):
     """These next tests are meant to have one class per Command.
@@ -430,6 +436,40 @@ class TestCmdDeleteIndex(TestCaseWithDB):
         self.assertEqual(retval, None)
         self.assertEqual(cmd.stdout.getvalue(), '')
         self.assertEqual(cmd.stderr.getvalue(), '')
+
+
+class TestCmdGetIndexKeys(TestCaseWithDB):
+
+    def test_get_index_keys(self):
+        self.db.create_index("foo", ["bar"])
+        self.db.create_doc('{"bar": 42}')
+        cmd = self.make_command(client.CmdGetIndexKeys)
+        retval = cmd.run(self.db_path, "foo")
+        self.assertEqual(retval, None)
+        self.assertEqual(cmd.stdout.getvalue(), '42\n')
+        self.assertEqual(cmd.stderr.getvalue(), '')
+
+    def test_get_index_keys_empty(self):
+        self.db.create_index("foo", ["bar"])
+        cmd = self.make_command(client.CmdGetIndexKeys)
+        retval = cmd.run(self.db_path, "foo")
+        self.assertEqual(retval, None)
+        self.assertEqual(cmd.stdout.getvalue(), '')
+        self.assertEqual(cmd.stderr.getvalue(), '')
+
+    def test_get_index_keys_no_db(self):
+        cmd = self.make_command(client.CmdGetIndexKeys)
+        retval = cmd.run(self.db_path + "__DOES_NOT_EXIST", "foo")
+        self.assertEqual(retval, 1)
+        self.assertEqual(cmd.stdout.getvalue(), '')
+        self.assertEqual(cmd.stderr.getvalue(), 'Database does not exist.\n')
+
+    def test_get_index_keys_no_index(self):
+        cmd = self.make_command(client.CmdGetIndexKeys)
+        retval = cmd.run(self.db_path, "foo")
+        self.assertEqual(retval, 1)
+        self.assertEqual(cmd.stdout.getvalue(), '')
+        self.assertEqual(cmd.stderr.getvalue(), 'Index does not exist.\n')
 
 
 class RunMainHelper(object):
