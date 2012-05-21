@@ -18,6 +18,7 @@
 
 import argparse
 import os
+import simplejson
 import sys
 
 from u1db import (
@@ -322,8 +323,46 @@ class CmdGetIndexKeys(OneDbCmd):
             return
         return 1
 
-
 client_commands.register(CmdGetIndexKeys)
+
+
+class CmdGetFromIndex(OneDbCmd):
+    """Find documents by searching an index"""
+
+    name = "get-from-index"
+
+    @classmethod
+    def _populate_subparser(cls, parser):
+        parser.add_argument('database', help='The local database to query',
+                            metavar='database-path')
+        parser.add_argument('index', help='the name of the index')
+        parser.add_argument('values', metavar="value",
+                            help='the value to look up (one per index column)',
+                            nargs="+")
+
+    def run(self, database, index, values):
+        try:
+            db = self._open(database, create=False)
+            docs = db.get_from_index(index, [values])
+        except errors.DatabaseDoesNotExist:
+            self.stderr.write("Database does not exist.\n")
+        except errors.IndexDoesNotExist:
+            self.stderr.write("Index does not exist.\n")
+        else:
+            self.stdout.write("[")
+            for i, doc in enumerate(docs):
+                if i:
+                    self.stdout.write(",")
+                self.stdout.write(simplejson.dumps(dict(
+                            id=doc.doc_id,
+                            rev=doc.rev,
+                            content=simplejson.loads(doc.content)),
+                                                   indent=4))
+            self.stdout.write("]\n")
+            return
+        return 1
+
+client_commands.register(CmdGetFromIndex)
 
 
 def main(args):

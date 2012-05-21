@@ -17,6 +17,7 @@
 import cStringIO
 import os
 import sys
+import simplejson
 import subprocess
 
 from u1db import (
@@ -144,6 +145,13 @@ class TestArgs(tests.TestCase):
         self.assertEqual(client.CmdGetIndexKeys, args.subcommand)
         self.assertEqual('db', args.database)
         self.assertEqual('index', args.index)
+
+    def test_get_from_index(self):
+        args = self.parse_args(['get-from-index', 'db', 'index', 'foo'])
+        self.assertEqual(client.CmdGetFromIndex, args.subcommand)
+        self.assertEqual('db', args.database)
+        self.assertEqual('index', args.index)
+        self.assertEqual(['foo'], args.values)
 
 
 class TestCaseWithDB(tests.TestCase):
@@ -467,6 +475,48 @@ class TestCmdGetIndexKeys(TestCaseWithDB):
     def test_get_index_keys_no_index(self):
         cmd = self.make_command(client.CmdGetIndexKeys)
         retval = cmd.run(self.db_path, "foo")
+        self.assertEqual(retval, 1)
+        self.assertEqual(cmd.stdout.getvalue(), '')
+        self.assertEqual(cmd.stderr.getvalue(), 'Index does not exist.\n')
+
+
+class TestCmdGetFromIndex(TestCaseWithDB):
+
+    def test_get_from_index(self):
+        self.db.create_index("index", ["key"])
+        doc1 = self.db.create_doc(tests.simple_doc)
+        doc2 = self.db.create_doc(tests.nested_doc)
+        cmd = self.make_command(client.CmdGetFromIndex)
+        retval = cmd.run(self.db_path, "index", ["value"])
+        self.assertEqual(retval, None)
+        self.assertEqual(sorted(simplejson.loads(cmd.stdout.getvalue())),
+                         sorted([dict(id=doc1.doc_id,
+                                      rev=doc1.rev,
+                                      content=simplejson.loads(doc1.content)),
+                                 dict(id=doc2.doc_id,
+                                      rev=doc2.rev,
+                                      content=simplejson.loads(doc2.content)),
+                                 ]))
+        self.assertEqual(cmd.stderr.getvalue(), '')
+
+    def test_get_from_index_empty(self):
+        self.db.create_index("index", ["key"])
+        cmd = self.make_command(client.CmdGetFromIndex)
+        retval = cmd.run(self.db_path, "index", ["value"])
+        self.assertEqual(retval, None)
+        self.assertEqual(cmd.stdout.getvalue(), '[]\n')
+        self.assertEqual(cmd.stderr.getvalue(), '')
+
+    def test_get_from_index_no_db(self):
+        cmd = self.make_command(client.CmdGetFromIndex)
+        retval = cmd.run(self.db_path + "__DOES_NOT_EXIST", "foo", [])
+        self.assertEqual(retval, 1)
+        self.assertEqual(cmd.stdout.getvalue(), '')
+        self.assertEqual(cmd.stderr.getvalue(), 'Database does not exist.\n')
+
+    def test_get_from_index_no_index(self):
+        cmd = self.make_command(client.CmdGetFromIndex)
+        retval = cmd.run(self.db_path, "foo", [])
         self.assertEqual(retval, 1)
         self.assertEqual(cmd.stdout.getvalue(), '')
         self.assertEqual(cmd.stderr.getvalue(), 'Index does not exist.\n')
