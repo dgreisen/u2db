@@ -356,7 +356,7 @@ class TestCmdCreateIndex(TestCaseWithDB):
         self.assertEqual(retval, 1)
         self.assertEqual(cmd.stdout.getvalue(), '')
         self.assertEqual(cmd.stderr.getvalue(),
-                         'A different index is called that.\n')
+                         "There is already a different index named 'foo'.\n")
 
     def test_create_index_bad_expression(self):
         cmd = self.make_command(client.CmdCreateIndex)
@@ -365,6 +365,7 @@ class TestCmdCreateIndex(TestCaseWithDB):
         self.assertEqual(cmd.stdout.getvalue(), '')
         self.assertEqual(cmd.stderr.getvalue(),
                          'Bad index expression.\n')
+
 
 class TestCmdListIndexes(TestCaseWithDB):
 
@@ -381,6 +382,20 @@ class TestCmdListIndexes(TestCaseWithDB):
         retval = cmd.run(self.db_path)
         self.assertEqual(retval, None)
         self.assertEqual(cmd.stdout.getvalue(), 'foo: bar, baz\n')
+        self.assertEqual(cmd.stderr.getvalue(), '')
+
+    def test_list_several_indexes(self):
+        self.db.create_index("foo", ["bar", "baz"])
+        self.db.create_index("bar", ["baz", "foo"])
+        self.db.create_index("baz", ["foo", "bar"])
+        cmd = self.make_command(client.CmdListIndexes)
+        retval = cmd.run(self.db_path)
+        self.assertEqual(retval, None)
+        self.assertEqual(cmd.stdout.getvalue(),
+                         'bar: baz, foo\n'
+                         'baz: foo, bar\n'
+                         'foo: bar, baz\n'
+                         )
         self.assertEqual(cmd.stderr.getvalue(), '')
 
     def test_list_indexes_no_db(self):

@@ -241,13 +241,14 @@ class CmdCreateIndex(OneDbCmd):
                 return
             db.create_index(index, expression)
         except errors.DatabaseDoesNotExist:
-            print >> self.stderr, "Database does not exist."
+            self.stderr.write("Database does not exist.\n")
             return 1
         except errors.IndexNameTakenError:
-            print >> self.stderr, "A different index is called that."
+            self.stderr.write("There is already a different index named %r.\n"
+                              % (index,))
             return 1
         except errors.IndexDefinitionParseError:
-            print >> self.stderr, "Bad index expression."
+            self.stderr.write("Bad index expression.\n")
             return 1
 
 client_commands.register(CmdCreateIndex)
@@ -267,10 +268,10 @@ class CmdListIndexes(OneDbCmd):
         try:
             db = self._open(database, create=False)
         except errors.DatabaseDoesNotExist:
-            print >> self.stderr, "Database does not exist."
+            self.stderr.write("Database does not exist.\n")
             return 1
         for (index, expression) in db.list_indexes():
-            print >> self.stdout, "%s: %s" % (index, ", ".join(expression))
+            self.stdout.write("%s: %s\n" % (index, ", ".join(expression)))
 
 client_commands.register(CmdListIndexes)
 
