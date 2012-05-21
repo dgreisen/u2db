@@ -733,6 +733,10 @@ class DatabaseIndexTests(tests.DatabaseBaseTests):
                           self.db.get_index_keys,
                           'foo')
 
+    def test_get_index_keys_works_if_no_docs(self):
+        self.db.create_index('test-idx', ['key'])
+        self.assertEqual([], self.db.get_index_keys('test-idx'))
+
     def test_put_updates_index(self):
         doc = self.db.create_doc(simple_doc)
         self.db.create_index('test-idx', ['key'])
