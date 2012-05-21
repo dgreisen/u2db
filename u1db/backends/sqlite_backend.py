@@ -535,7 +535,11 @@ class SQLiteDatabase(CommonBackend):
         c = self._db_handle.cursor()
         c.execute("SELECT field FROM index_definitions"
                   " WHERE name = ? ORDER BY offset", (index_name,))
-        return [x[0] for x in c.fetchall()]
+        fields = [x[0] for x in c.fetchall()]
+        if not fields:
+            raise errors.IndexDoesNotExist
+        return fields
+
 
     @staticmethod
     def _transform_glob(value, escape_char='.'):
@@ -617,6 +621,8 @@ class SQLiteDatabase(CommonBackend):
             raise dbapi2.OperationalError(str(e) +
                 '\nstatement: %s\nargs: %s\n' % (SQL_INDEX_KEYS, (index,)))
         res = c.fetchall()
+        if not res:
+            raise errors.IndexDoesNotExist
         return [r[0] for r in res]
 
     def delete_index(self, index_name):

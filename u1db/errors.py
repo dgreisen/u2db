@@ -77,6 +77,10 @@ class IndexDefinitionParseError(U1DBError):
     """The index definition cannot be parsed."""
 
 
+class IndexDoesNotExist(U1DBError):
+    """No index of that name exists."""
+
+
 class Unauthorized(U1DBError):
     """Request wasn't authorized properly."""
 

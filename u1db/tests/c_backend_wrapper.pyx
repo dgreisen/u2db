@@ -118,6 +118,7 @@ cdef extern from "u1db/u1db.h":
     int U1DB_INVALID_VALUE_FOR_INDEX
     int U1DB_BROKEN_SYNC_STREAM
     int U1DB_DUPLICATE_INDEX_NAME
+    int U1DB_INDEX_DOES_NOT_EXIST
     int U1DB_INTERNAL_ERROR
 
     int U1DB_INSERTED
@@ -567,6 +568,8 @@ cdef handle_status(context, int status):
         raise errors.ConflictedDoc()
     if status == U1DB_DUPLICATE_INDEX_NAME:
         raise errors.IndexNameTakenError()
+    if status == U1DB_INDEX_DOES_NOT_EXIST:
+        raise errors.IndexDoesNotExist
     raise RuntimeError('%s (status: %s)' % (context, status))
 
 

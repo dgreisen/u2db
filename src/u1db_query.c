@@ -440,6 +440,9 @@ lookup_index_fields(u1database *db, u1query *query)
                                SQLITE_TRANSIENT);
     if (status != SQLITE_OK) { goto finish; }
     status = sqlite3_step(statement);
+    if (status == SQLITE_DONE) {
+        status = U1DB_INDEX_DOES_NOT_EXIST;
+    }
     while (status == SQLITE_ROW) {
         offset = sqlite3_column_int(statement, 0);
         field = (char*)sqlite3_column_text(statement, 1);
@@ -627,6 +630,9 @@ u1db_get_index_keys(u1database *db, char *index_name,
         goto finish;
     }
     status = sqlite3_step(statement);
+    if (status == SQLITE_DONE) {
+        status = U1DB_INDEX_DOES_NOT_EXIST;
+    }
     while (status == SQLITE_ROW) {
         key = (char*)sqlite3_column_text(statement, 0);
         if ((status = cb(context, key)) != U1DB_OK)

@@ -189,7 +189,10 @@ class InMemoryDatabase(CommonBackend):
         return definitions
 
     def get_from_index(self, index_name, key_values):
-        index = self._indexes[index_name]
+        try:
+            index = self._indexes[index_name]
+        except KeyError:
+            raise errors.IndexDoesNotExist
         doc_ids = index.lookup(key_values)
         result = []
         for doc_id in doc_ids:
@@ -198,7 +201,10 @@ class InMemoryDatabase(CommonBackend):
         return result
 
     def get_index_keys(self, index_name):
-        index = self._indexes[index_name]
+        try:
+            index = self._indexes[index_name]
+        except KeyError:
+            raise errors.IndexDoesNotExist
         return list(set(index.keys()))
 
     def whats_changed(self, old_generation=0):
