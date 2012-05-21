@@ -291,7 +291,7 @@ class CmdDeleteIndex(OneDbCmd):
         try:
             db = self._open(database, create=False)
         except errors.DatabaseDoesNotExist:
-            print >> self.stderr, "Database does not exist."
+            self.stderr.write("Database does not exist.\n")
             return 1
         db.delete_index(index)
 
