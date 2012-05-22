@@ -211,7 +211,7 @@ class TestSQLitePartialExpandDatabase(tests.TestCase):
         self.db.create_index('test', ['key1', 'key2'])
         doc1 = self.db.create_doc(
             '{"key1": "val1", "key2": "val2"}')
-        doc1.content = '{"key1": "val1", "key2": "valy"}'
+        doc1.content = {"key1": "val1", "key2": "valy"}
         self.db.put_doc(doc1)
         c = self.db._get_sqlite_handle().cursor()
         c.execute("SELECT doc_id, field_name, value FROM document_fields"

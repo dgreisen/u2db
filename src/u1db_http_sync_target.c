@@ -675,8 +675,8 @@ doc_to_tempfile(u1db_document *doc, int gen, FILE *fd)
     }
     json_object_object_add(json, "id", json_object_new_string(doc->doc_id));
     json_object_object_add(json, "rev", json_object_new_string(doc->doc_rev));
-    json_object_object_add(json, "content",
-		      doc->content?json_object_new_string(doc->content):NULL);
+    json_object_object_add(
+        json, "content", doc->json?json_object_new_string(doc->json):NULL);
     json_object_object_add(json, "gen", json_object_new_int(gen));
     fputs(json_object_to_json_string(json), fd);
 finish:

@@ -28,7 +28,7 @@ class TestDocument(tests.TestCase):
         doc = self.make_document('doc-id', 'uid:1', tests.simple_doc)
         self.assertEqual('doc-id', doc.doc_id)
         self.assertEqual('uid:1', doc.rev)
-        self.assertEqual(tests.simple_doc, doc.content)
+        self.assertEqual(tests.simple_doc, doc.get_json())
         self.assertFalse(doc.has_conflicts)
 
     def test__repr__(self):
@@ -47,24 +47,24 @@ class TestDocument(tests.TestCase):
             repr(doc))
 
     def test__lt__(self):
-        doc_a = self.make_document('a', 'b', 'c')
-        doc_b = self.make_document('b', 'b', 'c')
+        doc_a = self.make_document('a', 'b', '{}')
+        doc_b = self.make_document('b', 'b', '{}')
         self.assertTrue(doc_a < doc_b)
         self.assertTrue(doc_b > doc_a)
-        doc_aa = self.make_document('a', 'a', 'b')
+        doc_aa = self.make_document('a', 'a', '{}')
         self.assertTrue(doc_aa < doc_a)
 
     def test__eq__(self):
-        doc_a = self.make_document('a', 'b', 'c')
-        doc_b = self.make_document('a', 'b', 'c')
+        doc_a = self.make_document('a', 'b', '{}')
+        doc_b = self.make_document('a', 'b', '{}')
         self.assertTrue(doc_a == doc_b)
-        doc_b = self.make_document('a', 'b', 'c', has_conflicts=True)
+        doc_b = self.make_document('a', 'b', '{}', has_conflicts=True)
         self.assertFalse(doc_a == doc_b)
 
     def test_set_content(self):
         doc = self.make_document('id', 'rev', '{"content":""}')
-        self.assertEqual('{"content":""}', doc.content)
-        doc.content = '{"content": "new"}'
-        self.assertEqual('{"content": "new"}', doc.content)
+        self.assertEqual('{"content":""}', doc.get_json())
+        doc.set_json('{"content": "new"}')
+        self.assertEqual('{"content": "new"}', doc.get_json())
 
 load_tests = tests.load_with_scenarios

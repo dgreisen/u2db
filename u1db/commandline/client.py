@@ -132,7 +132,7 @@ class CmdGet(OneDbCmd):
         if doc.content is None:
             outfile.write('[document deleted]\n')
         else:
-            outfile.write(doc.content)
+            outfile.write(doc.get_json())
         self.stderr.write('rev: %s\n' % (doc.rev,))
         if doc.has_conflicts:
             # TODO: Probably want to write 'conflicts' or 'conflicted' to

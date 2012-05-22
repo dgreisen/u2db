@@ -44,7 +44,7 @@ cdef extern from "u1db/u1db.h":
         size_t doc_id_len
         char *doc_rev
         size_t doc_rev_len
-        char *content
+        char *json
         size_t content_len
         int has_conflicts
     # Note: u1query is actually defined in u1db_internal.h, and in u1db.h it is
@@ -68,7 +68,7 @@ cdef extern from "u1db/u1db.h":
     void u1db_free(u1database **)
     int u1db_set_replica_uid(u1database *, char *replica_uid)
     int u1db_get_replica_uid(u1database *, const_char_ptr *replica_uid)
-    int u1db_create_doc(u1database *db, char *content, char *doc_id,
+    int u1db_create_doc(u1database *db, char *json, char *doc_id,
                         u1db_document **doc)
     int u1db_delete_doc(u1database *db, u1db_document *doc)
     int u1db_get_doc(u1database *db, char *doc_id, u1db_document **doc)
@@ -127,7 +127,7 @@ cdef extern from "u1db/u1db.h":
     int U1DB_CONFLICTED
 
     void u1db_free_doc(u1db_document **doc)
-    int u1db_doc_set_content(u1db_document *doc, char *content)
+    int u1db_doc_set_json(u1db_document *doc, char *json)
 
 
 cdef extern from "u1db/u1db_internal.h":
@@ -457,15 +457,14 @@ cdef class CDocument(object):
             return PyString_FromStringAndSize(
                     self._doc.doc_rev, self._doc.doc_rev_len)
 
-    property content:
-        def __get__(self):
-            if self._doc.content == NULL:
-                return None
-            return PyString_FromStringAndSize(
-                    self._doc.content, self._doc.content_len)
+    def get_json(self):
+        if self._doc.json == NULL:
+            return None
+        return PyString_FromStringAndSize(
+                self._doc.json, self._doc.content_len)
 
-        def __set__(self, val):
-            u1db_doc_set_content(self._doc, val)
+    def set_json(self, val):
+        u1db_doc_set_json(self._doc, val)
 
 
     property has_conflicts:
@@ -480,7 +479,7 @@ cdef class CDocument(object):
         else:
             extra = ''
         return '%s(%s, %s%s, %r)' % (self.__class__.__name__, self.doc_id,
-                                     self.rev, extra, self.content)
+                                     self.rev, extra, self.get_json())
 
     def __hash__(self):
         raise NotImplementedError(self.__hash__)
@@ -488,12 +487,12 @@ cdef class CDocument(object):
     def __richcmp__(self, other, int t):
         try:
             if t == 0: # Py_LT <
-                return ((self.doc_id, self.rev, self.content)
-                    < (other.doc_id, other.rev, other.content))
+                return ((self.doc_id, self.rev, self.get_json())
+                    < (other.doc_id, other.rev, other.get_json()))
             elif t == 2: # Py_EQ ==
                 return (self.doc_id == other.doc_id
                         and self.rev == other.rev
-                        and self.content == other.content
+                        and self.get_json() == other.get_json()
                         and self.has_conflicts == other.has_conflicts)
         except AttributeError:
             # Fall through to NotImplemented

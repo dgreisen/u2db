@@ -157,7 +157,8 @@ class SQLiteDatabase(CommonBackend):
         #   like lp:dirspec to grab the file from a common resource
         #   directory. Doesn't specifically need to be handled until we get
         #   to the point of packaging this.
-        schema_content = pkg_resources.resource_string(__name__, 'dbschema.sql')
+        schema_content = pkg_resources.resource_string(
+            __name__, 'dbschema.sql')
         # Note: We'd like to use c.executescript() here, but it seems that
         #       executescript always commits, even if you set
         #       isolation_level = None, so if we want to properly handle
@@ -392,7 +393,7 @@ class SQLiteDatabase(CommonBackend):
                 raise errors.DocumentDoesNotExist
             if old_doc.rev != doc.rev:
                 raise errors.RevisionConflict()
-            if old_doc.content is None:
+            if old_doc.get_json() is None:
                 raise errors.DocumentAlreadyDeleted
             if self._has_conflicts(doc.doc_id):
                 raise errors.ConflictedDoc()
@@ -481,7 +482,7 @@ class SQLiteDatabase(CommonBackend):
         my_doc = self._get_doc(doc.doc_id)
         c = self._db_handle.cursor()
         self._prune_conflicts(doc, vectorclock.VectorClockRev(doc.rev))
-        self._add_conflict(c, doc.doc_id, my_doc.rev, my_doc.content)
+        self._add_conflict(c, doc.doc_id, my_doc.rev, my_doc.get_json())
         doc.has_conflicts = True
         self._put_and_update_indexes(my_doc, doc)
 
@@ -509,7 +510,7 @@ class SQLiteDatabase(CommonBackend):
             if cur_doc.rev in superseded_revs:
                 self._put_and_update_indexes(cur_doc, doc)
             else:
-                self._add_conflict(c, doc.doc_id, new_rev, doc.content)
+                self._add_conflict(c, doc.doc_id, new_rev, doc.get_json())
             # TODO: Is there some way that we could construct a rev that would
             #       end up in superseded_revs, such that we add a conflict, and
             #       then immediately delete it?
@@ -539,7 +540,6 @@ class SQLiteDatabase(CommonBackend):
         if not fields:
             raise errors.IndexDoesNotExist
         return fields
-
 
     @staticmethod
     def _transform_glob(value, escape_char='.'):
@@ -670,20 +670,20 @@ class SQLitePartialExpandDatabase(SQLiteDatabase):
 
     def _put_and_update_indexes(self, old_doc, doc):
         c = self._db_handle.cursor()
-        if doc and doc.content:
-            raw_doc = simplejson.loads(doc.content)
+        if doc and doc.get_json():
+            raw_doc = doc.content
         else:
             raw_doc = {}
         if old_doc is not None:
             c.execute("UPDATE document SET doc_rev=?, content=?"
                       " WHERE doc_id = ?",
-                      (doc.rev, doc.content, doc.doc_id))
+                      (doc.rev, doc.get_json(), doc.doc_id))
             c.execute("DELETE FROM document_fields WHERE doc_id = ?",
                       (doc.doc_id,))
         else:
             c.execute("INSERT INTO document (doc_id, doc_rev, content)"
                       " VALUES (?, ?, ?)",
-                      (doc.doc_id, doc.rev, doc.content))
+                      (doc.doc_id, doc.rev, doc.get_json()))
         indexed_fields = self._get_indexed_fields()
         if indexed_fields:
             # It is expected that len(indexed_fields) is shorter than

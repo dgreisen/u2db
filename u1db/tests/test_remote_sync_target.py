@@ -182,7 +182,7 @@ class TestRemoteSyncTargets(tests.TestCaseWithServer):
         remote_target = self.getSyncTarget('test')
         other_docs = []
         def receive_doc(doc):
-            other_docs.append((doc.doc_id, doc.rev, doc.content))
+            other_docs.append((doc.doc_id, doc.rev, doc.get_json()))
         doc = self.make_document('doc-here', 'replica:1', '{"value": "here"}')
         new_gen = remote_target.sync_exchange(
                 [(doc, 10)],
@@ -213,7 +213,7 @@ class TestRemoteSyncTargets(tests.TestCaseWithServer):
         remote_target = self.getSyncTarget('test')
         other_changes = []
         def receive_doc(doc, gen):
-            other_changes.append((doc.doc_id, doc.rev, doc.content, gen))
+            other_changes.append((doc.doc_id, doc.rev, doc.get_json(), gen))
         doc1 = self.make_document('doc-here', 'replica:1', '{"value": "here"}')
         doc2 = self.make_document('doc-here2', 'replica:1',
                                   '{"value": "here2"}')
@@ -256,7 +256,7 @@ class TestRemoteSyncTargets(tests.TestCaseWithServer):
         remote_target = self.getSyncTarget('test')
         other_changes = []
         def receive_doc(doc, gen):
-            other_changes.append((doc.doc_id, doc.rev, doc.content, gen))
+            other_changes.append((doc.doc_id, doc.rev, doc.get_json(), gen))
         self.assertRaises(errors.Unavailable, remote_target.sync_exchange,
                           [], 'replica', last_known_generation=0,
                           return_doc_cb=receive_doc)
@@ -270,7 +270,7 @@ class TestRemoteSyncTargets(tests.TestCaseWithServer):
         remote_target = self.getSyncTarget('test')
         other_changes = []
         def receive_doc(doc, gen):
-            other_changes.append((doc.doc_id, doc.rev, doc.content, gen))
+            other_changes.append((doc.doc_id, doc.rev, doc.get_json(), gen))
         new_gen = remote_target.sync_exchange(
                         [], 'replica', last_known_generation=0,
                         return_doc_cb=receive_doc)

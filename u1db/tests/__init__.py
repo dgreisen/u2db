@@ -29,7 +29,6 @@ import testtools
 from u1db import (
     errors,
     Document,
-    sync,
     )
 from u1db.backends import (
     inmemory,
@@ -83,7 +82,7 @@ class TestCase(testtools.TestCase):
             conflicts = conflicts[:1] + sorted(conflicts[1:])
         actual = db.get_doc_conflicts(doc_id)
         if actual:
-            actual = [(doc.rev, doc.content) for doc in actual]
+            actual = [(doc.rev, doc.get_json()) for doc in actual]
             actual = actual[:1] + sorted(actual[1:])
         self.assertEqual(conflicts, actual)
 

@@ -32,7 +32,7 @@ typedef struct _u1db_document
     size_t doc_id_len;
     char *doc_rev;
     size_t doc_rev_len;
-    char *content;
+    char *json;
     size_t content_len;
     int has_conflicts;
 } u1db_document;
@@ -104,7 +104,7 @@ int u1db_get_replica_uid(u1database *db, const char **replica_uid);
 /**
  * Create a new document.
  *
- * @param content The JSON string representing the document. The content will
+ * @param json The JSON string representing the document. The json will
  *                be copied and managed by the 'doc' parameter.
  * @param doc_id A string identifying the document. If the value supplied is
  *               NULL, then a new doc_id will be generated.
@@ -112,7 +112,7 @@ int u1db_get_replica_uid(u1database *db, const char **replica_uid);
  *            freed with u1db_free_doc
  * @return a status code indicating success or failure.
  */
-int u1db_create_doc(u1database *db, const char *content, const char *doc_id,
+int u1db_create_doc(u1database *db, const char *json, const char *doc_id,
                     u1db_document **doc);
 
 /**
@@ -229,7 +229,7 @@ void u1db_free_doc(u1db_document **doc);
  * This will copy the string, since the memory is managed by the doc object
  * itself.
  */
-int u1db_doc_set_content(u1db_document *doc, const char *content);
+int u1db_doc_set_json(u1db_document *doc, const char *json);
 
 
 /**

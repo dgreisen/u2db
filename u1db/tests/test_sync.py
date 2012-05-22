@@ -129,7 +129,7 @@ class DatabaseSyncTargetTests(tests.DatabaseBaseTests,
         super(DatabaseSyncTargetTests, self).tearDown()
 
     def receive_doc(self, doc, gen):
-        self.other_changes.append((doc.doc_id, doc.rev, doc.content, gen))
+        self.other_changes.append((doc.doc_id, doc.rev, doc.get_json(), gen))
 
     def set_trace_hook(self, callback):
         try:
@@ -314,7 +314,7 @@ class DatabaseSyncTargetTests(tests.DatabaseBaseTests,
         doc = self.db.create_doc(simple_doc)
         docs_by_gen = [
             (self.make_document('new', 'other:1', '{}'), 4),
-            (self.make_document(doc.doc_id, doc.rev, doc.content), 5)]
+            (self.make_document(doc.doc_id, doc.rev, doc.get_json()), 5)]
         new_gen = self.st.sync_exchange(docs_by_gen, 'other-replica',
                                         last_known_generation=0,
                                         return_doc_cb=self.receive_doc)
@@ -511,7 +511,7 @@ class DatabaseSyncTests(tests.DatabaseBaseTests):
         self.sync(self.db1, self.db3)
         self.sync(self.db2, self.db3)
         new_content = '{"key": "altval"}'
-        doc.content = new_content
+        doc.set_json(new_content)
         self.db1.put_doc(doc)
         doc_rev2 = doc.rev
         self.sync(self.db2, self.db1)
@@ -551,9 +551,9 @@ class DatabaseSyncTests(tests.DatabaseBaseTests):
         doc_id = doc1.doc_id
         self.db1.create_index('test-idx', ['key'])
         self.sync(self.db1, self.db2)
-        doc2 = self.make_document(doc1.doc_id, doc1.rev, doc1.content)
+        doc2 = self.make_document(doc1.doc_id, doc1.rev, doc1.get_json())
         new_doc = '{"key": "altval"}'
-        doc1.content = new_doc
+        doc1.set_json(new_doc)
         self.db1.put_doc(doc1)
         self.db2.delete_doc(doc2)
         self.assertTransactionLog([doc_id, doc_id], self.db1)
@@ -577,7 +577,7 @@ class DatabaseSyncTests(tests.DatabaseBaseTests):
         self.sync(self.db1, self.db2)
         content1 = '{"key": "localval"}'
         content2 = '{"key": "altval"}'
-        doc.content = content2
+        doc.set_json(content2)
         self.db2.put_doc(doc)
         doc2_rev2 = doc.rev
         triggered = []
@@ -636,7 +636,7 @@ class DatabaseSyncTests(tests.DatabaseBaseTests):
         self.sync(self.db2, db3)
         self.assertEqual(db3.get_doc('the-doc').rev, doc2.rev)
         # update on 1
-        doc1.content = '{"a": 3}'
+        doc1.set_json('{"a": 3}')
         self.db1.put_doc(doc1)
         # conflicts
         self.sync(self.db2, self.db1)
@@ -649,11 +649,11 @@ class DatabaseSyncTests(tests.DatabaseBaseTests):
         revs = [doc.rev for doc in conflicts]
         self.db2.resolve_doc(doc4, revs)
         doc2 = self.db2.get_doc('the-doc')
-        self.assertEqual(doc4.content, doc2.content)
+        self.assertEqual(doc4.get_json(), doc2.get_json())
         self.assertFalse(doc2.has_conflicts)
         self.sync(self.db2, db3)
         doc3 = db3.get_doc('the-doc')
-        self.assertEqual(doc4.content, doc3.content)
+        self.assertEqual(doc4.get_json(), doc3.get_json())
         self.assertFalse(doc3.has_conflicts)
 
     def test_sync_supersedes_conflicts(self):
@@ -664,7 +664,7 @@ class DatabaseSyncTests(tests.DatabaseBaseTests):
         self.sync(db3, self.db1)
         self.sync(db3, self.db2)
         self.assertEqual(3, len(db3.get_doc_conflicts('the-doc')))
-        doc1.content = '{"a": 2}'
+        doc1.set_json('{"a": 2}')
         self.db1.put_doc(doc1)
         self.sync(db3, self.db1)
         # original doc1 should have been removed from conflicts
