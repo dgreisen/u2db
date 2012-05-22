@@ -108,7 +108,7 @@ class HTTPDatabase(http_client.HTTPClientBase, Database):
         params = {'old_rev': doc.rev}
         res, headers = self._request_json('DELETE',
             ['doc', doc.doc_id], params)
-        doc.content = None
+        doc.delete()
         doc.rev = res['rev']
 
     def get_sync_target(self):

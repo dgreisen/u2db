@@ -399,7 +399,7 @@ class SQLiteDatabase(CommonBackend):
                 raise errors.ConflictedDoc()
             new_rev = self._allocate_doc_rev(doc.rev)
             doc.rev = new_rev
-            doc.content = None
+            doc.delete()
             self._put_and_update_indexes(old_doc, doc)
         return new_rev
 

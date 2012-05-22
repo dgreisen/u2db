@@ -167,7 +167,7 @@ class InMemoryDatabase(CommonBackend):
             raise errors.DocumentDoesNotExist
         if self._docs[doc.doc_id][1] in ('null', None):
             raise errors.DocumentAlreadyDeleted
-        doc.content = None
+        doc.delete()
         self.put_doc(doc)
 
     def create_index(self, index_name, index_expression):
