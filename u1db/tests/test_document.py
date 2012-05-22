@@ -67,4 +67,21 @@ class TestDocument(tests.TestCase):
         doc.set_json('{"content": "new"}')
         self.assertEqual('{"content": "new"}', doc.get_json())
 
+
+class TestPyDocument(tests.TestCase):
+
+    scenarios = ([('py', {'make_document': Document})])
+
+    def test_get_content(self):
+        doc = self.make_document('id', 'rev', '{"content":""}')
+        self.assertEqual({"content": ""}, doc.content)
+        doc.set_json('{"content": "new"}')
+        self.assertEqual({"content": "new"}, doc.content)
+
+    def test_set_content(self):
+        doc = self.make_document('id', 'rev', '{"content":""}')
+        doc.content = {"content": "new"}
+        self.assertEqual('{"content": "new"}', doc.get_json())
+
+
 load_tests = tests.load_with_scenarios

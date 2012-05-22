@@ -339,6 +339,23 @@ class Document(object):
         return ((self.doc_id, self.rev, self.get_json())
             < (other.doc_id, other.rev, other.get_json()))
 
+    def get_json(self):
+        """Get the json serialization of this document."""
+        if self._json is not None:
+            return self._json
+        if self._content is not None:
+            return simplejson.dumps(self._content, sort_keys=True)
+        return None
+
+    def set_json(self, json):
+        """Set the json serialization of this document."""
+        self._content = None
+        self._json = json
+
+    # The following part of the API is optional: no implementation is forced to
+    # have it but if the language supports dictionaries/hashtables, it makes
+    # Documents a lot more user friendly.
+
     def _get_content(self):
         """Get the dictionary representing this document."""
         if self._json is not None:
@@ -356,18 +373,7 @@ class Document(object):
     content = property(
         _get_content, _set_content, doc="Content of the Document.")
 
-    def get_json(self):
-        """Get the json serialization of this document."""
-        if self._json is not None:
-            return self._json
-        if self._content is not None:
-            return simplejson.dumps(self._content, sort_keys=True)
-        return None
-
-    def set_json(self, json):
-        """Set the json serialization of this document."""
-        self._content = None
-        self._json = json
+    # End of optional part.
 
 
 class SyncTarget(object):
