@@ -260,7 +260,7 @@ class DocResource(object):
             'x-u1db-rev': doc.rev,
             'x-u1db-has-conflicts': simplejson.dumps(doc.has_conflicts)
             }
-        if doc.get_json() is None:
+        if doc.is_deleted():
             self.responder.send_response_json(
                http_errors.wire_description_to_status[errors.DOCUMENT_DELETED],
                error=errors.DOCUMENT_DELETED,

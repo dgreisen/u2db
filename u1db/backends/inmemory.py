@@ -90,9 +90,9 @@ class InMemoryDatabase(CommonBackend):
 
     def _put_and_update_indexes(self, old_doc, doc):
         for index in self._indexes.itervalues():
-            if old_doc is not None and old_doc.get_json() is not None:
+            if old_doc is not None and not old_doc.is_deleted():
                 index.remove_json(old_doc.doc_id, old_doc.get_json())
-            if doc.get_json() is not None:
+            if not doc.is_deleted():
                 index.add_json(doc.doc_id, doc.get_json())
         trans_id = self._allocate_transaction_id()
         self._docs[doc.doc_id] = (doc.rev, doc.get_json())

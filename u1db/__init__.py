@@ -364,6 +364,11 @@ class Document(object):
         self._content = None
         self._json = json
 
+    def delete(self):
+        """Delete this document."""
+        self._json = None
+        self._content = None
+
     # The following part of the API is optional: no implementation is forced to
     # have it but if the language supports dictionaries/hashtables, it makes
     # Documents a lot more user friendly.

@@ -61,12 +61,6 @@ class TestDocument(tests.TestCase):
         doc_b = self.make_document('a', 'b', '{}', has_conflicts=True)
         self.assertFalse(doc_a == doc_b)
 
-    def test_set_json(self):
-        doc = self.make_document('id', 'rev', '{"content":""}')
-        self.assertEqual('{"content":""}', doc.get_json())
-        doc.set_json('{"content": "new"}')
-        self.assertEqual('{"content": "new"}', doc.get_json())
-
 
 class TestPyDocument(tests.TestCase):
 
@@ -88,6 +82,34 @@ class TestPyDocument(tests.TestCase):
         self.assertFalse(doc_a.is_deleted())
         doc_a.set_json(None)
         self.assertTrue(doc_a.is_deleted())
+
+    def test_delete(self):
+        doc_a = self.make_document('a', 'b', '{}')
+        self.assertFalse(doc_a.is_deleted())
+        doc_a.delete()
+        self.assertTrue(doc_a.is_deleted())
+
+    def test_same_content_as(self):
+        doc_a = self.make_document('a', 'b', '{}')
+        doc_b = self.make_document('d', 'e', '{}')
+        self.assertTrue(doc_a.same_content_as(doc_b))
+        doc_b = self.make_document('p', 'q', '{}', has_conflicts=True)
+        self.assertTrue(doc_a.same_content_as(doc_b))
+        doc_b.content['key'] = 'value'
+        self.assertFalse(doc_a.same_content_as(doc_b))
+
+    def test_same_content_as_json_order(self):
+        doc_a = self.make_document(
+            'a', 'b', '{"key1": "val1", "key2": "val2"}')
+        doc_b = self.make_document(
+            'c', 'd', '{"key2": "val2", "key1": "val1"}')
+        self.assertTrue(doc_a.same_content_as(doc_b))
+
+    def test_set_json(self):
+        doc = self.make_document('id', 'rev', '{"content":""}')
+        self.assertEqual('{"content":""}', doc.get_json())
+        doc.set_json('{"content": "new"}')
+        self.assertEqual('{"content": "new"}', doc.get_json())
 
 
 load_tests = tests.load_with_scenarios

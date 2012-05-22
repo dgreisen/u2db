@@ -393,7 +393,7 @@ class SQLiteDatabase(CommonBackend):
                 raise errors.DocumentDoesNotExist
             if old_doc.rev != doc.rev:
                 raise errors.RevisionConflict()
-            if old_doc.get_json() is None:
+            if old_doc.is_deleted():
                 raise errors.DocumentAlreadyDeleted
             if self._has_conflicts(doc.doc_id):
                 raise errors.ConflictedDoc()
@@ -670,7 +670,7 @@ class SQLitePartialExpandDatabase(SQLiteDatabase):
 
     def _put_and_update_indexes(self, old_doc, doc):
         c = self._db_handle.cursor()
-        if doc and doc.get_json():
+        if doc and not doc.is_deleted():
             raw_doc = simplejson.loads(doc.get_json())
         else:
             raw_doc = {}
