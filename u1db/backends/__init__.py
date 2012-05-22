@@ -110,7 +110,7 @@ class CommonBackend(u1db.Database):
             # so we should send it back, and we should not generate a
             # conflict
             state = 'superseded'
-        elif cur_doc.content == doc.content:
+        elif cur_doc.same_content_as(doc):
             # the documents have been edited to the same thing at both ends
             doc_vcr.maximize(cur_vcr)
             doc_vcr.increment(self._replica_uid)

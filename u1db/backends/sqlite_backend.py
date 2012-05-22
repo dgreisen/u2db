@@ -671,7 +671,7 @@ class SQLitePartialExpandDatabase(SQLiteDatabase):
     def _put_and_update_indexes(self, old_doc, doc):
         c = self._db_handle.cursor()
         if doc and doc.get_json():
-            raw_doc = doc.content
+            raw_doc = simplejson.loads(doc.get_json())
         else:
             raw_doc = {}
         if old_doc is not None:

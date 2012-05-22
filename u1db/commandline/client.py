@@ -129,7 +129,7 @@ class CmdGet(OneDbCmd):
         if doc is None:
             self.stderr.write('Document not found (id: %s)\n' % (doc_id,))
             return 1  # failed
-        if doc.content is None:
+        if doc.is_deleted():
             outfile.write('[document deleted]\n')
         else:
             outfile.write(doc.get_json())

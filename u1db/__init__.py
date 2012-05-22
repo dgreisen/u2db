@@ -308,6 +308,18 @@ class Document(object):
         self._content = None
         self.has_conflicts = has_conflicts
 
+    def same_content_as(self, other):
+        """Compare the content of two documents."""
+        if self._json:
+            c1 = simplejson.loads(self._json)
+        else:
+            c1 = self._content
+        if other._json:
+            c2 = simplejson.loads(other._json)
+        else:
+            c2 = other._content
+        return c1 == c2
+
     def __repr__(self):
         if self.has_conflicts:
             extra = ', conflicted'
@@ -324,7 +336,7 @@ class Document(object):
             return NotImplemented
         return (
             self.doc_id == other.doc_id and self.rev == other.rev and
-            self.content == other.content and self.has_conflicts ==
+            self.same_content_as(other) and self.has_conflicts ==
             other.has_conflicts)
 
     def __lt__(self, other):
@@ -344,7 +356,7 @@ class Document(object):
         if self._json is not None:
             return self._json
         if self._content is not None:
-            return simplejson.dumps(self._content, sort_keys=True)
+            return simplejson.dumps(self._content)
         return None
 
     def set_json(self, json):
@@ -372,6 +384,9 @@ class Document(object):
 
     content = property(
         _get_content, _set_content, doc="Content of the Document.")
+
+    def is_deleted(self):
+        return self.get_json() is None
 
     # End of optional part.
 

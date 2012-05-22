@@ -61,7 +61,7 @@ class TestDocument(tests.TestCase):
         doc_b = self.make_document('a', 'b', '{}', has_conflicts=True)
         self.assertFalse(doc_a == doc_b)
 
-    def test_set_content(self):
+    def test_set_json(self):
         doc = self.make_document('id', 'rev', '{"content":""}')
         self.assertEqual('{"content":""}', doc.get_json())
         doc.set_json('{"content": "new"}')
@@ -82,6 +82,12 @@ class TestPyDocument(tests.TestCase):
         doc = self.make_document('id', 'rev', '{"content":""}')
         doc.content = {"content": "new"}
         self.assertEqual('{"content": "new"}', doc.get_json())
+
+    def test_is_deleted(self):
+        doc_a = self.make_document('a', 'b', '{}')
+        self.assertFalse(doc_a.is_deleted())
+        doc_a.set_json(None)
+        self.assertTrue(doc_a.is_deleted())
 
 
 load_tests = tests.load_with_scenarios
