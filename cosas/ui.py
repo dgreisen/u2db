@@ -94,9 +94,9 @@ class TaskDelegate(QtGui.QStyledItemDelegate):
         painter.save()
         painter.setPen(self.pen)
         painter.drawRect(option.rect)
+        # Return painter to original stats.
         painter.restore()
         super(TaskDelegate, self).paint(painter, option, index)
-        # Return painter to original stats.
 
 
 class Sync(QtGui.QDialog):
@@ -192,9 +192,9 @@ class Main(QtGui.QMainWindow):
         # Get all the tasks in the database, and add them to the UI.
         for task in self.store.get_all_tasks():
             self.add_task(task)
-        self.task_edit.clear()
+        self.title_edit.clear()
         # Give the edit field focus.
-        self.task_edit.setFocus()
+        self.title_edit.setFocus()
         # Initialize the variable that points to the currently selected list
         # item.
         self.item = None
@@ -209,10 +209,10 @@ class Main(QtGui.QMainWindow):
     def connect_events(self):
         """Hook up all the signal handlers."""
         # On enter, save the task that was being edited.
-        self.task_edit.returnPressed.connect(self.update)
+        self.title_edit.returnPressed.connect(self.update)
         # If a new row in the list is selected, change the currently selected
         # task, and put its contents in the edit field.
-        # self.todo_list.currentItemChanged.connect(self.row_changed)
+        self.todo_list.itemDoubleClicked.connect(self.task_double_clicked)
         # If the checked status of an item in the list changes, change the done
         # status of the task.
         # self.todo_list.itemChanged.connect(self.item_changed)
@@ -248,7 +248,7 @@ class Main(QtGui.QMainWindow):
             self.add_task(task)
         # Clear the current selection.
         self.todo_list.setCurrentRow(-1)
-        self.task_edit.clear()
+        self.title_edit.clear()
         self.item = None
 
     def item_changed(self, item):
@@ -262,12 +262,12 @@ class Main(QtGui.QMainWindow):
         item.setText(item.task.title)
         # Clear the current selection.
         self.todo_list.setCurrentRow(-1)
-        self.task_edit.clear()
+        self.title_edit.clear()
         self.item = None
 
     def update(self):
         """Either add a new task or update an existing one."""
-        text = unicode(self.task_edit.text(), 'utf-8')
+        text = unicode(self.title_edit.text(), 'utf-8')
         if not text:
             # There was no text in the edit field so do nothing.
             return
@@ -279,7 +279,7 @@ class Main(QtGui.QMainWindow):
             # A task was selected, so update it.
             self.update_task_text(text)
         # Clear the current selection.
-        self.task_edit.clear()
+        self.title_edit.clear()
         self.item = None
 
     def delete(self):
@@ -292,7 +292,7 @@ class Main(QtGui.QMainWindow):
         self.store.delete_task(item.task)
         # Clear the current selection.
         self.todo_list.setCurrentRow(-1)
-        self.task_edit.clear()
+        self.title_edit.clear()
         self.item = None
 
     def add_task(self, task):
@@ -415,20 +415,18 @@ class Main(QtGui.QMainWindow):
         # Save the changed task to the database.
         self.store.save_task(task)
 
-    def row_changed(self, index):
+    def task_double_clicked(self, task):
         """Edit item when row changes."""
-        if index == -1:
-            self.task_edit.clear()
-            return
         # If a row is selected, show the selected task's title in the edit
         # field.
-        self.item = self.todo_list.item(index)
-        self.task_edit.setText(self.item.task.title)
+        self.drop_frame.show()
+        self.item = task
+        self.title_edit.setText(self.item.task.title)
 
 
 if __name__ == "__main__":
-    # Unfortunately, to be able to use ubuntuone.platform.credentials on linux,
-    # we now depend on dbus. :(
+    # TODO: Unfortunately, to be able to use ubuntuone.platform.credentials on
+    # linux, we now depend on dbus. :(
     from dbus.mainloop.qt import DBusQtMainLoop
     main_loop = DBusQtMainLoop(set_as_default=True)
     app = QtGui.QApplication(sys.argv)
