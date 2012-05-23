@@ -33,7 +33,7 @@ typedef struct _u1db_document
     char *doc_rev;
     size_t doc_rev_len;
     char *json;
-    size_t content_len;
+    size_t json_len;
     int has_conflicts;
 } u1db_document;
 

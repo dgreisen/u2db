@@ -45,7 +45,7 @@ cdef extern from "u1db/u1db.h":
         char *doc_rev
         size_t doc_rev_len
         char *json
-        size_t content_len
+        size_t json_len
         int has_conflicts
     # Note: u1query is actually defined in u1db_internal.h, and in u1db.h it is
     #       just an opaque pointer. However, older versions of Cython don't let
@@ -461,7 +461,7 @@ cdef class CDocument(object):
         if self._doc.json == NULL:
             return None
         return PyString_FromStringAndSize(
-                self._doc.json, self._doc.content_len)
+                self._doc.json, self._doc.json_len)
 
     def set_json(self, val):
         u1db_doc_set_json(self._doc, val)
