@@ -547,7 +547,7 @@ u1db_put_doc(u1database *db, u1db_document *doc)
         doc->doc_rev = new_rev;
         doc->doc_rev_len = strlen(new_rev);
         status = write_doc(db, doc->doc_id, new_rev,
-                           doc->json, doc->content_len,
+                           doc->json, doc->json_len,
                            (old_doc_rev != NULL));
     }
 finish:
@@ -812,7 +812,7 @@ u1db__put_doc_if_newer(u1database *db, u1db_document *doc, int save_conflict,
     }
     if (status == U1DB_OK && store) {
         status = write_doc(db, doc->doc_id, doc->doc_rev,
-                           doc->json, doc->content_len,
+                           doc->json, doc->json_len,
                            (stored_doc_rev != NULL));
     }
     if (status == U1DB_OK && replica_uid != NULL) {
@@ -917,12 +917,12 @@ u1db_resolve_doc(u1database *db, u1db_document *doc,
     doc->doc_rev_len = strlen(new_doc_rev);
     if (cur_in_superseded) {
         status = write_doc(db, doc->doc_id, new_doc_rev, doc->json,
-                doc->content_len, (stored_doc_rev != NULL));
+                doc->json_len, (stored_doc_rev != NULL));
     } else {
         // The current value is not listed as being superseded, so we just put
         // this rev as a conflict
         status = write_conflict(db, doc->doc_id, new_doc_rev, doc->json,
-                                doc->content_len);
+                                doc->json_len);
     }
     if (status != U1DB_OK) {
         goto finish;
@@ -1110,7 +1110,7 @@ finish:
         doc->doc_rev_len = strlen(doc_rev);
         free(doc->json);
         doc->json = NULL;
-        doc->content_len = 0;
+        doc->json_len = 0;
     }
     return status;
 }
@@ -1556,7 +1556,7 @@ u1db__allocate_document(const char *doc_id, const char *revision,
         goto cleanup;
     if (!copy_str_and_len(&doc->doc_rev, &doc->doc_rev_len, revision))
         goto cleanup;
-    if (!copy_str_and_len(&doc->json, &doc->content_len, content))
+    if (!copy_str_and_len(&doc->json, &doc->json_len, content))
         goto cleanup;
     doc->has_conflicts = has_conflicts;
     return doc;
@@ -1617,7 +1617,7 @@ u1db_doc_set_json(u1db_document *doc, const char *json)
     memcpy(tmp, json, content_len);
     free(doc->json);
     doc->json = tmp;
-    doc->content_len = content_len;
+    doc->json_len = content_len;
     // TODO: Return success
     return 1;
 }
