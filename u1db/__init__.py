@@ -364,10 +364,18 @@ class Document(object):
         self._content = None
         self._json = json
 
-    def delete(self):
-        """Delete this document."""
+    def make_tombstone(self):
+        """Make this document into a tombstone."""
         self._json = None
         self._content = None
+
+    def is_tombstone(self):
+        """Return True if the document is a tombstone, False otherwise."""
+        if self._content is not None:
+            return False
+        if self._json is not None:
+            return False
+        return True
 
     # The following part of the API is optional: no implementation is forced to
     # have it but if the language supports dictionaries/hashtables, it makes
@@ -389,9 +397,6 @@ class Document(object):
 
     content = property(
         _get_content, _set_content, doc="Content of the Document.")
-
-    def is_deleted(self):
-        return self.get_json() is None
 
     # End of optional part.
 

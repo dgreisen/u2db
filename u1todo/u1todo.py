@@ -113,7 +113,7 @@ class TodoStore(object):
         if document is None:
             # No document with that id exists in the database.
             raise KeyError("No task with id '%s'." % (task_id,))
-        if document.is_deleted():
+        if document.is_tombstone():
             # The document id exists, but the document's content was previously
             # deleted.
             raise KeyError("Task with id %s was deleted." % (task_id,))

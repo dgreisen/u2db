@@ -90,9 +90,9 @@ class InMemoryDatabase(CommonBackend):
 
     def _put_and_update_indexes(self, old_doc, doc):
         for index in self._indexes.itervalues():
-            if old_doc is not None and not old_doc.is_deleted():
+            if old_doc is not None and not old_doc.is_tombstone():
                 index.remove_json(old_doc.doc_id, old_doc.get_json())
-            if not doc.is_deleted():
+            if not doc.is_tombstone():
                 index.add_json(doc.doc_id, doc.get_json())
         trans_id = self._allocate_transaction_id()
         self._docs[doc.doc_id] = (doc.rev, doc.get_json())
@@ -167,7 +167,7 @@ class InMemoryDatabase(CommonBackend):
             raise errors.DocumentDoesNotExist
         if self._docs[doc.doc_id][1] in ('null', None):
             raise errors.DocumentAlreadyDeleted
-        doc.delete()
+        doc.make_tombstone()
         self.put_doc(doc)
 
     def create_index(self, index_name, index_expression):

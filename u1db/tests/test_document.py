@@ -77,17 +77,17 @@ class TestPyDocument(tests.TestCase):
         doc.content = {"content": "new"}
         self.assertEqual('{"content": "new"}', doc.get_json())
 
-    def test_is_deleted(self):
+    def test_is_tombstone(self):
         doc_a = self.make_document('a', 'b', '{}')
-        self.assertFalse(doc_a.is_deleted())
+        self.assertFalse(doc_a.is_tombstone())
         doc_a.set_json(None)
-        self.assertTrue(doc_a.is_deleted())
+        self.assertTrue(doc_a.is_tombstone())
 
-    def test_delete(self):
+    def test_make_tombstone(self):
         doc_a = self.make_document('a', 'b', '{}')
-        self.assertFalse(doc_a.is_deleted())
-        doc_a.delete()
-        self.assertTrue(doc_a.is_deleted())
+        self.assertFalse(doc_a.is_tombstone())
+        doc_a.make_tombstone()
+        self.assertTrue(doc_a.is_tombstone())
 
     def test_same_content_as(self):
         doc_a = self.make_document('a', 'b', '{}')

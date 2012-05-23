@@ -393,13 +393,13 @@ class SQLiteDatabase(CommonBackend):
                 raise errors.DocumentDoesNotExist
             if old_doc.rev != doc.rev:
                 raise errors.RevisionConflict()
-            if old_doc.is_deleted():
+            if old_doc.is_tombstone():
                 raise errors.DocumentAlreadyDeleted
             if self._has_conflicts(doc.doc_id):
                 raise errors.ConflictedDoc()
             new_rev = self._allocate_doc_rev(doc.rev)
             doc.rev = new_rev
-            doc.delete()
+            doc.make_tombstone()
             self._put_and_update_indexes(old_doc, doc)
         return new_rev
 
@@ -670,7 +670,7 @@ class SQLitePartialExpandDatabase(SQLiteDatabase):
 
     def _put_and_update_indexes(self, old_doc, doc):
         c = self._db_handle.cursor()
-        if doc and not doc.is_deleted():
+        if doc and not doc.is_tombstone():
             raw_doc = simplejson.loads(doc.get_json())
         else:
             raw_doc = {}
