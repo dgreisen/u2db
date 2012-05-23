@@ -24,6 +24,7 @@ import StringIO
 from u1db import (
     __version__ as _u1db_version,
     errors,
+    sync,
     tests,
     )
 
@@ -493,6 +494,21 @@ class TestHTTPResponder(tests.TestCase):
                           '\r\n]\r\n'], self.response_body)
         self.assertEqual([], responder.content)
 
+    def test_send_stream_w_error(self):
+        responder = http_app.HTTPResponder(self.start_response)
+        responder.content_type = "application/x-u1db-multi-json"
+        responder.start_response(200)
+        responder.start_stream()
+        responder.stream_entry({'entry': 1})
+        responder.send_response_json(503, error="unavailable")
+        self.assertEqual('200 OK', self.status)
+        self.assertEqual({'content-type': 'application/x-u1db-multi-json',
+                          'cache-control': 'no-cache'}, self.headers)
+        self.assertEqual(['[',
+                           '\r\n', '{"entry": 1}'], self.response_body)
+        self.assertEqual([',\r\n', '{"error": "unavailable"}\r\n'],
+                         responder.content)
+
 
 class TestHTTPApp(tests.TestCase):
 
@@ -535,6 +551,12 @@ class TestHTTPApp(tests.TestCase):
         self.assertEqual('application/json', resp.header('content-type'))
         self.assertEqual({'ok': True}, simplejson.loads(resp.body))
 
+    def test_delete_database(self):
+        resp = self.app.delete('/db0')
+        self.assertEqual(200, resp.status)
+        self.assertRaises(errors.DatabaseDoesNotExist,
+                          self.state.check_database, 'db0')
+
     def test_get_database(self):
         resp = self.app.get('/db0')
         self.assertEqual(200, resp.status)
@@ -572,7 +594,7 @@ class TestHTTPApp(tests.TestCase):
                             headers={'content-type': 'application/json'})
         doc = self.db0.get_doc('doc1')
         self.assertEqual(201, resp.status)  # created
-        self.assertEqual('{"x": 1}', doc.content)
+        self.assertEqual('{"x": 1}', doc.get_json())
         self.assertEqual('application/json', resp.header('content-type'))
         self.assertEqual({'rev': doc.rev}, simplejson.loads(resp.body))
 
@@ -583,7 +605,7 @@ class TestHTTPApp(tests.TestCase):
                             headers={'content-type': 'application/json'})
         doc = self.db0.get_doc('doc1')
         self.assertEqual(200, resp.status)
-        self.assertEqual('{"x": 2}', doc.content)
+        self.assertEqual('{"x": 2}', doc.get_json())
         self.assertEqual('application/json', resp.header('content-type'))
         self.assertEqual({'rev': doc.rev}, simplejson.loads(resp.body))
 
@@ -642,24 +664,26 @@ class TestHTTPApp(tests.TestCase):
                          simplejson.loads(resp.body))
 
     def test_get_sync_info(self):
-        self.db0.set_sync_generation('other-id', 1)
+        self.db0._set_sync_info('other-id', 1, 'T-transid')
         resp = self.app.get('/db0/sync-from/other-id')
         self.assertEqual(200, resp.status)
         self.assertEqual('application/json', resp.header('content-type'))
         self.assertEqual(dict(target_replica_uid='db0',
                               target_replica_generation=0,
                               source_replica_uid='other-id',
-                              source_replica_generation=1),
+                              source_replica_generation=1,
+                              source_transaction_id='T-transid'),
                               simplejson.loads(resp.body))
 
     def test_record_sync_info(self):
         resp = self.app.put('/db0/sync-from/other-id',
-                            params='{"generation": 2}',
-                            headers={'content-type': 'application/json'})
+            params='{"generation": 2, "transaction_id": "T-transid"}',
+            headers={'content-type': 'application/json'})
         self.assertEqual(200, resp.status)
         self.assertEqual('application/json', resp.header('content-type'))
         self.assertEqual({'ok': True}, simplejson.loads(resp.body))
-        self.assertEqual(self.db0.get_sync_generation('other-id'), 2)
+        self.assertEqual((2, 'T-transid'),
+                         self.db0._get_sync_gen_info('other-id'))
 
     def test_sync_exchange_send(self):
         entries = {
@@ -670,16 +694,15 @@ class TestHTTPApp(tests.TestCase):
             }
 
         gens = []
-        _set_sync_generation = self.db0._set_sync_generation
-        def set_sync_generation_witness(other_uid, other_gen):
+        _do_set_sync_info = self.db0._do_set_sync_info
+        def set_sync_generation_witness(other_uid, other_gen, other_trans_id):
             gens.append((other_uid, other_gen))
-            _set_sync_generation(other_uid, other_gen)
+            _do_set_sync_info(other_uid, other_gen, other_trans_id)
             self.assertGetDoc(self.db0, entries[other_gen]['id'],
                               entries[other_gen]['rev'],
                               entries[other_gen]['content'], False)
 
-        self.patch(self.db0, '_set_sync_generation',
-                   set_sync_generation_witness)
+        self.patch(self.db0, '_do_set_sync_info', set_sync_generation_witness)
 
         args = dict(last_known_generation=0)
         body = ("[\r\n" +
@@ -740,6 +763,27 @@ class TestHTTPApp(tests.TestCase):
                           'rev': doc2.rev, 'id': doc2.doc_id, 'gen': 2},
                          simplejson.loads(parts[3].rstrip(",")))
         self.assertEqual(']', parts[4])
+
+    def test_sync_exchange_error_in_stream(self):
+        args = dict(last_known_generation=0)
+        body = "[\r\n%s\r\n]" % simplejson.dumps(args)
+        def boom(self, return_doc_cb):
+            raise errors.Unavailable
+        self.patch(sync.SyncExchange, 'return_docs',
+                   boom)
+        resp = self.app.post('/db0/sync-from/replica',
+                            params=body,
+                            headers={'content-type':
+                                     'application/x-u1db-sync-stream'})
+        self.assertEqual(200, resp.status)
+        self.assertEqual('application/x-u1db-sync-stream',
+                         resp.header('content-type'))
+        parts = resp.body.splitlines()
+        self.assertEqual(3, len(parts))
+        self.assertEqual('[', parts[0])
+        self.assertEqual({'new_generation': 0},
+                         simplejson.loads(parts[1].rstrip(",")))
+        self.assertEqual({'error': 'unavailable'}, simplejson.loads(parts[2]))
 
 
 class TestRequestHooks(tests.TestCase):

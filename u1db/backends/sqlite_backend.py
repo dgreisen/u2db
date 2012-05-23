@@ -16,9 +16,11 @@
 
 """A U1DB implementation that uses SQLite as its persistence layer."""
 
+import errno
 import os
 import simplejson
 from sqlite3 import dbapi2
+import sys
 import time
 import uuid
 
@@ -102,6 +104,15 @@ class SQLiteDatabase(CommonBackend):
             return backend_cls(sqlite_file)
 
     @staticmethod
+    def delete_database(sqlite_file):
+        try:
+            os.unlink(sqlite_file)
+        except OSError as ex:
+            if ex.errno == errno.ENOENT:
+                raise errors.DatabaseDoesNotExist()
+            raise
+
+    @staticmethod
     def register_implementation(klass):
         """Register that we implement an SQLiteDatabase.
 
@@ -130,7 +141,7 @@ class SQLiteDatabase(CommonBackend):
         try:
             c.execute("SELECT value FROM u1db_config"
                       " WHERE name = 'sql_schema'")
-        except dbapi2.OperationalError, e:
+        except dbapi2.OperationalError:
             # The table does not exist yet
             val = None
         else:
@@ -146,7 +157,8 @@ class SQLiteDatabase(CommonBackend):
         #   like lp:dirspec to grab the file from a common resource
         #   directory. Doesn't specifically need to be handled until we get
         #   to the point of packaging this.
-        schema_content = pkg_resources.resource_string(__name__, 'dbschema.sql')
+        schema_content = pkg_resources.resource_string(
+            __name__, 'dbschema.sql')
         # Note: We'd like to use c.executescript() here, but it seems that
         #       executescript always commits, even if you set
         #       isolation_level = None, so if we want to properly handle
@@ -254,8 +266,9 @@ class SQLiteDatabase(CommonBackend):
 
     def _get_transaction_log(self):
         c = self._db_handle.cursor()
-        c.execute("SELECT doc_id FROM transaction_log ORDER BY generation")
-        return [v[0] for v in c.fetchall()]
+        c.execute("SELECT doc_id, transaction_id FROM transaction_log"
+                  " ORDER BY generation")
+        return c.fetchall()
 
     def _get_doc(self, doc_id):
         """Get just the document content, without fancy handling."""
@@ -344,21 +357,34 @@ class SQLiteDatabase(CommonBackend):
 
     def whats_changed(self, old_generation=0):
         c = self._db_handle.cursor()
-        c.execute("SELECT generation, doc_id FROM transaction_log"
+        c.execute("SELECT generation, doc_id, transaction_id"
+                  " FROM transaction_log"
                   " WHERE generation > ? ORDER BY generation DESC",
                   (old_generation,))
         results = c.fetchall()
         cur_gen = old_generation
         seen = set()
         changes = []
-        for generation, doc_id in results:
+        newest_trans_id = ''
+        for generation, doc_id, trans_id in results:
             if doc_id not in seen:
-                changes.append((doc_id, generation))
+                changes.append((doc_id, generation, trans_id))
                 seen.add(doc_id)
         if changes:
             cur_gen = changes[0][1]  # max generation
+            newest_trans_id = changes[0][2]
             changes.reverse()
-        return cur_gen, changes
+        else:
+            c.execute("SELECT generation, transaction_id"
+                      " FROM transaction_log ORDER BY generation DESC LIMIT 1")
+            results = c.fetchone()
+            if not results:
+                cur_gen = 0
+                newest_trans_id = ''
+            else:
+                cur_gen, newest_trans_id = results
+
+        return cur_gen, newest_trans_id, changes
 
     def delete_doc(self, doc):
         with self._db_handle:
@@ -367,13 +393,13 @@ class SQLiteDatabase(CommonBackend):
                 raise errors.DocumentDoesNotExist
             if old_doc.rev != doc.rev:
                 raise errors.RevisionConflict()
-            if old_doc.content is None:
+            if old_doc.is_tombstone():
                 raise errors.DocumentAlreadyDeleted
             if self._has_conflicts(doc.doc_id):
                 raise errors.ConflictedDoc()
             new_rev = self._allocate_doc_rev(doc.rev)
             doc.rev = new_rev
-            doc.content = None
+            doc.make_tombstone()
             self._put_and_update_indexes(old_doc, doc)
         return new_rev
 
@@ -398,33 +424,40 @@ class SQLiteDatabase(CommonBackend):
             this_doc.has_conflicts = True
             return [this_doc] + conflict_docs
 
-    def get_sync_generation(self, other_replica_uid):
+    def _get_sync_gen_info(self, other_replica_uid):
         c = self._db_handle.cursor()
-        c.execute("SELECT known_generation FROM sync_log"
+        c.execute("SELECT known_generation, known_transaction_id FROM sync_log"
                   " WHERE replica_uid = ?",
                   (other_replica_uid,))
         val = c.fetchone()
         if val is None:
             other_gen = 0
+            trans_id = ''
         else:
             other_gen = val[0]
-        return other_gen
+            trans_id = val[1]
+        return other_gen, trans_id
 
-    def set_sync_generation(self, other_replica_uid, other_generation):
+    def _set_sync_info(self, other_replica_uid, other_generation,
+                       other_transaction_id):
         with self._db_handle:
-            self._set_sync_generation(other_replica_uid, other_generation)
+            self._do_set_sync_info(other_replica_uid, other_generation,
+                                   other_transaction_id)
 
-    def _set_sync_generation(self, other_replica_uid, other_generation):
+    def _do_set_sync_info(self, other_replica_uid, other_generation,
+                          other_transaction_id):
             c = self._db_handle.cursor()
-            c.execute("INSERT OR REPLACE INTO sync_log VALUES (?, ?)",
-                      (other_replica_uid, other_generation))
+            c.execute("INSERT OR REPLACE INTO sync_log VALUES (?, ?, ?)",
+                      (other_replica_uid, other_generation,
+                       other_transaction_id))
 
-    def put_doc_if_newer(self, doc, save_conflict, replica_uid=None,
-                         replica_gen=None):
+    def _put_doc_if_newer(self, doc, save_conflict, replica_uid=None,
+                          replica_gen=None, replica_trans_id=None):
         with self._db_handle:
-            return super(SQLiteDatabase, self).put_doc_if_newer(doc,
+            return super(SQLiteDatabase, self)._put_doc_if_newer(doc,
                 save_conflict=save_conflict,
-                replica_uid=replica_uid, replica_gen=replica_gen)
+                replica_uid=replica_uid, replica_gen=replica_gen,
+                replica_trans_id=replica_trans_id)
 
     def _add_conflict(self, c, doc_id, my_doc_rev, my_content):
         c.execute("INSERT INTO conflicts VALUES (?, ?, ?)",
@@ -449,7 +482,7 @@ class SQLiteDatabase(CommonBackend):
         my_doc = self._get_doc(doc.doc_id)
         c = self._db_handle.cursor()
         self._prune_conflicts(doc, vectorclock.VectorClockRev(doc.rev))
-        self._add_conflict(c, doc.doc_id, my_doc.rev, my_doc.content)
+        self._add_conflict(c, doc.doc_id, my_doc.rev, my_doc.get_json())
         doc.has_conflicts = True
         self._put_and_update_indexes(my_doc, doc)
 
@@ -461,7 +494,7 @@ class SQLiteDatabase(CommonBackend):
             #       Specifically, cur_doc.rev is always in the final vector
             #       clock of revisions that we supersede, even if it wasn't in
             #       conflicted_doc_revs. We still add it as a conflict, but the
-            #       fact that put_doc_if_newer propagates resolutions means I
+            #       fact that _put_doc_if_newer propagates resolutions means I
             #       think that conflict could accidentally be resolved. We need
             #       to add a test for this case first. (create a rev, create a
             #       conflict, create another conflict, resolve the first rev
@@ -477,7 +510,7 @@ class SQLiteDatabase(CommonBackend):
             if cur_doc.rev in superseded_revs:
                 self._put_and_update_indexes(cur_doc, doc)
             else:
-                self._add_conflict(c, doc.doc_id, new_rev, doc.content)
+                self._add_conflict(c, doc.doc_id, new_rev, doc.get_json())
             # TODO: Is there some way that we could construct a rev that would
             #       end up in superseded_revs, such that we add a conflict, and
             #       then immediately delete it?
@@ -503,7 +536,10 @@ class SQLiteDatabase(CommonBackend):
         c = self._db_handle.cursor()
         c.execute("SELECT field FROM index_definitions"
                   " WHERE name = ? ORDER BY offset", (index_name,))
-        return [x[0] for x in c.fetchall()]
+        fields = [x[0] for x in c.fetchall()]
+        if not fields:
+            raise errors.IndexDoesNotExist
+        return fields
 
     @staticmethod
     def _transform_glob(value, escape_char='.'):
@@ -556,13 +592,13 @@ class SQLiteDatabase(CommonBackend):
                         if is_wildcard:
                             # We can't have a partial wildcard following
                             # another wildcard
-                            raise errors.InvalidValueForIndex()
+                            raise errors.InvalidGlobbing
                         where.append(like_where[idx])
                         args.append(self._transform_glob(value))
                     is_wildcard = True
                 else:
                     if is_wildcard:
-                        raise errors.InvalidValueForIndex()
+                        raise errors.InvalidGlobbing
                     where.append(exact_where[idx])
                     args.append(value)
             statement = ("SELECT d.doc_id, d.doc_rev, d.content"
@@ -583,8 +619,11 @@ class SQLiteDatabase(CommonBackend):
             c.execute(SQL_INDEX_KEYS, (index,))
         except dbapi2.OperationalError, e:
             raise dbapi2.OperationalError(str(e) +
-                '\nstatement: %s\nargs: %s\n' % (statement, args))
+                '\nstatement: %s\nargs: %s\n' % (SQL_INDEX_KEYS, (index,)))
         res = c.fetchall()
+        if not res:
+            # raise IndexDoesNotExist if appropriate
+            self._get_index_definition(index)
         return [r[0] for r in res]
 
     def delete_index(self, index_name):
@@ -597,13 +636,16 @@ class SQLiteDatabase(CommonBackend):
 class SQLiteSyncTarget(CommonSyncTarget):
 
     def get_sync_info(self, source_replica_uid):
-        source_gen = self._db.get_sync_generation(source_replica_uid)
+        source_gen, trans_id = self._db._get_sync_gen_info(source_replica_uid)
         my_gen = self._db._get_generation()
-        return self._db._replica_uid, my_gen, source_gen
+        return self._db._replica_uid, my_gen, source_gen, trans_id
 
-    def record_sync_info(self, source_replica_uid, source_replica_generation):
-        self._db.set_sync_generation(source_replica_uid,
-                                     source_replica_generation)
+    def record_sync_info(self, source_replica_uid, source_replica_generation,
+                         source_replica_transaction_id):
+        if self._trace_hook:
+            self._trace_hook('record_sync_info')
+        self._db._set_sync_info(source_replica_uid, source_replica_generation,
+                                source_replica_transaction_id)
 
 
 class SQLitePartialExpandDatabase(SQLiteDatabase):
@@ -622,27 +664,26 @@ class SQLitePartialExpandDatabase(SQLiteDatabase):
         return set([x[0] for x in c.fetchall()])
 
     def _evaluate_index(self, raw_doc, field):
-        val = raw_doc
         parser = query_parser.Parser()
         getter = parser.parse(field)
         return getter.get(raw_doc)
 
     def _put_and_update_indexes(self, old_doc, doc):
         c = self._db_handle.cursor()
-        if doc and doc.content:
-            raw_doc = simplejson.loads(doc.content)
+        if doc and not doc.is_tombstone():
+            raw_doc = simplejson.loads(doc.get_json())
         else:
             raw_doc = {}
         if old_doc is not None:
             c.execute("UPDATE document SET doc_rev=?, content=?"
                       " WHERE doc_id = ?",
-                      (doc.rev, doc.content, doc.doc_id))
+                      (doc.rev, doc.get_json(), doc.doc_id))
             c.execute("DELETE FROM document_fields WHERE doc_id = ?",
                       (doc.doc_id,))
         else:
             c.execute("INSERT INTO document (doc_id, doc_rev, content)"
                       " VALUES (?, ?, ?)",
-                      (doc.doc_id, doc.rev, doc.content))
+                      (doc.doc_id, doc.rev, doc.get_json()))
         indexed_fields = self._get_indexed_fields()
         if indexed_fields:
             # It is expected that len(indexed_fields) is shorter than
@@ -650,8 +691,9 @@ class SQLitePartialExpandDatabase(SQLiteDatabase):
             getters = [(field, self._parse_index_definition(field))
                        for field in indexed_fields]
             self._update_indexes(doc.doc_id, raw_doc, getters, c)
-        c.execute("INSERT INTO transaction_log(doc_id) VALUES (?)",
-                  (doc.doc_id,))
+        trans_id = self._allocate_transaction_id()
+        c.execute("INSERT INTO transaction_log(doc_id, transaction_id)"
+                  " VALUES (?, ?)", (doc.doc_id, trans_id))
 
     def create_index(self, index_name, index_expression):
         with self._db_handle:
@@ -659,8 +701,11 @@ class SQLitePartialExpandDatabase(SQLiteDatabase):
             cur_fields = self._get_indexed_fields()
             definition = [(index_name, idx, field)
                           for idx, field in enumerate(index_expression)]
-            c.executemany("INSERT INTO index_definitions VALUES (?, ?, ?)",
-                          definition)
+            try:
+                c.executemany("INSERT INTO index_definitions VALUES (?, ?, ?)",
+                              definition)
+            except dbapi2.IntegrityError as e:
+                raise errors.IndexNameTakenError, e, sys.exc_info()[2]
             new_fields = set([f for f in index_expression
                               if f not in cur_fields])
             if new_fields:

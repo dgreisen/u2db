@@ -34,17 +34,18 @@ struct _http_request;
 
 static int st_http_get_sync_info(u1db_sync_target *st,
         const char *source_replica_uid,
-        const char **st_replica_uid, int *st_gen, int *source_gen);
+        const char **st_replica_uid, int *st_gen, int *source_gen,
+        char **trans_id);
 
 static int st_http_record_sync_info(u1db_sync_target *st,
-        const char *source_replica_uid, int source_gen);
+        const char *source_replica_uid, int source_gen, const char *trans_id);
 
 static int st_http_get_sync_exchange(u1db_sync_target *st,
                          const char *source_replica_uid,
                          int source_gen,
                          u1db_sync_exchange **exchange);
 static int st_http_sync_exchange(u1db_sync_target *st,
-                      const char *source_replica_uid, 
+                      const char *source_replica_uid,
                       int n_docs, u1db_document **docs,
                       int *generations, int *target_gen, void *context,
                       u1db_doc_gen_callback cb);
@@ -355,11 +356,13 @@ maybe_sign_url(u1db_sync_target *st, const char *http_method,
 static int
 st_http_get_sync_info(u1db_sync_target *st,
         const char *source_replica_uid,
-        const char **st_replica_uid, int *st_gen, int *source_gen)
+        const char **st_replica_uid, int *st_gen, int *source_gen,
+        char **trans_id)
 {
     struct _http_state *state;
     struct _http_request req = {0};
     char *url = NULL;
+    const char *tmp = NULL;
     int status;
     long http_code;
     struct curl_slist *headers = NULL;
@@ -451,6 +454,20 @@ st_http_get_sync_info(u1db_sync_target *st,
         goto finish;
     }
     *source_gen = json_object_get_int(obj);
+    obj = json_object_object_get(json, "source_transaction_id");
+    if (obj == NULL) {
+        *trans_id = NULL;
+    } else {
+        tmp = json_object_get_string(obj);
+        if (tmp == NULL) {
+            *trans_id = NULL;
+        } else {
+            *trans_id = strdup(tmp);
+            if (*trans_id == NULL) {
+                status = U1DB_NOMEM;
+            }
+        }
+    }
 finish:
     if (req.header_buffer != NULL) {
         free(req.header_buffer);
@@ -508,7 +525,7 @@ finish:
 
 static int
 st_http_record_sync_info(u1db_sync_target *st,
-        const char *source_replica_uid, int source_gen)
+        const char *source_replica_uid, int source_gen, const char *trans_id)
 {
     struct _http_state *state;
     struct _http_request req = {0};
@@ -537,6 +554,8 @@ st_http_record_sync_info(u1db_sync_target *st,
         goto finish;
     }
     json_object_object_add(json, "generation", json_object_new_int(source_gen));
+    json_object_object_add(json, "transaction_id",
+                           json_object_new_string(trans_id));
     raw_body = json_object_to_json_string(json);
     raw_len = strlen(raw_body);
     req.state = state;
@@ -561,7 +580,7 @@ st_http_record_sync_info(u1db_sync_target *st,
     status = curl_easy_setopt(state->curl, CURLOPT_INFILESIZE_LARGE,
                               (curl_off_t)req.num_put_bytes);
     if (status != CURLE_OK) { goto finish; }
-    status = maybe_sign_url(st, "PUT", url, &headers); 
+    status = maybe_sign_url(st, "PUT", url, &headers);
     if (status != U1DB_OK) { goto finish; }
 
     // Now actually send the data
@@ -656,8 +675,8 @@ doc_to_tempfile(u1db_document *doc, int gen, FILE *fd)
     }
     json_object_object_add(json, "id", json_object_new_string(doc->doc_id));
     json_object_object_add(json, "rev", json_object_new_string(doc->doc_rev));
-    json_object_object_add(json, "content",
-		      doc->content?json_object_new_string(doc->content):NULL);
+    json_object_object_add(
+        json, "content", doc->json?json_object_new_string(doc->json):NULL);
     json_object_object_add(json, "gen", json_object_new_int(gen));
     fputs(json_object_to_json_string(json), fd);
 finish:

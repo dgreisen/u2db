@@ -32,8 +32,8 @@ typedef struct _u1db_document
     size_t doc_id_len;
     char *doc_rev;
     size_t doc_rev_len;
-    char *content;
-    size_t content_len;
+    char *json;
+    size_t json_len;
     int has_conflicts;
 } u1db_document;
 
@@ -43,6 +43,8 @@ typedef int (*u1db_doc_callback)(void *context, u1db_document *doc);
 typedef int (*u1db_key_callback)(void *context, const char *key);
 typedef int (*u1db_doc_gen_callback)(void *context, u1db_document *doc, int gen);
 typedef int (*u1db_doc_id_gen_callback)(void *context, const char *doc_id, int gen);
+typedef int (*u1db_trans_info_callback)(void *context, const char *doc_id,
+                                        int gen, const char *trans_id);
 
 #define U1DB_OK 0
 #define U1DB_INVALID_PARAMETER -1
@@ -63,6 +65,9 @@ typedef int (*u1db_doc_id_gen_callback)(void *context, const char *doc_id, int g
 #define U1DB_UNHANDLED_CHARACTERS -14
 #define U1DB_MISSING_FIELD_SPECIFIER -15
 #define U1DB_INVALID_FIELD_SPECIFIER -16
+#define U1DB_DUPLICATE_INDEX_NAME -17
+#define U1DB_INDEX_DOES_NOT_EXIST -18
+#define U1DB_INVALID_GLOBBING -19
 #define U1DB_INTERNAL_ERROR -999
 
 // Used by put_doc_if_newer
@@ -100,7 +105,7 @@ int u1db_get_replica_uid(u1database *db, const char **replica_uid);
 /**
  * Create a new document.
  *
- * @param content The JSON string representing the document. The content will
+ * @param json The JSON string representing the document. The json will
  *                be copied and managed by the 'doc' parameter.
  * @param doc_id A string identifying the document. If the value supplied is
  *               NULL, then a new doc_id will be generated.
@@ -108,7 +113,7 @@ int u1db_get_replica_uid(u1database *db, const char **replica_uid);
  *            freed with u1db_free_doc
  * @return a status code indicating success or failure.
  */
-int u1db_create_doc(u1database *db, const char *content, const char *doc_id,
+int u1db_create_doc(u1database *db, const char *json, const char *doc_id,
                     u1db_document **doc);
 
 /**
@@ -121,32 +126,6 @@ int u1db_create_doc(u1database *db, const char *content, const char *doc_id,
  *            the new revision.
  */
 int u1db_put_doc(u1database *db, u1db_document *doc);
-
-/**
- * Update content if the revision is newer than what is already present.
- *
- * @param doc (IN/OUT) The document we want added to the database. If
- *            save_conflict is true and this conflicts, we will set
- *            doc->has_conflicts
- * @param save_conflict If 1, when a document would conflict, it is saved as
- *                      the current version and marked as a conflict.
- *                      Otherwise the document is just rejected as not newer.
- * @param replica_uid Used during synchronization to indicate what replica
- *                    this document came from. (Can be NULL)
- * @param replica_gen Generation of the replica. Only meaningful if
- *                    replica_uid is set.
- * @param state (OUT) Return one of:
- *  U1DB_INSERTED   The document is newer than what we have
- *  U1DB_SUPERSEDED We already have a newer document than what was passed
- *  U1DB_CONVERGED  We have exactly the same document
- *  U1DB_CONFLICTED Neither document is strictly newer than the other. If
- *                  save_conflict is false, then we will ignore the document.
- * @param at_gen (OUT) For INSERTED or CONVERGED states used to return
- *                     the insertion/current generation. Ignored if NULL.
- */
-int u1db_put_doc_if_newer(u1database *db, u1db_document *doc, int save_conflict,
-                          const char *replica_uid, int replica_gen,
-                          int *state, int *at_gen);
 
 
 /**
@@ -221,16 +200,18 @@ int u1db_delete_doc(u1database *db, u1db_document *doc);
  * @param gen    The global database revision to start at. You can pass '0' to
  *               get all changes in the database. The integer will be updated
  *               to point at the current generation.
+ * @param trans_id The transaction identifier associated with the generation.
  * @param cb     A callback function. This will be called passing in 'context',
- *               and a document identifier for each document that has been modified.
- *               The doc_id string is transient, so callers must copy it to
- *               their own memory if they want to keep it.
- *               If a document is changed more than once, it is currently
- *               undefined whether this will call cb() once per change, or just
- *               once per doc_id.
+ *               and a document identifier for each document that has been
+ *               modified. This includes the generation and associated
+ *               transaction id for each change. If a document is modified more
+ *               than once, only the most recent change will be given.
+ *               Note that the strings passed are transient, so must be copied
+ *               if callers want to use them after they return.
  * @param context Opaque context, passed back to the caller.
  */
-int u1db_whats_changed(u1database *db, int *gen, void *context, u1db_doc_id_gen_callback cb);
+int u1db_whats_changed(u1database *db, int *gen, char **trans_id,
+                       void *context, u1db_trans_info_callback cb);
 
 
 /**
@@ -249,7 +230,7 @@ void u1db_free_doc(u1db_document **doc);
  * This will copy the string, since the memory is managed by the doc object
  * itself.
  */
-int u1db_doc_set_content(u1db_document *doc, const char *content);
+int u1db_doc_set_json(u1db_document *doc, const char *json);
 
 
 /**

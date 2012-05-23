@@ -44,6 +44,12 @@ class HTTPDatabase(http_client.HTTPClientBase, Database):
         db.open(create)
         return db
 
+    @staticmethod
+    def delete_database(url):
+        db = HTTPDatabase(url)
+        db._delete()
+        db.close()
+
     def open(self, create):
         if create:
             self._ensure()
@@ -56,6 +62,9 @@ class HTTPDatabase(http_client.HTTPClientBase, Database):
     def _ensure(self):
         self._request_json('PUT', [], {}, {})
 
+    def _delete(self):
+        self._request_json('DELETE', [], {}, {})
+
     def put_doc(self, doc):
         if doc.doc_id is None:
             raise errors.InvalidDocId()
@@ -63,7 +72,7 @@ class HTTPDatabase(http_client.HTTPClientBase, Database):
         if doc.rev is not None:
             params['old_rev'] = doc.rev
         res, headers = self._request_json('PUT', ['doc', doc.doc_id], params,
-                                          doc.content, 'application/json')
+                                          doc.get_json(), 'application/json')
         doc.rev = res['rev']
         return res['rev']
 
@@ -87,7 +96,7 @@ class HTTPDatabase(http_client.HTTPClientBase, Database):
 
     def create_doc(self, content, doc_id=None):
         if doc_id is None:
-            doc_id = str(uuid.uuid4())
+            doc_id = 'D-%s' % (uuid.uuid4().hex,)
         res, headers = self._request_json('PUT', ['doc', doc_id], {},
                                           content, 'application/json')
         new_doc = Document(doc_id, res['rev'], content)
@@ -99,7 +108,7 @@ class HTTPDatabase(http_client.HTTPClientBase, Database):
         params = {'old_rev': doc.rev}
         res, headers = self._request_json('DELETE',
             ['doc', doc.doc_id], params)
-        doc.content = None
+        doc.make_tombstone()
         doc.rev = res['rev']
 
     def get_sync_target(self):

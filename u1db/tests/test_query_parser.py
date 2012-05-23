@@ -314,7 +314,7 @@ class TestParser(tests.TestCase):
         self.assertParseError("lower()")
 
     def test_parse_trailing_chars(self):
-        self.assertParseError("lower(ab$)")
+        self.assertParseError("lower(ab))")
 
     def test_parse_empty_op(self):
         self.assertParseError("(ab)")

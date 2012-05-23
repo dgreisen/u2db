@@ -45,16 +45,20 @@ class InMemoryDatabase(CommonBackend):
         # may be closing it, while another wants to inspect the results.
         pass
 
-    def get_sync_generation(self, other_replica_uid):
-        return self._other_generations.get(other_replica_uid, 0)
+    def _get_sync_gen_info(self, other_replica_uid):
+        return self._other_generations.get(other_replica_uid, (0, ''))
 
-    def set_sync_generation(self, other_replica_uid, other_generation):
-        self._set_sync_generation(other_replica_uid, other_generation)
+    def _set_sync_info(self, other_replica_uid, other_generation,
+                       other_transaction_id):
+        self._do_set_sync_info(other_replica_uid, other_generation,
+                               other_transaction_id)
 
-    def _set_sync_generation(self, other_replica_uid, other_generation):
+    def _do_set_sync_info(self, other_replica_uid, other_generation,
+                          other_transaction_id):
         # TODO: to handle race conditions, we may want to check if the current
         #       value is greater than this new value.
-        self._other_generations[other_replica_uid] = other_generation
+        self._other_generations[other_replica_uid] = (other_generation,
+                                                      other_transaction_id)
 
     def get_sync_target(self):
         return InMemorySyncTarget(self)
@@ -86,12 +90,13 @@ class InMemoryDatabase(CommonBackend):
 
     def _put_and_update_indexes(self, old_doc, doc):
         for index in self._indexes.itervalues():
-            if old_doc is not None and old_doc.content is not None:
-                index.remove_json(old_doc.doc_id, old_doc.content)
-            if doc.content is not None:
-                index.add_json(doc.doc_id, doc.content)
-        self._docs[doc.doc_id] = (doc.rev, doc.content)
-        self._transaction_log.append(doc.doc_id)
+            if old_doc is not None and not old_doc.is_tombstone():
+                index.remove_json(old_doc.doc_id, old_doc.get_json())
+            if not doc.is_tombstone():
+                index.add_json(doc.doc_id, doc.get_json())
+        trans_id = self._allocate_transaction_id()
+        self._docs[doc.doc_id] = (doc.rev, doc.get_json())
+        self._transaction_log.append((doc.doc_id, trans_id))
 
     def _get_doc(self, doc_id):
         try:
@@ -154,7 +159,7 @@ class InMemoryDatabase(CommonBackend):
         if cur_rev in superseded_revs:
             self._put_and_update_indexes(cur_doc, doc)
         else:
-            remaining_conflicts.append((new_rev, doc.content))
+            remaining_conflicts.append((new_rev, doc.get_json()))
         self._replace_conflicts(doc, remaining_conflicts)
 
     def delete_doc(self, doc):
@@ -162,10 +167,12 @@ class InMemoryDatabase(CommonBackend):
             raise errors.DocumentDoesNotExist
         if self._docs[doc.doc_id][1] in ('null', None):
             raise errors.DocumentAlreadyDeleted
-        doc.content = None
+        doc.make_tombstone()
         self.put_doc(doc)
 
     def create_index(self, index_name, index_expression):
+        if index_name in self._indexes:
+            raise errors.IndexNameTakenError
         index = InMemoryIndex(index_name, index_expression)
         for doc_id, (doc_rev, doc) in self._docs.iteritems():
             if doc is not None:
@@ -182,7 +189,10 @@ class InMemoryDatabase(CommonBackend):
         return definitions
 
     def get_from_index(self, index_name, key_values):
-        index = self._indexes[index_name]
+        try:
+            index = self._indexes[index_name]
+        except KeyError:
+            raise errors.IndexDoesNotExist
         doc_ids = index.lookup(key_values)
         result = []
         for doc_id in doc_ids:
@@ -191,28 +201,38 @@ class InMemoryDatabase(CommonBackend):
         return result
 
     def get_index_keys(self, index_name):
-        index = self._indexes[index_name]
+        try:
+            index = self._indexes[index_name]
+        except KeyError:
+            raise errors.IndexDoesNotExist
         return list(set(index.keys()))
 
     def whats_changed(self, old_generation=0):
         changes = []
         relevant_tail = self._transaction_log[old_generation:]
+        # We don't use len(self._transaction_log) because _transaction_log may
+        # get mutated by a concurrent operation.
         cur_generation = old_generation + len(relevant_tail)
+        last_trans_id = ''
+        if relevant_tail:
+            last_trans_id = relevant_tail[-1][1]
+        elif self._transaction_log:
+            last_trans_id = self._transaction_log[-1][1]
         seen = set()
         generation = cur_generation
-        for doc_id in reversed(relevant_tail):
+        for doc_id, trans_id in reversed(relevant_tail):
             if doc_id not in seen:
-                changes.append((doc_id, generation))
+                changes.append((doc_id, generation, trans_id))
                 seen.add(doc_id)
             generation -= 1
         changes.reverse()
-        return (cur_generation, changes)
+        return (cur_generation, last_trans_id, changes)
 
     def _force_doc_sync_conflict(self, doc):
         my_doc = self._get_doc(doc.doc_id)
         self._prune_conflicts(doc, vectorclock.VectorClockRev(doc.rev))
         self._conflicts.setdefault(doc.doc_id, []).append(
-            (my_doc.rev, my_doc.content))
+            (my_doc.rev, my_doc.get_json()))
         doc.has_conflicts = True
         self._put_and_update_indexes(my_doc, doc)
 
@@ -282,14 +302,14 @@ class InMemoryIndex(object):
                     # We have an 'x*' style wildcard
                     if is_wildcard:
                         # We were already in wildcard mode, so this is invalid
-                        raise errors.InvalidValueForIndex()
+                        raise errors.InvalidGlobbing
                     last = idx + 1
                 is_wildcard = True
             else:
                 if is_wildcard:
                     # We were in wildcard mode, we can't follow that with
                     # non-wildcard
-                    raise errors.InvalidValueForIndex()
+                    raise errors.InvalidGlobbing
                 last = idx + 1
         if not is_wildcard:
             return -1
@@ -333,10 +353,13 @@ class InMemoryIndex(object):
 class InMemorySyncTarget(CommonSyncTarget):
 
     def get_sync_info(self, source_replica_uid):
-        source_gen = self._db.get_sync_generation(source_replica_uid)
-        return (
-            self._db._replica_uid, len(self._db._transaction_log), source_gen)
+        source_gen, trans_id = self._db._get_sync_gen_info(source_replica_uid)
+        return (self._db._replica_uid, len(self._db._transaction_log),
+                source_gen, trans_id)
 
-    def record_sync_info(self, source_replica_uid, source_replica_generation):
-        self._db.set_sync_generation(source_replica_uid,
-                                     source_replica_generation)
+    def record_sync_info(self, source_replica_uid, source_replica_generation,
+                         source_transaction_id):
+        if self._trace_hook:
+            self._trace_hook('record_sync_info')
+        self._db._set_sync_info(source_replica_uid, source_replica_generation,
+                                source_transaction_id)

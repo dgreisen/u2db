@@ -16,8 +16,6 @@
 
 """Code for parsing Index definitions."""
 
-import string
-
 from u1db import (
     errors,
     )
@@ -133,7 +131,7 @@ class Lower(Transformation):
     name = "lower"
 
     def _can_transform(self, val):
-        return not isinstance(val, (int, bool, float, list, dict))
+        return isinstance(val, basestring)
 
     def transform(self, values):
         if not values:
@@ -156,7 +154,7 @@ class Number(Transformation):
         self.padding = "%%0%sd" % number
 
     def _can_transform(self, val):
-        return not isinstance(val, (str, bool, float, list, dict))
+        return isinstance(val, int) and not isinstance(val, bool)
 
     def transform(self, values):
         """Transform any integers in values into zero padded strings."""
@@ -191,7 +189,7 @@ class SplitWords(Transformation):
     name = "split_words"
 
     def _can_transform(self, val):
-        return not isinstance(val, (int, bool, float, list, dict))
+        return isinstance(val, basestring)
 
     def transform(self, values):
         if not values:
@@ -223,11 +221,11 @@ class Parser(object):
     """Parse an index expression into a sequence of transformations."""
 
     _transformations = {}
-    _word_chars = string.lowercase + string.uppercase + "._" + string.digits
+    _delimiters = '()'
 
     def _take_word(self, partial):
         for idx, char in enumerate(partial):
-            if char not in self._word_chars:
+            if char in self._delimiters:
                 return partial[:idx], partial[idx:]
         return partial, ''
 

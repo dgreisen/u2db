@@ -65,10 +65,14 @@ struct _u1db_sync_target {
      *                          target, matches st_replica_uid
      * @param source_gen        (OUT) The last generation of source_replica_uid
      *                          that st has synchronized with.
+     * @param trans_id          (OUT) The transaction id associated with the
+     *                          source generation, the memory must be freed by
+     *                          the caller.
      */
     int (*get_sync_info)(u1db_sync_target *st,
         const char *source_replica_uid,
-        const char **st_replica_uid, int *st_gen, int *source_gen);
+        const char **st_replica_uid, int *st_gen, int *source_gen,
+        char **trans_id);
     /**
      * Set the synchronization information about another replica.
      *
@@ -78,9 +82,10 @@ struct _u1db_sync_target {
      *                              want to synchronize from.
      * @param source_gen        The last generation of source_replica_uid
      *                          that st has synchronized with.
+     * @param trans_id          The transaction id associated with source_gen
      */
     int (*record_sync_info)(u1db_sync_target *st,
-        const char *source_replica_uid, int source_gen);
+        const char *source_replica_uid, int source_gen, const char *trans_id);
 
     /**
      * Send documents to the target, and receive the response.
@@ -165,6 +170,34 @@ struct _u1db_sync_exchange {
 };
 
 /**
+ * Update content if the revision is newer than what is already present.
+ *
+ * @param doc (IN/OUT) The document we want added to the database. If
+ *            save_conflict is true and this conflicts, we will set
+ *            doc->has_conflicts
+ * @param save_conflict If 1, when a document would conflict, it is saved as
+ *                      the current version and marked as a conflict.
+ *                      Otherwise the document is just rejected as not newer.
+ * @param replica_uid Used during synchronization to indicate what replica
+ *                    this document came from. (Can be NULL)
+ * @param replica_gen Generation of the replica. Only meaningful if
+ *                    replica_uid is set.
+ * @param replica_trans_id Transaction id associated with generation.
+ * @param state (OUT) Return one of:
+ *  U1DB_INSERTED   The document is newer than what we have
+ *  U1DB_SUPERSEDED We already have a newer document than what was passed
+ *  U1DB_CONVERGED  We have exactly the same document
+ *  U1DB_CONFLICTED Neither document is strictly newer than the other. If
+ *                  save_conflict is false, then we will ignore the document.
+ * @param at_gen (OUT) For INSERTED or CONVERGED states used to return
+ *                     the insertion/current generation. Ignored if NULL.
+ */
+int u1db__put_doc_if_newer(u1database *db, u1db_document *doc,
+                           int save_conflict, const char *replica_uid,
+                           int replica_gen, const char *replica_trans_id,
+                           int *state, int *at_gen);
+
+/**
  * Internal API, Get the global database rev.
  */
 int u1db__get_generation(u1database *db, int *generation);
@@ -215,7 +248,7 @@ void u1db__free_table(u1db_table **table);
  * Get the list of everything that has changed that we've recorded.
  */
 int u1db__get_transaction_log(u1database *db, void *context,
-                              u1db_doc_id_gen_callback cb);
+                              u1db_trans_info_callback cb);
 
 /**
  * Get the known generation we synchronized with another implementation.
@@ -223,16 +256,18 @@ int u1db__get_transaction_log(u1database *db, void *context,
  * @param replica_uid The identifier for the other database
  * @param generation  (OUT) The last generation that we know we synchronized
  *                    with the other database.
+ * @param trans_id    (OUT) The transaction id associated with the generation.
+ *                    Callers must free the data.
  */
-int u1db__get_sync_generation(u1database *db, const char *replica_uid,
-                              int *generation);
+int u1db__get_sync_gen_info(u1database *db, const char *replica_uid,
+                            int *generation, char **trans_id);
 
 /**
  * Set the known sync generation for another replica.
  *
  */
-int u1db__set_sync_generation(u1database *db, const char *replica_uid,
-                              int generation);
+int u1db__set_sync_info(u1database *db, const char *replica_uid,
+                        int generation, const char *trans_id);
 
 /**
  * Internal sync api, get the stored information about another machine.

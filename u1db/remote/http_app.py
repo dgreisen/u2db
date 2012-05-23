@@ -210,6 +210,11 @@ class DatabaseResource(object):
         self.state.ensure_database(self.dbname)
         self.responder.send_response_json(200, ok=True)
 
+    @http_method()
+    def delete(self):
+        self.state.delete_database(self.dbname)
+        self.responder.send_response_json(200, ok=True)
+
 
 @url_to_resource.register
 class DocResource(object):
@@ -255,13 +260,14 @@ class DocResource(object):
             'x-u1db-rev': doc.rev,
             'x-u1db-has-conflicts': simplejson.dumps(doc.has_conflicts)
             }
-        if doc.content is None:
+        if doc.is_tombstone():
             self.responder.send_response_json(
                http_errors.wire_description_to_status[errors.DOCUMENT_DELETED],
                error=errors.DOCUMENT_DELETED,
                headers=headers)
         else:
-            self.responder.send_response_content(doc.content, headers=headers)
+            self.responder.send_response_content(
+                doc.get_json(), headers=headers)
 
 
 @url_to_resource.register
@@ -285,12 +291,14 @@ class SyncResource(object):
         self.responder.send_response_json(target_replica_uid=result[0],
                                      target_replica_generation=result[1],
                                      source_replica_uid=self.source_replica_uid,
-                                     source_replica_generation=result[2])
+                                     source_replica_generation=result[2],
+                                     source_transaction_id=result[3])
 
     @http_method(generation=int,
                  content_as_args=True, no_query=True)
-    def put(self, generation):
-        self.target.record_sync_info(self.source_replica_uid, generation)
+    def put(self, generation, transaction_id):
+        self.target.record_sync_info(self.source_replica_uid, generation,
+                                     transaction_id)
         self.responder.send_response_json(ok=True)
 
     # Implements the same logic as LocalSyncTarget.sync_exchange
@@ -309,7 +317,7 @@ class SyncResource(object):
 
     def post_end(self):
         def send_doc(doc, gen):
-            entry = dict(id=doc.doc_id, rev=doc.rev, content=doc.content,
+            entry = dict(id=doc.doc_id, rev=doc.rev, content=doc.get_json(),
                          gen=gen)
             self.responder.stream_entry(entry)
         new_gen = self.sync_exch.find_changes_to_return()
@@ -366,7 +374,10 @@ class HTTPResponder(object):
         """send and finish response with content"""
         headers['content-length'] = str(len(content))
         self.start_response(status, headers=headers)
-        self.content = [content]
+        if self._stream_state == 1:
+            self.content = [',\r\n', content]
+        else:
+            self.content = [content]
         self.finish_response()
 
     def start_stream(self):

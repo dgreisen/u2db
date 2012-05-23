@@ -18,12 +18,14 @@
 
 import argparse
 import os
+import simplejson
 import sys
 
 from u1db import (
     Document,
     open as u1db_open,
     sync,
+    errors,
     )
 from u1db.commandline import command
 from u1db.remote import (
@@ -128,10 +130,10 @@ class CmdGet(OneDbCmd):
         if doc is None:
             self.stderr.write('Document not found (id: %s)\n' % (doc_id,))
             return 1  # failed
-        if doc.content is None:
+        if doc.is_tombstone():
             outfile.write('[document deleted]\n')
         else:
-            outfile.write(doc.content)
+            outfile.write(doc.get_json())
         self.stderr.write('rev: %s\n' % (doc.rev,))
         if doc.has_conflicts:
             # TODO: Probably want to write 'conflicts' or 'conflicted' to
@@ -218,6 +220,186 @@ class CmdSync(command.Command):
         source_db.close()
 
 client_commands.register(CmdSync)
+
+
+class CmdCreateIndex(OneDbCmd):
+    """Create an index"""
+
+    name = "create-index"
+
+    @classmethod
+    def _populate_subparser(cls, parser):
+        parser.add_argument('database', help='The local database to update',
+                            metavar='database-path')
+        parser.add_argument('index', help='the name of the index')
+        parser.add_argument('expression', help='an index expression',
+                            nargs='+')
+
+    def run(self, database, index, expression):
+        try:
+            db = self._open(database, create=False)
+            if (index, expression) in db.list_indexes():
+                return
+            db.create_index(index, expression)
+        except errors.DatabaseDoesNotExist:
+            self.stderr.write("Database does not exist.\n")
+            return 1
+        except errors.IndexNameTakenError:
+            self.stderr.write("There is already a different index named %r.\n"
+                              % (index,))
+            return 1
+        except errors.IndexDefinitionParseError:
+            self.stderr.write("Bad index expression.\n")
+            return 1
+
+client_commands.register(CmdCreateIndex)
+
+
+class CmdListIndexes(OneDbCmd):
+    """List existing indexes"""
+
+    name = "list-indexes"
+
+    @classmethod
+    def _populate_subparser(cls, parser):
+        parser.add_argument('database', help='The local database to query',
+                            metavar='database-path')
+
+    def run(self, database):
+        try:
+            db = self._open(database, create=False)
+        except errors.DatabaseDoesNotExist:
+            self.stderr.write("Database does not exist.\n")
+            return 1
+        for (index, expression) in db.list_indexes():
+            self.stdout.write("%s: %s\n" % (index, ", ".join(expression)))
+
+client_commands.register(CmdListIndexes)
+
+
+class CmdDeleteIndex(OneDbCmd):
+    """Delete an index"""
+
+    name = "delete-index"
+
+    @classmethod
+    def _populate_subparser(cls, parser):
+        parser.add_argument('database', help='The local database to update',
+                            metavar='database-path')
+        parser.add_argument('index', help='the name of the index')
+
+    def run(self, database, index):
+        try:
+            db = self._open(database, create=False)
+        except errors.DatabaseDoesNotExist:
+            self.stderr.write("Database does not exist.\n")
+            return 1
+        db.delete_index(index)
+
+client_commands.register(CmdDeleteIndex)
+
+
+class CmdGetIndexKeys(OneDbCmd):
+    """Get the index's keys"""
+
+    name = "get-index-keys"
+
+    @classmethod
+    def _populate_subparser(cls, parser):
+        parser.add_argument('database', help='The local database to query',
+                            metavar='database-path')
+        parser.add_argument('index', help='the name of the index')
+
+    def run(self, database, index):
+        try:
+            db = self._open(database, create=False)
+            for i in db.get_index_keys(index):
+                self.stdout.write("%s\n" % (i,))
+        except errors.DatabaseDoesNotExist:
+            self.stderr.write("Database does not exist.\n")
+        except errors.IndexDoesNotExist:
+            self.stderr.write("Index does not exist.\n")
+        else:
+            return
+        return 1
+
+client_commands.register(CmdGetIndexKeys)
+
+
+class CmdGetFromIndex(OneDbCmd):
+    """Find documents by searching an index"""
+
+    name = "get-from-index"
+    argv = None
+
+    @classmethod
+    def _populate_subparser(cls, parser):
+        parser.add_argument('database', help='The local database to query',
+                            metavar='database-path')
+        parser.add_argument('index', help='the name of the index')
+        parser.add_argument('values', metavar="value",
+                            help='the value to look up (one per index column)',
+                            nargs="+")
+
+    def run(self, database, index, values):
+        try:
+            db = self._open(database, create=False)
+            docs = db.get_from_index(index, [values])
+        except errors.DatabaseDoesNotExist:
+            self.stderr.write("Database does not exist.\n")
+        except errors.IndexDoesNotExist:
+            self.stderr.write("Index does not exist.\n")
+        except errors.InvalidValueForIndex:
+            index_def = db._get_index_definition(index)
+            len_diff = len(index_def) - len(values)
+            if len_diff == 0:
+                # can't happen (HAH)
+                raise
+            argv = self.argv if self.argv is not None else sys.argv
+            self.stderr.write(
+                "Invalid query: "
+                "index %r requires %d query expression%s%s.\n"
+                "For example, the following would be valid:\n"
+                "    %s %s %r %r %s\n"
+                % (index,
+                   len(index_def),
+                   "s" if len(index_def) > 1 else "",
+                   ", not %d" % len(values) if len(values) else "",
+                   argv[0], argv[1], database, index,
+                   " ".join(map(repr,
+                                values[:len(index_def)]
+                                + ["*" for i in range(len_diff)])),
+                   ))
+        except errors.InvalidGlobbing:
+            argv = self.argv if self.argv is not None else sys.argv
+            fixed = []
+            for (i, v) in enumerate(values):
+                fixed.append(v)
+                if v.endswith('*'):
+                    break
+            # values has at least one element, so i is defined
+            fixed.extend('*'*(len(values)-i-1))
+            self.stderr.write(
+                "Invalid query: a star can only be followed by stars.\n"
+                "For example, the following would be valid:\n"
+                "    %s %s %r %r %s\n"
+                % (argv[0], argv[1], database, index,
+                   " ".join(map(repr, fixed))))
+
+        else:
+            self.stdout.write("[")
+            for i, doc in enumerate(docs):
+                if i:
+                    self.stdout.write(",")
+                self.stdout.write(simplejson.dumps(dict(
+                            id=doc.doc_id,
+                            rev=doc.rev,
+                            content=doc.content), indent=4))
+            self.stdout.write("]\n")
+            return
+        return 1
+
+client_commands.register(CmdGetFromIndex)
 
 
 def main(args):

@@ -15,6 +15,7 @@
 # along with u1db.  If not, see <http://www.gnu.org/licenses/>.
 
 """The synchronization utilities for U1DB."""
+from itertools import izip
 
 import u1db
 
@@ -51,8 +52,9 @@ class Synchronizer(object):
         """
         # Increases self.num_inserted depending whether the document
         # was effectively inserted.
-        state, _ = self.source.put_doc_if_newer(doc, save_conflict=True,
-            replica_uid=self.target_replica_uid, replica_gen=replica_gen)
+        state, _ = self.source._put_doc_if_newer(doc, save_conflict=True,
+            replica_uid=self.target_replica_uid, replica_gen=replica_gen,
+            replica_trans_id=None)
         if state == 'inserted':
             self.num_inserted += 1
         elif state == 'converged':
@@ -82,35 +84,39 @@ class Synchronizer(object):
         new generation.
         """
         cur_gen = self.source._get_generation()
-        if cur_gen == start_generation + self.num_inserted:
+        if (cur_gen == start_generation + self.num_inserted
+            and self.num_inserted > 0):
             self.sync_target.record_sync_info(self.source._replica_uid,
-                                              cur_gen)
+                                              cur_gen, 'T-sid')
 
     def sync(self, callback=None):
         """Synchronize documents between source and target."""
         sync_target = self.sync_target
         # get target identifier, its current generation,
         # and its last-seen database generation for this source
-        (self.target_replica_uid, target_gen,
-         target_my_gen) = sync_target.get_sync_info(self.source._replica_uid)
+        (self.target_replica_uid, target_gen, target_my_gen,
+         target_my_trans_id) = sync_target.get_sync_info(self.source._replica_uid)
         # what's changed since that generation and this current gen
-        my_gen, changes = self.source.whats_changed(target_my_gen)
-        changed_doc_ids = [doc_id for doc_id, _ in changes]
+        my_gen, _, changes = self.source.whats_changed(target_my_gen)
+
+        # this source last-seen database generation for the target
+        target_last_known_gen, target_trans_id = self.source._get_sync_gen_info(
+            self.target_replica_uid)
+        if not changes and target_last_known_gen == target_gen:
+            return my_gen
+        changed_doc_ids = [doc_id for doc_id, _, _ in changes]
         # prepare to send all the changed docs
         docs_to_send = self.source.get_docs(changed_doc_ids,
             check_for_conflicts=False)
-        docs_by_generation = zip(docs_to_send, (gen for _, gen in changes))
+        docs_by_generation = zip(docs_to_send, (gen for _, gen, _ in changes))
 
-        # this source last-seen database generation for the target
-        target_last_known_gen = self.source.get_sync_generation(
-            self.target_replica_uid)
         # exchange documents and try to insert the returned ones with
         # the target, return target synced-up-to gen
         new_gen = sync_target.sync_exchange(docs_by_generation,
                         self.source._replica_uid, target_last_known_gen,
                         return_doc_cb=self._insert_doc_from_target)
         # record target synced-up-to generation including applying what we sent
-        self.source.set_sync_generation(self.target_replica_uid, new_gen)
+        self.source._set_sync_info(self.target_replica_uid, new_gen, 'T-sid')
 
         # if gapless record current reached generation with target
         self._record_sync_info_with_the_target(my_gen)
@@ -160,8 +166,9 @@ class SyncExchange(object):
         :param source_gen: The source generation of doc.
         :return: None
         """
-        state, at_gen = self._db.put_doc_if_newer(doc, save_conflict=False,
-            replica_uid=self.source_replica_uid, replica_gen=source_gen)
+        state, at_gen = self._db._put_doc_if_newer(doc, save_conflict=False,
+            replica_uid=self.source_replica_uid, replica_gen=source_gen,
+            replica_trans_id=None)
         if state == 'inserted':
             self.seen_ids[doc.doc_id] = at_gen
         elif state == 'converged':
@@ -195,15 +202,16 @@ class SyncExchange(object):
             'last_known_gen': self.source_last_known_generation
             })
         self._trace('before whats_changed')
-        gen, changes = self._db.whats_changed(self.source_last_known_generation)
+        gen, trans_id, changes = self._db.whats_changed(
+            self.source_last_known_generation)
         self._trace('after whats_changed')
         self.new_gen = gen
         seen_ids = self.seen_ids
         # changed docs that weren't superseded by or converged with
-        self.changes_to_return = [(doc_id, gen) for (doc_id, gen)  in changes
-                                         if doc_id not in seen_ids or
-                                         # there was a subsequent update
-                                            seen_ids.get(doc_id) < gen]
+        self.changes_to_return = [(doc_id, gen) for (doc_id, gen, _) in changes
+                                  # there was a subsequent update
+                                  if doc_id not in seen_ids or
+                                     seen_ids.get(doc_id) < gen]
         return self.new_gen
 
     def return_docs(self, return_doc_cb):
@@ -223,7 +231,7 @@ class SyncExchange(object):
         self._trace('before get_docs')
         docs = self._db.get_docs(changed_doc_ids, check_for_conflicts=False)
 
-        docs_by_gen = zip(docs, (gen for _, gen in changes_to_return))
+        docs_by_gen = izip(docs, (gen for _, gen in changes_to_return))
         for doc, gen in docs_by_gen:
             return_doc_cb(doc, gen)
         # for tests

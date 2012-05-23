@@ -201,7 +201,8 @@ class TestCSyncTarget(BackendTests):
         exc.insert_doc_from_source(doc, 10)
         self.assertGetDoc(self.db, 'doc-id', 'replica:1', tests.simple_doc,
                           False)
-        self.assertEqual(10, self.db.get_sync_generation('source-uid'))
+        self.assertEqual((10, None),
+                         self.db._get_sync_gen_info('source-uid'))
         self.assertEqual(['doc-id'], exc.get_seen_ids())
 
     def test_sync_exchange_conflicted_doc(self):
@@ -317,8 +318,8 @@ class TestSyncCtoHTTPViaC(tests.TestCaseWithServer):
         db = c_backend_wrapper.CDatabase(':memory:')
         doc = db.create_doc(tests.simple_doc)
         c_backend_wrapper.sync_db_to_target(db, target)
-        self.assertGetDoc(mem_db, doc.doc_id, doc.rev, doc.content, False)
-        self.assertGetDoc(db, mem_doc.doc_id, mem_doc.rev, mem_doc.content,
+        self.assertGetDoc(mem_db, doc.doc_id, doc.rev, doc.get_json(), False)
+        self.assertGetDoc(db, mem_doc.doc_id, mem_doc.rev, mem_doc.get_json(),
                           False)
 
 
@@ -342,8 +343,8 @@ class TestSyncCtoOAuthHTTPViaC(tests.TestCaseWithServer):
         db = c_backend_wrapper.CDatabase(':memory:')
         doc = db.create_doc(tests.simple_doc)
         c_backend_wrapper.sync_db_to_target(db, target)
-        self.assertGetDoc(mem_db, doc.doc_id, doc.rev, doc.content, False)
-        self.assertGetDoc(db, mem_doc.doc_id, mem_doc.rev, mem_doc.content,
+        self.assertGetDoc(mem_db, doc.doc_id, doc.rev, doc.get_json(), False)
+        self.assertGetDoc(db, mem_doc.doc_id, mem_doc.rev, mem_doc.get_json(),
                           False)
 
 

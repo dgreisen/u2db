@@ -29,7 +29,6 @@ import testtools
 from u1db import (
     errors,
     Document,
-    sync,
     )
 from u1db.backends import (
     inmemory,
@@ -83,7 +82,7 @@ class TestCase(testtools.TestCase):
             conflicts = conflicts[:1] + sorted(conflicts[1:])
         actual = db.get_doc_conflicts(doc_id)
         if actual:
-            actual = [(doc.rev, doc.content) for doc in actual]
+            actual = [(doc.rev, doc.get_json()) for doc in actual]
             actual = actual[:1] + sorted(actual[1:])
         self.assertEqual(conflicts, actual)
 
@@ -161,6 +160,26 @@ class DatabaseBaseTests(TestCase):
         # self.close_database(self.db)
         super(DatabaseBaseTests, self).tearDown()
 
+    def assertTransactionLog(self, doc_ids, db):
+        """Assert that the given docs are in the transaction log."""
+        log = db._get_transaction_log()
+        just_ids = []
+        seen_transactions = set()
+        for doc_id, transaction_id in log:
+            just_ids.append(doc_id)
+            self.assertIsNot(None, transaction_id,
+                             "Transaction id should not be None")
+            self.assertNotEqual('', transaction_id,
+                                "Transaction id should be a unique string")
+            self.assertTrue(transaction_id.startswith('T-'))
+            self.assertNotIn(transaction_id, seen_transactions)
+            seen_transactions.add(transaction_id)
+        self.assertEqual(doc_ids, just_ids)
+
+    def getLastTransId(self, db):
+        """Return the transaction id for the last database update."""
+        return self.db._get_transaction_log()[-1][-1]
+
 
 class ServerStateForTests(server_state.ServerState):
     """Used in the test suite, so we don't have to touch disk, etc."""
@@ -189,6 +208,9 @@ class ServerStateForTests(server_state.ServerState):
         db = inmemory.InMemoryDatabase(path)
         self._dbs[path] = db
         return db
+
+    def delete_database(self, path):
+        del self._dbs[path]
 
 
 class ResponderForTests(object):

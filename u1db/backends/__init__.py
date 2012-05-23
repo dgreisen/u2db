@@ -14,7 +14,7 @@
 # You should have received a copy of the GNU Lesser General Public License
 # along with u1db.  If not, see <http://www.gnu.org/licenses/>.
 
-""""""
+"""Abstract classes and common implementations for the backends."""
 
 import re
 import uuid
@@ -27,7 +27,7 @@ import u1db.sync
 from u1db.vectorclock import VectorClockRev
 
 
-check_doc_id_re = re.compile("^" + u1db.DOC_ID_CONSTRAINTS + "$")
+check_doc_id_re = re.compile("^" + u1db.DOC_ID_CONSTRAINTS + "$", re.UNICODE)
 
 
 class CommonSyncTarget(u1db.sync.LocalSyncTarget):
@@ -39,6 +39,9 @@ class CommonBackend(u1db.Database):
     def _allocate_doc_id(self):
         """Generate a unique identifier for this document."""
         return 'D-' + uuid.uuid4().hex  # 'D-' stands for document
+
+    def _allocate_transaction_id(self):
+        return 'T-' + uuid.uuid4().hex  # 'T-' stands for transaction
 
     def _allocate_doc_rev(self, old_doc_rev):
         vcr = VectorClockRev(old_doc_rev)
@@ -87,8 +90,8 @@ class CommonBackend(u1db.Database):
             result.append(doc)
         return result
 
-    def put_doc_if_newer(self, doc, save_conflict, replica_uid=None,
-                         replica_gen=None):
+    def _put_doc_if_newer(self, doc, save_conflict, replica_uid=None,
+                          replica_gen=None, replica_trans_id=None):
         cur_doc = self._get_doc(doc.doc_id)
         doc_vcr = VectorClockRev(doc.rev)
         if cur_doc is None:
@@ -107,12 +110,19 @@ class CommonBackend(u1db.Database):
             # so we should send it back, and we should not generate a
             # conflict
             state = 'superseded'
+        elif cur_doc.same_content_as(doc):
+            # the documents have been edited to the same thing at both ends
+            doc_vcr.maximize(cur_vcr)
+            doc_vcr.increment(self._replica_uid)
+            doc.rev = doc_vcr.as_str()
+            self._put_and_update_indexes(cur_doc, doc)
+            state = 'superseded'
         else:
             state = 'conflicted'
             if save_conflict:
                 self._force_doc_sync_conflict(doc)
         if replica_uid is not None and replica_gen is not None:
-            self._set_sync_generation(replica_uid, replica_gen)
+            self._do_set_sync_info(replica_uid, replica_gen, replica_trans_id)
         return state, self._get_generation()
 
     def _ensure_maximal_rev(self, cur_rev, extra_revs):

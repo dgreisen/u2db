@@ -86,9 +86,8 @@ class TodoStore(object):
             # No tags specified, so return all tasks.
             return self.get_all_tasks()
         # Get all tasks for the first tag.
-        results = {
-            doc.doc_id: doc for doc in
-            self.db.get_from_index(TAGS_INDEX, [(tags[0],)])}
+        results = dict((doc.doc_id, doc) for doc in
+            self.db.get_from_index(TAGS_INDEX, [(tags[0],)]))
         # Now loop over the rest of the tags (if any) and remove from the
         # results any document that does not have that particular tag.
         for tag in tags[1:]:
@@ -114,7 +113,7 @@ class TodoStore(object):
         if document is None:
             # No document with that id exists in the database.
             raise KeyError("No task with id '%s'." % (task_id,))
-        if document.content is None:
+        if document.is_tombstone():
             # The document id exists, but the document's content was previously
             # deleted.
             raise KeyError("Task with id %s was deleted." % (task_id,))
@@ -167,7 +166,6 @@ class Task(object):
 
     def __init__(self, document):
         self._document = document
-        self._content = json.loads(document.content)
 
     @property
     def task_id(self):
@@ -178,31 +176,31 @@ class Task(object):
 
     def _get_title(self):
         """Get the task title."""
-        return self._content['title']
+        return self._document.content['title']
 
     def _set_title(self, title):
         """Set the task title."""
-        self._content['title'] = title
+        self._document.content['title'] = title
 
     title = property(_get_title, _set_title, doc="Title of the task.")
 
     def _get_done(self):
         """Get the status of the task."""
-        return self._content['done']
+        return self._document.content['done']
 
     def _set_done(self, value):
         """Set the done status."""
-        self._content['done'] = value
+        self._document.content['done'] = value
 
     done = property(_get_done, _set_done, doc="Done flag.")
 
     def _get_tags(self):
         """Get tags associated with the task."""
-        return self._content['tags']
+        return self._document.content['tags']
 
     def _set_tags(self, tags):
         """Set tags associated with the task."""
-        self._content['tags'] = list(set(tags))
+        self._document.content['tags'] = list(set(tags))
 
     tags = property(_get_tags, _set_tags, doc="Task tags.")
 
@@ -211,5 +209,4 @@ class Task(object):
         """The u1db document representing this task."""
         # This brings the underlying document's JSON content back into sync
         # with whatever data the task currently holds.
-        self._document.content = json.dumps(self._content)
         return self._document

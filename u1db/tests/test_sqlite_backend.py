@@ -211,7 +211,7 @@ class TestSQLitePartialExpandDatabase(tests.TestCase):
         self.db.create_index('test', ['key1', 'key2'])
         doc1 = self.db.create_doc(
             '{"key1": "val1", "key2": "val2"}')
-        doc1.content = '{"key1": "val1", "key2": "valy"}'
+        doc1.content = {"key1": "val1", "key2": "valy"}
         self.db.put_doc(doc1)
         c = self.db._get_sqlite_handle().cursor()
         c.execute("SELECT doc_id, field_name, value FROM document_fields"
@@ -318,6 +318,22 @@ class TestSQLitePartialExpandDatabase(tests.TestCase):
         self.assertRaises(errors.DatabaseDoesNotExist,
                           sqlite_backend.SQLiteDatabase.open_database, path,
                           create=False)
+
+    def test_delete_database_existent(self):
+        temp_dir = self.createTempDir(prefix='u1db-test-')
+        path = temp_dir + '/new.sqlite'
+        db = sqlite_backend.SQLiteDatabase.open_database(path, create=True)
+        db.close()
+        sqlite_backend.SQLiteDatabase.delete_database(path)
+        self.assertRaises(errors.DatabaseDoesNotExist,
+                          sqlite_backend.SQLiteDatabase.open_database, path,
+                          create=False)
+
+    def test_delete_database_nonexistent(self):
+        temp_dir = self.createTempDir(prefix='u1db-test-')
+        path = temp_dir + '/non-existent.sqlite'
+        self.assertRaises(errors.DatabaseDoesNotExist,
+                          sqlite_backend.SQLiteDatabase.delete_database, path)
 
     def assertTransform(self, sql_value, value):
         transformed = sqlite_backend.SQLiteDatabase._transform_glob(value)

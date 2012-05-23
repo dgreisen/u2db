@@ -16,6 +16,8 @@
 
 """U1DB"""
 
+import simplejson
+
 __version_info__ = (0, 0, 1, 'dev', 0)
 __version__ = '.'.join(map(str, __version_info__))
 
@@ -39,7 +41,8 @@ def open(path, create):
 DBNAME_CONSTRAINTS = r"[a-zA-Z0-9][a-zA-Z0-9.-]*"
 
 # constraints on doc ids (as regex)
-DOC_ID_CONSTRAINTS = r"[^/\\]+"
+# (no slashes, and no characters outside the ascii range)
+DOC_ID_CONSTRAINTS = ur"[^/\\\u0001-\u0019\u007f-\uffff]+"
 
 
 class Database(object):
@@ -56,11 +59,12 @@ class Database(object):
 
         :param old_generation: The generation of the database in the old
             state.
-        :return: (cur_generation, [(doc_id, generation),...])
-            The current generation of the database, and a list of of
-            changed documents since old_generation, represented by tuples
-            with for each document its doc_id and the generation corresponding
-            to the last intervening change and sorted by generation
+        :return: (generation, trans_id, [(doc_id, generation, trans_id),...])
+            The current generation of the database, its associated transaction
+            id, and a list of of changed documents since old_generation,
+            represented by tuples with for each document its doc_id and the
+            generation and transaction id corresponding to the last intervening
+            change and sorted by generation (old changes first)
         """
         raise NotImplementedError(self.whats_changed)
 
@@ -103,46 +107,6 @@ class Database(object):
             The Document object will also be updated.
         """
         raise NotImplementedError(self.put_doc)
-
-    def put_doc_if_newer(self, doc, save_conflict, replica_uid=None,
-                         replica_gen=None):
-        """Insert/update document into the database with a given revision.
-
-        This api is used during synchronization operations.
-
-        If a document would conflict and save_conflict is set to True, the
-        content will be selected as the 'current' content for doc.doc_id,
-        even though doc.rev doesn't supersede the currently stored revision.
-        The currently stored document will be added to the list of conflict
-        alternatives for the given doc_id.
-
-        This forces the new content to be 'current' so that we get convergence
-        after synchronizing, even if people don't resolve conflicts. Users can
-        then notice that their content is out of date, update it, and
-        synchronize again. (The alternative is that users could synchronize and
-        think the data has propagated, but their local copy looks fine, and the
-        remote copy is never updated again.)
-
-        :param doc: A Document object
-        :param save_conflict: If this document is a conflict, do you want to
-            save it as a conflict, or just ignore it.
-        :param replica_uid: A unique replica identifier.
-        :param replica_gen: The generation of the replica corresponding to the
-            this document. The replica arguments are optional, but are used
-            during synchronization.
-        :return: (state, at_gen) -  If we don't have doc_id already,
-            or if doc_rev supersedes the existing document revision,
-            then the content will be inserted, and state is 'inserted'.
-            If doc_rev is less than or equal to the existing revision,
-            then the put is ignored and state is respecitvely 'superseded'
-            or 'converged'.
-            If doc_rev is not strictly superseded or supersedes, then
-            state is 'conflicted'. The document will not be inserted if
-            save_conflict is False.
-            For 'inserted' or 'converged', at_gen is the insertion/current
-            generation.
-        """
-        raise NotImplementedError(self.put_doc_if_newer)
 
     def delete_doc(self, doc):
         """Mark a document as deleted.
@@ -209,8 +173,6 @@ class Database(object):
         """
         raise NotImplementedError(self.get_index_keys)
 
-    # XXX: get_doc_conflicts still uses tuples, we need to change this to using
-    #      Document objects
     def get_doc_conflicts(self, doc_id):
         """Get the list of conflict texts for the given document.
 
@@ -246,30 +208,6 @@ class Database(object):
         """
         raise NotImplementedError(self.get_sync_target)
 
-    def get_sync_generation(self, other_replica_uid):
-        """Return the last known database generation of the other db replica.
-
-        When you do a synchronization with another replica, the Database keeps
-        track of what generation the other database replica  was at.
-        This way we only have to request data that is newer.
-
-        :param other_replica_uid: The identifier for the other replica.
-        :return: The generation we encountered during synchronization. If we've
-            never synchronized with the replica, this is 0.
-        """
-        raise NotImplementedError(self.get_sync_generation)
-
-    def set_sync_generation(self, other_replica_uid, other_generation):
-        """Set the last-known generation for the other database replica.
-
-        We have just performed some synchronization, and we want to track what
-        generation the other replica was at. See also get_sync_generation.
-        :param other_replica_uid: The U1DB identifier for the other replica.
-        :param other_generation: The generation number for the other replica.
-        :return: None
-        """
-        raise NotImplementedError(self.get_sync_generation)
-
     def close(self):
         """Release any resources associated with this database."""
         raise NotImplementedError(self.close)
@@ -280,21 +218,106 @@ class Database(object):
         from u1db.remote.http_target import HTTPSyncTarget
         return Synchronizer(self, HTTPSyncTarget(url)).sync()
 
+    def _get_sync_gen_info(self, other_replica_uid):
+        """Return the last known information about the other db replica.
+
+        When you do a synchronization with another replica, the Database keeps
+        track of what generation the other database replica was at, and what
+        the associated transaction id was.  This is used to determine what data
+        needs to be sent, and if two databases are claiming to be the same
+        replica.
+
+        :param other_replica_uid: The identifier for the other replica.
+        :return: (gen, trans_id) The generation and transaction id we
+            encountered during synchronization. If we've never synchronized
+            with the replica, this is (0, '').
+        """
+        raise NotImplementedError(self._get_sync_gen_info)
+
+    def _set_sync_info(self, other_replica_uid, other_generation,
+                       other_transaction_id):
+        """Set the last-known generation for the other database replica.
+
+        We have just performed some synchronization, and we want to track what
+        generation the other replica was at. See also _get_sync_gen_info.
+        :param other_replica_uid: The U1DB identifier for the other replica.
+        :param other_generation: The generation number for the other replica.
+        :param other_transaction_id: The transaction id associated with the
+            generation.
+        :return: None
+        """
+        raise NotImplementedError(self._set_sync_info)
+
+    def _put_doc_if_newer(self, doc, save_conflict, replica_uid=None,
+                          replica_gen=None, replica_trans_id=None):
+        """Insert/update document into the database with a given revision.
+
+        This api is used during synchronization operations.
+
+        If a document would conflict and save_conflict is set to True, the
+        content will be selected as the 'current' content for doc.doc_id,
+        even though doc.rev doesn't supersede the currently stored revision.
+        The currently stored document will be added to the list of conflict
+        alternatives for the given doc_id.
+
+        This forces the new content to be 'current' so that we get convergence
+        after synchronizing, even if people don't resolve conflicts. Users can
+        then notice that their content is out of date, update it, and
+        synchronize again. (The alternative is that users could synchronize and
+        think the data has propagated, but their local copy looks fine, and the
+        remote copy is never updated again.)
+
+        :param doc: A Document object
+        :param save_conflict: If this document is a conflict, do you want to
+            save it as a conflict, or just ignore it.
+        :param replica_uid: A unique replica identifier.
+        :param replica_gen: The generation of the replica corresponding to the
+            this document. The replica arguments are optional, but are used
+            during synchronization.
+        :param replica_trans_id: The transaction_id associated with the
+            generation.
+        :return: (state, at_gen) -  If we don't have doc_id already,
+            or if doc_rev supersedes the existing document revision,
+            then the content will be inserted, and state is 'inserted'.
+            If doc_rev is less than or equal to the existing revision,
+            then the put is ignored and state is respecitvely 'superseded'
+            or 'converged'.
+            If doc_rev is not strictly superseded or supersedes, then
+            state is 'conflicted'. The document will not be inserted if
+            save_conflict is False.
+            For 'inserted' or 'converged', at_gen is the insertion/current
+            generation.
+        """
+        raise NotImplementedError(self._put_doc_if_newer)
+
 
 class Document(object):
     """Container for handling a single document.
 
     :ivar doc_id: Unique identifier for this document.
     :ivar rev:
-    :ivar content: The JSON string for this document.
+    :ivar json: The JSON string for this document.
     :ivar has_conflicts: Boolean indicating if this document has conflicts
     """
 
-    def __init__(self, doc_id, rev, content, has_conflicts=False):
+    def __init__(self, doc_id, rev, json, has_conflicts=False):
         self.doc_id = doc_id
         self.rev = rev
-        self.content = content
+        self._json = json
+        self._content = None
         self.has_conflicts = has_conflicts
+
+    def same_content_as(self, other):
+        """Compare the content of two documents."""
+        if self._json:
+            c1 = simplejson.loads(self._json)
+        else:
+            c1 = self._content
+        if other._json:
+            c2 = simplejson.loads(other._json)
+        else:
+            c2 = other._content
+        return c1 == c2
 
     def __repr__(self):
         if self.has_conflicts:
@@ -302,7 +325,7 @@ class Document(object):
         else:
             extra = ''
         return '%s(%s, %s%s, %r)' % (self.__class__.__name__, self.doc_id,
-                                     self.rev, extra, self.content)
+                                     self.rev, extra, self.get_json())
 
     def __hash__(self):
         raise NotImplementedError(self.__hash__)
@@ -310,7 +333,10 @@ class Document(object):
     def __eq__(self, other):
         if not isinstance(other, Document):
             return NotImplemented
-        return self.__dict__ == other.__dict__
+        return (
+            self.doc_id == other.doc_id and self.rev == other.rev and
+            self.same_content_as(other) and self.has_conflicts ==
+            other.has_conflicts)
 
     def __lt__(self, other):
         """This is meant for testing, not part of the official api.
@@ -321,8 +347,57 @@ class Document(object):
         """
         # Since this is just for testing, we don't worry about comparing
         # against things that aren't a Document.
-        return ((self.doc_id, self.rev, self.content)
-            < (other.doc_id, other.rev, other.content))
+        return ((self.doc_id, self.rev, self.get_json())
+            < (other.doc_id, other.rev, other.get_json()))
+
+    def get_json(self):
+        """Get the json serialization of this document."""
+        if self._json is not None:
+            return self._json
+        if self._content is not None:
+            return simplejson.dumps(self._content)
+        return None
+
+    def set_json(self, json):
+        """Set the json serialization of this document."""
+        self._content = None
+        self._json = json
+
+    def make_tombstone(self):
+        """Make this document into a tombstone."""
+        self._json = None
+        self._content = None
+
+    def is_tombstone(self):
+        """Return True if the document is a tombstone, False otherwise."""
+        if self._content is not None:
+            return False
+        if self._json is not None:
+            return False
+        return True
+
+    # The following part of the API is optional: no implementation is forced to
+    # have it but if the language supports dictionaries/hashtables, it makes
+    # Documents a lot more user friendly.
+
+    def _get_content(self):
+        """Get the dictionary representing this document."""
+        if self._json is not None:
+            self._content = simplejson.loads(self._json)
+            self._json = None
+        if self._content is not None:
+            return self._content
+        return None
+
+    def _set_content(self, content):
+        """Set the dictionary representing this document."""
+        self._json = None
+        self._content = content
+
+    content = property(
+        _get_content, _set_content, doc="Content of the Document.")
+
+    # End of optional part.
 
 
 class SyncTarget(object):
@@ -337,11 +412,13 @@ class SyncTarget(object):
         :param source_replica_uid: Another replica which we might have
             synchronized with in the past.
         :return: (target_replica_uid, target_replica_generation,
-                  source_replica_last_known_generation)
+                  source_replica_last_known_generation,
+                  source_replica_last_known_transaction_id)
         """
         raise NotImplementedError(self.get_sync_info)
 
-    def record_sync_info(self, source_replica_uid, source_replica_generation):
+    def record_sync_info(self, source_replica_uid, source_replica_generation,
+                         source_replica_transaction_id):
         """Record tip information for another replica.
 
         After sync_exchange has been processed, the caller will have
@@ -357,6 +434,8 @@ class SyncTarget(object):
         :param source_replica_uid: The identifier for the source replica.
         :param source_replica_generation:
              The database generation for the source replica.
+        :param source_replica_transaction_id: The transaction id associated
+            with the source replica generation.
         :return: None
         """
         raise NotImplementedError(self.record_sync_info)

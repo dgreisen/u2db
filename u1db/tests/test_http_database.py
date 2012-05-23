@@ -41,18 +41,21 @@ class TestHTTPDatabaseSimpleOperations(tests.TestCase):
         self.db._conn = object()  # crash if used
         self.got = None
         self.response_val = None
+
         def _request(method, url_parts, params=None, body=None,
                                                      content_type=None):
             self.got = method, url_parts, params, body, content_type
             if isinstance(self.response_val, Exception):
                 raise self.response_val
             return self.response_val
+
         def _request_json(method, url_parts, params=None, body=None,
                                                           content_type=None):
             self.got = method, url_parts, params, body, content_type
             if isinstance(self.response_val, Exception):
                 raise self.response_val
             return self.response_val
+
         self.db._request = _request
         self.db._request_json = _request_json
 
@@ -72,6 +75,11 @@ class TestHTTPDatabaseSimpleOperations(tests.TestCase):
         self.db._ensure()
         self.assertEqual(('PUT', [], {}, {}, None), self.got)
 
+    def test__delete(self):
+        self.response_val = {'ok': True}, {}
+        self.db._delete()
+        self.assertEqual(('DELETE', [], {}, {}, None), self.got)
+
     def test__check(self):
         self.response_val = {}, {}
         res = self.db._check()
@@ -88,7 +96,7 @@ class TestHTTPDatabaseSimpleOperations(tests.TestCase):
                           '{"v": 1}', 'application/json'), self.got)
 
         self.response_val = {'rev': 'doc-rev-2'}, {}
-        doc.content = '{"v": 2}'
+        doc.content = {"v": 2}
         res = self.db.put_doc(doc)
         self.assertEqual('doc-rev-2', res)
         self.assertEqual('doc-rev-2', doc.rev)
@@ -130,15 +138,16 @@ class TestHTTPDatabaseSimpleOperations(tests.TestCase):
         new_doc = self.db.create_doc('{"v": 1}', doc_id='doc-id')
         self.assertEqual('doc-rev', new_doc.rev)
         self.assertEqual('doc-id', new_doc.doc_id)
-        self.assertEqual('{"v": 1}', new_doc.content)
+        self.assertEqual('{"v": 1}', new_doc.get_json())
         self.assertEqual(('PUT', ['doc', 'doc-id'], {},
                           '{"v": 1}', 'application/json'), self.got)
 
     def test_create_doc_without_id(self):
         self.response_val = {'rev': 'doc-rev-2'}, {}
         new_doc = self.db.create_doc('{"v": 3}')
+        self.assertEqual('D-', new_doc.doc_id[:2])
         self.assertEqual('doc-rev-2', new_doc.rev)
-        self.assertEqual('{"v": 3}', new_doc.content)
+        self.assertEqual('{"v": 3}', new_doc.get_json())
         self.assertEqual(('PUT', ['doc', new_doc.doc_id], {},
                           '{"v": 3}', 'application/json'), self.got)
 
@@ -180,6 +189,13 @@ class TestHTTPDatabaseIntegration(tests.TestCaseWithServer):
         db._ensure()
         self.assertIs(None, db.get_doc('doc1'))
 
+    def test__delete(self):
+        self.request_state._create_database('db0')
+        db = http_database.HTTPDatabase(self.getURL('db0'))
+        db._delete()
+        self.assertRaises(errors.DatabaseDoesNotExist,
+                          self.request_state.check_database, 'db0')
+
     def test_open_database_existing(self):
         self.request_state._create_database('db0')
         db = http_database.HTTPDatabase.open_database(self.getURL('db0'),
@@ -196,6 +212,12 @@ class TestHTTPDatabaseIntegration(tests.TestCaseWithServer):
         db = http_database.HTTPDatabase.open_database(self.getURL('new'),
                                                       create=True)
         self.assertIs(None, db.get_doc('doc1'))
+
+    def test_delete_database_existing(self):
+        self.request_state._create_database('db0')
+        http_database.HTTPDatabase.delete_database(self.getURL('db0'))
+        self.assertRaises(errors.DatabaseDoesNotExist,
+                          self.request_state.check_database, 'db0')
 
     def test_doc_ids_needing_quoting(self):
         db0 = self.request_state._create_database('db0')

@@ -44,8 +44,8 @@ cdef extern from "u1db/u1db.h":
         size_t doc_id_len
         char *doc_rev
         size_t doc_rev_len
-        char *content
-        size_t content_len
+        char *json
+        size_t json_len
         int has_conflicts
     # Note: u1query is actually defined in u1db_internal.h, and in u1db.h it is
     #       just an opaque pointer. However, older versions of Cython don't let
@@ -61,14 +61,14 @@ cdef extern from "u1db/u1db.h":
     ctypedef int (*u1db_key_callback)(void *context, char *key)
     ctypedef int (*u1db_doc_gen_callback)(void *context,
         u1db_document *doc, int gen)
-    ctypedef int (*u1db_doc_id_gen_callback)(void *context,
-        const_char_ptr doc_id, int gen)
+    ctypedef int (*u1db_trans_info_callback)(void *context,
+        const_char_ptr doc_id, int gen, const_char_ptr trans_id)
 
     u1database * u1db_open(char *fname)
     void u1db_free(u1database **)
     int u1db_set_replica_uid(u1database *, char *replica_uid)
     int u1db_get_replica_uid(u1database *, const_char_ptr *replica_uid)
-    int u1db_create_doc(u1database *db, char *content, char *doc_id,
+    int u1db_create_doc(u1database *db, char *json, char *doc_id,
                         u1db_document **doc)
     int u1db_delete_doc(u1database *db, u1db_document *doc)
     int u1db_get_doc(u1database *db, char *doc_id, u1db_document **doc)
@@ -76,16 +76,17 @@ cdef extern from "u1db/u1db.h":
                       int check_for_conflicts, void *context,
                       u1db_doc_callback cb)
     int u1db_put_doc(u1database *db, u1db_document *doc)
-    int u1db_put_doc_if_newer(u1database *db, u1db_document *doc,
-                              int save_conflict, char *replica_uid,
-                              int replica_gen, int *state, int *at_gen)
+    int u1db__put_doc_if_newer(u1database *db, u1db_document *doc,
+                               int save_conflict, char *replica_uid,
+                               int replica_gen, char *replica_trans_id,
+                               int *state, int *at_gen)
     int u1db_resolve_doc(u1database *db, u1db_document *doc,
                          int n_revs, const_char_ptr *revs)
     int u1db_delete_doc(u1database *db, u1db_document *doc)
-    int u1db_whats_changed(u1database *db, int *gen, void *context,
-                           u1db_doc_id_gen_callback cb)
+    int u1db_whats_changed(u1database *db, int *gen, char **trans_id,
+                           void *context, u1db_trans_info_callback cb)
     int u1db__get_transaction_log(u1database *db, void *context,
-                                  u1db_doc_id_gen_callback cb)
+                                  u1db_trans_info_callback cb)
     int u1db_get_doc_conflicts(u1database *db, char *doc_id, void *context,
                                u1db_doc_callback cb)
 
@@ -115,7 +116,10 @@ cdef extern from "u1db/u1db.h":
     int U1DB_NOT_IMPLEMENTED
     int U1DB_INVALID_JSON
     int U1DB_INVALID_VALUE_FOR_INDEX
+    int U1DB_INVALID_GLOBBING
     int U1DB_BROKEN_SYNC_STREAM
+    int U1DB_DUPLICATE_INDEX_NAME
+    int U1DB_INDEX_DOES_NOT_EXIST
     int U1DB_INTERNAL_ERROR
 
     int U1DB_INSERTED
@@ -124,7 +128,7 @@ cdef extern from "u1db/u1db.h":
     int U1DB_CONFLICTED
 
     void u1db_free_doc(u1db_document **doc)
-    int u1db_doc_set_content(u1db_document *doc, char *content)
+    int u1db_doc_set_json(u1db_document *doc, char *json)
 
 
 cdef extern from "u1db/u1db_internal.h":
@@ -154,9 +158,10 @@ cdef extern from "u1db/u1db_internal.h":
     ctypedef struct u1db_sync_target:
         int (*get_sync_info)(u1db_sync_target *st,
             char *source_replica_uid,
-            const_char_ptr *st_replica_uid, int *st_gen, int *source_gen) nogil
+            const_char_ptr *st_replica_uid, int *st_gen, int *source_gen,
+            char **source_trans_id) nogil
         int (*record_sync_info)(u1db_sync_target *st,
-            char *source_replica_uid, int source_gen) nogil
+            char *source_replica_uid, int source_gen, char *trans_id) nogil
         int (*sync_exchange)(u1db_sync_target *st,
                              char *source_replica_uid, int n_docs,
                              u1db_document **docs, int *generations,
@@ -189,10 +194,10 @@ cdef extern from "u1db/u1db_internal.h":
                                            char *content, int has_conflicts)
     int u1db__generate_hex_uuid(char *)
 
-    int u1db__get_sync_generation(u1database *db, char *replica_uid,
-                                  int *generation)
-    int u1db__set_sync_generation(u1database *db, char *replica_uid,
-                                  int generation)
+    int u1db__get_sync_gen_info(u1database *db, char *replica_uid,
+                                int *generation, char **trans_id)
+    int u1db__set_sync_info(u1database *db, char *replica_uid, int generation,
+                            char *trans_id)
     int u1db__sync_get_machine_info(u1database *db, char *other_replica_uid,
                                     int *other_db_rev, char **my_replica_uid,
                                     int *my_db_rev)
@@ -251,11 +256,12 @@ from u1db import errors
 from sqlite3 import dbapi2
 
 
-cdef int _append_doc_gen_to_list(void *context, const_char_ptr doc_id,
-                                 int generation) with gil:
+cdef int _append_trans_info_to_list(void *context, const_char_ptr doc_id,
+                                    int generation,
+                                    const_char_ptr trans_id) with gil:
     a_list = <object>(context)
     doc = doc_id
-    a_list.append((doc, generation))
+    a_list.append((doc, generation, trans_id))
     return 0
 
 
@@ -279,6 +285,19 @@ cdef _list_to_array(lst, const_char_ptr **res, int *count):
         tmp[idx] = x
     res[0] = tmp
 
+cdef _list_to_str_array(lst, const_char_ptr **res, int *count):
+    cdef const_char_ptr *tmp
+    count[0] = len(lst)
+    tmp = <const_char_ptr*>calloc(sizeof(char*), count[0])
+    new_objs = []
+    for idx, x in enumerate(lst):
+        if isinstance(x, unicode):
+            x = x.encode('utf-8')
+            new_objs.append(x)
+        tmp[idx] = x
+    res[0] = tmp
+    return new_objs
+
 
 cdef int _append_index_definition_to_list(void *context,
         const_char_ptr index_name, int n_expressions,
@@ -288,7 +307,8 @@ cdef int _append_index_definition_to_list(void *context,
     a_list = <object>(context)
     exp_list = []
     for i from 0 <= i < n_expressions:
-        exp_list.append(expressions[i])
+        s = expressions[i]
+        exp_list.append(s.decode('utf-8'))
     a_list.append((index_name, exp_list))
     return 0
 
@@ -329,6 +349,21 @@ cdef int _trace_hook(void *context, const_char_ptr state) with gil:
         #       something in C
         return U1DB_INTERNAL_ERROR
     return U1DB_OK
+
+
+cdef char *_ensure_str(object obj, object extra_objs) except NULL:
+    """Ensure that we have the UTF-8 representation of a parameter.
+
+    :param obj: A Unicode or String object.
+    :param extra_objs: This should be a Python list. If we have to convert obj
+        from being a Unicode object, this will hold the PyString object so that
+        we know the char* lifetime will be correct.
+    :return: A C pointer to the UTF-8 representation.
+    """
+    if isinstance(obj, unicode):
+        obj = obj.encode('utf-8')
+        extra_objs.append(obj)
+    return PyString_AsString(obj)
 
 
 def _format_query(fields):
@@ -423,15 +458,14 @@ cdef class CDocument(object):
             return PyString_FromStringAndSize(
                     self._doc.doc_rev, self._doc.doc_rev_len)
 
-    property content:
-        def __get__(self):
-            if self._doc.content == NULL:
-                return None
-            return PyString_FromStringAndSize(
-                    self._doc.content, self._doc.content_len)
+    def get_json(self):
+        if self._doc.json == NULL:
+            return None
+        return PyString_FromStringAndSize(
+                self._doc.json, self._doc.json_len)
 
-        def __set__(self, val):
-            u1db_doc_set_content(self._doc, val)
+    def set_json(self, val):
+        u1db_doc_set_json(self._doc, val)
 
 
     property has_conflicts:
@@ -446,7 +480,7 @@ cdef class CDocument(object):
         else:
             extra = ''
         return '%s(%s, %s%s, %r)' % (self.__class__.__name__, self.doc_id,
-                                     self.rev, extra, self.content)
+                                     self.rev, extra, self.get_json())
 
     def __hash__(self):
         raise NotImplementedError(self.__hash__)
@@ -454,12 +488,12 @@ cdef class CDocument(object):
     def __richcmp__(self, other, int t):
         try:
             if t == 0: # Py_LT <
-                return ((self.doc_id, self.rev, self.content)
-                    < (other.doc_id, other.rev, other.content))
+                return ((self.doc_id, self.rev, self.get_json())
+                    < (other.doc_id, other.rev, other.get_json()))
             elif t == 2: # Py_EQ ==
                 return (self.doc_id == other.doc_id
                         and self.rev == other.rev
-                        and self.content == other.content
+                        and self.get_json() == other.get_json()
                         and self.has_conflicts == other.has_conflicts)
         except AttributeError:
             # Fall through to NotImplemented
@@ -526,12 +560,18 @@ cdef handle_status(context, int status):
                                   % (context,))
     if status == U1DB_INVALID_VALUE_FOR_INDEX:
         raise errors.InvalidValueForIndex()
+    if status == U1DB_INVALID_GLOBBING:
+        raise errors.InvalidGlobbing()
     if status == U1DB_INTERNAL_ERROR:
         raise errors.U1DBError("internal error")
     if status == U1DB_BROKEN_SYNC_STREAM:
         raise errors.BrokenSyncStream()
     if status == U1DB_CONFLICTED:
         raise errors.ConflictedDoc()
+    if status == U1DB_DUPLICATE_INDEX_NAME:
+        raise errors.IndexNameTakenError()
+    if status == U1DB_INDEX_DOES_NOT_EXIST:
+        raise errors.IndexDoesNotExist
     raise RuntimeError('%s (status: %s)' % (context, status))
 
 
@@ -625,22 +665,27 @@ cdef class CSyncTarget(object):
     def get_sync_info(self, source_replica_uid):
         cdef const_char_ptr st_replica_uid = NULL
         cdef int st_gen = 0, source_gen = 0, status
+        cdef char *trans_id = NULL
 
         self._check()
         assert self._st.get_sync_info != NULL, "get_sync_info is NULL?"
         with nogil:
             status = self._st.get_sync_info(self._st, source_replica_uid,
-                &st_replica_uid, &st_gen, &source_gen)
+                &st_replica_uid, &st_gen, &source_gen, &trans_id)
         handle_status("get_sync_info", status)
-        return (safe_str(st_replica_uid), st_gen, source_gen)
+        res_trans_id = None
+        if trans_id != NULL:
+            res_trans_id = trans_id
+            free(trans_id)
+        return (safe_str(st_replica_uid), st_gen, source_gen, res_trans_id)
 
-    def record_sync_info(self, source_replica_uid, source_gen):
+    def record_sync_info(self, source_replica_uid, source_gen, source_trans_id):
         cdef int status
         self._check()
         assert self._st.record_sync_info != NULL, "record_sync_info is NULL?"
         with nogil:
             status = self._st.record_sync_info(self._st, source_replica_uid,
-                                               source_gen)
+                                               source_gen, source_trans_id)
         handle_status("record_sync_info", status)
 
     def _get_sync_exchange(self, source_replica_uid, source_gen):
@@ -831,22 +876,26 @@ cdef class CDatabase(object):
             u1db_put_doc(self._db, doc._doc))
         return doc.rev
 
-    def put_doc_if_newer(self, CDocument doc, save_conflict, replica_uid=None,
-                         replica_gen=None):
-        cdef char *c_uid
+    def _put_doc_if_newer(self, CDocument doc, save_conflict, replica_uid=None,
+                          replica_gen=None, replica_trans_id=None):
+        cdef char *c_uid, *c_trans_id
         cdef int gen, state = 0, at_gen = -1
 
         if replica_uid is None:
             c_uid = NULL
         else:
             c_uid = replica_uid
+        if replica_trans_id is None:
+            c_trans_id = NULL
+        else:
+            c_trans_id = replica_trans_id
         if replica_gen is None:
             gen = 0
         else:
             gen = replica_gen
-        handle_status("Failed to put_doc_if_newer",
-            u1db_put_doc_if_newer(self._db, doc._doc, save_conflict,
-                c_uid, gen, &state, &at_gen))
+        handle_status("Failed to _put_doc_if_newer",
+            u1db__put_doc_if_newer(self._db, doc._doc, save_conflict,
+                c_uid, gen, c_trans_id, &state, &at_gen))
         if state == U1DB_INSERTED:
             return 'inserted', at_gen
         elif state == U1DB_SUPERSEDED:
@@ -856,7 +905,7 @@ cdef class CDatabase(object):
         elif state == U1DB_CONFLICTED:
             return 'conflicted', at_gen
         else:
-            raise RuntimeError("Unknown put_doc_if_newer state: %d" % (state,))
+            raise RuntimeError("Unknown _put_doc_if_newer state: %d" % (state,))
 
     def get_doc(self, doc_id):
         cdef u1db_document *doc = NULL
@@ -907,20 +956,28 @@ cdef class CDatabase(object):
 
     def whats_changed(self, generation=0):
         cdef int c_generation
+        cdef int status
+        cdef char *trans_id = NULL
 
         a_list = []
         c_generation = generation
-        handle_status("whats_changed",
-            u1db_whats_changed(self._db, &c_generation, <void*>a_list,
-                               _append_doc_gen_to_list))
-        return c_generation, a_list
+        res_trans_id = ''
+        status = u1db_whats_changed(self._db, &c_generation, &trans_id,
+                                    <void*>a_list, _append_trans_info_to_list)
+        try:
+            handle_status("whats_changed", status)
+        finally:
+            if trans_id != NULL:
+                res_trans_id = trans_id
+                free(trans_id)
+        return c_generation, res_trans_id, a_list
 
     def _get_transaction_log(self):
         a_list = []
-        handle_status("get_transaction_log",
+        handle_status("_get_transaction_log",
             u1db__get_transaction_log(self._db, <void*>a_list,
-                                      _append_doc_gen_to_list))
-        return [doc_id for doc_id, gen in a_list]
+                                      _append_trans_info_to_list))
+        return [(doc_id, trans_id) for doc_id, gen, trans_id in a_list]
 
     def _get_generation(self):
         cdef int generation
@@ -928,16 +985,22 @@ cdef class CDatabase(object):
             u1db__get_generation(self._db, &generation))
         return generation
 
-    def get_sync_generation(self, replica_uid):
-        cdef int generation
+    def _get_sync_gen_info(self, replica_uid):
+        cdef int generation, status
+        cdef char *trans_id = NULL
 
-        handle_status("get_sync_generation",
-            u1db__get_sync_generation(self._db, replica_uid, &generation))
-        return generation
+        status = u1db__get_sync_gen_info(self._db, replica_uid, &generation,
+                                         &trans_id)
+        handle_status("_get_sync_gen_info", status)
+        raw_trans_id = None
+        if trans_id != NULL:
+            raw_trans_id = trans_id
+            free(trans_id)
+        return generation, raw_trans_id
 
-    def set_sync_generation(self, replica_uid, generation):
-        handle_status("set_sync_generation",
-            u1db__set_sync_generation(self._db, replica_uid, generation))
+    def _set_sync_info(self, replica_uid, generation, trans_id):
+        handle_status("_set_sync_info",
+            u1db__set_sync_info(self._db, replica_uid, generation, trans_id))
 
     def _sync_exchange(self, docs_info, from_replica_uid, from_machine_rev,
                        last_known_rev):
@@ -962,10 +1025,16 @@ cdef class CDatabase(object):
         cdef const_char_ptr *expressions
         cdef int n_expressions
 
-        _list_to_array(index_expression, &expressions, &n_expressions)
-        handle_status("create_index",
-            u1db_create_index(self._db, index_name, n_expressions, expressions))
-        free(<void*>expressions)
+        # keep a reference to new_objs so that the pointers in expressions
+        # remain valid.
+        new_objs = _list_to_str_array(
+            index_expression, &expressions, &n_expressions)
+        try:
+            handle_status("create_index",
+                u1db_create_index(
+                    self._db, index_name, n_expressions, expressions))
+        finally:
+            free(<void*>expressions)
 
     def list_indexes(self):
         a_list = []
@@ -981,6 +1050,7 @@ cdef class CDatabase(object):
     def get_from_index(self, index_name, key_values):
         cdef CQuery query
         cdef int status
+        extra = []
         query = self._query_init(index_name)
         res = []
         status = U1DB_OK
@@ -990,20 +1060,26 @@ cdef class CDatabase(object):
                     <void*>res, _append_doc_to_list, 0, NULL)
             elif len(entry) == 1:
                 status = u1db_get_from_index(self._db, query._query,
-                    <void*>res, _append_doc_to_list, 1, <char*>entry[0])
+                    <void*>res, _append_doc_to_list, 1,
+                    _ensure_str(entry[0], extra))
             elif len(entry) == 2:
                 status = u1db_get_from_index(self._db, query._query,
                     <void*>res, _append_doc_to_list, 2,
-                    <char*>entry[0], <char*>entry[1])
+                    _ensure_str(entry[0], extra),
+                    _ensure_str(entry[1], extra))
             elif len(entry) == 3:
                 status = u1db_get_from_index(self._db, query._query,
                     <void*>res, _append_doc_to_list, 3,
-                    <char*>entry[0], <char*>entry[1], <char*>entry[2])
+                    _ensure_str(entry[0], extra),
+                    _ensure_str(entry[1], extra),
+                    _ensure_str(entry[2], extra))
             elif len(entry) == 4:
                 status = u1db_get_from_index(self._db, query._query,
                     <void*>res, _append_doc_to_list, 4,
-                    <char*>entry[0], <char*>entry[1], <char*>entry[2],
-                    <char*>entry[3])
+                    _ensure_str(entry[0], extra),
+                    _ensure_str(entry[1], extra),
+                    _ensure_str(entry[2], extra),
+                    _ensure_str(entry[3], extra))
             else:
                 status = U1DB_NOT_IMPLEMENTED
             handle_status("get_from_index", status)

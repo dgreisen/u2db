@@ -84,6 +84,22 @@ class TestParsingSyncStream(tests.TestCase):
                           '"content": "c", "gen": 3},\r\n]',
                           lambda doc, gen: None)
 
+    def test_error_in_stream(self):
+        tgt = http_target.HTTPSyncTarget("http://foo/foo")
+
+        self.assertRaises(errors.Unavailable,
+                          tgt._parse_sync_stream,
+                          '[\r\n{"new_generation": 0},'
+                          '\r\n{"error": "unavailable"}\r\n', None)
+
+        self.assertRaises(errors.Unavailable,
+                          tgt._parse_sync_stream,
+                          '[\r\n{"error": "unavailable"}\r\n', None)
+
+        self.assertRaises(errors.BrokenSyncStream,
+                          tgt._parse_sync_stream,
+                          '[\r\n{"error": "?"}\r\n', None)
+
 
 def http_server_def():
     def make_server(host_port, handler, state):
@@ -148,17 +164,17 @@ class TestRemoteSyncTargets(tests.TestCaseWithServer):
     def test_get_sync_info(self):
         self.startServer()
         db = self.request_state._create_database('test')
-        db.set_sync_generation('other-id', 1)
+        db._set_sync_info('other-id', 1, 'T-transid')
         remote_target = self.getSyncTarget('test')
-        self.assertEqual(('test', 0, 1),
+        self.assertEqual(('test', 0, 1, 'T-transid'),
                          remote_target.get_sync_info('other-id'))
 
     def test_record_sync_info(self):
         self.startServer()
         db = self.request_state._create_database('test')
         remote_target = self.getSyncTarget('test')
-        remote_target.record_sync_info('other-id', 2)
-        self.assertEqual(db.get_sync_generation('other-id'), 2)
+        remote_target.record_sync_info('other-id', 2, 'T-transid')
+        self.assertEqual((2, 'T-transid'), db._get_sync_gen_info('other-id'))
 
     def test_sync_exchange_send(self):
         self.startServer()
@@ -166,7 +182,7 @@ class TestRemoteSyncTargets(tests.TestCaseWithServer):
         remote_target = self.getSyncTarget('test')
         other_docs = []
         def receive_doc(doc):
-            other_docs.append((doc.doc_id, doc.rev, doc.content))
+            other_docs.append((doc.doc_id, doc.rev, doc.get_json()))
         doc = self.make_document('doc-here', 'replica:1', '{"value": "here"}')
         new_gen = remote_target.sync_exchange(
                 [(doc, 10)],
@@ -183,19 +199,21 @@ class TestRemoteSyncTargets(tests.TestCaseWithServer):
         self.patch(self.server.RequestHandlerClass, 'get_stderr',
                    blackhole_getstderr)
         db = self.request_state._create_database('test')
-        _put_doc_if_newer = db.put_doc_if_newer
+        _put_doc_if_newer = db._put_doc_if_newer
         trigger_ids = ['doc-here2']
         def bomb_put_doc_if_newer(doc, save_conflict,
-                                  replica_uid=None, replica_gen=None):
+                                  replica_uid=None, replica_gen=None,
+                                  replica_trans_id=None):
             if doc.doc_id in trigger_ids:
                 raise Exception
             return _put_doc_if_newer(doc, save_conflict=save_conflict,
-                replica_uid=replica_uid, replica_gen=replica_gen)
-        self.patch(db, 'put_doc_if_newer', bomb_put_doc_if_newer)
+                replica_uid=replica_uid, replica_gen=replica_gen,
+                replica_trans_id=replica_trans_id)
+        self.patch(db, '_put_doc_if_newer', bomb_put_doc_if_newer)
         remote_target = self.getSyncTarget('test')
         other_changes = []
         def receive_doc(doc, gen):
-            other_changes.append((doc.doc_id, doc.rev, doc.content, gen))
+            other_changes.append((doc.doc_id, doc.rev, doc.get_json(), gen))
         doc1 = self.make_document('doc-here', 'replica:1', '{"value": "here"}')
         doc2 = self.make_document('doc-here2', 'replica:1',
                                   '{"value": "here2"}')
@@ -206,7 +224,7 @@ class TestRemoteSyncTargets(tests.TestCaseWithServer):
                 return_doc_cb=receive_doc)
         self.assertGetDoc(db, 'doc-here', 'replica:1', '{"value": "here"}',
                           False)
-        self.assertEqual(10, db.get_sync_generation('replica'))
+        self.assertEqual((10, None), db._get_sync_gen_info('replica'))
         self.assertEqual([], other_changes)
         # retry
         trigger_ids = []
@@ -216,10 +234,33 @@ class TestRemoteSyncTargets(tests.TestCaseWithServer):
                 return_doc_cb=receive_doc)
         self.assertGetDoc(db, 'doc-here2', 'replica:1', '{"value": "here2"}',
                           False)
-        self.assertEqual(11, db.get_sync_generation('replica'))
+        self.assertEqual((11, None), db._get_sync_gen_info('replica'))
         self.assertEqual(2, new_gen)
         # bounced back to us
         self.assertEqual([('doc-here', 'replica:1', '{"value": "here"}', 1)],
+                         other_changes)
+
+    def test_sync_exchange_in_stream_error(self):
+        self.startServer()
+        def blackhole_getstderr(inst):
+            return cStringIO.StringIO()
+        self.patch(self.server.RequestHandlerClass, 'get_stderr',
+                   blackhole_getstderr)
+        db = self.request_state._create_database('test')
+        doc = db.create_doc('{"value": "there"}')
+        def bomb_get_docs(doc_ids, check_for_conflicts=None):
+            yield doc
+            # delayed failure case
+            raise errors.Unavailable
+        self.patch(db, 'get_docs', bomb_get_docs)
+        remote_target = self.getSyncTarget('test')
+        other_changes = []
+        def receive_doc(doc, gen):
+            other_changes.append((doc.doc_id, doc.rev, doc.get_json(), gen))
+        self.assertRaises(errors.Unavailable, remote_target.sync_exchange,
+                          [], 'replica', last_known_generation=0,
+                          return_doc_cb=receive_doc)
+        self.assertEqual([(doc.doc_id, doc.rev, '{"value": "there"}', 1)],
                          other_changes)
 
     def test_sync_exchange_receive(self):
@@ -229,7 +270,7 @@ class TestRemoteSyncTargets(tests.TestCaseWithServer):
         remote_target = self.getSyncTarget('test')
         other_changes = []
         def receive_doc(doc, gen):
-            other_changes.append((doc.doc_id, doc.rev, doc.content, gen))
+            other_changes.append((doc.doc_id, doc.rev, doc.get_json(), gen))
         new_gen = remote_target.sync_exchange(
                         [], 'replica', last_known_generation=0,
                         return_doc_cb=receive_doc)
