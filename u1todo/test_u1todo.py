@@ -199,14 +199,14 @@ class TaskTestCase(TestCase):
         task = Task(self.document)
         title = "new task"
         task.title = title
-        self.assertEqual(title, task._content['title'])
+        self.assertEqual(title, task._document.content['title'])
 
     def test_set_done(self):
         """Changing the done property changes the underlying content."""
         task = Task(self.document)
-        self.assertEqual(False, task._content['done'])
+        self.assertEqual(False, task._document.content['done'])
         task.done = True
-        self.assertEqual(True, task._content['done'])
+        self.assertEqual(True, task._document.content['done'])
 
     def test_extracts_tags(self):
         """Tags are extracted from the item's text."""
@@ -222,4 +222,4 @@ class TaskTestCase(TestCase):
         """Setting the tags property changes the underlying content."""
         task = Task(self.document)
         task.tags = ["foo", "bar"]
-        self.assertEqual(["foo", "bar"], task._content['tags'])
+        self.assertEqual(["foo", "bar"], task._document.content['tags'])

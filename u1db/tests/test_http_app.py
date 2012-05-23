@@ -594,7 +594,7 @@ class TestHTTPApp(tests.TestCase):
                             headers={'content-type': 'application/json'})
         doc = self.db0.get_doc('doc1')
         self.assertEqual(201, resp.status)  # created
-        self.assertEqual('{"x": 1}', doc.content)
+        self.assertEqual('{"x": 1}', doc.get_json())
         self.assertEqual('application/json', resp.header('content-type'))
         self.assertEqual({'rev': doc.rev}, simplejson.loads(resp.body))
 
@@ -605,7 +605,7 @@ class TestHTTPApp(tests.TestCase):
                             headers={'content-type': 'application/json'})
         doc = self.db0.get_doc('doc1')
         self.assertEqual(200, resp.status)
-        self.assertEqual('{"x": 2}', doc.content)
+        self.assertEqual('{"x": 2}', doc.get_json())
         self.assertEqual('application/json', resp.header('content-type'))
         self.assertEqual({'rev': doc.rev}, simplejson.loads(resp.body))
 

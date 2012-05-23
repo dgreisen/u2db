@@ -243,13 +243,13 @@ handle_row(sqlite3_stmt *statement, u1db_row **row)
 }
 
 int
-u1db_create_doc(u1database *db, const char *content, const char *doc_id,
+u1db_create_doc(u1database *db, const char *json, const char *doc_id,
                 u1db_document **doc)
 {
     char *local_doc_id = NULL;
     int status;
 
-    if (db == NULL || content == NULL || doc == NULL || *doc != NULL) {
+    if (db == NULL || json == NULL || doc == NULL || *doc != NULL) {
         // Bad parameter
         return U1DB_INVALID_PARAMETER;
     }
@@ -261,7 +261,7 @@ u1db_create_doc(u1database *db, const char *content, const char *doc_id,
         }
         doc_id = local_doc_id;
     }
-    *doc = u1db__allocate_document(doc_id, NULL, content, 0);
+    *doc = u1db__allocate_document(doc_id, NULL, json, 0);
     if (*doc == NULL) {
         status = U1DB_NOMEM;
         goto finish;
@@ -547,7 +547,7 @@ u1db_put_doc(u1database *db, u1db_document *doc)
         doc->doc_rev = new_rev;
         doc->doc_rev_len = strlen(new_rev);
         status = write_doc(db, doc->doc_id, new_rev,
-                           doc->content, doc->content_len,
+                           doc->json, doc->content_len,
                            (old_doc_rev != NULL));
     }
 finish:
@@ -778,9 +778,9 @@ u1db__put_doc_if_newer(u1database *db, u1db_document *doc, int save_conflict,
             store = 0;
             status = U1DB_OK;
             *state = U1DB_SUPERSEDED;
-        } else if ((doc->content == NULL && stored_content == NULL)
-                   || (doc->content != NULL && stored_content != NULL
-                       && strcmp(doc->content, stored_content) == 0)) {
+        } else if ((doc->json == NULL && stored_content == NULL)
+                   || (doc->json != NULL && stored_content != NULL
+                       && strcmp(doc->json, stored_content) == 0)) {
             // The contents have converged by divine intervention!
             status = u1db__vectorclock_maximize(new_vc, stored_vc);
             if (status != SQLITE_OK) { goto finish; }
@@ -812,7 +812,7 @@ u1db__put_doc_if_newer(u1database *db, u1db_document *doc, int save_conflict,
     }
     if (status == U1DB_OK && store) {
         status = write_doc(db, doc->doc_id, doc->doc_rev,
-                           doc->content, doc->content_len,
+                           doc->json, doc->content_len,
                            (stored_doc_rev != NULL));
     }
     if (status == U1DB_OK && replica_uid != NULL) {
@@ -916,12 +916,12 @@ u1db_resolve_doc(u1database *db, u1db_document *doc,
     doc->doc_rev = new_doc_rev;
     doc->doc_rev_len = strlen(new_doc_rev);
     if (cur_in_superseded) {
-        status = write_doc(db, doc->doc_id, new_doc_rev, doc->content,
+        status = write_doc(db, doc->doc_id, new_doc_rev, doc->json,
                 doc->content_len, (stored_doc_rev != NULL));
     } else {
         // The current value is not listed as being superseded, so we just put
         // this rev as a conflict
-        status = write_conflict(db, doc->doc_id, new_doc_rev, doc->content,
+        status = write_conflict(db, doc->doc_id, new_doc_rev, doc->json,
                                 doc->content_len);
     }
     if (status != U1DB_OK) {
@@ -1108,8 +1108,8 @@ finish:
         free(doc->doc_rev);
         doc->doc_rev = doc_rev;
         doc->doc_rev_len = strlen(doc_rev);
-        free(doc->content);
-        doc->content = NULL;
+        free(doc->json);
+        doc->json = NULL;
         doc->content_len = 0;
     }
     return status;
@@ -1556,7 +1556,7 @@ u1db__allocate_document(const char *doc_id, const char *revision,
         goto cleanup;
     if (!copy_str_and_len(&doc->doc_rev, &doc->doc_rev_len, revision))
         goto cleanup;
-    if (!copy_str_and_len(&doc->content, &doc->content_len, content))
+    if (!copy_str_and_len(&doc->json, &doc->content_len, content))
         goto cleanup;
     doc->has_conflicts = has_conflicts;
     return doc;
@@ -1570,8 +1570,8 @@ cleanup:
     if (doc->doc_rev != NULL) {
         free(doc->doc_id);
     }
-    if (doc->content != NULL) {
-        free(doc->content);
+    if (doc->json != NULL) {
+        free(doc->json);
     }
     free(doc);
     return NULL;
@@ -1589,8 +1589,8 @@ u1db_free_doc(u1db_document **doc)
     if ((*doc)->doc_rev != NULL) {
         free((*doc)->doc_rev);
     }
-    if ((*doc)->content != NULL) {
-        free((*doc)->content);
+    if ((*doc)->json != NULL) {
+        free((*doc)->json);
     }
     free(*doc);
     *doc = NULL;
@@ -1598,25 +1598,25 @@ u1db_free_doc(u1db_document **doc)
 
 
 int
-u1db_doc_set_content(u1db_document *doc, const char *content)
+u1db_doc_set_json(u1db_document *doc, const char *json)
 {
     char *tmp;
     int content_len;
-    if (doc == NULL || content == NULL) {
+    if (doc == NULL || json == NULL) {
         // TODO: return an error code
         return 0;
     }
     // What to do about 0 length content? Is it even valid? Not all platforms
     // support malloc(0)
-    content_len = strlen(content);
+    content_len = strlen(json);
     tmp = (char*)calloc(1, content_len + 1);
     if (tmp == NULL) {
         // TODO: return ENOMEM
         return 0;
     }
-    memcpy(tmp, content, content_len);
-    free(doc->content);
-    doc->content = tmp;
+    memcpy(tmp, json, content_len);
+    free(doc->json);
+    doc->json = tmp;
     doc->content_len = content_len;
     // TODO: Return success
     return 1;

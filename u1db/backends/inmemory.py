@@ -90,12 +90,12 @@ class InMemoryDatabase(CommonBackend):
 
     def _put_and_update_indexes(self, old_doc, doc):
         for index in self._indexes.itervalues():
-            if old_doc is not None and old_doc.content is not None:
-                index.remove_json(old_doc.doc_id, old_doc.content)
-            if doc.content is not None:
-                index.add_json(doc.doc_id, doc.content)
+            if old_doc is not None and not old_doc.is_tombstone():
+                index.remove_json(old_doc.doc_id, old_doc.get_json())
+            if not doc.is_tombstone():
+                index.add_json(doc.doc_id, doc.get_json())
         trans_id = self._allocate_transaction_id()
-        self._docs[doc.doc_id] = (doc.rev, doc.content)
+        self._docs[doc.doc_id] = (doc.rev, doc.get_json())
         self._transaction_log.append((doc.doc_id, trans_id))
 
     def _get_doc(self, doc_id):
@@ -159,7 +159,7 @@ class InMemoryDatabase(CommonBackend):
         if cur_rev in superseded_revs:
             self._put_and_update_indexes(cur_doc, doc)
         else:
-            remaining_conflicts.append((new_rev, doc.content))
+            remaining_conflicts.append((new_rev, doc.get_json()))
         self._replace_conflicts(doc, remaining_conflicts)
 
     def delete_doc(self, doc):
@@ -167,7 +167,7 @@ class InMemoryDatabase(CommonBackend):
             raise errors.DocumentDoesNotExist
         if self._docs[doc.doc_id][1] in ('null', None):
             raise errors.DocumentAlreadyDeleted
-        doc.content = None
+        doc.make_tombstone()
         self.put_doc(doc)
 
     def create_index(self, index_name, index_expression):
@@ -232,7 +232,7 @@ class InMemoryDatabase(CommonBackend):
         my_doc = self._get_doc(doc.doc_id)
         self._prune_conflicts(doc, vectorclock.VectorClockRev(doc.rev))
         self._conflicts.setdefault(doc.doc_id, []).append(
-            (my_doc.rev, my_doc.content))
+            (my_doc.rev, my_doc.get_json()))
         doc.has_conflicts = True
         self._put_and_update_indexes(my_doc, doc)
 

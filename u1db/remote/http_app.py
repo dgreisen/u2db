@@ -260,13 +260,14 @@ class DocResource(object):
             'x-u1db-rev': doc.rev,
             'x-u1db-has-conflicts': simplejson.dumps(doc.has_conflicts)
             }
-        if doc.content is None:
+        if doc.is_tombstone():
             self.responder.send_response_json(
                http_errors.wire_description_to_status[errors.DOCUMENT_DELETED],
                error=errors.DOCUMENT_DELETED,
                headers=headers)
         else:
-            self.responder.send_response_content(doc.content, headers=headers)
+            self.responder.send_response_content(
+                doc.get_json(), headers=headers)
 
 
 @url_to_resource.register
@@ -316,7 +317,7 @@ class SyncResource(object):
 
     def post_end(self):
         def send_doc(doc, gen):
-            entry = dict(id=doc.doc_id, rev=doc.rev, content=doc.content,
+            entry = dict(id=doc.doc_id, rev=doc.rev, content=doc.get_json(),
                          gen=gen)
             self.responder.stream_entry(entry)
         new_gen = self.sync_exch.find_changes_to_return()

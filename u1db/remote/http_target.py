@@ -89,15 +89,17 @@ class HTTPSyncTarget(http_client.HTTPClientBase, SyncTarget):
             self._conn.putheader(header_name, header_value)
         entries = ['[']
         size = 1
+
         def prepare(**dic):
             entry = comma + '\r\n' + simplejson.dumps(dic)
             entries.append(entry)
             return len(entry)
+
         comma = ''
         size += prepare(last_known_generation=last_known_generation)
         comma = ','
         for doc, gen in docs_by_generations:
-            size += prepare(id=doc.doc_id, rev=doc.rev, content=doc.content,
+            size += prepare(id=doc.doc_id, rev=doc.rev, content=doc.get_json(),
                             gen=gen)
         entries.append('\r\n]')
         size += len(entries[-1])

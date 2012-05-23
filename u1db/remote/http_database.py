@@ -72,7 +72,7 @@ class HTTPDatabase(http_client.HTTPClientBase, Database):
         if doc.rev is not None:
             params['old_rev'] = doc.rev
         res, headers = self._request_json('PUT', ['doc', doc.doc_id], params,
-                                          doc.content, 'application/json')
+                                          doc.get_json(), 'application/json')
         doc.rev = res['rev']
         return res['rev']
 
@@ -108,7 +108,7 @@ class HTTPDatabase(http_client.HTTPClientBase, Database):
         params = {'old_rev': doc.rev}
         res, headers = self._request_json('DELETE',
             ['doc', doc.doc_id], params)
-        doc.content = None
+        doc.make_tombstone()
         doc.rev = res['rev']
 
     def get_sync_target(self):

@@ -130,10 +130,10 @@ class CmdGet(OneDbCmd):
         if doc is None:
             self.stderr.write('Document not found (id: %s)\n' % (doc_id,))
             return 1  # failed
-        if doc.content is None:
+        if doc.is_tombstone():
             outfile.write('[document deleted]\n')
         else:
-            outfile.write(doc.content)
+            outfile.write(doc.get_json())
         self.stderr.write('rev: %s\n' % (doc.rev,))
         if doc.has_conflicts:
             # TODO: Probably want to write 'conflicts' or 'conflicted' to
@@ -379,8 +379,7 @@ class CmdGetFromIndex(OneDbCmd):
                 self.stdout.write(simplejson.dumps(dict(
                             id=doc.doc_id,
                             rev=doc.rev,
-                            content=simplejson.loads(doc.content)),
-                                                   indent=4))
+                            content=doc.content), indent=4))
             self.stdout.write("]\n")
             return
         return 1

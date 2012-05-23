@@ -184,7 +184,7 @@ class TestCmdCreate(TestCaseWithDB):
         inf = cStringIO.StringIO(tests.simple_doc)
         cmd.run(self.db_path, inf, 'test-id')
         doc = self.db.get_doc('test-id')
-        self.assertEqual(tests.simple_doc, doc.content)
+        self.assertEqual(tests.simple_doc, doc.get_json())
         self.assertFalse(doc.has_conflicts)
         self.assertEqual('', cmd.stdout.getvalue())
         self.assertEqual('id: test-id\nrev: %s\n' % (doc.rev,),
@@ -200,7 +200,7 @@ class TestCmdDelete(TestCaseWithDB):
         doc2 = self.db.get_doc(doc.doc_id)
         self.assertEqual(doc.doc_id, doc2.doc_id)
         self.assertNotEqual(doc.rev, doc2.rev)
-        self.assertIs(None, doc2.content)
+        self.assertIs(None, doc2.get_json())
         self.assertEqual('', cmd.stdout.getvalue())
         self.assertEqual('rev: %s\n' % (doc2.rev,), cmd.stderr.getvalue())
 
@@ -492,10 +492,10 @@ class TestCmdGetFromIndex(TestCaseWithDB):
         self.assertEqual(sorted(simplejson.loads(cmd.stdout.getvalue())),
                          sorted([dict(id=doc1.doc_id,
                                       rev=doc1.rev,
-                                      content=simplejson.loads(doc1.content)),
+                                      content=doc1.content),
                                  dict(id=doc2.doc_id,
                                       rev=doc2.rev,
-                                      content=simplejson.loads(doc2.content)),
+                                      content=doc2.content),
                                  ]))
         self.assertEqual(cmd.stderr.getvalue(), '')
 
@@ -608,7 +608,7 @@ class TestCommandLine(TestCaseWithDB, RunMainHelper):
         self.assertEqual(0, p.returncode)
         self.assertEqual('', stdout)
         doc = self.db.get_doc('test-id')
-        self.assertEqual(tests.simple_doc, doc.content)
+        self.assertEqual(tests.simple_doc, doc.get_json())
         self.assertFalse(doc.has_conflicts)
         expected = 'id: test-id\nrev: %s\n' % (doc.rev,)
         stripped = stderr.replace('\r\n', '\n')
@@ -648,7 +648,7 @@ class TestCommandLine(TestCaseWithDB, RunMainHelper):
             stdin=tests.nested_doc)
         doc = self.db.get_doc('test-id')
         self.assertFalse(doc.has_conflicts)
-        self.assertEqual(tests.nested_doc, doc.content)
+        self.assertEqual(tests.nested_doc, doc.get_json())
         self.assertEqual(0, ret)
         self.assertEqual('', stdout)
         self.assertEqual('rev: %s\n' % (doc.rev,), stderr)
