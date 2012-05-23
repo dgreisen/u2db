@@ -330,6 +330,7 @@ class CmdGetFromIndex(OneDbCmd):
     """Find documents by searching an index"""
 
     name = "get-from-index"
+    argv = None
 
     @classmethod
     def _populate_subparser(cls, parser):
@@ -348,6 +349,28 @@ class CmdGetFromIndex(OneDbCmd):
             self.stderr.write("Database does not exist.\n")
         except errors.IndexDoesNotExist:
             self.stderr.write("Index does not exist.\n")
+        except errors.InvalidValueForIndex:
+            index_def = db._get_index_definition(index)
+            msg = ["Invalid query;"]
+            len_diff = len(index_def) - len(values)
+            if len_diff:
+                msg.append("index %r requires %d query expression%s"
+                           % (index, len(index_def),
+                              "s" if len(index_def) > 1 else ""))
+                if len(values):
+                    msg[-1] += ", not %d" % len(values)
+                if len_diff > 0:
+                    msg[-1] += ".\nPerhaps you meant:"
+                    argv = self.argv if self.argv is not None else sys.argv
+                    msg.extend(argv[:2])
+                    msg.append(repr(database))
+                    msg.extend(map(repr, values))
+                    msg.extend(["'*'" for i in range(len_diff)])
+            else:
+                # can't happen (HAH)
+                msg.append("not sure how to help you (read the docs?)")
+            self.stderr.write(" ".join(msg))
+            self.stderr.write(".\n")
         else:
             self.stdout.write("[")
             for i, doc in enumerate(docs):
