@@ -592,13 +592,13 @@ class SQLiteDatabase(CommonBackend):
                         if is_wildcard:
                             # We can't have a partial wildcard following
                             # another wildcard
-                            raise errors.InvalidValueForIndex()
+                            raise errors.InvalidGlobbing
                         where.append(like_where[idx])
                         args.append(self._transform_glob(value))
                     is_wildcard = True
                 else:
                     if is_wildcard:
-                        raise errors.InvalidValueForIndex()
+                        raise errors.InvalidGlobbing
                     where.append(exact_where[idx])
                     args.append(value)
             statement = ("SELECT d.doc_id, d.doc_rev, d.content"

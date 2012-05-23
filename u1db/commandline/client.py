@@ -371,6 +371,10 @@ class CmdGetFromIndex(OneDbCmd):
                 msg.append("not sure how to help you (read the docs?)")
             self.stderr.write(" ".join(msg))
             self.stderr.write(".\n")
+        except errors.InvalidGlobbing:
+            # XXX this needs to actually help the user
+            self.stderr.write("Invalid query; not sure how to help you"
+                              " (read the docs?).\n")
         else:
             self.stdout.write("[")
             for i, doc in enumerate(docs):
