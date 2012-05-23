@@ -554,13 +554,14 @@ class TestCmdGetFromIndex(TestCaseWithDB):
     def test_get_from_index_cant_bad_glob(self):
         self.db.create_index("index", ["key1", "key2"])
         cmd = self.make_command(client.CmdGetFromIndex)
-        retval = cmd.run(self.db_path, "index", ["*", "a"])
+        cmd.argv = ["XX", "YY"]
+        retval = cmd.run(self.db_path, "index", ["value1*", "value2"])
         self.assertEqual(retval, 1)
         self.assertEqual(cmd.stdout.getvalue(), '')
-        # temp error until we split exceptions in the backend
-        # (in a later commit)
-        self.assertEqual(cmd.stderr.getvalue(), "Invalid query;"
-                         " not sure how to help you (read the docs?).\n")
+        self.assertEqual(cmd.stderr.getvalue(), "Invalid query; you"
+                         " cannot do a partial search twice in one query.\n"
+                         "Perhaps you meant: XX YY %r 'value1*' '*'.\n"
+                         % self.db_path)
 
 
 class RunMainHelper(object):

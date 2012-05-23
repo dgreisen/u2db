@@ -373,8 +373,20 @@ class CmdGetFromIndex(OneDbCmd):
             self.stderr.write(".\n")
         except errors.InvalidGlobbing:
             # XXX this needs to actually help the user
-            self.stderr.write("Invalid query; not sure how to help you"
-                              " (read the docs?).\n")
+            argv = self.argv if self.argv is not None else sys.argv
+            fixed = []
+            for (i, v) in enumerate(values):
+                fixed.append(v)
+                if v.endswith('*'):
+                    break
+            # values has at least one element, so i is defined
+            fixed.extend('*'*(len(values)-i-1))
+            self.stderr.write("Invalid query; you cannot do a partial search"
+                              " twice in one query.\nPerhaps you meant: "
+                              "%s %s %r %s.\n"
+                              % (argv[0], argv[1], database,
+                                 " ".join(map(repr, fixed))))
+
         else:
             self.stdout.write("[")
             for i, doc in enumerate(docs):
