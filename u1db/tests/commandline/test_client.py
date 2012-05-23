@@ -524,20 +524,28 @@ class TestCmdGetFromIndex(TestCaseWithDB):
     def test_get_from_index_two_expr_instead_of_one(self):
         self.db.create_index("index", ["key1"])
         cmd = self.make_command(client.CmdGetFromIndex)
+        cmd.argv = ["XX", "YY"]
         retval = cmd.run(self.db_path, "index", ["value1", "value2"])
         self.assertEqual(retval, 1)
         self.assertEqual(cmd.stdout.getvalue(), '')
-        self.assertEqual(cmd.stderr.getvalue(), "Invalid query; index"
-                         " 'index' requires 1 query expression, not 2.\n")
+        self.assertEqual("Invalid query: index 'index' requires"
+                         " 1 query expression, not 2.\n"
+                         "For example, the following would be valid:\n"
+                         "    XX YY %r 'index' 'value1'\n"
+                         % self.db_path, cmd.stderr.getvalue())
 
     def test_get_from_index_three_expr_instead_of_two(self):
         self.db.create_index("index", ["key1", "key2"])
         cmd = self.make_command(client.CmdGetFromIndex)
+        cmd.argv = ["XX", "YY"]
         retval = cmd.run(self.db_path, "index", ["value1", "value2", "value3"])
         self.assertEqual(retval, 1)
         self.assertEqual(cmd.stdout.getvalue(), '')
-        self.assertEqual(cmd.stderr.getvalue(), "Invalid query; index"
-                         " 'index' requires 2 query expressions, not 3.\n")
+        self.assertEqual("Invalid query: index 'index' requires"
+                         " 2 query expressions, not 3.\n"
+                         "For example, the following would be valid:\n"
+                         "    XX YY %r 'index' 'value1' 'value2'\n"
+                         % self.db_path, cmd.stderr.getvalue())
 
     def test_get_from_index_one_expr_instead_of_two(self):
         self.db.create_index("index", ["key1", "key2"])
@@ -546,21 +554,24 @@ class TestCmdGetFromIndex(TestCaseWithDB):
         retval = cmd.run(self.db_path, "index", ["value1"])
         self.assertEqual(retval, 1)
         self.assertEqual(cmd.stdout.getvalue(), '')
-        self.assertEqual(cmd.stderr.getvalue(), "Invalid query; index"
-                         " 'index' requires 2 query expressions, not 1.\n"
-                         "Perhaps you meant: XX YY %r 'value1' '*'.\n"
-                         % self.db_path)
+        self.assertEqual("Invalid query: index 'index' requires"
+                         " 2 query expressions, not 1.\n"
+                         "For example, the following would be valid:\n"
+                         "    XX YY %r 'index' 'value1' '*'\n"
+                         % self.db_path, cmd.stderr.getvalue())
 
     def test_get_from_index_cant_bad_glob(self):
         self.db.create_index("index", ["key1", "key2"])
         cmd = self.make_command(client.CmdGetFromIndex)
-        retval = cmd.run(self.db_path, "index", ["*", "a"])
+        cmd.argv = ["XX", "YY"]
+        retval = cmd.run(self.db_path, "index", ["value1*", "value2"])
         self.assertEqual(retval, 1)
         self.assertEqual(cmd.stdout.getvalue(), '')
-        # temp error until we split exceptions in the backend
-        # (in a later commit)
-        self.assertEqual(cmd.stderr.getvalue(), "Invalid query;"
-                         " not sure how to help you (read the docs?).\n")
+        self.assertEqual("Invalid query:"
+                         " a star can only be followed by stars.\n"
+                         "For example, the following would be valid:\n"
+                         "    XX YY %r 'index' 'value1*' '*'\n"
+                         % self.db_path, cmd.stderr.getvalue())
 
 
 class RunMainHelper(object):

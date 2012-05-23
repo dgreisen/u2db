@@ -302,14 +302,14 @@ class InMemoryIndex(object):
                     # We have an 'x*' style wildcard
                     if is_wildcard:
                         # We were already in wildcard mode, so this is invalid
-                        raise errors.InvalidValueForIndex()
+                        raise errors.InvalidGlobbing
                     last = idx + 1
                 is_wildcard = True
             else:
                 if is_wildcard:
                     # We were in wildcard mode, we can't follow that with
                     # non-wildcard
-                    raise errors.InvalidValueForIndex()
+                    raise errors.InvalidGlobbing
                 last = idx + 1
         if not is_wildcard:
             return -1

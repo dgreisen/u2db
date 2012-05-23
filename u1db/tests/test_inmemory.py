@@ -124,5 +124,5 @@ class TestInMemoryIndex(tests.TestCase):
             idx._find_non_wildcards, ('a', 'b'))
         self.assertRaises(errors.InvalidValueForIndex,
             idx._find_non_wildcards, ('a', 'b', 'c', 'd'))
-        self.assertRaises(errors.InvalidValueForIndex,
+        self.assertRaises(errors.InvalidGlobbing,
             idx._find_non_wildcards, ('*', 'b', 'c'))

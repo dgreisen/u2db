@@ -769,12 +769,12 @@ class DatabaseIndexTests(tests.DatabaseBaseTests):
 
     def test_get_from_index_illegal_wildcard_order(self):
         self.db.create_index('test-idx', ['k1', 'k2'])
-        self.assertRaises(errors.InvalidValueForIndex,
+        self.assertRaises(errors.InvalidGlobbing,
             self.db.get_from_index, 'test-idx', [('*', 'v2')])
 
     def test_get_from_index_illegal_glob_after_wildcard(self):
         self.db.create_index('test-idx', ['k1', 'k2'])
-        self.assertRaises(errors.InvalidValueForIndex,
+        self.assertRaises(errors.InvalidGlobbing,
             self.db.get_from_index, 'test-idx', [('*', 'v*')])
 
     def test_get_all_from_index(self):
@@ -891,13 +891,13 @@ class DatabaseIndexTests(tests.DatabaseBaseTests):
 
     def test_get_from_index_illegal_glob_before_value(self):
         self.db.create_index('test-idx', ['k1', 'k2'])
-        self.assertRaises(errors.InvalidValueForIndex,
+        self.assertRaises(errors.InvalidGlobbing,
             self.db.get_from_index, 'test-idx', [('v*', 'v2')])
 
     def test_get_from_index_illegal_glob_after_glob(self):
         self.db.create_index('test-idx', ['k1', 'k2'])
-        self.assertRaises(errors.InvalidValueForIndex,
-            self.db.get_from_index, 'test-idx', [('*', 'v*')])
+        self.assertRaises(errors.InvalidGlobbing,
+            self.db.get_from_index, 'test-idx', [('v*', 'v*')])
 
     def test_get_from_index_with_sql_wildcards(self):
         self.db.create_index('test-idx', ['key'])

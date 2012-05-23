@@ -116,6 +116,7 @@ cdef extern from "u1db/u1db.h":
     int U1DB_NOT_IMPLEMENTED
     int U1DB_INVALID_JSON
     int U1DB_INVALID_VALUE_FOR_INDEX
+    int U1DB_INVALID_GLOBBING
     int U1DB_BROKEN_SYNC_STREAM
     int U1DB_DUPLICATE_INDEX_NAME
     int U1DB_INDEX_DOES_NOT_EXIST
@@ -559,6 +560,8 @@ cdef handle_status(context, int status):
                                   % (context,))
     if status == U1DB_INVALID_VALUE_FOR_INDEX:
         raise errors.InvalidValueForIndex()
+    if status == U1DB_INVALID_GLOBBING:
+        raise errors.InvalidGlobbing()
     if status == U1DB_INTERNAL_ERROR:
         raise errors.U1DBError("internal error")
     if status == U1DB_BROKEN_SYNC_STREAM:

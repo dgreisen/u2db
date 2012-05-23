@@ -351,26 +351,41 @@ class CmdGetFromIndex(OneDbCmd):
             self.stderr.write("Index does not exist.\n")
         except errors.InvalidValueForIndex:
             index_def = db._get_index_definition(index)
-            msg = ["Invalid query;"]
             len_diff = len(index_def) - len(values)
-            if len_diff:
-                msg.append("index %r requires %d query expression%s"
-                           % (index, len(index_def),
-                              "s" if len(index_def) > 1 else ""))
-                if len(values):
-                    msg[-1] += ", not %d" % len(values)
-                if len_diff > 0:
-                    msg[-1] += ".\nPerhaps you meant:"
-                    argv = self.argv if self.argv is not None else sys.argv
-                    msg.extend(argv[:2])
-                    msg.append(repr(database))
-                    msg.extend(map(repr, values))
-                    msg.extend(["'*'" for i in range(len_diff)])
-            else:
+            if len_diff == 0:
                 # can't happen (HAH)
-                msg.append("not sure how to help you (read the docs?)")
-            self.stderr.write(" ".join(msg))
-            self.stderr.write(".\n")
+                raise
+            argv = self.argv if self.argv is not None else sys.argv
+            self.stderr.write(
+                "Invalid query: "
+                "index %r requires %d query expression%s%s.\n"
+                "For example, the following would be valid:\n"
+                "    %s %s %r %r %s\n"
+                % (index,
+                   len(index_def),
+                   "s" if len(index_def) > 1 else "",
+                   ", not %d" % len(values) if len(values) else "",
+                   argv[0], argv[1], database, index,
+                   " ".join(map(repr,
+                                values[:len(index_def)]
+                                + ["*" for i in range(len_diff)])),
+                   ))
+        except errors.InvalidGlobbing:
+            argv = self.argv if self.argv is not None else sys.argv
+            fixed = []
+            for (i, v) in enumerate(values):
+                fixed.append(v)
+                if v.endswith('*'):
+                    break
+            # values has at least one element, so i is defined
+            fixed.extend('*'*(len(values)-i-1))
+            self.stderr.write(
+                "Invalid query: a star can only be followed by stars.\n"
+                "For example, the following would be valid:\n"
+                "    %s %s %r %r %s\n"
+                % (argv[0], argv[1], database, index,
+                   " ".join(map(repr, fixed))))
+
         else:
             self.stdout.write("[")
             for i, doc in enumerate(docs):
