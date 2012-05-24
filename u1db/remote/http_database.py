@@ -76,14 +76,17 @@ class HTTPDatabase(http_client.HTTPClientBase, Database):
         doc.rev = res['rev']
         return res['rev']
 
-    def get_doc(self, doc_id):
+    def get_doc(self, doc_id, include_deleted=False):
         try:
-            res, headers = self._request('GET', ['doc', doc_id])
+            res, headers = self._request(
+                'GET', ['doc', doc_id], {"include_deleted": include_deleted})
         except errors.DocumentDoesNotExist:
             return None
         except errors.HTTPError, e:
             if (e.status == DOCUMENT_DELETED_STATUS and
                 'x-u1db-rev' in e.headers):
+                if not include_deleted:
+                    return None
                 res = None
                 headers = e.headers
             else:

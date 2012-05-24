@@ -50,7 +50,7 @@ class TestArgs(tests.TestCase):
         # parsing.
         try:
             return self.parser.parse_args(args)
-        except SystemExit, e:
+        except SystemExit:
             raise AssertionError('got SystemExit')
 
     def test_create(self):
@@ -197,7 +197,7 @@ class TestCmdDelete(TestCaseWithDB):
         doc = self.db.create_doc(tests.simple_doc)
         cmd = self.make_command(client.CmdDelete)
         cmd.run(self.db_path, doc.doc_id, doc.rev)
-        doc2 = self.db.get_doc(doc.doc_id)
+        doc2 = self.db.get_doc(doc.doc_id, include_deleted=True)
         self.assertEqual(doc.doc_id, doc2.doc_id)
         self.assertNotEqual(doc.rev, doc2.rev)
         self.assertIs(None, doc2.get_json())
@@ -344,7 +344,7 @@ class TestCmdCreateIndex(TestCaseWithDB):
         cmd = self.make_command(client.CmdCreateIndex)
         retval = cmd.run(self.db_path, "foo", ["bar", "baz"])
         self.assertEqual(self.db.list_indexes(), [('foo', ['bar', "baz"])])
-        self.assertEqual(retval, None) # conveniently mapped to 0
+        self.assertEqual(retval, None)  # conveniently mapped to 0
         self.assertEqual(cmd.stdout.getvalue(), '')
         self.assertEqual(cmd.stderr.getvalue(), '')
 
@@ -642,7 +642,7 @@ class TestCommandLine(TestCaseWithDB, RunMainHelper):
         doc = self.db.create_doc(tests.simple_doc, doc_id='test-id')
         ret, stdout, stderr = self.run_main(
             ['delete', self.db_path, 'test-id', doc.rev])
-        doc = self.db.get_doc('test-id')
+        doc = self.db.get_doc('test-id', include_deleted=True)
         self.assertEqual(0, ret)
         self.assertEqual('', stdout)
         self.assertEqual('rev: %s\n' % (doc.rev,), stderr)
@@ -650,7 +650,7 @@ class TestCommandLine(TestCaseWithDB, RunMainHelper):
     def test_init_db(self):
         path = self.working_dir + '/test2.db'
         ret, stdout, stderr = self.run_main(['init-db', path])
-        db2 = u1db_open(path, create=False)
+        u1db_open(path, create=False)
 
     def test_put(self):
         doc = self.db.create_doc(tests.simple_doc, doc_id='test-id')
@@ -674,7 +674,8 @@ class TestCommandLine(TestCaseWithDB, RunMainHelper):
         self.assertEqual(0, ret)
         self.assertEqual('', stdout)
         self.assertEqual('', stderr)
-        self.assertGetDoc(self.db2, 'test-id', doc.rev, tests.simple_doc, False)
+        self.assertGetDoc(
+            self.db2, 'test-id', doc.rev, tests.simple_doc, False)
 
 
 class TestHTTPIntegration(tests.TestCaseWithServer, RunMainHelper):
@@ -697,7 +698,7 @@ class TestHTTPIntegration(tests.TestCaseWithServer, RunMainHelper):
     def test_init_db(self):
         url = self.getURL('new.db')
         ret, stdout, stderr = self.run_main(['init-db', url])
-        db2 = u1db_open(self.getPath('new.db'), create=False)
+        u1db_open(self.getPath('new.db'), create=False)
 
     def test_create_get_put_delete(self):
         db = u1db_open(self.getPath('test.db'), create=True)
@@ -720,4 +721,4 @@ class TestHTTPIntegration(tests.TestCaseWithServer, RunMainHelper):
         self.assertEqual(0, ret)
         self.assertTrue(stderr.startswith('rev: '))
         doc_rev2 = stderr[len('rev: '):].rstrip()
-        self.assertGetDoc(db, doc_id, doc_rev2, None, False)
+        self.assertGetDocIncludeDeleted(db, doc_id, doc_rev2, None, False)
