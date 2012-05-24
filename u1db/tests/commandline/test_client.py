@@ -153,6 +153,12 @@ class TestArgs(tests.TestCase):
         self.assertEqual('index', args.index)
         self.assertEqual(['foo'], args.values)
 
+    def test_get_doc_conflicts(self):
+        args = self.parse_args(['get-doc-conflicts', 'db', 'doc-id'])
+        self.assertEqual(client.CmdGetDocConflicts, args.subcommand)
+        self.assertEqual('db', args.database)
+        self.assertEqual('doc-id', args.doc_id)
+
 
 class TestCaseWithDB(tests.TestCase):
     """These next tests are meant to have one class per Command.
@@ -252,6 +258,46 @@ class TestCmdGet(TestCaseWithDB):
         self.assertEqual(result, 1)
         self.assertEqual(cmd.stdout.getvalue(), "")
         self.assertTrue("not found" in cmd.stderr.getvalue())
+
+
+class TestCmdGetDocConflicts(TestCaseWithDB):
+
+    def setUp(self):
+        super(TestCmdGetDocConflicts, self).setUp()
+        self.doc1 = self.db.create_doc(tests.simple_doc, doc_id='my-doc')
+        self.doc2 = self.make_document('my-doc', 'other:1', '{}', False)
+        self.db._put_doc_if_newer(self.doc2, save_conflict=True)
+
+    def test_get_doc_conflicts_none(self):
+        doc = self.db.create_doc(tests.simple_doc, doc_id='a-doc')
+        cmd = self.make_command(client.CmdGetDocConflicts)
+        cmd.run(self.db_path, 'a-doc')
+        self.assertEqual([],
+                         simplejson.loads(cmd.stdout.getvalue()))
+        self.assertEqual('', cmd.stderr.getvalue())
+
+    def test_get_doc_conflicts_simple(self):
+        cmd = self.make_command(client.CmdGetDocConflicts)
+        cmd.run(self.db_path, 'my-doc')
+        self.assertEqual([dict(rev=self.doc2.rev, content=self.doc2.content),
+                          dict(rev=self.doc1.rev, content=self.doc1.content),
+                          ],
+                         simplejson.loads(cmd.stdout.getvalue()))
+        self.assertEqual('', cmd.stderr.getvalue())
+
+    def test_get_doc_conflicts_no_db(self):
+        cmd = self.make_command(client.CmdGetDocConflicts)
+        retval = cmd.run(self.db_path + "__DOES_NOT_EXIST", "my-doc")
+        self.assertEqual(retval, 1)
+        self.assertEqual(cmd.stdout.getvalue(), '')
+        self.assertEqual(cmd.stderr.getvalue(), 'Database does not exist.\n')
+
+    def test_get_doc_conflicts_no_doc(self):
+        cmd = self.make_command(client.CmdGetDocConflicts)
+        retval = cmd.run(self.db_path, "some-doc")
+        self.assertEqual(retval, 1)
+        self.assertEqual(cmd.stdout.getvalue(), '')
+        self.assertEqual(cmd.stderr.getvalue(), 'Document does not exist.\n')
 
 
 class TestCmdInit(TestCaseWithDB):

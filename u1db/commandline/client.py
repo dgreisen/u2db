@@ -143,6 +143,41 @@ class CmdGet(OneDbCmd):
 client_commands.register(CmdGet)
 
 
+class CmdGetDocConflicts(OneDbCmd):
+    """Get the conflicts from a document"""
+
+    name = 'get-doc-conflicts'
+
+    @classmethod
+    def _populate_subparser(cls, parser):
+        parser.add_argument('database',
+                            help='The local database to query',
+                            metavar='database-path')
+        parser.add_argument('doc_id', help='The document id to retrieve.')
+
+    def run(self, database, doc_id):
+        try:
+            db = self._open(database, False)
+        except errors.DatabaseDoesNotExist:
+            self.stderr.write("Database does not exist.\n")
+            return 1
+        conflicts = db.get_doc_conflicts(doc_id)
+        if not conflicts:
+            if db.get_doc(doc_id) is None:
+                self.stderr.write("Document does not exist.\n")
+                return 1
+        self.stdout.write("[")
+        for i, doc in enumerate(conflicts):
+            if i:
+                self.stdout.write(",")
+            self.stdout.write(simplejson.dumps(dict(rev=doc.rev,
+                                                    content=doc.content),
+                                               indent=4))
+        self.stdout.write("]\n")
+
+client_commands.register(CmdGetDocConflicts)
+
+
 class CmdInitDB(OneDbCmd):
     """Create a new database"""
 
