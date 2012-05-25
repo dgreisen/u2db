@@ -1679,18 +1679,20 @@ u1db_create_index(u1database *db, const char *index_name, int n_expressions,
     status = sqlite3_step(statement);
     i=0;
     while (status == SQLITE_ROW) {
-	if (strcmp((const char *)sqlite3_column_text(statement, 0), expressions[i]) != 0) {
-	    status = U1DB_DUPLICATE_INDEX_NAME;
-	    goto finish;
-	}
-	status = sqlite3_step(statement);
-	i++;
+        if (strcmp((const char *)sqlite3_column_text(statement, 0),
+                   expressions[i]) != 0) {
+            status = U1DB_DUPLICATE_INDEX_NAME;
+            goto finish;
+        }
+        status = sqlite3_step(statement);
+        i++;
+    }
+    if (status != SQLITE_DONE) { goto finish; }
+    if (i>0) {
+        status = SQLITE_OK;
+        goto finish;
     }
     sqlite3_finalize(statement);
-    if (i>0) {
-	status = SQLITE_OK;
-	goto finish;
-    }
     status = sqlite3_prepare_v2(db->sql_handle,
         "INSERT INTO index_definitions VALUES (?, ?, ?)", -1,
         &statement, NULL);
