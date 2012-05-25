@@ -656,8 +656,20 @@ class TestHTTPApp(tests.TestCase):
         resp = self.app.get('/db0/doc/doc1', expect_errors=True)
         self.assertEqual(404, resp.status)
         self.assertEqual('application/json', resp.header('content-type'))
-        self.assertEqual({"error": errors.DOCUMENT_DOES_NOT_EXIST},
-                         simplejson.loads(resp.body))
+        self.assertEqual(
+            {"error": errors.DocumentDoesNotExist.wire_description},
+            simplejson.loads(resp.body))
+
+    def test_get_doc_deleted_explicit_exclude(self):
+        doc = self.db0.create_doc('{"x": 1}', doc_id='doc1')
+        self.db0.delete_doc(doc)
+        resp = self.app.get(
+            '/db0/doc/doc1?include_deleted=false', expect_errors=True)
+        self.assertEqual(404, resp.status)
+        self.assertEqual('application/json', resp.header('content-type'))
+        self.assertEqual(
+            {"error": errors.DocumentDoesNotExist.wire_description},
+            simplejson.loads(resp.body))
 
     def test_get_deleted_doc(self):
         doc = self.db0.create_doc('{"x": 1}', doc_id='doc1')
@@ -666,8 +678,8 @@ class TestHTTPApp(tests.TestCase):
             '/db0/doc/doc1?include_deleted=true', expect_errors=True)
         self.assertEqual(404, resp.status)
         self.assertEqual('application/json', resp.header('content-type'))
-        self.assertEqual({"error": errors.DOCUMENT_DELETED},
-                         simplejson.loads(resp.body))
+        self.assertEqual(
+            {"error": errors.DOCUMENT_DELETED}, simplejson.loads(resp.body))
         self.assertEqual(doc.rev, resp.header('x-u1db-rev'))
         self.assertEqual('false', resp.header('x-u1db-has-conflicts'))
 

@@ -38,6 +38,13 @@ from u1db.remote import (
     )
 
 
+def parse_bool(expression):
+    """Parse boolean querystring parameter."""
+    if expression == 'true':
+        return True
+    return False
+
+
 class BadRequest(Exception):
     """Bad request."""
 
@@ -248,7 +255,7 @@ class DocResource(object):
         self.db.delete_doc(doc)
         self.responder.send_response_json(200, rev=doc.rev)
 
-    @http_method()
+    @http_method(include_deleted=parse_bool)
     def get(self, include_deleted=False):
         doc = self.db.get_doc(self.id, include_deleted=include_deleted)
         if doc is None:

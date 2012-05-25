@@ -136,4 +136,3 @@ wire_description_to_exc["error"] = U1DBError
 #
 # wire error descriptions not corresponding to an exception
 DOCUMENT_DELETED = "document deleted"
-DOCUMENT_DOES_NOT_EXIST = "document does not exist"

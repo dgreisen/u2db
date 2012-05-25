@@ -85,8 +85,6 @@ class HTTPDatabase(http_client.HTTPClientBase, Database):
         except errors.HTTPError, e:
             if (e.status == DOCUMENT_DELETED_STATUS and
                 'x-u1db-rev' in e.headers):
-                if not include_deleted:
-                    return None
                 res = None
                 headers = e.headers
             else:
