@@ -78,8 +78,9 @@ class InMemoryDatabase(CommonBackend):
             raise errors.ConflictedDoc()
         old_doc = self._get_doc(doc.doc_id)
         if old_doc is not None:
-            if old_doc.rev != doc.rev:
-                raise errors.RevisionConflict()
+            if not (doc.rev is None and old_doc.is_tombstone()):
+                if old_doc.rev != doc.rev:
+                    raise errors.RevisionConflict()
         else:
             if doc.rev is not None:
                 raise errors.RevisionConflict()

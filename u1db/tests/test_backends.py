@@ -152,6 +152,12 @@ class AllDatabaseTests(tests.DatabaseBaseTests, tests.TestCaseWithServer):
         self.assertRaises(errors.RevisionConflict, self.db.put_doc, bad_doc)
         self.assertGetDoc(self.db, 'my_doc_id', old_rev, simple_doc, False)
 
+    def test_create_succeeds_after_delete(self):
+        doc = self.db.create_doc(simple_doc, doc_id='my_doc_id')
+        self.db.delete_doc(doc)
+        new_doc = self.db.create_doc(simple_doc, doc_id='my_doc_id')
+        self.assertGetDoc(self.db, 'my_doc_id', new_doc.rev, simple_doc, False)
+
     def test_get_doc_after_put(self):
         doc = self.db.create_doc(simple_doc, doc_id='my_doc_id')
         self.assertGetDoc(self.db, 'my_doc_id', doc.rev, simple_doc, False)

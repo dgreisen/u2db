@@ -513,7 +513,7 @@ u1db_put_doc(u1database *db, u1db_document *doc)
                         &old_content_len, &statement);
     if (status != SQLITE_OK) { goto finish; }
     if (doc->doc_rev == NULL) {
-        if (old_doc_rev == NULL) {
+        if (old_doc_rev == NULL || old_content == NULL) {
             // We are creating a new document from scratch. No problem.
             status = 0;
         } else {
