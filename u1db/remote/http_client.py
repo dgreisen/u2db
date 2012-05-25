@@ -42,6 +42,16 @@ from u1db.remote.ssl_match_hostname import (
 CA_CERTS = "/etc/ssl/certs/ca-certificates.crt"
 
 
+def _encode_query_parameter(value):
+    """Encode query parameter."""
+    if isinstance(value, bool):
+        if value:
+            value = 'true'
+        else:
+            value = 'false'
+    return unicode(value).encode('utf-8')
+
+
 class _VerifiedHTTPSConnection(httplib.HTTPSConnection):
     """HTTPSConnection verifying server side certificates."""
     # derived from httplib.py
@@ -166,13 +176,7 @@ class HTTPClientBase(object):
         if params:
             for key, value in params.items():
                 key = unicode(key).encode('utf-8')
-                if isinstance(value, bool):
-                    if value:
-                        value = 'true'
-                    else:
-                        value = 'false'
-                value = unicode(value).encode('utf-8')
-                encoded_params[key] = value
+                encoded_params[key] = _encode_query_parameter(value)
             url_query += ('?' + urllib.urlencode(encoded_params))
         if body is not None and not isinstance(body, basestring):
             body = simplejson.dumps(body)
