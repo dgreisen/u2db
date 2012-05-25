@@ -292,7 +292,8 @@ class TestHTTPInvocationByMethodWithBody(tests.TestCase):
         res = invoke()
         self.assertEqual('Put/end', res)
         self.assertEqual({'a': '1', 'b': 2}, resource.args)
-        self.assertEqual(['{"entry": "x"}', '{"entry": "y"}'], resource.entries)
+        self.assertEqual(
+            ['{"entry": "x"}', '{"entry": "y"}'], resource.entries)
         self.assertEqual(['a', 's', 's', 'e'], resource.order)
 
     def _put_sync_stream(self, body):
@@ -303,7 +304,7 @@ class TestHTTPInvocationByMethodWithBody(tests.TestCase):
                    'CONTENT_TYPE': 'application/x-u1db-sync-stream'}
         invoke = http_app.HTTPInvocationByMethodWithBody(resource, environ,
                                                          parameters)
-        res = invoke()
+        invoke()
 
     def test_put_sync_stream_wrong_start(self):
         self.assertRaises(http_app.BadRequest,
@@ -362,9 +363,11 @@ class TestHTTPInvocationByMethodWithBody(tests.TestCase):
                    'wsgi.input': StringIO.StringIO('{}'),
                    'CONTENT_LENGTH': '10000',
                    'CONTENT_TYPE': 'text/plain'}
+
         class params:
             max_request_size = 5000
             max_entry_size = sys.maxint  # we don't get to use this
+
         invoke = http_app.HTTPInvocationByMethodWithBody(resource, environ,
                                                          params)
         self.assertRaises(http_app.BadRequest, invoke)
@@ -430,8 +433,10 @@ class TestHTTPResponder(tests.TestCase):
         self.status = status
         self.headers = dict(headers)
         self.response_body = []
+
         def write(data):
             self.response_body.append(data)
+
         return write
 
     def test_send_response_content_w_headers(self):
@@ -621,7 +626,7 @@ class TestHTTPApp(tests.TestCase):
     def test_delete_doc(self):
         doc = self.db0.create_doc('{"x": 1}', doc_id='doc1')
         resp = self.app.delete('/db0/doc/doc1?old_rev=%s' % doc.rev)
-        doc = self.db0.get_doc('doc1')
+        doc = self.db0.get_doc('doc1', include_deleted=True)
         self.assertEqual(None, doc.content)
         self.assertEqual(200, resp.status)
         self.assertEqual('application/json', resp.header('content-type'))
@@ -651,8 +656,30 @@ class TestHTTPApp(tests.TestCase):
         resp = self.app.get('/db0/doc/doc1', expect_errors=True)
         self.assertEqual(404, resp.status)
         self.assertEqual('application/json', resp.header('content-type'))
-        self.assertEqual({"error": errors.DOCUMENT_DELETED},
-                         simplejson.loads(resp.body))
+        self.assertEqual(
+            {"error": errors.DocumentDoesNotExist.wire_description},
+            simplejson.loads(resp.body))
+
+    def test_get_doc_deleted_explicit_exclude(self):
+        doc = self.db0.create_doc('{"x": 1}', doc_id='doc1')
+        self.db0.delete_doc(doc)
+        resp = self.app.get(
+            '/db0/doc/doc1?include_deleted=false', expect_errors=True)
+        self.assertEqual(404, resp.status)
+        self.assertEqual('application/json', resp.header('content-type'))
+        self.assertEqual(
+            {"error": errors.DocumentDoesNotExist.wire_description},
+            simplejson.loads(resp.body))
+
+    def test_get_deleted_doc(self):
+        doc = self.db0.create_doc('{"x": 1}', doc_id='doc1')
+        self.db0.delete_doc(doc)
+        resp = self.app.get(
+            '/db0/doc/doc1?include_deleted=true', expect_errors=True)
+        self.assertEqual(404, resp.status)
+        self.assertEqual('application/json', resp.header('content-type'))
+        self.assertEqual(
+            {"error": errors.DOCUMENT_DELETED}, simplejson.loads(resp.body))
         self.assertEqual(doc.rev, resp.header('x-u1db-rev'))
         self.assertEqual('false', resp.header('x-u1db-has-conflicts'))
 
@@ -695,6 +722,7 @@ class TestHTTPApp(tests.TestCase):
 
         gens = []
         _do_set_sync_info = self.db0._do_set_sync_info
+
         def set_sync_generation_witness(other_uid, other_gen, other_trans_id):
             gens.append((other_uid, other_gen))
             _do_set_sync_info(other_uid, other_gen, other_trans_id)
@@ -767,8 +795,10 @@ class TestHTTPApp(tests.TestCase):
     def test_sync_exchange_error_in_stream(self):
         args = dict(last_known_generation=0)
         body = "[\r\n%s\r\n]" % simplejson.dumps(args)
+
         def boom(self, return_doc_cb):
             raise errors.Unavailable
+
         self.patch(sync.SyncExchange, 'return_docs',
                    boom)
         resp = self.app.post('/db0/sync-from/replica',
@@ -797,32 +827,38 @@ class TestRequestHooks(tests.TestCase):
 
     def test_begin_and_done(self):
         calls = []
+
         def begin(environ):
             self.assertTrue('PATH_INFO' in environ)
             calls.append('begin')
+
         def done(environ):
             self.assertTrue('PATH_INFO' in environ)
             calls.append('done')
+
         self.http_app.request_begin = begin
         self.http_app.request_done = done
 
         doc = self.db0.create_doc('{"x": 1}', doc_id='doc1')
-        resp = self.app.get('/db0/doc/%s' % doc.doc_id)
+        self.app.get('/db0/doc/%s' % doc.doc_id)
 
         self.assertEqual(['begin', 'done'], calls)
 
     def test_bad_request(self):
         calls = []
+
         def begin(environ):
             self.assertTrue('PATH_INFO' in environ)
             calls.append('begin')
+
         def bad_request(environ):
             self.assertTrue('PATH_INFO' in environ)
             calls.append('bad-request')
+
         self.http_app.request_begin = begin
         self.http_app.request_bad_request = bad_request
         # shouldn't be called
-        self.http_app.request_done = lambda env: borken
+        self.http_app.request_done = lambda env: 1 / 0
 
         resp = self.app.put('/db0/foo/doc1', params='{"x": 1}',
                             headers={'content-type': 'application/json'},
@@ -843,6 +879,7 @@ class TestHTTPAppErrorHandling(tests.TestCase):
         super(TestHTTPAppErrorHandling, self).setUp()
         self.exc = None
         self.state = tests.ServerStateForTests()
+
         class ErroringResource(object):
 
             def post(_, args, content):
@@ -887,16 +924,19 @@ class TestHTTPAppErrorHandling(tests.TestCase):
 
     def test_generic_u1db_errors_hooks(self):
         calls = []
+
         def begin(environ):
             self.assertTrue('PATH_INFO' in environ)
             calls.append('begin')
+
         def u1db_error(environ, exc):
             self.assertTrue('PATH_INFO' in environ)
             calls.append(('error', exc))
+
         self.http_app.request_begin = begin
         self.http_app.request_u1db_error = u1db_error
         # shouldn't be called
-        self.http_app.request_done = lambda env: borken
+        self.http_app.request_done = lambda env: 1 / 0
 
         self.exc = errors.U1DBError()
         resp = self.app.post('/req', params='{}',
@@ -916,15 +956,18 @@ class TestHTTPAppErrorHandling(tests.TestCase):
         class Failure(Exception):
             pass
         calls = []
+
         def begin(environ):
             calls.append('begin')
+
         def failed(environ):
             self.assertTrue('PATH_INFO' in environ)
             calls.append(('failed', sys.exc_info()))
+
         self.http_app.request_begin = begin
         self.http_app.request_failed = failed
         # shouldn't be called
-        self.http_app.request_done = lambda env: borken
+        self.http_app.request_done = lambda env: 1 / 0
 
         self.exc = Failure()
         self.assertRaises(Failure, self.app.post, '/req', params='{}',
@@ -945,9 +988,11 @@ class TestPluggableSyncExchange(tests.TestCase):
         self.state.ensure_database('foo')
 
     def test_plugging(self):
+
         class MySyncExchange(object):
             def __init__(self, db, source_replica_uid, last_known_generation):
                 pass
+
         class MySyncResource(http_app.SyncResource):
             sync_exchange_class = MySyncExchange
 

@@ -77,14 +77,16 @@ class InMemoryDatabase(CommonBackend):
         if self._has_conflicts(doc.doc_id):
             raise errors.ConflictedDoc()
         old_doc = self._get_doc(doc.doc_id)
-        if old_doc is not None:
-            if not (doc.rev is None and old_doc.is_tombstone()):
+        if old_doc and doc.rev is None and old_doc.is_tombstone():
+            new_rev = self._allocate_doc_rev(old_doc.rev)
+        else:
+            if old_doc is not None:
                 if old_doc.rev != doc.rev:
                     raise errors.RevisionConflict()
-        else:
-            if doc.rev is not None:
-                raise errors.RevisionConflict()
-        new_rev = self._allocate_doc_rev(doc.rev)
+            else:
+                if doc.rev is not None:
+                    raise errors.RevisionConflict()
+            new_rev = self._allocate_doc_rev(doc.rev)
         doc.rev = new_rev
         self._put_and_update_indexes(old_doc, doc)
         return new_rev
@@ -109,9 +111,11 @@ class InMemoryDatabase(CommonBackend):
     def _has_conflicts(self, doc_id):
         return doc_id in self._conflicts
 
-    def get_doc(self, doc_id):
+    def get_doc(self, doc_id, include_deleted=False):
         doc = self._get_doc(doc_id)
         if doc is None:
+            return None
+        if doc.is_tombstone() and not include_deleted:
             return None
         doc.has_conflicts = (doc.doc_id in self._conflicts)
         return doc
