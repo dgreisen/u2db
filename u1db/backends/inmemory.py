@@ -108,9 +108,11 @@ class InMemoryDatabase(CommonBackend):
     def _has_conflicts(self, doc_id):
         return doc_id in self._conflicts
 
-    def get_doc(self, doc_id):
+    def get_doc(self, doc_id, include_deleted=False):
         doc = self._get_doc(doc_id)
         if doc is None:
+            return None
+        if doc.is_tombstone() and not include_deleted:
             return None
         doc.has_conflicts = (doc.doc_id in self._conflicts)
         return doc

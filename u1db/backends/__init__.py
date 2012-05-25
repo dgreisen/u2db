@@ -81,10 +81,13 @@ class CommonBackend(u1db.Database):
     def _put_and_update_indexes(self, doc_id, old_doc, new_rev, content):
         raise NotImplementedError(self._put_and_update_indexes)
 
-    def get_docs(self, doc_ids, check_for_conflicts=True):
+    def get_docs(self, doc_ids, check_for_conflicts=True,
+                 include_deleted=False):
         result = []
         for doc_id in doc_ids:
             doc = self._get_doc(doc_id)
+            if doc.is_tombstone() and not include_deleted:
+                continue
             if check_for_conflicts:
                 doc.has_conflicts = self._has_conflicts(doc_id)
             result.append(doc)

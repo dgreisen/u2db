@@ -147,7 +147,8 @@ int u1db_resolve_doc(u1database *db, u1db_document *doc,
  * @return status, will be U1DB_OK if there is no error, even if there is no
  *      document matching that doc_id.
  */
-int u1db_get_doc(u1database *db, const char *doc_id, u1db_document **doc);
+int u1db_get_doc(u1database *db, const char *doc_id, int include_deleted,
+                 u1db_document **doc);
 
 
 /**
@@ -164,7 +165,7 @@ int u1db_get_doc(u1database *db, const char *doc_id, u1db_document **doc);
  *           u1db_free_doc.
  */
 int u1db_get_docs(u1database *db, int n_doc_ids, const char **doc_ids,
-                  int check_for_conflicts, void *context,
+                  int check_for_conflicts, int include_deleted, void *context,
                   u1db_doc_callback cb);
 
 /**

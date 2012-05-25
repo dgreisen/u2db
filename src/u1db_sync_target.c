@@ -422,7 +422,7 @@ u1db__sync_exchange_return_docs(u1db_sync_exchange *se, void *context,
     if (se->num_doc_ids > 0) {
         status = u1db_get_docs(se->db, se->num_doc_ids,
                 (const char **)se->doc_ids_to_return,
-                0, &state, get_docs_to_gen_docs);
+                0, 1, &state, get_docs_to_gen_docs);
     }
 finish:
     return status;
@@ -469,7 +469,7 @@ get_and_insert_docs(u1database *source_db, u1db_sync_exchange *se,
         (u1db_doc_gen_callback)u1db__sync_exchange_insert_doc_from_source;
     get_doc_state.gen_for_doc_ids = generations;
     return u1db_get_docs(source_db, n_doc_ids, doc_ids,
-            0, &get_doc_state, get_docs_to_gen_docs);
+            0, 1, &get_doc_state, get_docs_to_gen_docs);
 }
 
 

@@ -291,9 +291,11 @@ class SQLiteDatabase(CommonBackend):
         else:
             return True
 
-    def get_doc(self, doc_id):
+    def get_doc(self, doc_id, include_deleted=False):
         doc = self._get_doc(doc_id)
         if doc is None:
+            return None
+        if doc.is_tombstone() and not include_deleted:
             return None
         # TODO: A doc which appears deleted could still have conflicts...
         doc.has_conflicts = self._has_conflicts(doc.doc_id)
