@@ -705,6 +705,9 @@ class SQLitePartialExpandDatabase(SQLiteDatabase):
                 c.executemany("INSERT INTO index_definitions VALUES (?, ?, ?)",
                               definition)
             except dbapi2.IntegrityError as e:
+                stored_def = self._get_index_definition(index_name)
+                if stored_def == [x[-1] for x in definition]:
+                    return
                 raise errors.IndexNameTakenError, e, sys.exc_info()[2]
             new_fields = set([f for f in index_expression
                               if f not in cur_fields])

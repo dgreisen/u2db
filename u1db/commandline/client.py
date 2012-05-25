@@ -273,8 +273,6 @@ class CmdCreateIndex(OneDbCmd):
     def run(self, database, index, expression):
         try:
             db = self._open(database, create=False)
-            if (index, expression) in db.list_indexes():
-                return
             db.create_index(index, expression)
         except errors.DatabaseDoesNotExist:
             self.stderr.write("Database does not exist.\n")

@@ -671,6 +671,11 @@ class DatabaseIndexTests(tests.DatabaseBaseTests):
                           self.db.create_index,
                           'test-idx', ['stuff'])
 
+    def test_create_index_does_not_fail_if_name_taken_with_same_index(self):
+        self.db.create_index('test-idx', ['key'])
+        self.db.create_index('test-idx', ['key'])
+        self.assertEqual([('test-idx', ['key'])], self.db.list_indexes())
+
     def test_create_index_after_deleting_document(self):
         doc = self.db.create_doc(simple_doc)
         doc2 = self.db.create_doc(simple_doc)
