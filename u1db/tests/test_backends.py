@@ -155,8 +155,23 @@ class AllDatabaseTests(tests.DatabaseBaseTests, tests.TestCaseWithServer):
     def test_create_succeeds_after_delete(self):
         doc = self.db.create_doc(simple_doc, doc_id='my_doc_id')
         self.db.delete_doc(doc)
+        deleted_doc = self.db.get_doc('my_doc_id', include_deleted=True)
+        deleted_vc = vectorclock.VectorClockRev(deleted_doc.rev)
         new_doc = self.db.create_doc(simple_doc, doc_id='my_doc_id')
         self.assertGetDoc(self.db, 'my_doc_id', new_doc.rev, simple_doc, False)
+        new_vc = vectorclock.VectorClockRev(new_doc.rev)
+        self.assertTrue(new_vc.is_newer(deleted_vc))
+
+    def test_put_succeeds_after_delete(self):
+        doc = self.db.create_doc(simple_doc, doc_id='my_doc_id')
+        self.db.delete_doc(doc)
+        deleted_doc = self.db.get_doc('my_doc_id', include_deleted=True)
+        deleted_vc = vectorclock.VectorClockRev(deleted_doc.rev)
+        doc2 = self.make_document('my_doc_id', None, simple_doc)
+        self.db.put_doc(doc2)
+        self.assertGetDoc(self.db, 'my_doc_id', doc2.rev, simple_doc, False)
+        new_vc = vectorclock.VectorClockRev(doc2.rev)
+        self.assertTrue(new_vc.is_newer(deleted_vc))
 
     def test_get_doc_after_put(self):
         doc = self.db.create_doc(simple_doc, doc_id='my_doc_id')
