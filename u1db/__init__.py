@@ -86,6 +86,10 @@ class Database(object):
         """
         raise NotImplementedError(self.get_docs)
 
+    def get_all_docs(self):
+        """Get the JSON content for all documents in the database."""
+        raise NotImplementedError(self.get_all_docs)
+
     def create_doc(self, content, doc_id=None):
         """Create a new document.
 

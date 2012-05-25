@@ -299,6 +299,18 @@ class SQLiteDatabase(CommonBackend):
         doc.has_conflicts = self._has_conflicts(doc.doc_id)
         return doc
 
+    def get_all_docs(self):
+        """Get all documents from the database."""
+        results = []
+        c = self._db_handle.cursor()
+        c.execute("SELECT doc_id, doc_rev, content FROM document;")
+        rows = c.fetchall()
+        for doc_id, doc_rev, content in rows:
+            if content is None:
+                continue
+            results.append(Document(doc_id, doc_rev, content))
+        return results
+
     def put_doc(self, doc):
         if doc.doc_id is None:
             raise errors.InvalidDocId()

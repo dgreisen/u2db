@@ -115,6 +115,15 @@ class InMemoryDatabase(CommonBackend):
         doc.has_conflicts = (doc.doc_id in self._conflicts)
         return doc
 
+    def get_all_docs(self):
+        """Return all documents in the database."""
+        results = []
+        for doc_id, (doc_rev, content) in self._docs.items():
+            if content is None:
+                continue
+            results.append(Document(doc_id, doc_rev, content))
+        return results
+
     def get_doc_conflicts(self, doc_id):
         if doc_id not in self._conflicts:
             return []

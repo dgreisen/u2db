@@ -1029,6 +1029,42 @@ finish:
     return status;
 }
 
+int
+u1db_get_all_docs(u1database *db, void *context, u1db_doc_callback cb)
+{
+    int status;
+    sqlite3_stmt *statement;
+
+    if (db == NULL || cb == NULL) {
+        return U1DB_INVALID_PARAMETER;
+    }
+    status = sqlite3_prepare_v2(db->sql_handle,
+        "SELECT doc_id, doc_rev, content FROM document", -1, &statement, NULL);
+    if (status != SQLITE_OK) { goto finish; }
+    status = sqlite3_step(statement);
+    while (status == SQLITE_ROW) {
+        const char *doc_id;
+        const char *revision;
+        const char *content;
+        u1db_document *doc;
+        doc_id = (char *)sqlite3_column_text(statement, 0);
+        revision = (char *)sqlite3_column_text(statement, 1);
+        content = (char *)sqlite3_column_text(statement, 2);
+        if (content != NULL)
+        {
+            doc = u1db__allocate_document(doc_id, revision, content, 0);
+            cb(context, doc);
+        }
+        status = sqlite3_step(statement);
+    }
+    if (status == SQLITE_DONE) {
+        status = SQLITE_OK;
+    }
+finish:
+    sqlite3_finalize(statement);
+    return status;
+}
+
 // Take cur_rev, and update it to have a version incremented based on the
 // database replica uid
 static int

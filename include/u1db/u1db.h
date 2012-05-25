@@ -168,6 +168,17 @@ int u1db_get_docs(u1database *db, int n_doc_ids, const char **doc_ids,
                   u1db_doc_callback cb);
 
 /**
+ * Retrieve all documents from the database.
+ *
+ * @param context A void* that is returned via the callback function.
+ * @param cb This will be called with each document requested. The api is
+ *           cb(void* context, u1db_document *doc). The returned documents are
+ *           allocated on the heap, and must be freed by the caller via
+ *           u1db_free_doc.
+ */
+int u1db_get_all_docs(u1database *db, void *context, u1db_doc_callback cb);
+
+/**
  * Get all of the contents associated with a conflicted document.
  *
  * If a document is not conflicted, then this will not invoke the callback
