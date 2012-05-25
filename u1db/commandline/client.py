@@ -227,6 +227,44 @@ class CmdPut(OneDbCmd):
 client_commands.register(CmdPut)
 
 
+class CmdResolve(OneDbCmd):
+    """Resolve a conflicted document"""
+
+    name = 'resolve-doc'
+
+    @classmethod
+    def _populate_subparser(cls, parser):
+        parser.add_argument('database',
+                            help='The local or remote database to update',
+                            metavar='database-path-or-url'),
+        parser.add_argument('doc_id', help='The conflicted document id')
+        parser.add_argument('doc_revs', metavar="doc-rev", nargs="+",
+            help='The revisions that the new content supersedes')
+        parser.add_argument('--infile', nargs='?', default=None,
+            help='The filename of the document that will be used for content',
+            type=argparse.FileType('rb'))
+
+    def run(self, database, doc_id, doc_revs, infile):
+        if infile is None:
+            infile = self.stdin
+        try:
+            db = self._open(database, create=False)
+        except errors.DatabaseDoesNotExist:
+            self.stderr.write("Database does not exist.\n")
+            return 1
+        doc = db.get_doc(doc_id)
+        if doc is None:
+            self.stderr.write("Document does not exist.\n")
+            return 1
+        doc.set_json(infile.read())
+        db.resolve_doc(doc, doc_revs)
+        self.stderr.write("rev: %s\n" % db.get_doc(doc_id).rev)
+        if doc.has_conflicts:
+            self.stderr.write("Document still has conflicts.\n")
+
+client_commands.register(CmdResolve)
+
+
 class CmdSync(command.Command):
     """Synchronize two databases"""
 
