@@ -219,10 +219,24 @@ class CmdPut(OneDbCmd):
     def run(self, database, doc_id, doc_rev, infile):
         if infile is None:
             infile = self.stdin
-        db = self._open(database, create=False)
-        doc = Document(doc_id, doc_rev, infile.read())
-        doc_rev = db.put_doc(doc)
-        self.stderr.write('rev: %s\n' % (doc_rev,))
+        try:
+            db = self._open(database, create=False)
+            doc = Document(doc_id, doc_rev, infile.read())
+            doc_rev = db.put_doc(doc)
+            self.stderr.write('rev: %s\n' % (doc_rev,))
+        except errors.DatabaseDoesNotExist:
+            self.stderr.write("Database does not exist.\n")
+        except errors.RevisionConflict:
+            if db.get_doc(doc_id) is None:
+                self.stderr.write("Document does not exist.\n")
+            else:
+                self.stderr.write("Given revision is not current.\n")
+        except errors.ConflictedDoc:
+            self.stderr.write("Document has conflicts.\n"
+                              "Inspect with get-doc-conflicts, then resolve.\n")
+        else:
+            return
+        return 1
 
 client_commands.register(CmdPut)
 

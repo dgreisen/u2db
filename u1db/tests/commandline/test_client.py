@@ -347,6 +347,47 @@ class TestCmdPut(TestCaseWithDB):
         self.assertEqual('rev: %s\n' % (doc.rev,),
                          cmd.stderr.getvalue())
 
+    def test_put_no_db(self):
+        cmd = self.make_command(client.CmdPut)
+        inf = cStringIO.StringIO(tests.nested_doc)
+        retval = cmd.run(self.db_path + "__DOES_NOT_EXIST",
+                         'my-test-doc', self.doc.rev, inf)
+        self.assertEqual(retval, 1)
+        self.assertEqual('', cmd.stdout.getvalue())
+        self.assertEqual('Database does not exist.\n', cmd.stderr.getvalue())
+
+    def test_put_no_doc(self):
+        cmd = self.make_command(client.CmdPut)
+        inf = cStringIO.StringIO(tests.nested_doc)
+        retval = cmd.run(self.db_path, 'no-such-doc', 'wut:1', inf)
+        self.assertEqual(1, retval)
+        self.assertEqual('', cmd.stdout.getvalue())
+        self.assertEqual('Document does not exist.\n', cmd.stderr.getvalue())
+
+    def test_put_doc_old_rev(self):
+        rev = self.doc.rev
+        doc = self.make_document('my-test-doc', rev, '{}', False)
+        self.db.put_doc(doc)
+        cmd = self.make_command(client.CmdPut)
+        inf = cStringIO.StringIO(tests.nested_doc)
+        retval = cmd.run(self.db_path, 'my-test-doc', rev, inf)
+        self.assertEqual(1, retval)
+        self.assertEqual('', cmd.stdout.getvalue())
+        self.assertEqual('Given revision is not current.\n',
+                         cmd.stderr.getvalue())
+
+    def test_put_doc_w_conflicts(self):
+        doc = self.make_document('my-test-doc', 'other:1', '{}', False)
+        self.db._put_doc_if_newer(doc, save_conflict=True)
+        cmd = self.make_command(client.CmdPut)
+        inf = cStringIO.StringIO(tests.nested_doc)
+        retval = cmd.run(self.db_path, 'my-test-doc', 'other:1', inf)
+        self.assertEqual(1, retval)
+        self.assertEqual('', cmd.stdout.getvalue())
+        self.assertEqual('Document has conflicts.\n'
+                         'Inspect with get-doc-conflicts, then resolve.\n',
+                         cmd.stderr.getvalue())
+
 
 class TestCmdResolve(TestCaseWithDB):
 
