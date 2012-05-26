@@ -140,6 +140,8 @@ class InMemoryDatabase(CommonBackend):
             for c_rev, c_doc in cur_conflicts:
                 if doc_vcr.is_newer(vectorclock.VectorClockRev(c_rev)):
                     continue
+                if doc.same_content_as(Document(doc.doc_id, c_rev, c_doc)):
+                    continue
                 remaining_conflicts.append((c_rev, c_doc))
             self._replace_conflicts(doc, remaining_conflicts)
 

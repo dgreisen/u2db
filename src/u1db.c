@@ -679,7 +679,7 @@ prune_conflicts(u1database *db, u1db_document *doc,
     int status = U1DB_OK;
     sqlite3_stmt *statement;
     status = sqlite3_prepare_v2(db->sql_handle,
-        "SELECT doc_rev FROM conflicts WHERE doc_id = ?", -1,
+        "SELECT doc_rev, content FROM conflicts WHERE doc_id = ?", -1,
         &statement, NULL);
     if (status != SQLITE_OK) { goto finish; }
     status = sqlite3_bind_text(statement, 1, doc->doc_id, -1, SQLITE_TRANSIENT);
@@ -687,14 +687,21 @@ prune_conflicts(u1database *db, u1db_document *doc,
     status = sqlite3_step(statement);
     while (status == SQLITE_ROW) {
         const char *conflict_rev;
+        const char *conflict_content;
         u1db_vectorclock *conflict_vc;
 
+        conflict_content = (const char*)sqlite3_column_text(statement, 1);
         conflict_rev = (const char*)sqlite3_column_text(statement, 0);
         conflict_vc = u1db__vectorclock_from_str(conflict_rev);
-        if (conflict_vc == NULL) {
+        if (conflict_vc == NULL
+            || (sqlite3_column_type(statement, 1) != SQLITE_NULL
+                && conflict_content == NULL)) {
             status = U1DB_NOMEM;
         } else {
-            if (u1db__vectorclock_is_newer(new_vc, conflict_vc)) {
+            if (u1db__vectorclock_is_newer(new_vc, conflict_vc)
+                || (doc->json == NULL && conflict_content == NULL)
+                || (doc->json != NULL && conflict_content != NULL
+                    && strcmp(doc->json, conflict_content) == 0)) {
                 // Note: Testing so far shows that it is ok to delete a record
                 //        from a table that we are currently selecting. If we
                 //        find out differently, update this to create a list of

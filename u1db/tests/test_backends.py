@@ -319,6 +319,36 @@ class LocalDatabaseTests(tests.DatabaseBaseTests):
         self.assertTrue(v2.is_newer(vectorclock.VectorClockRev("whatever:1")))
         self.assertTrue(v2.is_newer(vectorclock.VectorClockRev(rev)))
 
+    def test_put_doc_if_newer_automerge_2(self):
+        doc_a1 = self.db.create_doc(simple_doc)
+        doc_a2 = self.make_document(doc_a1.doc_id, 'test:2', "{}")
+        doc_a1b1 = self.make_document(doc_a1.doc_id, 'test:1|other:1',  '{"a":"42"}')
+        doc_a3 = self.make_document(doc_a1.doc_id, 'test:2|other:1', "{}")
+        self.db._put_doc_if_newer(doc_a2, True)
+        self.db._put_doc_if_newer(doc_a1b1, True)
+        self.db._put_doc_if_newer(doc_a3, True)
+        self.assertFalse(self.db.get_doc(doc_a1.doc_id).has_conflicts)
+
+    def test_put_doc_if_newer_automerge_3(self):
+        doc_a1 = self.db.create_doc(simple_doc)
+        doc_a1b1 = self.make_document(doc_a1.doc_id, 'test:1|other:1', "{}")
+        doc_a2 = self.make_document(doc_a1.doc_id, 'test:2',  '{"a":"42"}')
+        doc_a3 = self.make_document(doc_a1.doc_id, 'test:3', "{}")
+        self.db._put_doc_if_newer(doc_a1b1, True)
+        self.db._put_doc_if_newer(doc_a2, True)
+        self.db._put_doc_if_newer(doc_a3, True)
+        self.assertFalse(self.db.get_doc(doc_a1.doc_id).has_conflicts)
+
+    def test_put_doc_if_newer_automerge_4(self):
+        doc_a1 = self.db.create_doc(simple_doc)
+        doc_a1b1 = self.make_document(doc_a1.doc_id, 'test:1|other:1', None)
+        doc_a2 = self.make_document(doc_a1.doc_id, 'test:2',  '{"a":"42"}')
+        doc_a3 = self.make_document(doc_a1.doc_id, 'test:3', None)
+        self.db._put_doc_if_newer(doc_a1b1, True)
+        self.db._put_doc_if_newer(doc_a2, True)
+        self.db._put_doc_if_newer(doc_a3, True)
+        self.assertFalse(self.db.get_doc(doc_a1.doc_id, True).has_conflicts)
+
     def test_put_doc_if_newer_already_converged(self):
         orig_doc = '{"new": "doc"}'
         doc1 = self.db.create_doc(orig_doc)
