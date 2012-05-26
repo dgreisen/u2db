@@ -337,7 +337,13 @@ class LocalDatabaseTests(tests.DatabaseBaseTests):
         self.db._put_doc_if_newer(doc_a1b1, True)
         self.db._put_doc_if_newer(doc_a2, True)
         self.db._put_doc_if_newer(doc_a3, True)
-        self.assertFalse(self.db.get_doc(doc_a1.doc_id).has_conflicts)
+        doc = self.db.get_doc(doc_a1.doc_id, True)
+        self.assertFalse(doc.has_conflicts)
+        rev = vectorclock.VectorClockRev(doc.rev)
+        rev_a3 = vectorclock.VectorClockRev('test:3')
+        rev_a1b1 = vectorclock.VectorClockRev('test:1|other:1')
+        self.assertTrue(rev.is_newer(rev_a3))
+        self.assertTrue(rev.is_newer(rev_a1b1))
 
     def test_put_doc_if_newer_automerge_4(self):
         doc_a1 = self.db.create_doc(simple_doc)
@@ -347,7 +353,13 @@ class LocalDatabaseTests(tests.DatabaseBaseTests):
         self.db._put_doc_if_newer(doc_a1b1, True)
         self.db._put_doc_if_newer(doc_a2, True)
         self.db._put_doc_if_newer(doc_a3, True)
-        self.assertFalse(self.db.get_doc(doc_a1.doc_id, True).has_conflicts)
+        doc = self.db.get_doc(doc_a1.doc_id, True)
+        self.assertFalse(doc.has_conflicts)
+        rev = vectorclock.VectorClockRev(doc.rev)
+        rev_a3 = vectorclock.VectorClockRev('test:3')
+        rev_a1b1 = vectorclock.VectorClockRev('test:1|other:1')
+        self.assertTrue(rev.is_newer(rev_a3))
+        self.assertTrue(rev.is_newer(rev_a1b1))
 
     def test_put_doc_if_newer_already_converged(self):
         orig_doc = '{"new": "doc"}'

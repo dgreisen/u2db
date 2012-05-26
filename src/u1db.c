@@ -676,7 +676,9 @@ static int
 prune_conflicts(u1database *db, u1db_document *doc,
                 u1db_vectorclock *new_vc)
 {
+    const char *local_replica_uid = NULL;
     int status = U1DB_OK;
+    int did_automerge = 0;
     sqlite3_stmt *statement;
     status = sqlite3_prepare_v2(db->sql_handle,
         "SELECT doc_rev, content FROM conflicts WHERE doc_id = ?", -1,
@@ -698,14 +700,21 @@ prune_conflicts(u1database *db, u1db_document *doc,
                 && conflict_content == NULL)) {
             status = U1DB_NOMEM;
         } else {
-            if (u1db__vectorclock_is_newer(new_vc, conflict_vc)
-                || (doc->json == NULL && conflict_content == NULL)
-                || (doc->json != NULL && conflict_content != NULL
-                    && strcmp(doc->json, conflict_content) == 0)) {
+            if (u1db__vectorclock_is_newer(new_vc, conflict_vc)) {
                 // Note: Testing so far shows that it is ok to delete a record
                 //        from a table that we are currently selecting. If we
                 //        find out differently, update this to create a list of
                 //        things to delete, then iterate over deleting them.
+                status = delete_conflict(db, doc->doc_id, conflict_rev);
+            } else if ((doc->json == NULL && conflict_content == NULL)
+                       || (doc->json != NULL && conflict_content != NULL
+                           && strcmp(doc->json, conflict_content) == 0)) {
+                did_automerge = 1;
+                status = u1db__vectorclock_maximize(new_vc, conflict_vc);
+                if (status != U1DB_OK) {
+                    u1db__free_vectorclock(&conflict_vc);
+                    goto finish;
+                }
                 status = delete_conflict(db, doc->doc_id, conflict_rev);
             } else {
                 // There is an existing conflict that we do *not* supersede,
@@ -721,6 +730,14 @@ prune_conflicts(u1database *db, u1db_document *doc,
     }
     if (status == SQLITE_DONE) {
         status = U1DB_OK;
+    } else if (status == U1DB_OK && did_automerge) {
+        status = u1db_get_replica_uid(db, &local_replica_uid);
+        if (status != SQLITE_OK) { goto finish; }
+        status = u1db__vectorclock_increment(new_vc, local_replica_uid);
+        if (status != SQLITE_OK) { goto finish; }
+        free(doc->doc_rev);
+        status = u1db__vectorclock_as_str(new_vc, &doc->doc_rev);
+        if (status != SQLITE_OK) { goto finish; }
     }
 finish:
     sqlite3_finalize(statement);
@@ -777,9 +794,20 @@ u1db__put_doc_if_newer(u1database *db, u1db_document *doc, int save_conflict,
         }
         if (u1db__vectorclock_is_newer(new_vc, stored_vc)) {
             // Just take the newer version
+            char *rev = strdup(doc->doc_rev);
+            if (rev == NULL) {
+                status = U1DB_NOMEM;
+                goto finish;
+            }
             store = 1;
             *state = U1DB_INSERTED;
             status = prune_conflicts(db, doc, new_vc);
+            // if the doc's rev has been updated, conflicts were automerged
+            if (status == U1DB_OK && strcmp(rev, doc->doc_rev) != 0) {
+                *state = U1DB_SUPERSEDED;
+            }
+            free(rev);
+            if (status != U1DB_OK) { goto finish; }
         } else if (u1db__vectorclock_is_newer(stored_vc, new_vc)) {
             // The existing version is newer than the one supplied
             store = 0;

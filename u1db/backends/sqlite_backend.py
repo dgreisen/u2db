@@ -468,11 +468,19 @@ class SQLiteDatabase(CommonBackend):
 
     def _prune_conflicts(self, doc, doc_vcr):
         if self._has_conflicts(doc.doc_id):
+            automerged = False
             c_revs_to_prune = []
             for c_doc in self._get_conflicts(doc.doc_id):
-                if (doc_vcr.is_newer(vectorclock.VectorClockRev(c_doc.rev))
-                    or doc.same_content_as(c_doc)):
+                c_vcr = vectorclock.VectorClockRev(c_doc.rev)
+                if doc_vcr.is_newer(c_vcr):
                     c_revs_to_prune.append(c_doc.rev)
+                elif doc.same_content_as(c_doc):
+                    c_revs_to_prune.append(c_doc.rev)
+                    doc_vcr.maximize(c_vcr)
+                    automerged = True
+            if automerged:
+                doc_vcr.increment(self._replica_uid)
+                doc.rev = doc_vcr.as_str()
             c = self._db_handle.cursor()
             self._delete_conflicts(c, doc, c_revs_to_prune)
 
