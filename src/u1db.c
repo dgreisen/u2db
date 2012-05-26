@@ -678,7 +678,7 @@ prune_conflicts(u1database *db, u1db_document *doc,
 {
     const char *local_replica_uid = NULL;
     int status = U1DB_OK;
-    int did_automerge = 0;
+    int did_autoresolve = 0;
     sqlite3_stmt *statement;
     status = sqlite3_prepare_v2(db->sql_handle,
         "SELECT doc_rev, content FROM conflicts WHERE doc_id = ?", -1,
@@ -709,7 +709,7 @@ prune_conflicts(u1database *db, u1db_document *doc,
             } else if ((doc->json == NULL && conflict_content == NULL)
                        || (doc->json != NULL && conflict_content != NULL
                            && strcmp(doc->json, conflict_content) == 0)) {
-                did_automerge = 1;
+                did_autoresolve = 1;
                 status = u1db__vectorclock_maximize(new_vc, conflict_vc);
                 if (status != U1DB_OK) {
                     u1db__free_vectorclock(&conflict_vc);
@@ -730,7 +730,7 @@ prune_conflicts(u1database *db, u1db_document *doc,
     }
     if (status == SQLITE_DONE) {
         status = U1DB_OK;
-    } else if (status == U1DB_OK && did_automerge) {
+    } else if (status == U1DB_OK && did_autoresolve) {
         status = u1db_get_replica_uid(db, &local_replica_uid);
         if (status != SQLITE_OK) { goto finish; }
         status = u1db__vectorclock_increment(new_vc, local_replica_uid);
@@ -802,7 +802,7 @@ u1db__put_doc_if_newer(u1database *db, u1db_document *doc, int save_conflict,
             store = 1;
             *state = U1DB_INSERTED;
             status = prune_conflicts(db, doc, new_vc);
-            // if the doc's rev has been updated, conflicts were automerged
+            // if the doc's rev has been updated, conflicts were autoresolved
             if (status == U1DB_OK && strcmp(rev, doc->doc_rev) != 0) {
                 *state = U1DB_SUPERSEDED;
             }

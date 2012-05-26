@@ -308,7 +308,7 @@ class LocalDatabaseTests(tests.DatabaseBaseTests):
         self.assertEqual('superseded', state)
         self.assertGetDoc(self.db, doc1.doc_id, doc1_rev2, simple_doc, False)
 
-    def test_put_doc_if_newer_automerge(self):
+    def test_put_doc_if_newer_autoresolve(self):
         doc1 = self.db.create_doc(simple_doc)
         rev = doc1.rev
         doc = self.make_document(doc1.doc_id, "whatever:1", doc1.get_json())
@@ -319,7 +319,7 @@ class LocalDatabaseTests(tests.DatabaseBaseTests):
         self.assertTrue(v2.is_newer(vectorclock.VectorClockRev("whatever:1")))
         self.assertTrue(v2.is_newer(vectorclock.VectorClockRev(rev)))
 
-    def test_put_doc_if_newer_automerge_2(self):
+    def test_put_doc_if_newer_autoresolve_2(self):
         doc_a1 = self.db.create_doc(simple_doc)
         doc_a2 = self.make_document(doc_a1.doc_id, 'test:2', "{}")
         doc_a1b1 = self.make_document(doc_a1.doc_id, 'test:1|other:1',  '{"a":"42"}')
@@ -329,7 +329,7 @@ class LocalDatabaseTests(tests.DatabaseBaseTests):
         self.db._put_doc_if_newer(doc_a3, True)
         self.assertFalse(self.db.get_doc(doc_a1.doc_id).has_conflicts)
 
-    def test_put_doc_if_newer_automerge_3(self):
+    def test_put_doc_if_newer_autoresolve_3(self):
         doc_a1 = self.db.create_doc(simple_doc)
         doc_a1b1 = self.make_document(doc_a1.doc_id, 'test:1|other:1', "{}")
         doc_a2 = self.make_document(doc_a1.doc_id, 'test:2',  '{"a":"42"}')
@@ -345,7 +345,7 @@ class LocalDatabaseTests(tests.DatabaseBaseTests):
         self.assertTrue(rev.is_newer(rev_a3))
         self.assertTrue(rev.is_newer(rev_a1b1))
 
-    def test_put_doc_if_newer_automerge_4(self):
+    def test_put_doc_if_newer_autoresolve_4(self):
         doc_a1 = self.db.create_doc(simple_doc)
         doc_a1b1 = self.make_document(doc_a1.doc_id, 'test:1|other:1', None)
         doc_a2 = self.make_document(doc_a1.doc_id, 'test:2',  '{"a":"42"}')

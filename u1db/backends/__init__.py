@@ -106,7 +106,7 @@ class CommonBackend(u1db.Database):
             rev = doc.rev
             self._prune_conflicts(doc, doc_vcr)
             if doc.rev != rev:
-                # conflicts have been automerged
+                # conflicts have been autoresolved
                 state = 'superseded'
             else:
                 state = 'inserted'
