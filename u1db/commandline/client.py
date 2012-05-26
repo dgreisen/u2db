@@ -125,7 +125,11 @@ class CmdGet(OneDbCmd):
     def run(self, database, doc_id, outfile):
         if outfile is None:
             outfile = self.stdout
-        db = self._open(database, create=False)
+        try:
+            db = self._open(database, create=False)
+        except errors.DatabaseDoesNotExist:
+            self.stderr.write("Database does not exist.\n")
+            return 1
         doc = db.get_doc(doc_id)
         if doc is None:
             self.stderr.write('Document not found (id: %s)\n' % (doc_id,))
@@ -133,12 +137,10 @@ class CmdGet(OneDbCmd):
         if doc.is_tombstone():
             outfile.write('[document deleted]\n')
         else:
-            outfile.write(doc.get_json())
+            outfile.write(doc.get_json() + '\n')
         self.stderr.write('rev: %s\n' % (doc.rev,))
         if doc.has_conflicts:
-            # TODO: Probably want to write 'conflicts' or 'conflicted' to
-            # stderr.
-            pass
+            self.stderr.write("Document has conflicts.\n")
 
 client_commands.register(CmdGet)
 

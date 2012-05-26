@@ -257,16 +257,32 @@ class TestCmdGet(TestCaseWithDB):
     def test_get_simple(self):
         cmd = self.make_command(client.CmdGet)
         cmd.run(self.db_path, 'my-test-doc', None)
-        self.assertEqual(tests.simple_doc, cmd.stdout.getvalue())
+        self.assertEqual(tests.simple_doc + "\n", cmd.stdout.getvalue())
         self.assertEqual('rev: %s\n' % (self.doc.rev,),
+                         cmd.stderr.getvalue())
+
+    def test_get_conflict(self):
+        doc = self.make_document('my-test-doc', 'other:1', '{}', False)
+        self.db._put_doc_if_newer(doc, save_conflict=True)
+        cmd = self.make_command(client.CmdGet)
+        cmd.run(self.db_path, 'my-test-doc', None)
+        self.assertEqual('{}\n', cmd.stdout.getvalue())
+        self.assertEqual('rev: %s\nDocument has conflicts.\n' % (doc.rev,),
                          cmd.stderr.getvalue())
 
     def test_get_fail(self):
         cmd = self.make_command(client.CmdGet)
         result = cmd.run(self.db_path, 'doc-not-there', None)
-        self.assertEqual(result, 1)
-        self.assertEqual(cmd.stdout.getvalue(), "")
+        self.assertEqual(1, result)
+        self.assertEqual("", cmd.stdout.getvalue())
         self.assertTrue("not found" in cmd.stderr.getvalue())
+
+    def test_get_no_database(self):
+        cmd = self.make_command(client.CmdGet)
+        retval = cmd.run(self.db_path + "__DOES_NOT_EXIST", "my-doc", None)
+        self.assertEqual(retval, 1)
+        self.assertEqual(cmd.stdout.getvalue(), '')
+        self.assertEqual(cmd.stderr.getvalue(), 'Database does not exist.\n')
 
 
 class TestCmdGetDocConflicts(TestCaseWithDB):
@@ -740,7 +756,7 @@ class TestCommandLine(TestCaseWithDB, RunMainHelper):
         doc = self.db.create_doc(tests.simple_doc, doc_id='test-id')
         ret, stdout, stderr = self.run_main(['get', self.db_path, 'test-id'])
         self.assertEqual(0, ret)
-        self.assertEqual(tests.simple_doc, stdout)
+        self.assertEqual(tests.simple_doc + "\n", stdout)
         self.assertEqual('rev: %s\n' % (doc.rev,), stderr)
         ret, stdout, stderr = self.run_main(['get', self.db_path, 'not-there'])
         self.assertEqual(1, ret)
