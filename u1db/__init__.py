@@ -86,8 +86,13 @@ class Database(object):
         """
         raise NotImplementedError(self.get_docs)
 
-    def get_all_docs(self):
-        """Get the JSON content for all documents in the database."""
+    def get_all_docs(self, include_deleted=False):
+        """Get the JSON content for all documents in the database.
+
+        :return: (generation, [Document])
+            The current generation of the database, followed by a list of all
+            the documents in the database.
+        """
         raise NotImplementedError(self.get_all_docs)
 
     def create_doc(self, content, doc_id=None):
