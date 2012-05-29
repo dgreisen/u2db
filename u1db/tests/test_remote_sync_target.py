@@ -242,21 +242,28 @@ class TestRemoteSyncTargets(tests.TestCaseWithServer):
 
     def test_sync_exchange_in_stream_error(self):
         self.startServer()
+
         def blackhole_getstderr(inst):
             return cStringIO.StringIO()
+
         self.patch(self.server.RequestHandlerClass, 'get_stderr',
                    blackhole_getstderr)
         db = self.request_state._create_database('test')
         doc = db.create_doc('{"value": "there"}')
-        def bomb_get_docs(doc_ids, check_for_conflicts=None):
+
+        def bomb_get_docs(doc_ids, check_for_conflicts=None,
+                          include_deleted=False):
             yield doc
             # delayed failure case
             raise errors.Unavailable
+
         self.patch(db, 'get_docs', bomb_get_docs)
         remote_target = self.getSyncTarget('test')
         other_changes = []
+
         def receive_doc(doc, gen):
             other_changes.append((doc.doc_id, doc.rev, doc.get_json(), gen))
+
         self.assertRaises(errors.Unavailable, remote_target.sync_exchange,
                           [], 'replica', last_known_generation=0,
                           return_doc_cb=receive_doc)

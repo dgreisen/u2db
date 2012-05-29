@@ -134,7 +134,7 @@ class DatabaseSyncTargetTests(tests.DatabaseBaseTests,
     def set_trace_hook(self, callback):
         try:
             self.st._set_trace_hook(callback)
-        except NotImplementedError, e:
+        except NotImplementedError:
             self.skipTest("%s does not implement _set_trace_hook"
                           % (self.st.__class__.__name__,))
 
@@ -146,7 +146,7 @@ class DatabaseSyncTargetTests(tests.DatabaseBaseTests,
 
     def test_create_doc_updates_sync_info(self):
         self.assertEqual(('test', 0, 0, ''), self.st.get_sync_info('other'))
-        doc = self.db.create_doc(simple_doc)
+        self.db.create_doc(simple_doc)
         self.assertEqual(('test', 1, 0, ''), self.st.get_sync_info('other'))
 
     def test_record_sync_info(self):
@@ -174,7 +174,8 @@ class DatabaseSyncTargetTests(tests.DatabaseBaseTests,
         new_gen = self.st.sync_exchange(docs_by_gen, 'replica',
                                         last_known_generation=0,
                                         return_doc_cb=self.receive_doc)
-        self.assertGetDoc(self.db, doc.doc_id, edit_rev, None, False)
+        self.assertGetDocIncludeDeleted(
+            self.db, doc.doc_id, edit_rev, None, False)
         self.assertTransactionLog([doc.doc_id, doc.doc_id], self.db)
         self.assertEqual(([], 2), (self.other_changes, new_gen))
         self.assertEqual(10, self.st.get_sync_info('replica')[2])
@@ -258,9 +259,10 @@ class DatabaseSyncTargetTests(tests.DatabaseBaseTests,
                            (doc2.doc_id, doc2.rev, nested_doc, 2)], 2),
                          (self.other_changes, new_gen))
         if self.whitebox:
-            self.assertEqual(self.db._last_exchange_log['return'],
-                             {'last_gen': 2, 'docs': [(doc.doc_id, doc.rev),
-                                                      (doc2.doc_id, doc2.rev)]})
+            self.assertEqual(
+                self.db._last_exchange_log['return'],
+                {'last_gen': 2, 'docs':
+                 [(doc.doc_id, doc.rev), (doc2.doc_id, doc2.rev)]})
 
     def test_sync_exchange_getting_newer_docs(self):
         doc = self.db.create_doc(simple_doc)
@@ -276,6 +278,7 @@ class DatabaseSyncTargetTests(tests.DatabaseBaseTests,
 
     def test_sync_exchange_with_concurrent_updates_of_synced_doc(self):
         expected = []
+
         def before_whatschanged_cb(state):
             if state != 'before whats_changed':
                 return
@@ -283,6 +286,7 @@ class DatabaseSyncTargetTests(tests.DatabaseBaseTests,
             conc_rev = self.db.put_doc(
                 self.make_document(doc.doc_id, 'test:1|z:2', cont))
             expected.append((doc.doc_id, conc_rev, cont, 3))
+
         self.set_trace_hook(before_whatschanged_cb)
         doc = self.db.create_doc(simple_doc)
         self.assertTransactionLog([doc.doc_id], self.db)
@@ -351,8 +355,10 @@ class DatabaseSyncTargetTests(tests.DatabaseBaseTests,
 
     def test__set_trace_hook(self):
         called = []
+
         def cb(state):
             called.append(state)
+
         self.set_trace_hook(cb)
         self.st.sync_exchange([], 'replica', 0, self.receive_doc)
         self.st.record_sync_info('replica', 0, 'T-sid')
@@ -465,10 +471,12 @@ class DatabaseSyncTests(tests.DatabaseBaseTests):
         # new record.
         # When we finish synchronizing, we can notice that something locally
         # was updated, and we cannot tell c2 our new updated generation
+
         def before_get_docs(state):
             if state != 'before get_docs':
                 return
             self.db1.create_doc(simple_doc)
+
         self.assertEqual(0, self.sync(self.db1, self.db2,
                                       trace_hook=before_get_docs))
         self.assertLastExchangeLog(self.db2,
@@ -482,7 +490,8 @@ class DatabaseSyncTests(tests.DatabaseBaseTests):
         self.assertEqual((0, ''), self.db2._get_sync_gen_info('test1'))
 
     def test_sync_doesnt_update_other_if_nothing_pulled(self):
-        doc = self.db1.create_doc(simple_doc)
+        self.db1.create_doc(simple_doc)
+
         def no_record_sync_info(state):
             if state != 'record_sync_info':
                 return
@@ -565,8 +574,9 @@ class DatabaseSyncTests(tests.DatabaseBaseTests):
              'return': {'docs': [(doc_id, doc2.rev)],
                         'last_gen': 2}})
         self.assertTransactionLog([doc_id, doc_id, doc_id], self.db1)
-        self.assertGetDoc(self.db1, doc_id, doc2.rev, None, True)
-        self.assertGetDoc(self.db2, doc_id, doc2.rev, None, False)
+        self.assertGetDocIncludeDeleted(self.db1, doc_id, doc2.rev, None, True)
+        self.assertGetDocIncludeDeleted(
+            self.db2, doc_id, doc2.rev, None, False)
         self.assertEqual([], self.db1.get_from_index('test-idx', [('value',)]))
 
     def test_sync_local_race_conflicted(self):
@@ -581,12 +591,14 @@ class DatabaseSyncTests(tests.DatabaseBaseTests):
         self.db2.put_doc(doc)
         doc2_rev2 = doc.rev
         triggered = []
+
         def after_whatschanged(state):
             if state != 'after whats_changed':
                 return
             triggered.append(True)
             doc = self.make_document(doc_id, doc1_rev, content1)
             self.db1.put_doc(doc)
+
         self.sync(self.db1, self.db2, trace_hook=after_whatschanged)
         self.assertEqual([True], triggered)
         self.assertGetDoc(self.db1, doc_id, doc2_rev2, content2, True)
@@ -599,7 +611,6 @@ class DatabaseSyncTests(tests.DatabaseBaseTests):
     def test_sync_propagates_deletes(self):
         doc1 = self.db1.create_doc(simple_doc)
         doc_id = doc1.doc_id
-        doc1_rev = doc1.rev
         self.db1.create_index('test-idx', ['key'])
         self.sync(self.db1, self.db2)
         self.db2.create_index('test-idx', ['key'])
@@ -613,8 +624,10 @@ class DatabaseSyncTests(tests.DatabaseBaseTests):
                          'source_uid': 'test1',
                          'source_gen': 2, 'last_known_gen': 1},
              'return': {'docs': [], 'last_gen': 2}})
-        self.assertGetDoc(self.db1, doc_id, deleted_rev, None, False)
-        self.assertGetDoc(self.db2, doc_id, deleted_rev, None, False)
+        self.assertGetDocIncludeDeleted(
+            self.db1, doc_id, deleted_rev, None, False)
+        self.assertGetDocIncludeDeleted(
+            self.db2, doc_id, deleted_rev, None, False)
         self.assertEqual([], self.db1.get_from_index('test-idx', [('value',)]))
         self.assertEqual([], self.db2.get_from_index('test-idx', [('value',)]))
         self.sync(self.db2, self.db3)
@@ -623,7 +636,8 @@ class DatabaseSyncTests(tests.DatabaseBaseTests):
                          'source_uid': 'test2',
                          'source_gen': 2, 'last_known_gen': 0},
              'return': {'docs': [], 'last_gen': 2}})
-        self.assertGetDoc(self.db3, doc_id, deleted_rev, None, False)
+        self.assertGetDocIncludeDeleted(
+            self.db3, doc_id, deleted_rev, None, False)
 
     def test_sync_propagates_resolution(self):
         doc1 = self.db1.create_doc('{"a": 1}', doc_id='the-doc')
@@ -659,8 +673,8 @@ class DatabaseSyncTests(tests.DatabaseBaseTests):
     def test_sync_supersedes_conflicts(self):
         db3 = self.create_database('test3')
         doc1 = self.db1.create_doc('{"a": 1}', doc_id='the-doc')
-        doc2 = self.db2.create_doc('{"b": 1}', doc_id='the-doc')
-        doc3 = db3.create_doc('{"c": 1}', doc_id='the-doc')
+        self.db2.create_doc('{"b": 1}', doc_id='the-doc')
+        db3.create_doc('{"c": 1}', doc_id='the-doc')
         self.sync(db3, self.db1)
         self.sync(db3, self.db2)
         self.assertEqual(3, len(db3.get_doc_conflicts('the-doc')))
@@ -724,6 +738,7 @@ class TestRemoteSyncIntegration(tests.TestCaseWithServer):
         progress1 = []
         progress2 = []
         _do_set_sync_info = self.db1._do_set_sync_info
+
         def set_sync_generation_witness1(other_uid, other_gen, trans_id):
             progress1.append((other_uid, other_gen,
                 [d for d, t in self.db1._get_transaction_log()[2:]]))
@@ -732,6 +747,7 @@ class TestRemoteSyncIntegration(tests.TestCaseWithServer):
                    set_sync_generation_witness1)
 
         _do_set_sync_info2 = self.db2._do_set_sync_info
+
         def set_sync_generation_witness2(other_uid, other_gen, trans_id):
             progress2.append((other_uid, other_gen,
                 [d for d, t in self.db2._get_transaction_log()[2:]]))

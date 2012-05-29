@@ -591,7 +591,8 @@ u1db_get_from_index(u1database *db, u1query *query,
         doc_id = (char*)sqlite3_column_text(statement, 0);
         // We use u1db_get_docs so we can pass check_for_conflicts=0, which is
         // currently expected by the test suite.
-        status = u1db_get_docs(db, 1, (const char**)&doc_id, 0, context, cb);
+        status = u1db_get_docs(
+            db, 1, (const char**)&doc_id, 0, 0, context, cb);
         if (status != U1DB_OK) { goto finish; }
         status = sqlite3_step(statement);
     }

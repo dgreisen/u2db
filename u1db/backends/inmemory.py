@@ -108,9 +108,11 @@ class InMemoryDatabase(CommonBackend):
     def _has_conflicts(self, doc_id):
         return doc_id in self._conflicts
 
-    def get_doc(self, doc_id):
+    def get_doc(self, doc_id, include_deleted=False):
         doc = self._get_doc(doc_id)
         if doc is None:
+            return None
+        if doc.is_tombstone() and not include_deleted:
             return None
         doc.has_conflicts = (doc.doc_id in self._conflicts)
         return doc
@@ -181,6 +183,8 @@ class InMemoryDatabase(CommonBackend):
 
     def create_index(self, index_name, index_expression):
         if index_name in self._indexes:
+            if self._indexes[index_name]._definition == index_expression:
+                return
             raise errors.IndexNameTakenError
         index = InMemoryIndex(index_name, index_expression)
         for doc_id, (doc_rev, doc) in self._docs.iteritems():

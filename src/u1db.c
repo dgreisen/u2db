@@ -941,7 +941,8 @@ finish:
 
 
 int
-u1db_get_doc(u1database *db, const char *doc_id, u1db_document **doc)
+u1db_get_doc(u1database *db, const char *doc_id, int include_deleted,
+             u1db_document **doc)
 {
     int status = 0, content_len = 0;
     sqlite3_stmt *statement;
@@ -959,12 +960,16 @@ u1db_get_doc(u1database *db, const char *doc_id, u1db_document **doc)
             *doc = NULL;
             goto finish;
         }
-        *doc = u1db__allocate_document(doc_id, (const char*)doc_rev,
-                                       (const char*)content, 0);
+        if (content != NULL || include_deleted) {
+            *doc = u1db__allocate_document(doc_id, (const char*)doc_rev,
+                                        (const char*)content, 0);
 
-        if (*doc != NULL) {
-            status = lookup_conflict(db, (*doc)->doc_id,
-                                     &((*doc)->has_conflicts));
+            if (*doc != NULL) {
+                status = lookup_conflict(db, (*doc)->doc_id,
+                                        &((*doc)->has_conflicts));
+            }
+        } else {
+            *doc = NULL;
         }
     } else {
         *doc = NULL;
@@ -976,7 +981,8 @@ finish:
 
 int
 u1db_get_docs(u1database *db, int n_doc_ids, const char **doc_ids,
-              int check_for_conflicts, void *context, u1db_doc_callback cb)
+              int check_for_conflicts, int include_deleted,
+              void *context, u1db_doc_callback cb)
 {
     int status, i;
     sqlite3_stmt *statement;
@@ -1005,11 +1011,13 @@ u1db_get_docs(u1database *db, int n_doc_ids, const char **doc_ids,
             u1db_document *doc;
             revision = (char *)sqlite3_column_text(statement, 0);
             content = (char *)sqlite3_column_text(statement, 1);
-            doc = u1db__allocate_document(doc_ids[i], revision, content, 0);
-            if (check_for_conflicts) {
-                status = lookup_conflict(db, doc_ids[i], &(doc->has_conflicts));
+            if (content != NULL || include_deleted) {
+                doc = u1db__allocate_document(doc_ids[i], revision, content, 0);
+                if (check_for_conflicts) {
+                    status = lookup_conflict(db, doc_ids[i], &(doc->has_conflicts));
+                }
+                cb(context, doc);
             }
-            cb(context, doc);
         } else if (status == SQLITE_DONE) {
             // This document doesn't exist
             // TODO: I believe the python implementation returns the Null
@@ -1705,6 +1713,30 @@ u1db_create_index(u1database *db, const char *index_name, int n_expressions,
     status = u1db__find_unique_expressions(db, n_expressions, expressions,
             &n_unique, &unique_expressions);
     if (status != U1DB_OK) { goto finish; }
+    status = sqlite3_prepare_v2(db->sql_handle,
+        "SELECT field FROM index_definitions"
+        " WHERE name = ? ORDER BY offset DESC",
+        -1, &statement, NULL);
+    if (status != SQLITE_OK) { goto finish; }
+    status = sqlite3_bind_text(statement, 1, index_name, -1, SQLITE_TRANSIENT);
+    if (status != SQLITE_OK) { goto finish; }
+    status = sqlite3_step(statement);
+    i=0;
+    while (status == SQLITE_ROW) {
+        if (strcmp((const char *)sqlite3_column_text(statement, 0),
+                   expressions[i]) != 0) {
+            status = U1DB_DUPLICATE_INDEX_NAME;
+            goto finish;
+        }
+        status = sqlite3_step(statement);
+        i++;
+    }
+    if (status != SQLITE_DONE) { goto finish; }
+    if (i>0) {
+        status = SQLITE_OK;
+        goto finish;
+    }
+    sqlite3_finalize(statement);
     status = sqlite3_prepare_v2(db->sql_handle,
         "INSERT INTO index_definitions VALUES (?, ?, ?)", -1,
         &statement, NULL);

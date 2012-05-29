@@ -42,6 +42,16 @@ from u1db.remote.ssl_match_hostname import (
 CA_CERTS = "/etc/ssl/certs/ca-certificates.crt"
 
 
+def _encode_query_parameter(value):
+    """Encode query parameter."""
+    if isinstance(value, bool):
+        if value:
+            value = 'true'
+        else:
+            value = 'false'
+    return unicode(value).encode('utf-8')
+
+
 class _VerifiedHTTPSConnection(httplib.HTTPSConnection):
     """HTTPSConnection verifying server side certificates."""
     # derived from httplib.py
@@ -87,8 +97,9 @@ class HTTPClientBase(object):
 
     def set_oauth_credentials(self, consumer_key, consumer_secret,
                               token_key, token_secret):
-        self._oauth_creds = (oauth.OAuthConsumer(consumer_key, consumer_secret),
-                             oauth.OAuthToken(token_key, token_secret))
+        self._oauth_creds = (
+            oauth.OAuthConsumer(consumer_key, consumer_secret),
+            oauth.OAuthToken(token_key, token_secret))
 
     def _ensure_connection(self):
         if self._conn is not None:
@@ -142,7 +153,8 @@ class HTTPClientBase(object):
                 parameters=params,
                 http_url=full_url
                 )
-            oauth_req.sign_request(self.oauth_signature_method, consumer, token)
+            oauth_req.sign_request(
+                self.oauth_signature_method, consumer, token)
             # Authorization: OAuth ...
             return oauth_req.to_header().items()
         else:
@@ -160,18 +172,20 @@ class HTTPClientBase(object):
                                   for part in url_parts)
             # oauth performs its own quoting
             unquoted_url += '/'.join(url_parts)
+        encoded_params = {}
         if params:
-            params = dict((unicode(v).encode('utf-8'),
-                           unicode(k).encode('utf-8'))
-                                                   for v, k in params.items())
-            url_query += ('?' + urllib.urlencode(params))
+            for key, value in params.items():
+                key = unicode(key).encode('utf-8')
+                encoded_params[key] = _encode_query_parameter(value)
+            url_query += ('?' + urllib.urlencode(encoded_params))
         if body is not None and not isinstance(body, basestring):
             body = simplejson.dumps(body)
             content_type = 'application/json'
         headers = {}
         if content_type:
             headers['content-type'] = content_type
-        headers.update(self._sign_request(method, unquoted_url, params))
+        headers.update(
+            self._sign_request(method, unquoted_url, encoded_params))
         self._conn.request(method, url_query, body, headers)
         return self._response()
 
