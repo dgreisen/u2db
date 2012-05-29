@@ -143,6 +143,7 @@ int u1db_resolve_doc(u1database *db, u1db_document *doc,
  * Get the document defined by the given document id.
  *
  * @param doc_id The document we are looking for
+ * @param include_deleted If true, return the document even if it was deleted.
  * @param doc (OUT) a document (or NULL) matching the request
  * @return status, will be U1DB_OK if there is no error, even if there is no
  *      document matching that doc_id.
@@ -158,6 +159,7 @@ int u1db_get_doc(u1database *db, const char *doc_id, int include_deleted,
  * @param doc_ids An array of document ids to retrieve.
  * @param check_for_conflicts If true, check if each document has any
  *          conflicts, if false, the conflict checking will be skipped.
+ * @param include_deleted If true, return documents even if they were deleted.
  * @param context A void* that is returned via the callback function.
  * @param cb This will be called with each document requested. The api is
  *           cb(void* context, u1db_document *doc). The returned documents are
@@ -171,13 +173,16 @@ int u1db_get_docs(u1database *db, int n_doc_ids, const char **doc_ids,
 /**
  * Retrieve all documents from the database.
  *
+ * @param include_deleted If true, return documents even if they were deleted.
+ * @param generation (OUT) the generation the database is at
  * @param context A void* that is returned via the callback function.
  * @param cb This will be called with each document requested. The api is
  *           cb(void* context, u1db_document *doc). The returned documents are
  *           allocated on the heap, and must be freed by the caller via
  *           u1db_free_doc.
  */
-int u1db_get_all_docs(u1database *db, void *context, u1db_doc_callback cb);
+int u1db_get_all_docs(u1database *db, int include_deleted, int *generation,
+                      void *context, u1db_doc_callback cb);
 
 /**
  * Get all of the contents associated with a conflicted document.

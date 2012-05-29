@@ -282,18 +282,32 @@ class LocalDatabaseTests(tests.DatabaseBaseTests):
         self.assertEqual([], self.db.get_docs([]))
 
     def test_get_all_docs_empty(self):
-        self.assertEqual([], self.db.get_all_docs())
+        self.assertEqual([], self.db.get_all_docs()[1])
 
     def test_get_all_docs(self):
         doc1 = self.db.create_doc(simple_doc)
         doc2 = self.db.create_doc(nested_doc)
-        self.assertEqual(sorted([doc1, doc2]), sorted(self.db.get_all_docs()))
+        self.assertEqual(
+            sorted([doc1, doc2]), sorted(self.db.get_all_docs()[1]))
 
     def test_get_all_docs_exclude_deleted(self):
         doc1 = self.db.create_doc(simple_doc)
         doc2 = self.db.create_doc(nested_doc)
         self.db.delete_doc(doc2)
-        self.assertEqual([doc1], self.db.get_all_docs())
+        self.assertEqual([doc1], self.db.get_all_docs()[1])
+
+    def test_get_all_docs_include_deleted(self):
+        doc1 = self.db.create_doc(simple_doc)
+        doc2 = self.db.create_doc(nested_doc)
+        self.db.delete_doc(doc2)
+        self.assertEqual(
+            sorted([doc1, doc2]),
+            sorted(self.db.get_all_docs(include_deleted=True)[1]))
+
+    def test_get_all_docs_generation(self):
+        self.db.create_doc(simple_doc)
+        self.db.create_doc(nested_doc)
+        self.assertEqual(2, self.db.get_all_docs()[0])
 
     def test_simple_put_doc_if_newer(self):
         doc = self.make_document('my-doc-id', 'test:1', simple_doc)

@@ -1038,7 +1038,8 @@ finish:
 }
 
 int
-u1db_get_all_docs(u1database *db, void *context, u1db_doc_callback cb)
+u1db_get_all_docs(u1database *db, int include_deleted, int *generation,
+                  void *context, u1db_doc_callback cb)
 {
     int status;
     sqlite3_stmt *statement;
@@ -1046,6 +1047,9 @@ u1db_get_all_docs(u1database *db, void *context, u1db_doc_callback cb)
     if (db == NULL || cb == NULL) {
         return U1DB_INVALID_PARAMETER;
     }
+    status = u1db__get_generation(db, generation);
+    if (status != U1DB_OK)
+        return status;
     status = sqlite3_prepare_v2(db->sql_handle,
         "SELECT doc_id, doc_rev, content FROM document", -1, &statement, NULL);
     if (status != SQLITE_OK) { goto finish; }
@@ -1058,8 +1062,7 @@ u1db_get_all_docs(u1database *db, void *context, u1db_doc_callback cb)
         doc_id = (char *)sqlite3_column_text(statement, 0);
         revision = (char *)sqlite3_column_text(statement, 1);
         content = (char *)sqlite3_column_text(statement, 2);
-        if (content != NULL)
-        {
+        if (content != NULL || include_deleted) {
             doc = u1db__allocate_document(doc_id, revision, content, 0);
             cb(context, doc);
         }

@@ -96,6 +96,9 @@ class Database(object):
     def get_all_docs(self, include_deleted=False):
         """Get the JSON content for all documents in the database.
 
+        :param include_deleted: If set to True, deleted documents will be
+            returned with empty content. Otherwise deleted documents will not
+            be included in the results.
         :return: (generation, [Document])
             The current generation of the database, followed by a list of all
             the documents in the database.
