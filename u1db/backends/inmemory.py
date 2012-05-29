@@ -108,12 +108,24 @@ class InMemoryDatabase(CommonBackend):
     def _has_conflicts(self, doc_id):
         return doc_id in self._conflicts
 
-    def get_doc(self, doc_id):
+    def get_doc(self, doc_id, include_deleted=False):
         doc = self._get_doc(doc_id)
         if doc is None:
             return None
+        if doc.is_tombstone() and not include_deleted:
+            return None
         doc.has_conflicts = (doc.doc_id in self._conflicts)
         return doc
+
+    def get_all_docs(self, include_deleted=False):
+        """Return all documents in the database."""
+        generation = self._get_generation()
+        results = []
+        for doc_id, (doc_rev, content) in self._docs.items():
+            if content is None and not include_deleted:
+                continue
+            results.append(Document(doc_id, doc_rev, content))
+        return (generation, results)
 
     def get_doc_conflicts(self, doc_id):
         if doc_id not in self._conflicts:

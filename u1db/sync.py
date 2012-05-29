@@ -95,19 +95,21 @@ class Synchronizer(object):
         # get target identifier, its current generation,
         # and its last-seen database generation for this source
         (self.target_replica_uid, target_gen, target_my_gen,
-         target_my_trans_id) = sync_target.get_sync_info(self.source._replica_uid)
+         target_my_trans_id) = sync_target.get_sync_info(
+             self.source._replica_uid)
         # what's changed since that generation and this current gen
         my_gen, _, changes = self.source.whats_changed(target_my_gen)
 
         # this source last-seen database generation for the target
-        target_last_known_gen, target_trans_id = self.source._get_sync_gen_info(
-            self.target_replica_uid)
+        (target_last_known_gen,
+         target_trans_id) = self.source._get_sync_gen_info(
+             self.target_replica_uid)
         if not changes and target_last_known_gen == target_gen:
             return my_gen
         changed_doc_ids = [doc_id for doc_id, _, _ in changes]
         # prepare to send all the changed docs
         docs_to_send = self.source.get_docs(changed_doc_ids,
-            check_for_conflicts=False)
+            check_for_conflicts=False, include_deleted=True)
         docs_by_generation = zip(docs_to_send, (gen for _, gen, _ in changes))
 
         # exchange documents and try to insert the returned ones with
@@ -229,7 +231,8 @@ class SyncExchange(object):
         # return docs, including conflicts
         changed_doc_ids = [doc_id for doc_id, _ in changes_to_return]
         self._trace('before get_docs')
-        docs = self._db.get_docs(changed_doc_ids, check_for_conflicts=False)
+        docs = self._db.get_docs(
+            changed_doc_ids, check_for_conflicts=False, include_deleted=True)
 
         docs_by_gen = izip(docs, (gen for _, gen in changes_to_return))
         for doc, gen in docs_by_gen:

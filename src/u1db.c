@@ -941,7 +941,8 @@ finish:
 
 
 int
-u1db_get_doc(u1database *db, const char *doc_id, u1db_document **doc)
+u1db_get_doc(u1database *db, const char *doc_id, int include_deleted,
+             u1db_document **doc)
 {
     int status = 0, content_len = 0;
     sqlite3_stmt *statement;
@@ -959,12 +960,16 @@ u1db_get_doc(u1database *db, const char *doc_id, u1db_document **doc)
             *doc = NULL;
             goto finish;
         }
-        *doc = u1db__allocate_document(doc_id, (const char*)doc_rev,
-                                       (const char*)content, 0);
+        if (content != NULL || include_deleted) {
+            *doc = u1db__allocate_document(doc_id, (const char*)doc_rev,
+                                        (const char*)content, 0);
 
-        if (*doc != NULL) {
-            status = lookup_conflict(db, (*doc)->doc_id,
-                                     &((*doc)->has_conflicts));
+            if (*doc != NULL) {
+                status = lookup_conflict(db, (*doc)->doc_id,
+                                        &((*doc)->has_conflicts));
+            }
+        } else {
+            *doc = NULL;
         }
     } else {
         *doc = NULL;
@@ -976,7 +981,8 @@ finish:
 
 int
 u1db_get_docs(u1database *db, int n_doc_ids, const char **doc_ids,
-              int check_for_conflicts, void *context, u1db_doc_callback cb)
+              int check_for_conflicts, int include_deleted,
+              void *context, u1db_doc_callback cb)
 {
     int status, i;
     sqlite3_stmt *statement;
@@ -1005,11 +1011,13 @@ u1db_get_docs(u1database *db, int n_doc_ids, const char **doc_ids,
             u1db_document *doc;
             revision = (char *)sqlite3_column_text(statement, 0);
             content = (char *)sqlite3_column_text(statement, 1);
-            doc = u1db__allocate_document(doc_ids[i], revision, content, 0);
-            if (check_for_conflicts) {
-                status = lookup_conflict(db, doc_ids[i], &(doc->has_conflicts));
+            if (content != NULL || include_deleted) {
+                doc = u1db__allocate_document(doc_ids[i], revision, content, 0);
+                if (check_for_conflicts) {
+                    status = lookup_conflict(db, doc_ids[i], &(doc->has_conflicts));
+                }
+                cb(context, doc);
             }
-            cb(context, doc);
         } else if (status == SQLITE_DONE) {
             // This document doesn't exist
             // TODO: I believe the python implementation returns the Null
@@ -1023,6 +1031,45 @@ u1db_get_docs(u1database *db, int n_doc_ids, const char **doc_ids,
         if (status != SQLITE_DONE) { goto finish; }
         status = sqlite3_reset(statement);
         if (status != SQLITE_OK) { goto finish; }
+    }
+finish:
+    sqlite3_finalize(statement);
+    return status;
+}
+
+int
+u1db_get_all_docs(u1database *db, int include_deleted, int *generation,
+                  void *context, u1db_doc_callback cb)
+{
+    int status;
+    sqlite3_stmt *statement;
+
+    if (db == NULL || cb == NULL) {
+        return U1DB_INVALID_PARAMETER;
+    }
+    status = u1db__get_generation(db, generation);
+    if (status != U1DB_OK)
+        return status;
+    status = sqlite3_prepare_v2(db->sql_handle,
+        "SELECT doc_id, doc_rev, content FROM document", -1, &statement, NULL);
+    if (status != SQLITE_OK) { goto finish; }
+    status = sqlite3_step(statement);
+    while (status == SQLITE_ROW) {
+        const char *doc_id;
+        const char *revision;
+        const char *content;
+        u1db_document *doc;
+        doc_id = (char *)sqlite3_column_text(statement, 0);
+        revision = (char *)sqlite3_column_text(statement, 1);
+        content = (char *)sqlite3_column_text(statement, 2);
+        if (content != NULL || include_deleted) {
+            doc = u1db__allocate_document(doc_id, revision, content, 0);
+            cb(context, doc);
+        }
+        status = sqlite3_step(statement);
+    }
+    if (status == SQLITE_DONE) {
+        status = SQLITE_OK;
     }
 finish:
     sqlite3_finalize(statement);

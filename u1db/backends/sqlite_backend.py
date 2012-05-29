@@ -291,13 +291,28 @@ class SQLiteDatabase(CommonBackend):
         else:
             return True
 
-    def get_doc(self, doc_id):
+    def get_doc(self, doc_id, include_deleted=False):
         doc = self._get_doc(doc_id)
         if doc is None:
+            return None
+        if doc.is_tombstone() and not include_deleted:
             return None
         # TODO: A doc which appears deleted could still have conflicts...
         doc.has_conflicts = self._has_conflicts(doc.doc_id)
         return doc
+
+    def get_all_docs(self, include_deleted=False):
+        """Get all documents from the database."""
+        generation = self._get_generation()
+        results = []
+        c = self._db_handle.cursor()
+        c.execute("SELECT doc_id, doc_rev, content FROM document;")
+        rows = c.fetchall()
+        for doc_id, doc_rev, content in rows:
+            if content is None and not include_deleted:
+                continue
+            results.append(Document(doc_id, doc_rev, content))
+        return (generation, results)
 
     def put_doc(self, doc):
         if doc.doc_id is None:

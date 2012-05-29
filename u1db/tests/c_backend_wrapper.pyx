@@ -71,10 +71,13 @@ cdef extern from "u1db/u1db.h":
     int u1db_create_doc(u1database *db, char *json, char *doc_id,
                         u1db_document **doc)
     int u1db_delete_doc(u1database *db, u1db_document *doc)
-    int u1db_get_doc(u1database *db, char *doc_id, u1db_document **doc)
+    int u1db_get_doc(u1database *db, char *doc_id, int include_deleted,
+                     u1db_document **doc)
     int u1db_get_docs(u1database *db, int n_doc_ids, const_char_ptr *doc_ids,
-                      int check_for_conflicts, void *context,
-                      u1db_doc_callback cb)
+                      int check_for_conflicts, int include_deleted,
+                      void *context, u1db_doc_callback cb)
+    int u1db_get_all_docs(u1database *db, int include_deleted, int *generation,
+                          void *context, u1db_doc_callback cb)
     int u1db_put_doc(u1database *db, u1db_document *doc)
     int u1db__put_doc_if_newer(u1database *db, u1db_document *doc,
                                int save_conflict, char *replica_uid,
@@ -907,32 +910,44 @@ cdef class CDatabase(object):
         else:
             raise RuntimeError("Unknown _put_doc_if_newer state: %d" % (state,))
 
-    def get_doc(self, doc_id):
+    def get_doc(self, doc_id, include_deleted=False):
         cdef u1db_document *doc = NULL
-
+        deleted = 1 if include_deleted else 0
         handle_status("get_doc failed",
-            u1db_get_doc(self._db, doc_id, &doc))
+            u1db_get_doc(self._db, doc_id, deleted, &doc))
         if doc == NULL:
             return None
         pydoc = CDocument()
         pydoc._doc = doc
         return pydoc
 
-    def get_docs(self, doc_ids, check_for_conflicts=True):
+    def get_docs(self, doc_ids, check_for_conflicts=True,
+                 include_deleted=False):
         cdef int n_doc_ids, conflicts
         cdef const_char_ptr *c_doc_ids
 
         _list_to_array(doc_ids, &c_doc_ids, &n_doc_ids)
-        if check_for_conflicts:
-            conflicts = 1
-        else:
-            conflicts = 0
+        deleted = 1 if include_deleted else 0
+        conflicts = 1 if check_for_conflicts else 0
         a_list = []
         handle_status("get_docs",
             u1db_get_docs(self._db, n_doc_ids, c_doc_ids,
-                conflicts, <void*>a_list, _append_doc_to_list))
+                conflicts, deleted, <void*>a_list, _append_doc_to_list))
         free(<void*>c_doc_ids)
         return a_list
+
+    def get_all_docs(self, include_deleted=False):
+        cdef int c_generation
+
+        a_list = []
+        deleted = 1 if include_deleted else 0
+        generation = 0
+        c_generation = generation
+        handle_status(
+            "get_all_docs", u1db_get_all_docs(
+                self._db, deleted, &c_generation, <void*>a_list,
+                _append_doc_to_list))
+        return (c_generation, a_list)
 
     def resolve_doc(self, CDocument doc, conflicted_doc_revs):
         cdef const_char_ptr *revs

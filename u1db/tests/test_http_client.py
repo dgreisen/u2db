@@ -29,6 +29,18 @@ from u1db.remote import (
     )
 
 
+class TestEncoder(tests.TestCase):
+
+    def test_encode_string(self):
+        self.assertEqual("foo", http_client._encode_query_parameter("foo"))
+
+    def test_encode_true(self):
+        self.assertEqual("true", http_client._encode_query_parameter(True))
+
+    def test_encode_false(self):
+        self.assertEqual("false", http_client._encode_query_parameter(False))
+
+
 class TestHTTPClientBase(tests.TestCaseWithServer):
 
     def app(self, environ, start_response):
@@ -44,7 +56,8 @@ class TestHTTPClientBase(tests.TestCaseWithServer):
             return [simplejson.dumps(ret)]
         elif environ['PATH_INFO'].endswith('error'):
             content_length = int(environ['CONTENT_LENGTH'])
-            error = simplejson.loads(environ['wsgi.input'].read(content_length))
+            error = simplejson.loads(
+                environ['wsgi.input'].read(content_length))
             response = error['response']
             # In debug mode, wsgiref has an assertion that the status parameter
             # is a 'str' object. However error['status'] returns a unicode
@@ -69,7 +82,8 @@ class TestHTTPClientBase(tests.TestCaseWithServer):
             oauth_server = oauth.OAuthServer(tests.testingOAuthStore)
             oauth_server.add_signature_method(tests.sign_meth_HMAC_SHA1)
             try:
-                consumer, token, params = oauth_server.verify_request(oauth_req)
+                consumer, token, params = oauth_server.verify_request(
+                    oauth_req)
             except oauth.OAuthError, e:
                 start_response("401 Unauthorized",
                                [('Content-Type', 'application/json')])
@@ -85,9 +99,11 @@ class TestHTTPClientBase(tests.TestCaseWithServer):
             srv = simple_server.WSGIServer(host_port, handler)
             srv.set_app(self.app)
             return srv
+
         class req_handler(simple_server.WSGIRequestHandler):
             def log_request(*args):
                 pass  # suppress
+
         return make_server, req_handler, "shutdown", "http"
 
     def getClient(self):
@@ -153,7 +169,8 @@ class TestHTTPClientBase(tests.TestCaseWithServer):
 
     def test__request_json(self):
         cli = self.getClient()
-        res, headers = cli._request_json('POST', ['echo'], {'b': 2}, {'a': 'x'})
+        res, headers = cli._request_json(
+            'POST', ['echo'], {'b': 2}, {'a': 'x'})
         self.assertEqual('application/json', headers['content-type'])
         self.assertEqual({'CONTENT_TYPE': 'application/json',
                           'PATH_INFO': '/dbase/echo',
@@ -248,8 +265,9 @@ class TestHTTPClientBase(tests.TestCaseWithServer):
         # oauth does its own internal quoting
         params = {'x': u'\xf0', 'y': "foo"}
         res, headers = cli._request('GET', ['doc', 'oauth', 'foo bar'], params)
-        self.assertEqual(['/dbase/doc/oauth/foo bar', tests.token1.key, params],
-                         simplejson.loads(res))
+        self.assertEqual(
+            ['/dbase/doc/oauth/foo bar', tests.token1.key, params],
+            simplejson.loads(res))
 
     def test_oauth_Unauthorized(self):
         cli = self.getClient()

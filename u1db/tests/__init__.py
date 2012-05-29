@@ -71,6 +71,13 @@ class TestCase(testtools.TestCase):
                                      has_conflicts=has_conflicts)
         self.assertEqual(exp_doc, db.get_doc(doc_id))
 
+    def assertGetDocIncludeDeleted(self, db, doc_id, doc_rev, content,
+                                   has_conflicts):
+        """Assert that the document in the database looks correct."""
+        exp_doc = self.make_document(doc_id, doc_rev, content,
+                                     has_conflicts=has_conflicts)
+        self.assertEqual(exp_doc, db.get_doc(doc_id, include_deleted=True))
+
     def assertGetDocConflicts(self, db, doc_id, conflicts):
         """Assert what conflicts are stored for a given doc_id.
 
