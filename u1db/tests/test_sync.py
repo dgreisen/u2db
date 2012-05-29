@@ -438,6 +438,34 @@ class DatabaseSyncTests(tests.DatabaseBaseTests):
         self.assertTrue(v.is_newer(vectorclock.VectorClockRev(rev1)))
         self.assertTrue(v.is_newer(vectorclock.VectorClockRev(rev2)))
 
+    def test_sync_autoresolves_moar(self):
+        self.db1.create_doc(simple_doc, doc_id='doc')
+        self.sync(self.db1, self.db2)
+        for db, content in [(self.db1, '{}'), (self.db2, '{"hi": 42}')]:
+            doc = db.get_doc('doc')
+            doc.set_json(content)
+            db.put_doc(doc)
+        self.sync(self.db1, self.db2)
+        # db1 and db2 now both have a doc of {hi:42}, but db1 has a conflict
+        doc = self.db1.get_doc('doc')
+        rev1 = doc.rev
+        self.assertTrue(doc.has_conflicts)
+        # set db2 to have a doc of {} (same as db1 before the conflict)
+        doc = self.db2.get_doc('doc')
+        doc.set_json('{}')
+        self.db2.put_doc(doc)
+        rev2 = doc.rev
+        # sync it across
+        self.sync(self.db1, self.db2)
+        # tadaa!
+        doc = self.db1.get_doc('doc')
+        self.assertFalse(doc.has_conflicts)
+        vec1 = vectorclock.VectorClockRev(rev1)
+        vec2 = vectorclock.VectorClockRev(rev2)
+        vec3 = vectorclock.VectorClockRev(doc.rev)
+        self.assertTrue(vec3.is_newer(vec1))
+        self.assertTrue(vec3.is_newer(vec2))
+
     def test_sync_puts_changes(self):
         doc = self.db1.create_doc(simple_doc)
         self.assertEqual(1, self.sync(self.db1, self.db2))
