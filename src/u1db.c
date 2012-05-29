@@ -514,7 +514,9 @@ u1db_put_doc(u1database *db, u1db_document *doc)
     if (status != SQLITE_OK) { goto finish; }
     if (doc->doc_rev == NULL) {
         if (old_doc_rev == NULL || old_content == NULL) {
-            // We are creating a new document from scratch. No problem.
+            // We are either creating a new document from scratch, or
+            // overwriting a previously deleted document, neither of which
+            // should lead to conflicts.
             status = 0;
         } else {
             // We were supplied a NULL doc rev, but the doc already exists
