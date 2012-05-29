@@ -125,7 +125,11 @@ class CmdGet(OneDbCmd):
     def run(self, database, doc_id, outfile):
         if outfile is None:
             outfile = self.stdout
-        db = self._open(database, create=False)
+        try:
+            db = self._open(database, create=False)
+        except errors.DatabaseDoesNotExist:
+            self.stderr.write("Database does not exist.\n")
+            return 1
         doc = db.get_doc(doc_id)
         if doc is None:
             self.stderr.write('Document not found (id: %s)\n' % (doc_id,))
@@ -133,12 +137,10 @@ class CmdGet(OneDbCmd):
         if doc.is_tombstone():
             outfile.write('[document deleted]\n')
         else:
-            outfile.write(doc.get_json())
+            outfile.write(doc.get_json() + '\n')
         self.stderr.write('rev: %s\n' % (doc.rev,))
         if doc.has_conflicts:
-            # TODO: Probably want to write 'conflicts' or 'conflicted' to
-            # stderr.
-            pass
+            self.stderr.write("Document has conflicts.\n")
 
 client_commands.register(CmdGet)
 
@@ -219,12 +221,64 @@ class CmdPut(OneDbCmd):
     def run(self, database, doc_id, doc_rev, infile):
         if infile is None:
             infile = self.stdin
-        db = self._open(database, create=False)
-        doc = Document(doc_id, doc_rev, infile.read())
-        doc_rev = db.put_doc(doc)
-        self.stderr.write('rev: %s\n' % (doc_rev,))
+        try:
+            db = self._open(database, create=False)
+            doc = Document(doc_id, doc_rev, infile.read())
+            doc_rev = db.put_doc(doc)
+            self.stderr.write('rev: %s\n' % (doc_rev,))
+        except errors.DatabaseDoesNotExist:
+            self.stderr.write("Database does not exist.\n")
+        except errors.RevisionConflict:
+            if db.get_doc(doc_id) is None:
+                self.stderr.write("Document does not exist.\n")
+            else:
+                self.stderr.write("Given revision is not current.\n")
+        except errors.ConflictedDoc:
+            self.stderr.write("Document has conflicts.\n"
+                              "Inspect with get-doc-conflicts, then resolve.\n")
+        else:
+            return
+        return 1
 
 client_commands.register(CmdPut)
+
+
+class CmdResolve(OneDbCmd):
+    """Resolve a conflicted document"""
+
+    name = 'resolve-doc'
+
+    @classmethod
+    def _populate_subparser(cls, parser):
+        parser.add_argument('database',
+                            help='The local or remote database to update',
+                            metavar='database-path-or-url'),
+        parser.add_argument('doc_id', help='The conflicted document id')
+        parser.add_argument('doc_revs', metavar="doc-rev", nargs="+",
+            help='The revisions that the new content supersedes')
+        parser.add_argument('--infile', nargs='?', default=None,
+            help='The filename of the document that will be used for content',
+            type=argparse.FileType('rb'))
+
+    def run(self, database, doc_id, doc_revs, infile):
+        if infile is None:
+            infile = self.stdin
+        try:
+            db = self._open(database, create=False)
+        except errors.DatabaseDoesNotExist:
+            self.stderr.write("Database does not exist.\n")
+            return 1
+        doc = db.get_doc(doc_id)
+        if doc is None:
+            self.stderr.write("Document does not exist.\n")
+            return 1
+        doc.set_json(infile.read())
+        db.resolve_doc(doc, doc_revs)
+        self.stderr.write("rev: %s\n" % db.get_doc(doc_id).rev)
+        if doc.has_conflicts:
+            self.stderr.write("Document still has conflicts.\n")
+
+client_commands.register(CmdResolve)
 
 
 class CmdSync(command.Command):
@@ -273,8 +327,6 @@ class CmdCreateIndex(OneDbCmd):
     def run(self, database, index, expression):
         try:
             db = self._open(database, create=False)
-            if (index, expression) in db.list_indexes():
-                return
             db.create_index(index, expression)
         except errors.DatabaseDoesNotExist:
             self.stderr.write("Database does not exist.\n")

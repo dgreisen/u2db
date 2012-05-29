@@ -1039,6 +1039,45 @@ finish:
     return status;
 }
 
+int
+u1db_get_all_docs(u1database *db, int include_deleted, int *generation,
+                  void *context, u1db_doc_callback cb)
+{
+    int status;
+    sqlite3_stmt *statement;
+
+    if (db == NULL || cb == NULL) {
+        return U1DB_INVALID_PARAMETER;
+    }
+    status = u1db__get_generation(db, generation);
+    if (status != U1DB_OK)
+        return status;
+    status = sqlite3_prepare_v2(db->sql_handle,
+        "SELECT doc_id, doc_rev, content FROM document", -1, &statement, NULL);
+    if (status != SQLITE_OK) { goto finish; }
+    status = sqlite3_step(statement);
+    while (status == SQLITE_ROW) {
+        const char *doc_id;
+        const char *revision;
+        const char *content;
+        u1db_document *doc;
+        doc_id = (char *)sqlite3_column_text(statement, 0);
+        revision = (char *)sqlite3_column_text(statement, 1);
+        content = (char *)sqlite3_column_text(statement, 2);
+        if (content != NULL || include_deleted) {
+            doc = u1db__allocate_document(doc_id, revision, content, 0);
+            cb(context, doc);
+        }
+        status = sqlite3_step(statement);
+    }
+    if (status == SQLITE_DONE) {
+        status = SQLITE_OK;
+    }
+finish:
+    sqlite3_finalize(statement);
+    return status;
+}
+
 // Take cur_rev, and update it to have a version incremented based on the
 // database replica uid
 static int
@@ -1679,6 +1718,30 @@ u1db_create_index(u1database *db, const char *index_name, int n_expressions,
     status = u1db__find_unique_expressions(db, n_expressions, expressions,
             &n_unique, &unique_expressions);
     if (status != U1DB_OK) { goto finish; }
+    status = sqlite3_prepare_v2(db->sql_handle,
+        "SELECT field FROM index_definitions"
+        " WHERE name = ? ORDER BY offset DESC",
+        -1, &statement, NULL);
+    if (status != SQLITE_OK) { goto finish; }
+    status = sqlite3_bind_text(statement, 1, index_name, -1, SQLITE_TRANSIENT);
+    if (status != SQLITE_OK) { goto finish; }
+    status = sqlite3_step(statement);
+    i=0;
+    while (status == SQLITE_ROW) {
+        if (strcmp((const char *)sqlite3_column_text(statement, 0),
+                   expressions[i]) != 0) {
+            status = U1DB_DUPLICATE_INDEX_NAME;
+            goto finish;
+        }
+        status = sqlite3_step(statement);
+        i++;
+    }
+    if (status != SQLITE_DONE) { goto finish; }
+    if (i>0) {
+        status = SQLITE_OK;
+        goto finish;
+    }
+    sqlite3_finalize(statement);
     status = sqlite3_prepare_v2(db->sql_handle,
         "INSERT INTO index_definitions VALUES (?, ?, ?)", -1,
         &statement, NULL);

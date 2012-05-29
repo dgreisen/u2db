@@ -120,6 +120,16 @@ class InMemoryDatabase(CommonBackend):
         doc.has_conflicts = (doc.doc_id in self._conflicts)
         return doc
 
+    def get_all_docs(self, include_deleted=False):
+        """Return all documents in the database."""
+        generation = self._get_generation()
+        results = []
+        for doc_id, (doc_rev, content) in self._docs.items():
+            if content is None and not include_deleted:
+                continue
+            results.append(Document(doc_id, doc_rev, content))
+        return (generation, results)
+
     def get_doc_conflicts(self, doc_id):
         if doc_id not in self._conflicts:
             return []
@@ -177,6 +187,8 @@ class InMemoryDatabase(CommonBackend):
 
     def create_index(self, index_name, index_expression):
         if index_name in self._indexes:
+            if self._indexes[index_name]._definition == index_expression:
+                return
             raise errors.IndexNameTakenError
         index = InMemoryIndex(index_name, index_expression)
         for doc_id, (doc_rev, doc) in self._docs.iteritems():

@@ -76,6 +76,8 @@ cdef extern from "u1db/u1db.h":
     int u1db_get_docs(u1database *db, int n_doc_ids, const_char_ptr *doc_ids,
                       int check_for_conflicts, int include_deleted,
                       void *context, u1db_doc_callback cb)
+    int u1db_get_all_docs(u1database *db, int include_deleted, int *generation,
+                          void *context, u1db_doc_callback cb)
     int u1db_put_doc(u1database *db, u1db_document *doc)
     int u1db__put_doc_if_newer(u1database *db, u1db_document *doc,
                                int save_conflict, char *replica_uid,
@@ -933,6 +935,19 @@ cdef class CDatabase(object):
                 conflicts, deleted, <void*>a_list, _append_doc_to_list))
         free(<void*>c_doc_ids)
         return a_list
+
+    def get_all_docs(self, include_deleted=False):
+        cdef int c_generation
+
+        a_list = []
+        deleted = 1 if include_deleted else 0
+        generation = 0
+        c_generation = generation
+        handle_status(
+            "get_all_docs", u1db_get_all_docs(
+                self._db, deleted, &c_generation, <void*>a_list,
+                _append_doc_to_list))
+        return (c_generation, a_list)
 
     def resolve_doc(self, CDocument doc, conflicted_doc_revs):
         cdef const_char_ptr *revs

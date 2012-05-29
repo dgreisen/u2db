@@ -301,6 +301,19 @@ class SQLiteDatabase(CommonBackend):
         doc.has_conflicts = self._has_conflicts(doc.doc_id)
         return doc
 
+    def get_all_docs(self, include_deleted=False):
+        """Get all documents from the database."""
+        generation = self._get_generation()
+        results = []
+        c = self._db_handle.cursor()
+        c.execute("SELECT doc_id, doc_rev, content FROM document;")
+        rows = c.fetchall()
+        for doc_id, doc_rev, content in rows:
+            if content is None and not include_deleted:
+                continue
+            results.append(Document(doc_id, doc_rev, content))
+        return (generation, results)
+
     def put_doc(self, doc):
         if doc.doc_id is None:
             raise errors.InvalidDocId()
@@ -710,6 +723,9 @@ class SQLitePartialExpandDatabase(SQLiteDatabase):
                 c.executemany("INSERT INTO index_definitions VALUES (?, ?, ?)",
                               definition)
             except dbapi2.IntegrityError as e:
+                stored_def = self._get_index_definition(index_name)
+                if stored_def == [x[-1] for x in definition]:
+                    return
                 raise errors.IndexNameTakenError, e, sys.exc_info()[2]
             new_fields = set([f for f in index_expression
                               if f not in cur_fields])
