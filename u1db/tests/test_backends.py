@@ -1132,6 +1132,28 @@ class PyDatabaseIndexTests(tests.DatabaseBaseTests):
         self.db.set_document_factory(FakeDocument)
         self.assertIs(None, self.db.get_doc('non-existing'))
 
+    def test_get_all_docs_with_factory(self):
+        self.db.set_document_factory(FakeDocument)
+        self.db.create_doc(simple_doc)
+        self.assertTrue(isinstance(self.db.get_all_docs()[1][0], FakeDocument))
+
+    def test_get_docs_conflicted_with_factory(self):
+        self.db.set_document_factory(FakeDocument)
+        doc1 = self.db.create_doc(simple_doc)
+        doc2 = self.make_document(doc1.doc_id, 'alternate:1', nested_doc)
+        self.db._put_doc_if_newer(doc2, save_conflict=True)
+        self.assertTrue(
+            isinstance(self.db.get_docs([doc1.doc_id])[0], FakeDocument))
+
+    def test_get_from_index_with_factory(self):
+        self.db.set_document_factory(FakeDocument)
+        self.db.create_doc(simple_doc)
+        self.db.create_index('test-idx', ['key'])
+        self.assertTrue(
+            isinstance(
+                self.db.get_from_index('test-idx', [('value',)])[0],
+                FakeDocument))
+
     def test_sync_exchange_updates_indexes(self):
         doc = self.db.create_doc(simple_doc)
         self.db.create_index('test-idx', ['key'])
