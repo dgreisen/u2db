@@ -27,8 +27,8 @@ EMPTY_TASK = json.dumps({"title": "", "done": False, "tags": []})
 TAGS_INDEX = 'tags'
 DONE_INDEX = 'done'
 INDEXES = {
-    TAGS_INDEX: ['tags'],
-    DONE_INDEX: ['bool(done)'],
+    TAGS_INDEX: 'tags',
+    DONE_INDEX: 'bool(done)',
 }
 
 TAGS = re.compile('#(\w+)|\[(.+)\]')

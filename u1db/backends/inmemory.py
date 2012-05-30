@@ -185,12 +185,13 @@ class InMemoryDatabase(CommonBackend):
         doc.make_tombstone()
         self.put_doc(doc)
 
-    def create_index(self, index_name, index_expression):
+    def create_index(self, index_name, *index_expressions):
         if index_name in self._indexes:
-            if self._indexes[index_name]._definition == index_expression:
+            if self._indexes[index_name]._definition == list(
+                    index_expressions):
                 return
             raise errors.IndexNameTakenError
-        index = InMemoryIndex(index_name, index_expression)
+        index = InMemoryIndex(index_name, list(index_expressions))
         for doc_id, (doc_rev, doc) in self._docs.iteritems():
             if doc is not None:
                 index.add_json(doc_id, doc)
