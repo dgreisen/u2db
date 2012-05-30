@@ -78,12 +78,10 @@ class Database(object):
         """
         raise NotImplementedError(self.whats_changed)
 
-    def get_doc(self, doc_id, factory, include_deleted=False):
+    def get_doc(self, doc_id, include_deleted=False):
         """Get the JSON string for the given document.
 
         :param doc_id: The unique document identifier
-        :param factory: An optional factory to create the object to be
-            returned (defaults to Document.)
         :param include_deleted: If set to True, deleted documents will be
             returned with empty content. Otherwise asking for a deleted
             document will return None.
