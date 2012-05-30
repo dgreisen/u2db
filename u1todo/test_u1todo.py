@@ -33,7 +33,7 @@ class TodoStoreTestCase(TestCase):
         store = TodoStore(self.db)
         store.initialize_db()
         for key, value in self.db.list_indexes():
-            self.assertEqual(INDEXES[key], *value)
+            self.assertEqual(INDEXES[key], value[0])
 
     def test_reinitialize_db(self):
         """Creates indexes."""
@@ -41,7 +41,7 @@ class TodoStoreTestCase(TestCase):
         store.new_task()
         store.initialize_db()
         for key, value in self.db.list_indexes():
-            self.assertEqual(INDEXES[key], *value)
+            self.assertEqual(INDEXES[key], value[0])
 
     def test_indexes_are_added(self):
         """New indexes are added when a new store is created."""
