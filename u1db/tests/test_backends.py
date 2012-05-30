@@ -55,7 +55,7 @@ def oauth_http_create_database(test, replica_uid):
     return http_db
 
 
-class FakeDocument(DocumentBase):
+class TestAlternativeDocument(DocumentBase):
     """A (not very) alternative implementation of Document."""
 
 
@@ -1111,48 +1111,50 @@ class DatabaseIndexTests(tests.DatabaseBaseTests):
             sorted(self.db.get_index_keys('test-idx')))
 
 
-class PyDatabaseIndexTests(tests.DatabaseBaseTests):
+class PythonBackendTests(tests.DatabaseBaseTests):
 
     def test_create_doc_with_factory(self):
-        self.db.set_document_factory(FakeDocument)
+        self.db.set_document_factory(TestAlternativeDocument)
         doc = self.db.create_doc(simple_doc, doc_id='my_doc_id')
-        self.assertTrue(isinstance(doc, FakeDocument))
+        self.assertTrue(isinstance(doc, TestAlternativeDocument))
 
     def test_get_doc_after_put_with_factory(self):
         doc = self.db.create_doc(simple_doc, doc_id='my_doc_id')
-        self.db.set_document_factory(FakeDocument)
+        self.db.set_document_factory(TestAlternativeDocument)
         result = self.db.get_doc('my_doc_id')
-        self.assertTrue(isinstance(result, FakeDocument))
+        self.assertTrue(isinstance(result, TestAlternativeDocument))
         self.assertEqual(doc.doc_id, result.doc_id)
         self.assertEqual(doc.rev, result.rev)
         self.assertEqual(doc.get_json(), result.get_json())
         self.assertEqual(False, result.has_conflicts)
 
     def test_get_doc_nonexisting_with_factory(self):
-        self.db.set_document_factory(FakeDocument)
+        self.db.set_document_factory(TestAlternativeDocument)
         self.assertIs(None, self.db.get_doc('non-existing'))
 
     def test_get_all_docs_with_factory(self):
-        self.db.set_document_factory(FakeDocument)
+        self.db.set_document_factory(TestAlternativeDocument)
         self.db.create_doc(simple_doc)
-        self.assertTrue(isinstance(self.db.get_all_docs()[1][0], FakeDocument))
+        self.assertTrue(isinstance(
+            self.db.get_all_docs()[1][0], TestAlternativeDocument))
 
     def test_get_docs_conflicted_with_factory(self):
-        self.db.set_document_factory(FakeDocument)
+        self.db.set_document_factory(TestAlternativeDocument)
         doc1 = self.db.create_doc(simple_doc)
         doc2 = self.make_document(doc1.doc_id, 'alternate:1', nested_doc)
         self.db._put_doc_if_newer(doc2, save_conflict=True)
         self.assertTrue(
-            isinstance(self.db.get_docs([doc1.doc_id])[0], FakeDocument))
+            isinstance(
+                self.db.get_docs([doc1.doc_id])[0], TestAlternativeDocument))
 
     def test_get_from_index_with_factory(self):
-        self.db.set_document_factory(FakeDocument)
+        self.db.set_document_factory(TestAlternativeDocument)
         self.db.create_doc(simple_doc)
         self.db.create_index('test-idx', ['key'])
         self.assertTrue(
             isinstance(
                 self.db.get_from_index('test-idx', [('value',)])[0],
-                FakeDocument))
+                TestAlternativeDocument))
 
     def test_sync_exchange_updates_indexes(self):
         doc = self.db.create_doc(simple_doc)

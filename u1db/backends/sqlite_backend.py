@@ -73,7 +73,7 @@ class SQLiteDatabase(CommonBackend):
     WAIT_FOR_PARALLEL_INIT_HALF_INTERVAL = 0.5
 
     @classmethod
-    def _open_database(cls, sqlite_file):
+    def _open_database(cls, sqlite_file, document_factory=None):
         if not os.path.isfile(sqlite_file):
             raise errors.DatabaseDoesNotExist()
         tries = 2
@@ -93,19 +93,22 @@ class SQLiteDatabase(CommonBackend):
                 raise err  # go for the richest error?
             tries -= 1
             time.sleep(cls.WAIT_FOR_PARALLEL_INIT_HALF_INTERVAL)
-        return SQLiteDatabase._sqlite_registry[v](sqlite_file)
+        return SQLiteDatabase._sqlite_registry[v](
+            sqlite_file, document_factory=document_factory)
 
     @classmethod
-    def open_database(cls, sqlite_file, create, backend_cls=None):
+    def open_database(cls, sqlite_file, create, backend_cls=None,
+                      document_factory=None):
         try:
-            return cls._open_database(sqlite_file)
+            return cls._open_database(
+                sqlite_file, document_factory=document_factory)
         except errors.DatabaseDoesNotExist:
             if not create:
                 raise
             if backend_cls is None:
                 # default is SQLitePartialExpandDatabase
                 backend_cls = SQLitePartialExpandDatabase
-            return backend_cls(sqlite_file)
+            return backend_cls(sqlite_file, document_factory=document_factory)
 
     @staticmethod
     def delete_database(sqlite_file):

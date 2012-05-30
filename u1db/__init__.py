@@ -22,7 +22,7 @@ __version_info__ = (0, 0, 1, 'dev', 0)
 __version__ = '.'.join(map(str, __version_info__))
 
 
-def open(path, create):
+def open(path, create, document_factory=None):
     """Open a database at the given location.
 
     Will raise u1db.errors.DatabaseDoesNotExist if create=False and the
@@ -34,7 +34,8 @@ def open(path, create):
     :return: An instance of Database.
     """
     from u1db.backends import sqlite_backend
-    return sqlite_backend.SQLiteDatabase.open_database(path, create=create)
+    return sqlite_backend.SQLiteDatabase.open_database(
+        path, create=create, document_factory=document_factory)
 
 
 # constraints on database names (relevant for remote access, as regex)
@@ -334,7 +335,6 @@ class DocumentBase(object):
         self.doc_id = doc_id
         self.rev = rev
         self._json = json
-        self._content = None
         self.has_conflicts = has_conflicts
 
     def same_content_as(self, other):
@@ -384,13 +384,10 @@ class DocumentBase(object):
         """Get the json serialization of this document."""
         if self._json is not None:
             return self._json
-        if self._content is not None:
-            return simplejson.dumps(self._content)
         return None
 
     def set_json(self, json):
         """Set the json serialization of this document."""
-        self._content = None
         self._json = json
 
     def make_tombstone(self):
