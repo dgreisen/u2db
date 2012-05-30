@@ -28,6 +28,7 @@ from u1db import (
     query_parser,
     )
 from u1db.backends import sqlite_backend
+from u1db.tests.test_backends import TestAlternativeDocument
 
 
 simple_doc = '{"key": "value"}'
@@ -253,6 +254,14 @@ class TestSQLitePartialExpandDatabase(tests.TestCase):
         db = sqlite_backend.SQLitePartialExpandDatabase(path)
         db2 = sqlite_backend.SQLiteDatabase._open_database(path)
         self.assertIsInstance(db2, sqlite_backend.SQLitePartialExpandDatabase)
+
+    def test__open_database_with_factory(self):
+        temp_dir = self.createTempDir(prefix='u1db-test-')
+        path = temp_dir + '/test.sqlite'
+        db = sqlite_backend.SQLitePartialExpandDatabase(path)
+        db2 = sqlite_backend.SQLiteDatabase._open_database(
+            path, document_factory=TestAlternativeDocument)
+        self.assertEqual(TestAlternativeDocument, db2._factory)
 
     def test__open_database_non_existent(self):
         temp_dir = self.createTempDir(prefix='u1db-test-')
