@@ -314,6 +314,14 @@ class TestSQLitePartialExpandDatabase(tests.TestCase):
         db2 = sqlite_backend.SQLiteDatabase.open_database(path, create=False)
         self.assertIsInstance(db2, sqlite_backend.SQLitePartialExpandDatabase)
 
+    def test_open_database_with_factory(self):
+        temp_dir = self.createTempDir(prefix='u1db-test-')
+        path = temp_dir + '/existing.sqlite'
+        db = sqlite_backend.SQLitePartialExpandDatabase(path)
+        db2 = sqlite_backend.SQLiteDatabase.open_database(
+            path, create=False, document_factory=TestAlternativeDocument)
+        self.assertEqual(TestAlternativeDocument, db2._factory)
+
     def test_open_database_create(self):
         temp_dir = self.createTempDir(prefix='u1db-test-')
         path = temp_dir + '/new.sqlite'
