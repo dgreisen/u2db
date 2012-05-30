@@ -51,6 +51,16 @@ class Database(object):
     This data store can be synchronized with other u1db.Database instances.
     """
 
+    def set_document_factory(self, factory):
+        """Set the document factory that will be used to create objects to be
+        returned as documents by the database.
+
+        :param factory: A function that returns an object which at minimum must
+        satisfy the same interface as does the class DocumentBase. Subclassing
+        that class is the easiest way to create such a function.
+        """
+        raise NotImplementedError(self.set_document_factory)
+
     def whats_changed(self, old_generation):
         """Return a list of documents that have changed since old_generation.
         This allows APPS to only store a db generation before going
@@ -68,10 +78,12 @@ class Database(object):
         """
         raise NotImplementedError(self.whats_changed)
 
-    def get_doc(self, doc_id, include_deleted=False):
+    def get_doc(self, doc_id, factory, include_deleted=False):
         """Get the JSON string for the given document.
 
         :param doc_id: The unique document identifier
+        :param factory: An optional factory to create the object to be
+            returned (defaults to Document.)
         :param include_deleted: If set to True, deleted documents will be
             returned with empty content. Otherwise asking for a deleted
             document will return None.
@@ -311,7 +323,7 @@ class Database(object):
         raise NotImplementedError(self._put_doc_if_newer)
 
 
-class Document(object):
+class DocumentBase(object):
     """Container for handling a single document.
 
     :ivar doc_id: Unique identifier for this document.
@@ -332,11 +344,11 @@ class Document(object):
         if self._json:
             c1 = simplejson.loads(self._json)
         else:
-            c1 = self._content
+            c1 = None
         if other._json:
             c2 = simplejson.loads(other._json)
         else:
-            c2 = other._content
+            c2 = None
         return c1 == c2
 
     def __repr__(self):
@@ -386,19 +398,67 @@ class Document(object):
     def make_tombstone(self):
         """Make this document into a tombstone."""
         self._json = None
+
+    def is_tombstone(self):
+        """Return True if the document is a tombstone, False otherwise."""
+        if self._json is not None:
+            return False
+        return True
+
+
+class Document(DocumentBase):
+    """Container for handling a single document.
+
+    :ivar doc_id: Unique identifier for this document.
+    :ivar rev:
+    :ivar json: The JSON string for this document.
+    :ivar has_conflicts: Boolean indicating if this document has conflicts
+    """
+
+    # The following part of the API is optional: no implementation is forced to
+    # have it but if the language supports dictionaries/hashtables, it makes
+    # Documents a lot more user friendly.
+
+    def __init__(self, doc_id, rev, json, has_conflicts=False):
+        super(Document, self).__init__(doc_id, rev, json, has_conflicts)
         self._content = None
+
+    def same_content_as(self, other):
+        """Compare the content of two documents."""
+        if self._json:
+            c1 = simplejson.loads(self._json)
+        else:
+            c1 = self._content
+        if other._json:
+            c2 = simplejson.loads(other._json)
+        else:
+            c2 = other._content
+        return c1 == c2
+
+    def get_json(self):
+        """Get the json serialization of this document."""
+        json = super(Document, self).get_json()
+        if json is not None:
+            return json
+        if self._content is not None:
+            return simplejson.dumps(self._content)
+        return None
+
+    def set_json(self, json):
+        """Set the json serialization of this document."""
+        self._content = None
+        super(Document, self).set_json(json)
+
+    def make_tombstone(self):
+        """Make this document into a tombstone."""
+        self._content = None
+        super(Document, self).make_tombstone()
 
     def is_tombstone(self):
         """Return True if the document is a tombstone, False otherwise."""
         if self._content is not None:
             return False
-        if self._json is not None:
-            return False
-        return True
-
-    # The following part of the API is optional: no implementation is forced to
-    # have it but if the language supports dictionaries/hashtables, it makes
-    # Documents a lot more user friendly.
+        return super(Document, self).is_tombstone()
 
     def _get_content(self):
         """Get the dictionary representing this document."""

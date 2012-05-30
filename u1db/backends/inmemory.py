@@ -30,7 +30,7 @@ from u1db.backends import CommonBackend, CommonSyncTarget
 class InMemoryDatabase(CommonBackend):
     """A database that only stores the data internally."""
 
-    def __init__(self, replica_uid):
+    def __init__(self, replica_uid, document_factory=None):
         self._transaction_log = []
         self._docs = {}
         # Map from doc_id => [(doc_rev, doc)] conflicts beyond 'winner'
@@ -39,6 +39,10 @@ class InMemoryDatabase(CommonBackend):
         self._indexes = {}
         self._replica_uid = replica_uid
         self._last_exchange_log = None
+        self._factory = document_factory or Document
+
+    def set_document_factory(self, factory):
+        self._factory = factory
 
     def close(self):
         # This is a no-op, We don't want to free the data because one client
@@ -103,7 +107,7 @@ class InMemoryDatabase(CommonBackend):
             doc_rev, content = self._docs[doc_id]
         except KeyError:
             return None
-        return Document(doc_id, doc_rev, content)
+        return self._factory(doc_id, doc_rev, content)
 
     def _has_conflicts(self, doc_id):
         return doc_id in self._conflicts
@@ -124,7 +128,7 @@ class InMemoryDatabase(CommonBackend):
         for doc_id, (doc_rev, content) in self._docs.items():
             if content is None and not include_deleted:
                 continue
-            results.append(Document(doc_id, doc_rev, content))
+            results.append(self._factory(doc_id, doc_rev, content))
         return (generation, results)
 
     def get_doc_conflicts(self, doc_id):
@@ -132,7 +136,7 @@ class InMemoryDatabase(CommonBackend):
             return []
         result = [self._get_doc(doc_id)]
         result[0].has_conflicts = True
-        result.extend([Document(doc_id, rev, content)
+        result.extend([self._factory(doc_id, rev, content)
                        for rev, content in self._conflicts[doc_id]])
         return result
 
@@ -211,7 +215,7 @@ class InMemoryDatabase(CommonBackend):
         result = []
         for doc_id in doc_ids:
             doc_rev, doc = self._docs[doc_id]
-            result.append(Document(doc_id, doc_rev, doc))
+            result.append(self._factory(doc_id, doc_rev, doc))
         return result
 
     def get_index_keys(self, index_name):

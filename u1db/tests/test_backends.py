@@ -18,6 +18,7 @@
 
 import simplejson
 from u1db import (
+    DocumentBase,
     errors,
     tests,
     vectorclock,
@@ -52,6 +53,10 @@ def oauth_http_create_database(test, replica_uid):
     http_db.set_oauth_credentials(tests.consumer1.key, tests.consumer1.secret,
                                   tests.token1.key, tests.token1.secret)
     return http_db
+
+
+class FakeDocument(DocumentBase):
+    """A (not very) alternative implementation of Document."""
 
 
 class AllDatabaseTests(tests.DatabaseBaseTests, tests.TestCaseWithServer):
@@ -1107,6 +1112,25 @@ class DatabaseIndexTests(tests.DatabaseBaseTests):
 
 
 class PyDatabaseIndexTests(tests.DatabaseBaseTests):
+
+    def test_create_doc_with_factory(self):
+        self.db.set_document_factory(FakeDocument)
+        doc = self.db.create_doc(simple_doc, doc_id='my_doc_id')
+        self.assertTrue(isinstance(doc, FakeDocument))
+
+    def test_get_doc_after_put_with_factory(self):
+        doc = self.db.create_doc(simple_doc, doc_id='my_doc_id')
+        self.db.set_document_factory(FakeDocument)
+        result = self.db.get_doc('my_doc_id')
+        self.assertTrue(isinstance(result, FakeDocument))
+        self.assertEqual(doc.doc_id, result.doc_id)
+        self.assertEqual(doc.rev, result.rev)
+        self.assertEqual(doc.get_json(), result.get_json())
+        self.assertEqual(False, result.has_conflicts)
+
+    def test_get_doc_nonexisting_with_factory(self):
+        self.db.set_document_factory(FakeDocument)
+        self.assertIs(None, self.db.get_doc('non-existing'))
 
     def test_sync_exchange_updates_indexes(self):
         doc = self.db.create_doc(simple_doc)

@@ -46,11 +46,15 @@ class SQLiteDatabase(CommonBackend):
 
     _sqlite_registry = {}
 
-    def __init__(self, sqlite_file):
+    def __init__(self, sqlite_file, document_factory=None):
         """Create a new sqlite file."""
         self._db_handle = dbapi2.connect(sqlite_file)
         self._real_replica_uid = None
         self._ensure_schema()
+        self._factory = document_factory or Document
+
+    def set_document_factory(self, factory):
+        self._factory = factory
 
     def get_sync_target(self):
         return SQLiteSyncTarget(self)
@@ -279,7 +283,7 @@ class SQLiteDatabase(CommonBackend):
         if val is None:
             return None
         doc_rev, content = val
-        return Document(doc_id, doc_rev, content)
+        return self._factory(doc_id, doc_rev, content)
 
     def _has_conflicts(self, doc_id):
         c = self._db_handle.cursor()
@@ -311,7 +315,7 @@ class SQLiteDatabase(CommonBackend):
         for doc_id, doc_rev, content in rows:
             if content is None and not include_deleted:
                 continue
-            results.append(Document(doc_id, doc_rev, content))
+            results.append(self._factory(doc_id, doc_rev, content))
         return (generation, results)
 
     def put_doc(self, doc):
@@ -422,7 +426,7 @@ class SQLiteDatabase(CommonBackend):
         c = self._db_handle.cursor()
         c.execute("SELECT doc_rev, content FROM conflicts WHERE doc_id = ?",
                   (doc_id,))
-        return [Document(doc_id, doc_rev, content)
+        return [self._factory(doc_id, doc_rev, content)
                 for doc_rev, content in c.fetchall()]
 
     def _get_conflict_revs(self, doc_id):
@@ -625,7 +629,7 @@ class SQLiteDatabase(CommonBackend):
                 raise dbapi2.OperationalError(str(e) +
                     '\nstatement: %s\nargs: %s\n' % (statement, args))
             res = c.fetchall()
-            result.extend([Document(r[0], r[1], r[2]) for r in res])
+            result.extend([self._factory(r[0], r[1], r[2]) for r in res])
         return result
 
     def get_index_keys(self, index):
