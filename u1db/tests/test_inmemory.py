@@ -104,13 +104,13 @@ class TestInMemoryIndex(tests.TestCase):
     def test_lookup(self):
         idx = inmemory.InMemoryIndex('idx-name', ['key'])
         idx.add_json('doc-id', simple_doc)
-        self.assertEqual(['doc-id'], idx.lookup([('value',)]))
+        self.assertEqual(['doc-id'], idx.lookup(['value']))
 
     def test_lookup_multi(self):
         idx = inmemory.InMemoryIndex('idx-name', ['key'])
         idx.add_json('doc-id', simple_doc)
         idx.add_json('doc2-id', simple_doc)
-        self.assertEqual(['doc-id', 'doc2-id'], idx.lookup([('value',)]))
+        self.assertEqual(['doc-id', 'doc2-id'], idx.lookup(['value']))
 
     def test__find_non_wildcards(self):
         idx = inmemory.InMemoryIndex('idx-name', ['k1', 'k2', 'k3'])
