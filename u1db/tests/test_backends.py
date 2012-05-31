@@ -811,6 +811,15 @@ class DatabaseIndexTests(tests.DatabaseBaseTests):
         self.assertEqual([doc],
             self.db.get_from_index('test-idx', [('value', 'value2')]))
 
+    def test_get_from_index_multi_ordered(self):
+        doc1 = self.db.create_doc('{"key": "value3", "key2": "value4"}')
+        doc2 = self.db.create_doc('{"key": "value2", "key2": "value3"}')
+        doc3 = self.db.create_doc('{"key": "value2", "key2": "value2"}')
+        doc4 = self.db.create_doc('{"key": "value1", "key2": "value1"}')
+        self.db.create_index('test-idx', 'key', 'key2')
+        self.assertEqual([doc4, doc3, doc2, doc1],
+            self.db.get_from_index('test-idx', [('v*', '*')]))
+
     def test_get_from_index_fails_if_no_index(self):
         self.assertRaises(errors.IndexDoesNotExist,
                           self.db.get_from_index,
@@ -876,6 +885,16 @@ class DatabaseIndexTests(tests.DatabaseBaseTests):
         # This is essentially a 'prefix' match, but we match every entry.
         self.assertEqual(sorted([doc1, doc2, doc4]),
             sorted(self.db.get_from_index('test-idx', [('*',)])))
+
+    def test_get_all_from_index_ordered(self):
+        self.db.create_index('test-idx', 'key')
+        doc1 = self.db.create_doc('{"key": "value x"}')
+        doc2 = self.db.create_doc('{"key": "value b"}')
+        doc3 = self.db.create_doc('{"key": "value a"}')
+        doc4 = self.db.create_doc('{"key": "value m"}')
+        # This is essentially a 'prefix' match, but we match every entry.
+        self.assertEqual([doc3, doc2, doc4, doc1],
+            self.db.get_from_index('test-idx', [('*',)]))
 
     def test_put_updates_when_adding_key(self):
         doc = self.db.create_doc("{}")

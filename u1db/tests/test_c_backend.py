@@ -140,14 +140,15 @@ class TestCDatabase(BackendTests):
     def test__format_query(self):
         self.assertFormatQueryEquals(
             "SELECT d0.doc_id FROM document_fields d0"
-            " WHERE d0.field_name = ? AND d0.value = ?",
+            " WHERE d0.field_name = ? AND d0.value = ? ORDER BY d0.value",
             [0], ["1"])
         self.assertFormatQueryEquals(
             "SELECT d0.doc_id"
             " FROM document_fields d0, document_fields d1"
             " WHERE d0.field_name = ? AND d0.value = ?"
             " AND d0.doc_id = d1.doc_id"
-            " AND d1.field_name = ? AND d1.value = ?",
+            " AND d1.field_name = ? AND d1.value = ?"
+            " ORDER BY d0.value, d1.value",
             [0, 0], ["1", "2"])
         self.assertFormatQueryEquals(
             "SELECT d0.doc_id"
@@ -156,26 +157,28 @@ class TestCDatabase(BackendTests):
             " AND d0.doc_id = d1.doc_id"
             " AND d1.field_name = ? AND d1.value = ?"
             " AND d0.doc_id = d2.doc_id"
-            " AND d2.field_name = ? AND d2.value = ?",
+            " AND d2.field_name = ? AND d2.value = ?"
+            " ORDER BY d0.value, d1.value, d2.value",
             [0, 0, 0], ["1", "2", "3"])
 
     def test__format_query_wildcard(self):
         self.assertFormatQueryEquals(
             "SELECT d0.doc_id FROM document_fields d0"
-            " WHERE d0.field_name = ? AND d0.value NOT NULL",
+            " WHERE d0.field_name = ? AND d0.value NOT NULL ORDER BY d0.value",
             [1], ["*"])
         self.assertFormatQueryEquals(
             "SELECT d0.doc_id"
             " FROM document_fields d0, document_fields d1"
             " WHERE d0.field_name = ? AND d0.value = ?"
             " AND d0.doc_id = d1.doc_id"
-            " AND d1.field_name = ? AND d1.value NOT NULL",
+            " AND d1.field_name = ? AND d1.value NOT NULL"
+            " ORDER BY d0.value, d1.value",
             [0, 1], ["1", "*"])
 
     def test__format_query_glob(self):
         self.assertFormatQueryEquals(
             "SELECT d0.doc_id FROM document_fields d0"
-            " WHERE d0.field_name = ? AND d0.value GLOB ?",
+            " WHERE d0.field_name = ? AND d0.value GLOB ? ORDER BY d0.value",
             [2], ["1*"])
 
 

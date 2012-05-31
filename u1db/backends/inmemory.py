@@ -355,7 +355,7 @@ class InMemoryIndex(object):
         key_prefix = '\x01'.join(value)
         key_prefix = key_prefix.rstrip('*')
         all_doc_ids = []
-        for key, doc_ids in self._values.iteritems():
+        for key, doc_ids in sorted(self._values.iteritems()):
             if key.startswith(key_prefix):
                 all_doc_ids.extend(doc_ids)
         return all_doc_ids
