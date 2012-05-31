@@ -29,7 +29,6 @@ import testtools
 from u1db import (
     errors,
     Document,
-    sync,
     )
 from u1db.backends import (
     inmemory,
@@ -72,6 +71,13 @@ class TestCase(testtools.TestCase):
                                      has_conflicts=has_conflicts)
         self.assertEqual(exp_doc, db.get_doc(doc_id))
 
+    def assertGetDocIncludeDeleted(self, db, doc_id, doc_rev, content,
+                                   has_conflicts):
+        """Assert that the document in the database looks correct."""
+        exp_doc = self.make_document(doc_id, doc_rev, content,
+                                     has_conflicts=has_conflicts)
+        self.assertEqual(exp_doc, db.get_doc(doc_id, include_deleted=True))
+
     def assertGetDocConflicts(self, db, doc_id, conflicts):
         """Assert what conflicts are stored for a given doc_id.
 
@@ -83,7 +89,7 @@ class TestCase(testtools.TestCase):
             conflicts = conflicts[:1] + sorted(conflicts[1:])
         actual = db.get_doc_conflicts(doc_id)
         if actual:
-            actual = [(doc.rev, doc.content) for doc in actual]
+            actual = [(doc.rev, doc.get_json()) for doc in actual]
             actual = actual[:1] + sorted(actual[1:])
         self.assertEqual(conflicts, actual)
 

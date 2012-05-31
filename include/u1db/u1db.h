@@ -32,8 +32,8 @@ typedef struct _u1db_document
     size_t doc_id_len;
     char *doc_rev;
     size_t doc_rev_len;
-    char *content;
-    size_t content_len;
+    char *json;
+    size_t json_len;
     int has_conflicts;
 } u1db_document;
 
@@ -65,6 +65,9 @@ typedef int (*u1db_trans_info_callback)(void *context, const char *doc_id,
 #define U1DB_UNHANDLED_CHARACTERS -14
 #define U1DB_MISSING_FIELD_SPECIFIER -15
 #define U1DB_INVALID_FIELD_SPECIFIER -16
+#define U1DB_DUPLICATE_INDEX_NAME -17
+#define U1DB_INDEX_DOES_NOT_EXIST -18
+#define U1DB_INVALID_GLOBBING -19
 #define U1DB_INTERNAL_ERROR -999
 
 // Used by put_doc_if_newer
@@ -102,7 +105,7 @@ int u1db_get_replica_uid(u1database *db, const char **replica_uid);
 /**
  * Create a new document.
  *
- * @param content The JSON string representing the document. The content will
+ * @param json The JSON string representing the document. The json will
  *                be copied and managed by the 'doc' parameter.
  * @param doc_id A string identifying the document. If the value supplied is
  *               NULL, then a new doc_id will be generated.
@@ -110,7 +113,7 @@ int u1db_get_replica_uid(u1database *db, const char **replica_uid);
  *            freed with u1db_free_doc
  * @return a status code indicating success or failure.
  */
-int u1db_create_doc(u1database *db, const char *content, const char *doc_id,
+int u1db_create_doc(u1database *db, const char *json, const char *doc_id,
                     u1db_document **doc);
 
 /**
@@ -140,11 +143,13 @@ int u1db_resolve_doc(u1database *db, u1db_document *doc,
  * Get the document defined by the given document id.
  *
  * @param doc_id The document we are looking for
+ * @param include_deleted If true, return the document even if it was deleted.
  * @param doc (OUT) a document (or NULL) matching the request
  * @return status, will be U1DB_OK if there is no error, even if there is no
  *      document matching that doc_id.
  */
-int u1db_get_doc(u1database *db, const char *doc_id, u1db_document **doc);
+int u1db_get_doc(u1database *db, const char *doc_id, int include_deleted,
+                 u1db_document **doc);
 
 
 /**
@@ -154,6 +159,7 @@ int u1db_get_doc(u1database *db, const char *doc_id, u1db_document **doc);
  * @param doc_ids An array of document ids to retrieve.
  * @param check_for_conflicts If true, check if each document has any
  *          conflicts, if false, the conflict checking will be skipped.
+ * @param include_deleted If true, return documents even if they were deleted.
  * @param context A void* that is returned via the callback function.
  * @param cb This will be called with each document requested. The api is
  *           cb(void* context, u1db_document *doc). The returned documents are
@@ -161,8 +167,22 @@ int u1db_get_doc(u1database *db, const char *doc_id, u1db_document **doc);
  *           u1db_free_doc.
  */
 int u1db_get_docs(u1database *db, int n_doc_ids, const char **doc_ids,
-                  int check_for_conflicts, void *context,
+                  int check_for_conflicts, int include_deleted, void *context,
                   u1db_doc_callback cb);
+
+/**
+ * Retrieve all documents from the database.
+ *
+ * @param include_deleted If true, return documents even if they were deleted.
+ * @param generation (OUT) the generation the database is at
+ * @param context A void* that is returned via the callback function.
+ * @param cb This will be called with each document requested. The api is
+ *           cb(void* context, u1db_document *doc). The returned documents are
+ *           allocated on the heap, and must be freed by the caller via
+ *           u1db_free_doc.
+ */
+int u1db_get_all_docs(u1database *db, int include_deleted, int *generation,
+                      void *context, u1db_doc_callback cb);
 
 /**
  * Get all of the contents associated with a conflicted document.
@@ -227,7 +247,7 @@ void u1db_free_doc(u1db_document **doc);
  * This will copy the string, since the memory is managed by the doc object
  * itself.
  */
-int u1db_doc_set_content(u1db_document *doc, const char *content);
+int u1db_doc_set_json(u1db_document *doc, const char *json);
 
 
 /**

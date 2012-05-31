@@ -14,7 +14,7 @@
 # You should have received a copy of the GNU Lesser General Public License
 # along with u1db.  If not, see <http://www.gnu.org/licenses/>.
 
-""""""
+"""Abstract classes and common implementations for the backends."""
 
 import re
 import uuid
@@ -81,10 +81,13 @@ class CommonBackend(u1db.Database):
     def _put_and_update_indexes(self, doc_id, old_doc, new_rev, content):
         raise NotImplementedError(self._put_and_update_indexes)
 
-    def get_docs(self, doc_ids, check_for_conflicts=True):
+    def get_docs(self, doc_ids, check_for_conflicts=True,
+                 include_deleted=False):
         result = []
         for doc_id in doc_ids:
             doc = self._get_doc(doc_id)
+            if doc.is_tombstone() and not include_deleted:
+                continue
             if check_for_conflicts:
                 doc.has_conflicts = self._has_conflicts(doc_id)
             result.append(doc)
@@ -109,6 +112,13 @@ class CommonBackend(u1db.Database):
             # Don't add this to seen_ids, because we have something newer,
             # so we should send it back, and we should not generate a
             # conflict
+            state = 'superseded'
+        elif cur_doc.same_content_as(doc):
+            # the documents have been edited to the same thing at both ends
+            doc_vcr.maximize(cur_vcr)
+            doc_vcr.increment(self._replica_uid)
+            doc.rev = doc_vcr.as_str()
+            self._put_and_update_indexes(cur_doc, doc)
             state = 'superseded'
         else:
             state = 'conflicted'

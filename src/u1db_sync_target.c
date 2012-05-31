@@ -287,7 +287,8 @@ u1db__sync_exchange_insert_doc_from_source(u1db_sync_exchange *se,
     status = u1db__put_doc_if_newer(se->db, doc, 0, se->source_replica_uid,
                                     source_gen, NULL, &insert_state, &at_gen);
     if (insert_state == U1DB_INSERTED || insert_state == U1DB_CONVERGED) {
-	lh_table_insert(se->seen_ids, strdup(doc->doc_id), (void *)(intptr_t)at_gen);
+        lh_table_insert(se->seen_ids, strdup(doc->doc_id),
+        (void *)(intptr_t)at_gen);
     } else {
         // state should be either U1DB_SUPERSEDED or U1DB_CONFLICTED, in either
         // case, we don't count this as a 'seen_id' because we will want to be
@@ -316,7 +317,7 @@ whats_changed_to_doc_ids(void *context, const char *doc_id, int gen,
     struct _whats_changed_doc_ids_state *state;
     state = (struct _whats_changed_doc_ids_state *)context;
     if (state->exclude_ids != NULL
-	&& (e = lh_table_lookup_entry(state->exclude_ids, doc_id)) != NULL
+        && (e = lh_table_lookup_entry(state->exclude_ids, doc_id)) != NULL
         && (intptr_t)e->v >= gen)
     {
         // This document was already seen at this gen,
@@ -426,7 +427,7 @@ u1db__sync_exchange_return_docs(u1db_sync_exchange *se, void *context,
     if (se->num_doc_ids > 0) {
         status = u1db_get_docs(se->db, se->num_doc_ids,
                 (const char **)se->doc_ids_to_return,
-                0, &state, get_docs_to_gen_docs);
+                0, 1, &state, get_docs_to_gen_docs);
     }
 finish:
     return status;
@@ -473,7 +474,7 @@ get_and_insert_docs(u1database *source_db, u1db_sync_exchange *se,
         (u1db_doc_gen_callback)u1db__sync_exchange_insert_doc_from_source;
     get_doc_state.gen_for_doc_ids = generations;
     return u1db_get_docs(source_db, n_doc_ids, doc_ids,
-            0, &get_doc_state, get_docs_to_gen_docs);
+            0, 1, &get_doc_state, get_docs_to_gen_docs);
 }
 
 
@@ -578,7 +579,8 @@ u1db__sync_db_to_target(u1database *db, u1db_sync_target *target,
     // fprintf(stderr, "Starting\n");
     if (db == NULL || target == NULL || local_gen_before_sync == NULL) {
         // fprintf(stderr, "DB, target, or local are NULL\n");
-        return U1DB_INVALID_PARAMETER;
+        status = U1DB_INVALID_PARAMETER;
+        goto finish;
     }
 
     status = u1db_get_replica_uid(db, &local_uid);
@@ -601,7 +603,7 @@ u1db__sync_db_to_target(u1database *db, u1db_sync_target *target,
     if (local_gen == local_gen_known_by_target
         && target_gen == target_gen_known_by_local)
     {
-        return U1DB_OK;
+        goto finish;
     }
     *local_gen_before_sync = local_gen;
     return_doc_state.db = db;

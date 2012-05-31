@@ -44,10 +44,11 @@ class ConflictedDoc(U1DBError):
 
 
 class InvalidValueForIndex(U1DBError):
-    """The values supplied does not match the index definition.
+    """The values supplied does not match the index definition."""
 
-    Can also be raised if wildcard matches are not strictly at the tail of the
-    request.
+
+class InvalidGlobbing(U1DBError):
+    """Raised if wildcard matches are not strictly at the tail of the request.
     """
 
 
@@ -69,8 +70,16 @@ class DatabaseDoesNotExist(U1DBError):
     wire_description = "database does not exist"
 
 
+class IndexNameTakenError(U1DBError):
+    """The given index name is already taken."""
+
+
 class IndexDefinitionParseError(U1DBError):
     """The index definition cannot be parsed."""
+
+
+class IndexDoesNotExist(U1DBError):
+    """No index of that name exists."""
 
 
 class Unauthorized(U1DBError):

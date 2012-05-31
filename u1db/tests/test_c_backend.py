@@ -319,8 +319,8 @@ class TestSyncCtoHTTPViaC(tests.TestCaseWithServer):
         db = c_backend_wrapper.CDatabase(':memory:')
         doc = db.create_doc(tests.simple_doc)
         c_backend_wrapper.sync_db_to_target(db, target)
-        self.assertGetDoc(mem_db, doc.doc_id, doc.rev, doc.content, False)
-        self.assertGetDoc(db, mem_doc.doc_id, mem_doc.rev, mem_doc.content,
+        self.assertGetDoc(mem_db, doc.doc_id, doc.rev, doc.get_json(), False)
+        self.assertGetDoc(db, mem_doc.doc_id, mem_doc.rev, mem_doc.get_json(),
                           False)
 
 
@@ -344,8 +344,8 @@ class TestSyncCtoOAuthHTTPViaC(tests.TestCaseWithServer):
         db = c_backend_wrapper.CDatabase(':memory:')
         doc = db.create_doc(tests.simple_doc)
         c_backend_wrapper.sync_db_to_target(db, target)
-        self.assertGetDoc(mem_db, doc.doc_id, doc.rev, doc.content, False)
-        self.assertGetDoc(db, mem_doc.doc_id, mem_doc.rev, mem_doc.content,
+        self.assertGetDoc(mem_db, doc.doc_id, doc.rev, doc.get_json(), False)
+        self.assertGetDoc(db, mem_doc.doc_id, mem_doc.rev, mem_doc.get_json(),
                           False)
 
 

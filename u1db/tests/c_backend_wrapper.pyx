@@ -44,8 +44,8 @@ cdef extern from "u1db/u1db.h":
         size_t doc_id_len
         char *doc_rev
         size_t doc_rev_len
-        char *content
-        size_t content_len
+        char *json
+        size_t json_len
         int has_conflicts
     # Note: u1query is actually defined in u1db_internal.h, and in u1db.h it is
     #       just an opaque pointer. However, older versions of Cython don't let
@@ -68,13 +68,16 @@ cdef extern from "u1db/u1db.h":
     void u1db_free(u1database **)
     int u1db_set_replica_uid(u1database *, char *replica_uid)
     int u1db_get_replica_uid(u1database *, const_char_ptr *replica_uid)
-    int u1db_create_doc(u1database *db, char *content, char *doc_id,
+    int u1db_create_doc(u1database *db, char *json, char *doc_id,
                         u1db_document **doc)
     int u1db_delete_doc(u1database *db, u1db_document *doc)
-    int u1db_get_doc(u1database *db, char *doc_id, u1db_document **doc)
+    int u1db_get_doc(u1database *db, char *doc_id, int include_deleted,
+                     u1db_document **doc)
     int u1db_get_docs(u1database *db, int n_doc_ids, const_char_ptr *doc_ids,
-                      int check_for_conflicts, void *context,
-                      u1db_doc_callback cb)
+                      int check_for_conflicts, int include_deleted,
+                      void *context, u1db_doc_callback cb)
+    int u1db_get_all_docs(u1database *db, int include_deleted, int *generation,
+                          void *context, u1db_doc_callback cb)
     int u1db_put_doc(u1database *db, u1db_document *doc)
     int u1db__put_doc_if_newer(u1database *db, u1db_document *doc,
                                int save_conflict, char *replica_uid,
@@ -116,7 +119,10 @@ cdef extern from "u1db/u1db.h":
     int U1DB_NOT_IMPLEMENTED
     int U1DB_INVALID_JSON
     int U1DB_INVALID_VALUE_FOR_INDEX
+    int U1DB_INVALID_GLOBBING
     int U1DB_BROKEN_SYNC_STREAM
+    int U1DB_DUPLICATE_INDEX_NAME
+    int U1DB_INDEX_DOES_NOT_EXIST
     int U1DB_INTERNAL_ERROR
 
     int U1DB_INSERTED
@@ -125,7 +131,7 @@ cdef extern from "u1db/u1db.h":
     int U1DB_CONFLICTED
 
     void u1db_free_doc(u1db_document **doc)
-    int u1db_doc_set_content(u1db_document *doc, char *content)
+    int u1db_doc_set_json(u1db_document *doc, char *json)
 
 
 cdef extern from "u1db/u1db_internal.h":
@@ -455,15 +461,14 @@ cdef class CDocument(object):
             return PyString_FromStringAndSize(
                     self._doc.doc_rev, self._doc.doc_rev_len)
 
-    property content:
-        def __get__(self):
-            if self._doc.content == NULL:
-                return None
-            return PyString_FromStringAndSize(
-                    self._doc.content, self._doc.content_len)
+    def get_json(self):
+        if self._doc.json == NULL:
+            return None
+        return PyString_FromStringAndSize(
+                self._doc.json, self._doc.json_len)
 
-        def __set__(self, val):
-            u1db_doc_set_content(self._doc, val)
+    def set_json(self, val):
+        u1db_doc_set_json(self._doc, val)
 
 
     property has_conflicts:
@@ -478,7 +483,7 @@ cdef class CDocument(object):
         else:
             extra = ''
         return '%s(%s, %s%s, %r)' % (self.__class__.__name__, self.doc_id,
-                                     self.rev, extra, self.content)
+                                     self.rev, extra, self.get_json())
 
     def __hash__(self):
         raise NotImplementedError(self.__hash__)
@@ -486,12 +491,12 @@ cdef class CDocument(object):
     def __richcmp__(self, other, int t):
         try:
             if t == 0: # Py_LT <
-                return ((self.doc_id, self.rev, self.content)
-                    < (other.doc_id, other.rev, other.content))
+                return ((self.doc_id, self.rev, self.get_json())
+                    < (other.doc_id, other.rev, other.get_json()))
             elif t == 2: # Py_EQ ==
                 return (self.doc_id == other.doc_id
                         and self.rev == other.rev
-                        and self.content == other.content
+                        and self.get_json() == other.get_json()
                         and self.has_conflicts == other.has_conflicts)
         except AttributeError:
             # Fall through to NotImplemented
@@ -558,12 +563,18 @@ cdef handle_status(context, int status):
                                   % (context,))
     if status == U1DB_INVALID_VALUE_FOR_INDEX:
         raise errors.InvalidValueForIndex()
+    if status == U1DB_INVALID_GLOBBING:
+        raise errors.InvalidGlobbing()
     if status == U1DB_INTERNAL_ERROR:
         raise errors.U1DBError("internal error")
     if status == U1DB_BROKEN_SYNC_STREAM:
         raise errors.BrokenSyncStream()
     if status == U1DB_CONFLICTED:
         raise errors.ConflictedDoc()
+    if status == U1DB_DUPLICATE_INDEX_NAME:
+        raise errors.IndexNameTakenError()
+    if status == U1DB_INDEX_DOES_NOT_EXIST:
+        raise errors.IndexDoesNotExist
     raise RuntimeError('%s (status: %s)' % (context, status))
 
 
@@ -910,32 +921,44 @@ cdef class CDatabase(object):
         else:
             raise RuntimeError("Unknown _put_doc_if_newer state: %d" % (state,))
 
-    def get_doc(self, doc_id):
+    def get_doc(self, doc_id, include_deleted=False):
         cdef u1db_document *doc = NULL
-
+        deleted = 1 if include_deleted else 0
         handle_status("get_doc failed",
-            u1db_get_doc(self._db, doc_id, &doc))
+            u1db_get_doc(self._db, doc_id, deleted, &doc))
         if doc == NULL:
             return None
         pydoc = CDocument()
         pydoc._doc = doc
         return pydoc
 
-    def get_docs(self, doc_ids, check_for_conflicts=True):
+    def get_docs(self, doc_ids, check_for_conflicts=True,
+                 include_deleted=False):
         cdef int n_doc_ids, conflicts
         cdef const_char_ptr *c_doc_ids
 
         _list_to_array(doc_ids, &c_doc_ids, &n_doc_ids)
-        if check_for_conflicts:
-            conflicts = 1
-        else:
-            conflicts = 0
+        deleted = 1 if include_deleted else 0
+        conflicts = 1 if check_for_conflicts else 0
         a_list = []
         handle_status("get_docs",
             u1db_get_docs(self._db, n_doc_ids, c_doc_ids,
-                conflicts, <void*>a_list, _append_doc_to_list))
+                conflicts, deleted, <void*>a_list, _append_doc_to_list))
         free(<void*>c_doc_ids)
         return a_list
+
+    def get_all_docs(self, include_deleted=False):
+        cdef int c_generation
+
+        a_list = []
+        deleted = 1 if include_deleted else 0
+        generation = 0
+        c_generation = generation
+        handle_status(
+            "get_all_docs", u1db_get_all_docs(
+                self._db, deleted, &c_generation, <void*>a_list,
+                _append_doc_to_list))
+        return (c_generation, a_list)
 
     def resolve_doc(self, CDocument doc, conflicted_doc_revs):
         cdef const_char_ptr *revs
@@ -1032,9 +1055,12 @@ cdef class CDatabase(object):
         # remain valid.
         new_objs = _list_to_str_array(
             index_expression, &expressions, &n_expressions)
-        handle_status("create_index",
-            u1db_create_index(self._db, index_name, n_expressions, expressions))
-        free(<void*>expressions)
+        try:
+            handle_status("create_index",
+                u1db_create_index(
+                    self._db, index_name, n_expressions, expressions))
+        finally:
+            free(<void*>expressions)
 
     def list_indexes(self):
         a_list = []

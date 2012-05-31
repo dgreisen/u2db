@@ -440,6 +440,9 @@ lookup_index_fields(u1database *db, u1query *query)
                                SQLITE_TRANSIENT);
     if (status != SQLITE_OK) { goto finish; }
     status = sqlite3_step(statement);
+    if (status == SQLITE_DONE) {
+        status = U1DB_INDEX_DOES_NOT_EXIST;
+    }
     while (status == SQLITE_ROW) {
         offset = sqlite3_column_int(statement, 0);
         field = (char*)sqlite3_column_text(statement, 1);
@@ -588,7 +591,8 @@ u1db_get_from_index(u1database *db, u1query *query,
         doc_id = (char*)sqlite3_column_text(statement, 0);
         // We use u1db_get_docs so we can pass check_for_conflicts=0, which is
         // currently expected by the test suite.
-        status = u1db_get_docs(db, 1, (const char**)&doc_id, 0, context, cb);
+        status = u1db_get_docs(
+            db, 1, (const char**)&doc_id, 0, 0, context, cb);
         if (status != U1DB_OK) { goto finish; }
         status = sqlite3_step(statement);
     }
@@ -627,6 +631,28 @@ u1db_get_index_keys(u1database *db, char *index_name,
         goto finish;
     }
     status = sqlite3_step(statement);
+    if (status == SQLITE_DONE) {
+        sqlite3_finalize(statement);
+        status = sqlite3_prepare_v2(
+            db->sql_handle,
+            "SELECT field FROM index_definitions WHERE name = ?;",
+            -1, &statement, NULL);
+        if (status != SQLITE_OK) {
+            goto finish;
+        }
+        status = sqlite3_bind_text(
+            statement, 1, index_name, -1, SQLITE_TRANSIENT);
+        if (status != SQLITE_OK) {
+            goto finish;
+        }
+        status = sqlite3_step(statement);
+        if (status == SQLITE_DONE) {
+            status = U1DB_INDEX_DOES_NOT_EXIST;
+        } else {
+            status = U1DB_OK;
+        }
+        goto finish;
+    }
     while (status == SQLITE_ROW) {
         key = (char*)sqlite3_column_text(statement, 0);
         if ((status = cb(context, key)) != U1DB_OK)
@@ -700,7 +726,7 @@ u1db__format_query(int n_fields, va_list argp, char **buf, int *wildcard)
             wildcard[i] = 2;
             if (have_wildcard) {
                 //globs not allowed after another wildcard
-                status = U1DB_INVALID_VALUE_FOR_INDEX;
+                status = U1DB_INVALID_GLOBBING;
                 goto finish;
             }
             have_wildcard = 1;
@@ -709,7 +735,7 @@ u1db__format_query(int n_fields, va_list argp, char **buf, int *wildcard)
             wildcard[i] = 0;
             if (have_wildcard) {
                 // Can't have a non-wildcard after a wildcard
-                status = U1DB_INVALID_VALUE_FOR_INDEX;
+                status = U1DB_INVALID_GLOBBING;
                 goto finish;
             }
             add_to_buf(&cur, &buf_size, " AND d%d.value = ?", i);

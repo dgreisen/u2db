@@ -77,25 +77,28 @@ class InMemoryDatabase(CommonBackend):
         if self._has_conflicts(doc.doc_id):
             raise errors.ConflictedDoc()
         old_doc = self._get_doc(doc.doc_id)
-        if old_doc is not None:
-            if old_doc.rev != doc.rev:
-                raise errors.RevisionConflict()
+        if old_doc and doc.rev is None and old_doc.is_tombstone():
+            new_rev = self._allocate_doc_rev(old_doc.rev)
         else:
-            if doc.rev is not None:
-                raise errors.RevisionConflict()
-        new_rev = self._allocate_doc_rev(doc.rev)
+            if old_doc is not None:
+                if old_doc.rev != doc.rev:
+                    raise errors.RevisionConflict()
+            else:
+                if doc.rev is not None:
+                    raise errors.RevisionConflict()
+            new_rev = self._allocate_doc_rev(doc.rev)
         doc.rev = new_rev
         self._put_and_update_indexes(old_doc, doc)
         return new_rev
 
     def _put_and_update_indexes(self, old_doc, doc):
         for index in self._indexes.itervalues():
-            if old_doc is not None and old_doc.content is not None:
-                index.remove_json(old_doc.doc_id, old_doc.content)
-            if doc.content is not None:
-                index.add_json(doc.doc_id, doc.content)
+            if old_doc is not None and not old_doc.is_tombstone():
+                index.remove_json(old_doc.doc_id, old_doc.get_json())
+            if not doc.is_tombstone():
+                index.add_json(doc.doc_id, doc.get_json())
         trans_id = self._allocate_transaction_id()
-        self._docs[doc.doc_id] = (doc.rev, doc.content)
+        self._docs[doc.doc_id] = (doc.rev, doc.get_json())
         self._transaction_log.append((doc.doc_id, trans_id))
 
     def _get_doc(self, doc_id):
@@ -108,12 +111,24 @@ class InMemoryDatabase(CommonBackend):
     def _has_conflicts(self, doc_id):
         return doc_id in self._conflicts
 
-    def get_doc(self, doc_id):
+    def get_doc(self, doc_id, include_deleted=False):
         doc = self._get_doc(doc_id)
         if doc is None:
             return None
+        if doc.is_tombstone() and not include_deleted:
+            return None
         doc.has_conflicts = (doc.doc_id in self._conflicts)
         return doc
+
+    def get_all_docs(self, include_deleted=False):
+        """Return all documents in the database."""
+        generation = self._get_generation()
+        results = []
+        for doc_id, (doc_rev, content) in self._docs.items():
+            if content is None and not include_deleted:
+                continue
+            results.append(Document(doc_id, doc_rev, content))
+        return (generation, results)
 
     def get_doc_conflicts(self, doc_id):
         if doc_id not in self._conflicts:
@@ -159,7 +174,7 @@ class InMemoryDatabase(CommonBackend):
         if cur_rev in superseded_revs:
             self._put_and_update_indexes(cur_doc, doc)
         else:
-            remaining_conflicts.append((new_rev, doc.content))
+            remaining_conflicts.append((new_rev, doc.get_json()))
         self._replace_conflicts(doc, remaining_conflicts)
 
     def delete_doc(self, doc):
@@ -167,10 +182,14 @@ class InMemoryDatabase(CommonBackend):
             raise errors.DocumentDoesNotExist
         if self._docs[doc.doc_id][1] in ('null', None):
             raise errors.DocumentAlreadyDeleted
-        doc.content = None
+        doc.make_tombstone()
         self.put_doc(doc)
 
     def create_index(self, index_name, index_expression):
+        if index_name in self._indexes:
+            if self._indexes[index_name]._definition == index_expression:
+                return
+            raise errors.IndexNameTakenError
         index = InMemoryIndex(index_name, index_expression)
         for doc_id, (doc_rev, doc) in self._docs.iteritems():
             if doc is not None:
@@ -187,7 +206,10 @@ class InMemoryDatabase(CommonBackend):
         return definitions
 
     def get_from_index(self, index_name, key_values):
-        index = self._indexes[index_name]
+        try:
+            index = self._indexes[index_name]
+        except KeyError:
+            raise errors.IndexDoesNotExist
         doc_ids = index.lookup(key_values)
         result = []
         for doc_id in doc_ids:
@@ -196,7 +218,10 @@ class InMemoryDatabase(CommonBackend):
         return result
 
     def get_index_keys(self, index_name):
-        index = self._indexes[index_name]
+        try:
+            index = self._indexes[index_name]
+        except KeyError:
+            raise errors.IndexDoesNotExist
         return list(set(index.keys()))
 
     def whats_changed(self, old_generation=0):
@@ -224,7 +249,7 @@ class InMemoryDatabase(CommonBackend):
         my_doc = self._get_doc(doc.doc_id)
         self._prune_conflicts(doc, vectorclock.VectorClockRev(doc.rev))
         self._conflicts.setdefault(doc.doc_id, []).append(
-            (my_doc.rev, my_doc.content))
+            (my_doc.rev, my_doc.get_json()))
         doc.has_conflicts = True
         self._put_and_update_indexes(my_doc, doc)
 
@@ -294,14 +319,14 @@ class InMemoryIndex(object):
                     # We have an 'x*' style wildcard
                     if is_wildcard:
                         # We were already in wildcard mode, so this is invalid
-                        raise errors.InvalidValueForIndex()
+                        raise errors.InvalidGlobbing
                     last = idx + 1
                 is_wildcard = True
             else:
                 if is_wildcard:
                     # We were in wildcard mode, we can't follow that with
                     # non-wildcard
-                    raise errors.InvalidValueForIndex()
+                    raise errors.InvalidGlobbing
                 last = idx + 1
         if not is_wildcard:
             return -1

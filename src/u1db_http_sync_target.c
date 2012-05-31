@@ -675,8 +675,8 @@ doc_to_tempfile(u1db_document *doc, int gen, FILE *fd)
     }
     json_object_object_add(json, "id", json_object_new_string(doc->doc_id));
     json_object_object_add(json, "rev", json_object_new_string(doc->doc_rev));
-    json_object_object_add(json, "content",
-		      doc->content?json_object_new_string(doc->content):NULL);
+    json_object_object_add(
+        json, "content", doc->json?json_object_new_string(doc->json):NULL);
     json_object_object_add(json, "gen", json_object_new_int(gen));
     fputs(json_object_to_json_string(json), fd);
 finish:
@@ -938,7 +938,7 @@ get_docs_to_tempfile(void *context, u1db_document *doc)
 
 
 int u1db_get_docs(u1database *db, int n_doc_ids, const char **doc_ids,
-                  int check_for_conflicts, void *context,
+                  int check_for_conflicts, int include_deleted, void *context,
                   u1db_doc_callback cb);
 
 static int
@@ -969,7 +969,7 @@ st_http_sync_exchange_doc_ids(u1db_sync_target *st, u1database *source_db,
     state.num = n_doc_ids;
     state.generations = generations;
     state.temp_fd = temp_fd;
-    status = u1db_get_docs(source_db, n_doc_ids, doc_ids, 0,
+    status = u1db_get_docs(source_db, n_doc_ids, doc_ids, 0, 1,
             &state, get_docs_to_tempfile);
     if (status != U1DB_OK) { goto finish; }
     status = finalize_and_send_temp_file(st, temp_fd, source_replica_uid, &req);

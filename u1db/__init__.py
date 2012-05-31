@@ -16,6 +16,8 @@
 
 """U1DB"""
 
+import simplejson
+
 __version_info__ = (0, 0, 1, 'dev', 0)
 __version__ = '.'.join(map(str, __version_info__))
 
@@ -66,23 +68,42 @@ class Database(object):
         """
         raise NotImplementedError(self.whats_changed)
 
-    def get_doc(self, doc_id):
+    def get_doc(self, doc_id, include_deleted=False):
         """Get the JSON string for the given document.
 
         :param doc_id: The unique document identifier
+        :param include_deleted: If set to True, deleted documents will be
+            returned with empty content. Otherwise asking for a deleted
+            document will return None.
         :return: a Document object.
         """
         raise NotImplementedError(self.get_doc)
 
-    def get_docs(self, doc_ids, check_for_conflicts=True):
+    def get_docs(self, doc_ids, check_for_conflicts=True,
+                 include_deleted=False):
         """Get the JSON content for many documents.
 
         :param doc_ids: A list of document identifiers.
         :param check_for_conflicts: If set to False, then the conflict check
             will be skipped, and 'None' will be returned instead of True/False.
+        :param include_deleted: If set to True, deleted documents will be
+            returned with empty content. Otherwise deleted documents will not
+            be included in the results.
         :return: [Document] for each document id and matching doc_ids order.
         """
         raise NotImplementedError(self.get_docs)
+
+    def get_all_docs(self, include_deleted=False):
+        """Get the JSON content for all documents in the database.
+
+        :param include_deleted: If set to True, deleted documents will be
+            returned with empty content. Otherwise deleted documents will not
+            be included in the results.
+        :return: (generation, [Document])
+            The current generation of the database, followed by a list of all
+            the documents in the database.
+        """
+        raise NotImplementedError(self.get_all_docs)
 
     def create_doc(self, content, doc_id=None):
         """Create a new document.
@@ -290,21 +311,33 @@ class Database(object):
         raise NotImplementedError(self._put_doc_if_newer)
 
 
-
 class Document(object):
     """Container for handling a single document.
 
     :ivar doc_id: Unique identifier for this document.
     :ivar rev:
-    :ivar content: The JSON string for this document.
+    :ivar json: The JSON string for this document.
     :ivar has_conflicts: Boolean indicating if this document has conflicts
     """
 
-    def __init__(self, doc_id, rev, content, has_conflicts=False):
+    def __init__(self, doc_id, rev, json, has_conflicts=False):
         self.doc_id = doc_id
         self.rev = rev
-        self.content = content
+        self._json = json
+        self._content = None
         self.has_conflicts = has_conflicts
+
+    def same_content_as(self, other):
+        """Compare the content of two documents."""
+        if self._json:
+            c1 = simplejson.loads(self._json)
+        else:
+            c1 = self._content
+        if other._json:
+            c2 = simplejson.loads(other._json)
+        else:
+            c2 = other._content
+        return c1 == c2
 
     def __repr__(self):
         if self.has_conflicts:
@@ -312,7 +345,7 @@ class Document(object):
         else:
             extra = ''
         return '%s(%s, %s%s, %r)' % (self.__class__.__name__, self.doc_id,
-                                     self.rev, extra, self.content)
+                                     self.rev, extra, self.get_json())
 
     def __hash__(self):
         raise NotImplementedError(self.__hash__)
@@ -320,7 +353,10 @@ class Document(object):
     def __eq__(self, other):
         if not isinstance(other, Document):
             return NotImplemented
-        return self.__dict__ == other.__dict__
+        return (
+            self.doc_id == other.doc_id and self.rev == other.rev and
+            self.same_content_as(other) and self.has_conflicts ==
+            other.has_conflicts)
 
     def __lt__(self, other):
         """This is meant for testing, not part of the official api.
@@ -331,8 +367,57 @@ class Document(object):
         """
         # Since this is just for testing, we don't worry about comparing
         # against things that aren't a Document.
-        return ((self.doc_id, self.rev, self.content)
-            < (other.doc_id, other.rev, other.content))
+        return ((self.doc_id, self.rev, self.get_json())
+            < (other.doc_id, other.rev, other.get_json()))
+
+    def get_json(self):
+        """Get the json serialization of this document."""
+        if self._json is not None:
+            return self._json
+        if self._content is not None:
+            return simplejson.dumps(self._content)
+        return None
+
+    def set_json(self, json):
+        """Set the json serialization of this document."""
+        self._content = None
+        self._json = json
+
+    def make_tombstone(self):
+        """Make this document into a tombstone."""
+        self._json = None
+        self._content = None
+
+    def is_tombstone(self):
+        """Return True if the document is a tombstone, False otherwise."""
+        if self._content is not None:
+            return False
+        if self._json is not None:
+            return False
+        return True
+
+    # The following part of the API is optional: no implementation is forced to
+    # have it but if the language supports dictionaries/hashtables, it makes
+    # Documents a lot more user friendly.
+
+    def _get_content(self):
+        """Get the dictionary representing this document."""
+        if self._json is not None:
+            self._content = simplejson.loads(self._json)
+            self._json = None
+        if self._content is not None:
+            return self._content
+        return None
+
+    def _set_content(self, content):
+        """Set the dictionary representing this document."""
+        self._json = None
+        self._content = content
+
+    content = property(
+        _get_content, _set_content, doc="Content of the Document.")
+
+    # End of optional part.
 
 
 class SyncTarget(object):

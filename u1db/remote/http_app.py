@@ -38,6 +38,13 @@ from u1db.remote import (
     )
 
 
+def parse_bool(expression):
+    """Parse boolean querystring parameter."""
+    if expression == 'true':
+        return True
+    return False
+
+
 class BadRequest(Exception):
     """Bad request."""
 
@@ -89,7 +96,8 @@ class _FencedReader(object):
 
 
 def http_method(**control):
-    """Decoration for handling of query arguments and content for a HTTP method.
+    """Decoration for handling of query arguments and content for a HTTP
+       method.
 
        args and content here are the query arguments and body of the incoming
        HTTP requests.
@@ -118,6 +126,7 @@ def http_method(**control):
     content_as_args = control.pop('content_as_args', False)
     no_query = control.pop('no_query', False)
     conversions = control.items()
+
     def wrap(f):
         argspec = inspect.getargspec(f)
         assert argspec.args[0] == "self"
@@ -125,6 +134,7 @@ def http_method(**control):
         ndefaults = len(argspec.defaults or ())
         required_args = set(argspec.args[1:nargs - ndefaults])
         all_args = set(argspec.args)
+
         @functools.wraps(f)
         def wrapper(self, args, content):
             if no_query and args:
@@ -147,7 +157,9 @@ def http_method(**control):
                 except ValueError:
                     raise BadRequest()
             return f(self, **args)
+
         return wrapper
+
     return wrap
 
 
@@ -243,9 +255,9 @@ class DocResource(object):
         self.db.delete_doc(doc)
         self.responder.send_response_json(200, rev=doc.rev)
 
-    @http_method()
-    def get(self):
-        doc = self.db.get_doc(self.id)
+    @http_method(include_deleted=parse_bool)
+    def get(self, include_deleted=False):
+        doc = self.db.get_doc(self.id, include_deleted=include_deleted)
         if doc is None:
             wire_descr = errors.DocumentDoesNotExist.wire_description
             self.responder.send_response_json(
@@ -260,13 +272,15 @@ class DocResource(object):
             'x-u1db-rev': doc.rev,
             'x-u1db-has-conflicts': simplejson.dumps(doc.has_conflicts)
             }
-        if doc.content is None:
+        if doc.is_tombstone():
             self.responder.send_response_json(
-               http_errors.wire_description_to_status[errors.DOCUMENT_DELETED],
+               http_errors.wire_description_to_status[
+                   errors.DOCUMENT_DELETED],
                error=errors.DOCUMENT_DELETED,
                headers=headers)
         else:
-            self.responder.send_response_content(doc.content, headers=headers)
+            self.responder.send_response_content(
+                doc.get_json(), headers=headers)
 
 
 @url_to_resource.register
@@ -287,11 +301,11 @@ class SyncResource(object):
     @http_method()
     def get(self):
         result = self.target.get_sync_info(self.source_replica_uid)
-        self.responder.send_response_json(target_replica_uid=result[0],
-                                     target_replica_generation=result[1],
-                                     source_replica_uid=self.source_replica_uid,
-                                     source_replica_generation=result[2],
-                                     source_transaction_id=result[3])
+        self.responder.send_response_json(
+            target_replica_uid=result[0], target_replica_generation=result[1],
+            source_replica_uid=self.source_replica_uid,
+            source_replica_generation=result[2],
+            source_transaction_id=result[3])
 
     @http_method(generation=int,
                  content_as_args=True, no_query=True)
@@ -316,7 +330,7 @@ class SyncResource(object):
 
     def post_end(self):
         def send_doc(doc, gen):
-            entry = dict(id=doc.doc_id, rev=doc.rev, content=doc.content,
+            entry = dict(id=doc.doc_id, rev=doc.rev, content=doc.get_json(),
                          gen=gen)
             self.responder.stream_entry(entry)
         new_gen = self.sync_exch.find_changes_to_return()
@@ -421,7 +435,8 @@ class HTTPInvocationByMethodWithBody(object):
         args = urlparse.parse_qsl(self.environ['QUERY_STRING'],
                                   strict_parsing=False)
         try:
-            args = dict((k.decode('utf-8'), v.decode('utf-8')) for k, v in args)
+            args = dict(
+                (k.decode('utf-8'), v.decode('utf-8')) for k, v in args)
         except ValueError:
             raise BadRequest()
         method = self.environ['REQUEST_METHOD'].lower()
@@ -433,7 +448,7 @@ class HTTPInvocationByMethodWithBody(object):
             # to support chunked enconding
             try:
                 content_length = int(self.environ['CONTENT_LENGTH'])
-            except (ValueError, KeyError), e:
+            except (ValueError, KeyError):
                 raise BadRequest
             if content_length <= 0:
                 raise BadRequest
@@ -486,7 +501,8 @@ class HTTPApp(object):
         resource_cls, params = url_to_resource.match(environ['PATH_INFO'])
         if resource_cls is None:
             raise BadRequest  # 404 instead?
-        resource = resource_cls(state=self.state, responder=responder, **params)
+        resource = resource_cls(
+            state=self.state, responder=responder, **params)
         return resource
 
     def __call__(self, environ, start_response):
