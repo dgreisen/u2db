@@ -161,7 +161,8 @@ class TestArgs(tests.TestCase):
         self.assertEqual('doc-id', args.doc_id)
 
     def test_resolve(self):
-        args = self.parse_args(['resolve-doc', 'db', 'doc-id', 'rev:1', 'other:1'])
+        args = self.parse_args(
+            ['resolve-doc', 'db', 'doc-id', 'rev:1', 'other:1'])
         self.assertEqual(client.CmdResolve, args.subcommand)
         self.assertEqual('db', args.database)
         self.assertEqual('doc-id', args.doc_id)
@@ -294,7 +295,7 @@ class TestCmdGetDocConflicts(TestCaseWithDB):
         self.db._put_doc_if_newer(self.doc2, save_conflict=True)
 
     def test_get_doc_conflicts_none(self):
-        doc = self.db.create_doc(tests.simple_doc, doc_id='a-doc')
+        self.db.create_doc(tests.simple_doc, doc_id='a-doc')
         cmd = self.make_command(client.CmdGetDocConflicts)
         cmd.run(self.db_path, 'a-doc')
         self.assertEqual([],
@@ -420,8 +421,10 @@ class TestCmdResolve(TestCaseWithDB):
         cmd.run(self.db_path, 'my-doc', [self.doc1.rev, self.doc2.rev], inf)
         doc = self.db.get_doc('my-doc')
         vec = vectorclock.VectorClockRev(doc.rev)
-        self.assertTrue(vec.is_newer(vectorclock.VectorClockRev(self.doc1.rev)))
-        self.assertTrue(vec.is_newer(vectorclock.VectorClockRev(self.doc2.rev)))
+        self.assertTrue(
+            vec.is_newer(vectorclock.VectorClockRev(self.doc1.rev)))
+        self.assertTrue(
+            vec.is_newer(vectorclock.VectorClockRev(self.doc2.rev)))
         self.assertGetDoc(self.db, 'my-doc', doc.rev, tests.nested_doc, False)
         self.assertEqual('', cmd.stdout.getvalue())
         self.assertEqual('rev: %s\n' % (doc.rev,),
@@ -437,8 +440,9 @@ class TestCmdResolve(TestCaseWithDB):
         doc = self.db.get_doc('my-doc')
         self.assertGetDoc(self.db, 'my-doc', doc.rev, moar, True)
         self.assertEqual('', cmd.stdout.getvalue())
-        self.assertEqual('rev: %s\nDocument still has conflicts.\n' % (doc.rev,),
-                         cmd.stderr.getvalue())
+        self.assertEqual(
+            'rev: %s\nDocument still has conflicts.\n' % (doc.rev,),
+            cmd.stderr.getvalue())
 
     def test_resolve_no_db(self):
         cmd = self.make_command(client.CmdResolve)
@@ -453,8 +457,6 @@ class TestCmdResolve(TestCaseWithDB):
         self.assertEqual(retval, 1)
         self.assertEqual(cmd.stdout.getvalue(), '')
         self.assertEqual(cmd.stderr.getvalue(), 'Document does not exist.\n')
-
-
 
 
 class TestCmdSync(TestCaseWithDB):
@@ -520,7 +522,7 @@ class TestCmdCreateIndex(TestCaseWithDB):
         self.assertEqual(cmd.stderr.getvalue(), 'Database does not exist.\n')
 
     def test_create_dupe_index(self):
-        self.db.create_index("foo", ["bar"])
+        self.db.create_index("foo", "bar")
         cmd = self.make_command(client.CmdCreateIndex)
         retval = cmd.run(self.db_path, "foo", ["bar"])
         self.assertEqual(retval, None)
@@ -528,7 +530,7 @@ class TestCmdCreateIndex(TestCaseWithDB):
         self.assertEqual(cmd.stderr.getvalue(), '')
 
     def test_create_dupe_index_different_expression(self):
-        self.db.create_index("foo", ["bar"])
+        self.db.create_index("foo", "bar")
         cmd = self.make_command(client.CmdCreateIndex)
         retval = cmd.run(self.db_path, "foo", ["baz"])
         self.assertEqual(retval, 1)
@@ -555,7 +557,7 @@ class TestCmdListIndexes(TestCaseWithDB):
         self.assertEqual(cmd.stderr.getvalue(), '')
 
     def test_list_indexes(self):
-        self.db.create_index("foo", ["bar", "baz"])
+        self.db.create_index("foo", "bar", "baz")
         cmd = self.make_command(client.CmdListIndexes)
         retval = cmd.run(self.db_path)
         self.assertEqual(retval, None)
@@ -563,9 +565,9 @@ class TestCmdListIndexes(TestCaseWithDB):
         self.assertEqual(cmd.stderr.getvalue(), '')
 
     def test_list_several_indexes(self):
-        self.db.create_index("foo", ["bar", "baz"])
-        self.db.create_index("bar", ["baz", "foo"])
-        self.db.create_index("baz", ["foo", "bar"])
+        self.db.create_index("foo", "bar", "baz")
+        self.db.create_index("bar", "baz", "foo")
+        self.db.create_index("baz", "foo", "bar")
         cmd = self.make_command(client.CmdListIndexes)
         retval = cmd.run(self.db_path)
         self.assertEqual(retval, None)
@@ -587,7 +589,7 @@ class TestCmdListIndexes(TestCaseWithDB):
 class TestCmdDeleteIndex(TestCaseWithDB):
 
     def test_delete_index(self):
-        self.db.create_index("foo", ["bar", "baz"])
+        self.db.create_index("foo", "bar", "baz")
         cmd = self.make_command(client.CmdDeleteIndex)
         retval = cmd.run(self.db_path, "foo")
         self.assertEqual(retval, None)
@@ -613,7 +615,7 @@ class TestCmdDeleteIndex(TestCaseWithDB):
 class TestCmdGetIndexKeys(TestCaseWithDB):
 
     def test_get_index_keys(self):
-        self.db.create_index("foo", ["bar"])
+        self.db.create_index("foo", "bar")
         self.db.create_doc('{"bar": 42}')
         cmd = self.make_command(client.CmdGetIndexKeys)
         retval = cmd.run(self.db_path, "foo")
@@ -622,7 +624,7 @@ class TestCmdGetIndexKeys(TestCaseWithDB):
         self.assertEqual(cmd.stderr.getvalue(), '')
 
     def test_get_index_keys_empty(self):
-        self.db.create_index("foo", ["bar"])
+        self.db.create_index("foo", "bar")
         cmd = self.make_command(client.CmdGetIndexKeys)
         retval = cmd.run(self.db_path, "foo")
         self.assertEqual(retval, None)
@@ -647,7 +649,7 @@ class TestCmdGetIndexKeys(TestCaseWithDB):
 class TestCmdGetFromIndex(TestCaseWithDB):
 
     def test_get_from_index(self):
-        self.db.create_index("index", ["key"])
+        self.db.create_index("index", "key")
         doc1 = self.db.create_doc(tests.simple_doc)
         doc2 = self.db.create_doc(tests.nested_doc)
         cmd = self.make_command(client.CmdGetFromIndex)
@@ -664,7 +666,7 @@ class TestCmdGetFromIndex(TestCaseWithDB):
         self.assertEqual(cmd.stderr.getvalue(), '')
 
     def test_get_from_index_empty(self):
-        self.db.create_index("index", ["key"])
+        self.db.create_index("index", "key")
         cmd = self.make_command(client.CmdGetFromIndex)
         retval = cmd.run(self.db_path, "index", ["value"])
         self.assertEqual(retval, None)
@@ -686,7 +688,7 @@ class TestCmdGetFromIndex(TestCaseWithDB):
         self.assertEqual(cmd.stderr.getvalue(), 'Index does not exist.\n')
 
     def test_get_from_index_two_expr_instead_of_one(self):
-        self.db.create_index("index", ["key1"])
+        self.db.create_index("index", "key1")
         cmd = self.make_command(client.CmdGetFromIndex)
         cmd.argv = ["XX", "YY"]
         retval = cmd.run(self.db_path, "index", ["value1", "value2"])
@@ -699,7 +701,7 @@ class TestCmdGetFromIndex(TestCaseWithDB):
                          % self.db_path, cmd.stderr.getvalue())
 
     def test_get_from_index_three_expr_instead_of_two(self):
-        self.db.create_index("index", ["key1", "key2"])
+        self.db.create_index("index", "key1", "key2")
         cmd = self.make_command(client.CmdGetFromIndex)
         cmd.argv = ["XX", "YY"]
         retval = cmd.run(self.db_path, "index", ["value1", "value2", "value3"])
@@ -712,7 +714,7 @@ class TestCmdGetFromIndex(TestCaseWithDB):
                          % self.db_path, cmd.stderr.getvalue())
 
     def test_get_from_index_one_expr_instead_of_two(self):
-        self.db.create_index("index", ["key1", "key2"])
+        self.db.create_index("index", "key1", "key2")
         cmd = self.make_command(client.CmdGetFromIndex)
         cmd.argv = ["XX", "YY"]
         retval = cmd.run(self.db_path, "index", ["value1"])
@@ -725,7 +727,7 @@ class TestCmdGetFromIndex(TestCaseWithDB):
                          % self.db_path, cmd.stderr.getvalue())
 
     def test_get_from_index_cant_bad_glob(self):
-        self.db.create_index("index", ["key1", "key2"])
+        self.db.create_index("index", "key1", "key2")
         cmd = self.make_command(client.CmdGetFromIndex)
         cmd.argv = ["XX", "YY"]
         retval = cmd.run(self.db_path, "index", ["value1*", "value2"])

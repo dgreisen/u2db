@@ -145,7 +145,7 @@ class Database(object):
         """
         raise NotImplementedError(self.delete_doc)
 
-    def create_index(self, index_name, index_expression):
+    def create_index(self, index_name, *index_expressions):
         """Create an named index, which can then be queried for future lookups.
         Creating an index which already exists is not an error, and is cheap.
         Creating an index which does not match the index_expressions of the
@@ -154,10 +154,11 @@ class Database(object):
         and the index generated.
 
         :name: A unique name which can be used as a key prefix
-        :index_expressions: A list of index expressions defining the index
+        :index_expressions: index expressions defining the index
             information. Examples:
-                ["field"] to index alphabetically sorted on field.
-                ["number(field, bits)", "lower(field)", "field.subfield"]
+                "fieldname" to index alphabetically sorted on field.
+                "number(fieldname, width)", "lower(fieldname)",
+                "fieldname.subfieldname"
         """
         raise NotImplementedError(self.create_index)
 

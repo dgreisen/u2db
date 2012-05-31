@@ -1036,14 +1036,14 @@ cdef class CDatabase(object):
         if status != U1DB_OK:
             raise RuntimeError("Failed to _sync_exchange: %d" % (status,))
 
-    def create_index(self, index_name, index_expression):
+    def create_index(self, index_name, *index_expressions):
         cdef const_char_ptr *expressions
         cdef int n_expressions
 
         # keep a reference to new_objs so that the pointers in expressions
         # remain valid.
         new_objs = _list_to_str_array(
-            index_expression, &expressions, &n_expressions)
+            index_expressions, &expressions, &n_expressions)
         try:
             handle_status("create_index",
                 u1db_create_index(
