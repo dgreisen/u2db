@@ -14,7 +14,7 @@
 # You should have received a copy of the GNU Lesser General Public License
 # along with u1db.  If not, see <http://www.gnu.org/licenses/>.
 
-"""HTTPDabase to access a remote db over the HTTP API."""
+"""HTTPDatabase to access a remote db over the HTTP API."""
 
 import simplejson
 import uuid
@@ -37,6 +37,13 @@ DOCUMENT_DELETED_STATUS = http_errors.wire_description_to_status[
 
 class HTTPDatabase(http_client.HTTPClientBase, Database):
     """Implement the Database API to a remote HTTP server."""
+
+    def __init__(self, url, document_factory=None):
+        super(HTTPDatabase, self).__init__(url)
+        self._factory = document_factory or Document
+
+    def set_document_factory(self, factory):
+        self._factory = factory
 
     @staticmethod
     def open_database(url, create):
@@ -91,7 +98,7 @@ class HTTPDatabase(http_client.HTTPClientBase, Database):
                 raise
         doc_rev = headers['x-u1db-rev']
         has_conflicts = simplejson.loads(headers['x-u1db-has-conflicts'])
-        doc = Document(doc_id, doc_rev, res)
+        doc = self._factory(doc_id, doc_rev, res)
         doc.has_conflicts = has_conflicts
         return doc
 
@@ -100,7 +107,7 @@ class HTTPDatabase(http_client.HTTPClientBase, Database):
             doc_id = 'D-%s' % (uuid.uuid4().hex,)
         res, headers = self._request_json('PUT', ['doc', doc_id], {},
                                           content, 'application/json')
-        new_doc = Document(doc_id, res['rev'], content)
+        new_doc = self._factory(doc_id, res['rev'], content)
         return new_doc
 
     def delete_doc(self, doc):
