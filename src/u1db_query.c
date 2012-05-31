@@ -741,6 +741,13 @@ u1db__format_query(int n_fields, va_list argp, char **buf, int *wildcard)
             add_to_buf(&cur, &buf_size, " AND d%d.value = ?", i);
         }
     }
+    add_to_buf(&cur, &buf_size, " ORDER BY ");
+    for (i = 0; i < n_fields; ++i) {
+        if (i != 0) {
+            add_to_buf(&cur, &buf_size, ", ");
+        }
+        add_to_buf(&cur, &buf_size, "d%d.value", i);
+    }
 finish:
     if (status != U1DB_OK && *buf != NULL) {
         free(*buf);

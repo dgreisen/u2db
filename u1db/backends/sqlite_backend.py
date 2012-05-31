@@ -619,9 +619,12 @@ class SQLiteDatabase(CommonBackend):
                         raise errors.InvalidGlobbing
                     where.append(exact_where[idx])
                     args.append(value)
-            statement = ("SELECT d.doc_id, d.doc_rev, d.content"
-                         " FROM document d, "
-                         + ', '.join(tables) + " WHERE " + ' AND '.join(where))
+            statement = (
+                "SELECT d.doc_id, d.doc_rev, d.content FROM document d, %s "
+                "WHERE %s ORDER BY %s;" % (
+                    ', '.join(tables), ' AND '.join(where),
+                    ', '.join(
+                        ['d%d.value' % i for i in range(len(definition))])))
             try:
                 c.execute(statement, tuple(args))
             except dbapi2.OperationalError, e:
