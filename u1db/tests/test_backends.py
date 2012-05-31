@@ -1194,7 +1194,7 @@ class PythonBackendTests(tests.DatabaseBaseTests):
     def test_get_from_index_with_factory(self):
         self.db.set_document_factory(TestAlternativeDocument)
         self.db.create_doc(simple_doc)
-        self.db.create_index('test-idx', ['key'])
+        self.db.create_index('test-idx', 'key')
         self.assertTrue(
             isinstance(
                 self.db.get_from_index('test-idx', [('value',)])[0],
