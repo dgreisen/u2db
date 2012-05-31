@@ -94,7 +94,7 @@ class TestSQLitePartialExpandDatabase(tests.TestCase):
         self.db = sqlite_backend.SQLitePartialExpandDatabase(':memory:')
         self.assertIsNot(None, self.db._replica_uid)
         self.assertEqual(32, len(self.db._replica_uid))
-        val = int(self.db._replica_uid, 16)
+        int(self.db._replica_uid, 16)
 
     def test__close_sqlite_handle(self):
         raw_db = self.db._get_sqlite_handle()
@@ -152,16 +152,16 @@ class TestSQLitePartialExpandDatabase(tests.TestCase):
         self.assertEqual(0, self.db._get_generation())
 
     def test_create_index(self):
-        self.db.create_index('test-idx', ["key"])
+        self.db.create_index('test-idx', "key")
         self.assertEqual([('test-idx', ["key"])], self.db.list_indexes())
 
     def test_create_index_multiple_fields(self):
-        self.db.create_index('test-idx', ["key", "key2"])
+        self.db.create_index('test-idx', "key", "key2")
         self.assertEqual([('test-idx', ["key", "key2"])],
                          self.db.list_indexes())
 
     def test__get_index_definition(self):
-        self.db.create_index('test-idx', ["key", "key2"])
+        self.db.create_index('test-idx', "key", "key2")
         # TODO: How would you test that an index is getting used for an SQL
         #       request?
         self.assertEqual(["key", "key2"],
@@ -183,7 +183,7 @@ class TestSQLitePartialExpandDatabase(tests.TestCase):
                          self.db.list_indexes())
 
     def test_no_indexes_no_document_fields(self):
-        doc1 = self.db.create_doc(
+        self.db.create_doc(
             '{"key1": "val1", "key2": "val2"}')
         c = self.db._get_sqlite_handle().cursor()
         c.execute("SELECT doc_id, field_name, value FROM document_fields"
@@ -197,7 +197,7 @@ class TestSQLitePartialExpandDatabase(tests.TestCase):
         c.execute("SELECT doc_id, field_name, value FROM document_fields"
                   " ORDER BY doc_id, field_name, value")
         self.assertEqual([], c.fetchall())
-        self.db.create_index('test', ['key1', 'key2'])
+        self.db.create_index('test', 'key1', 'key2')
         c.execute("SELECT doc_id, field_name, value FROM document_fields"
                   " ORDER BY doc_id, field_name, value")
         self.assertEqual(sorted(
@@ -208,7 +208,7 @@ class TestSQLitePartialExpandDatabase(tests.TestCase):
             ]), sorted(c.fetchall()))
 
     def test_put_updates_fields(self):
-        self.db.create_index('test', ['key1', 'key2'])
+        self.db.create_index('test', 'key1', 'key2')
         doc1 = self.db.create_doc(
             '{"key1": "val1", "key2": "val2"}')
         doc1.content = {"key1": "val1", "key2": "valy"}
@@ -221,7 +221,7 @@ class TestSQLitePartialExpandDatabase(tests.TestCase):
                          ], c.fetchall())
 
     def test_put_updates_nested_fields(self):
-        self.db.create_index('test', ['key', 'sub.doc'])
+        self.db.create_index('test', 'key', 'sub.doc')
         doc1 = self.db.create_doc(nested_doc)
         c = self.db._get_sqlite_handle().cursor()
         c.execute("SELECT doc_id, field_name, value FROM document_fields"
@@ -233,13 +233,16 @@ class TestSQLitePartialExpandDatabase(tests.TestCase):
     def test__ensure_schema_rollback(self):
         temp_dir = self.createTempDir(prefix='u1db-test-')
         path = temp_dir + '/rollback.db'
+
         class SQLitePartialExpandDbTesting(
             sqlite_backend.SQLitePartialExpandDatabase):
+
             def _set_replica_uid_in_transaction(self, uid):
                 super(SQLitePartialExpandDbTesting,
                     self)._set_replica_uid_in_transaction(uid)
                 if fail:
                     raise Exception()
+
         db = SQLitePartialExpandDbTesting.__new__(SQLitePartialExpandDbTesting)
         db._db_handle = dbapi2.connect(path)  # db is there but not yet init-ed
         fail = True
@@ -250,7 +253,7 @@ class TestSQLitePartialExpandDatabase(tests.TestCase):
     def test__open_database(self):
         temp_dir = self.createTempDir(prefix='u1db-test-')
         path = temp_dir + '/test.sqlite'
-        db = sqlite_backend.SQLitePartialExpandDatabase(path)
+        sqlite_backend.SQLitePartialExpandDatabase(path)
         db2 = sqlite_backend.SQLiteDatabase._open_database(path)
         self.assertIsInstance(db2, sqlite_backend.SQLitePartialExpandDatabase)
 
@@ -268,14 +271,17 @@ class TestSQLitePartialExpandDatabase(tests.TestCase):
         db._db_handle = dbapi2.connect(path)  # db is there but not yet init-ed
         self.addCleanup(db.close)
         observed = []
+
         class SQLiteDatabaseTesting(sqlite_backend.SQLiteDatabase):
             WAIT_FOR_PARALLEL_INIT_HALF_INTERVAL = 0.1
+
             @classmethod
             def _which_index_storage(cls, c):
                 res = super(SQLiteDatabaseTesting, cls)._which_index_storage(c)
                 db._ensure_schema()  # init db
                 observed.append(res[0])
                 return res
+
         db2 = SQLiteDatabaseTesting._open_database(path)
         self.addCleanup(db2.close)
         self.assertIsInstance(db2, sqlite_backend.SQLitePartialExpandDatabase)
@@ -292,7 +298,6 @@ class TestSQLitePartialExpandDatabase(tests.TestCase):
             f.write("")
         self.assertRaises(dbapi2.OperationalError,
                           SQLiteDatabaseTesting._open_database, path1)
-        path2 = temp_dir + '/invalid2.db'
         with open(path1, 'wb') as f:
             f.write("invalid")
         self.assertRaises(dbapi2.DatabaseError,
@@ -301,14 +306,14 @@ class TestSQLitePartialExpandDatabase(tests.TestCase):
     def test_open_database_existing(self):
         temp_dir = self.createTempDir(prefix='u1db-test-')
         path = temp_dir + '/existing.sqlite'
-        db = sqlite_backend.SQLitePartialExpandDatabase(path)
+        sqlite_backend.SQLitePartialExpandDatabase(path)
         db2 = sqlite_backend.SQLiteDatabase.open_database(path, create=False)
         self.assertIsInstance(db2, sqlite_backend.SQLitePartialExpandDatabase)
 
     def test_open_database_create(self):
         temp_dir = self.createTempDir(prefix='u1db-test-')
         path = temp_dir + '/new.sqlite'
-        db = sqlite_backend.SQLiteDatabase.open_database(path, create=True)
+        sqlite_backend.SQLiteDatabase.open_database(path, create=True)
         db2 = sqlite_backend.SQLiteDatabase.open_database(path, create=False)
         self.assertIsInstance(db2, sqlite_backend.SQLitePartialExpandDatabase)
 
@@ -348,13 +353,13 @@ class TestSQLitePartialExpandDatabase(tests.TestCase):
         self.assertTransform('v..al%', 'v.al*')
 
     def test__get_indexed_fields(self):
-        self.db.create_index('idx1', ['a', 'b'])
+        self.db.create_index('idx1', 'a', 'b')
         self.assertEqual(set(['a', 'b']), self.db._get_indexed_fields())
-        self.db.create_index('idx2', ['b', 'c'])
+        self.db.create_index('idx2', 'b', 'c')
         self.assertEqual(set(['a', 'b', 'c']), self.db._get_indexed_fields())
 
     def test_indexed_fields_expanded(self):
-        self.db.create_index('idx1', ['key1'])
+        self.db.create_index('idx1', 'key1')
         doc1 = self.db.create_doc('{"key1": "val1", "key2": "val2"}')
         self.assertEqual(set(['key1']), self.db._get_indexed_fields())
         c = self.db._get_sqlite_handle().cursor()
@@ -364,7 +369,7 @@ class TestSQLitePartialExpandDatabase(tests.TestCase):
 
     def test_create_index_updates_fields(self):
         doc1 = self.db.create_doc('{"key1": "val1", "key2": "val2"}')
-        self.db.create_index('idx1', ['key1'])
+        self.db.create_index('idx1', 'key1')
         self.assertEqual(set(['key1']), self.db._get_indexed_fields())
         c = self.db._get_sqlite_handle().cursor()
         c.execute("SELECT doc_id, field_name, value FROM document_fields"

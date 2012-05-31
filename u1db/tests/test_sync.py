@@ -452,7 +452,7 @@ class DatabaseSyncTests(tests.DatabaseBaseTests):
 
     def test_sync_pulls_changes(self):
         doc = self.db2.create_doc(simple_doc)
-        self.db1.create_index('test-idx', ['key'])
+        self.db1.create_index('test-idx', 'key')
         self.assertEqual(0, self.sync(self.db1, self.db2))
         self.assertGetDoc(self.db1, doc.doc_id, doc.rev, simple_doc, False)
         self.assertEqual(1, self.db1._get_sync_gen_info('test2')[0])
@@ -536,7 +536,7 @@ class DatabaseSyncTests(tests.DatabaseBaseTests):
         doc1 = self.db1.create_doc(simple_doc)
         doc_id = doc1.doc_id
         doc1_rev = doc1.rev
-        self.db1.create_index('test-idx', ['key'])
+        self.db1.create_index('test-idx', 'key')
         new_doc = '{"key": "altval"}'
         doc2 = self.db2.create_doc(new_doc, doc_id=doc_id)
         doc2_rev = doc2.rev
@@ -558,7 +558,7 @@ class DatabaseSyncTests(tests.DatabaseBaseTests):
     def test_sync_sees_remote_delete_conflicted(self):
         doc1 = self.db1.create_doc(simple_doc)
         doc_id = doc1.doc_id
-        self.db1.create_index('test-idx', ['key'])
+        self.db1.create_index('test-idx', 'key')
         self.sync(self.db1, self.db2)
         doc2 = self.make_document(doc1.doc_id, doc1.rev, doc1.get_json())
         new_doc = '{"key": "altval"}'
@@ -583,7 +583,7 @@ class DatabaseSyncTests(tests.DatabaseBaseTests):
         doc = self.db1.create_doc(simple_doc)
         doc_id = doc.doc_id
         doc1_rev = doc.rev
-        self.db1.create_index('test-idx', ['key'])
+        self.db1.create_index('test-idx', 'key')
         self.sync(self.db1, self.db2)
         content1 = '{"key": "localval"}'
         content2 = '{"key": "altval"}'
@@ -611,9 +611,9 @@ class DatabaseSyncTests(tests.DatabaseBaseTests):
     def test_sync_propagates_deletes(self):
         doc1 = self.db1.create_doc(simple_doc)
         doc_id = doc1.doc_id
-        self.db1.create_index('test-idx', ['key'])
+        self.db1.create_index('test-idx', 'key')
         self.sync(self.db1, self.db2)
-        self.db2.create_index('test-idx', ['key'])
+        self.db2.create_index('test-idx', 'key')
         self.db3 = self.create_database('test3')
         self.sync(self.db1, self.db3)
         self.db1.delete_doc(doc1)

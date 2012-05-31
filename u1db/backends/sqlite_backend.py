@@ -716,12 +716,12 @@ class SQLitePartialExpandDatabase(SQLiteDatabase):
         c.execute("INSERT INTO transaction_log(doc_id, transaction_id)"
                   " VALUES (?, ?)", (doc.doc_id, trans_id))
 
-    def create_index(self, index_name, index_expression):
+    def create_index(self, index_name, *index_expressions):
         with self._db_handle:
             c = self._db_handle.cursor()
             cur_fields = self._get_indexed_fields()
             definition = [(index_name, idx, field)
-                          for idx, field in enumerate(index_expression)]
+                          for idx, field in enumerate(index_expressions)]
             try:
                 c.executemany("INSERT INTO index_definitions VALUES (?, ?, ?)",
                               definition)
@@ -730,8 +730,8 @@ class SQLitePartialExpandDatabase(SQLiteDatabase):
                 if stored_def == [x[-1] for x in definition]:
                     return
                 raise errors.IndexNameTakenError, e, sys.exc_info()[2]
-            new_fields = set([f for f in index_expression
-                              if f not in cur_fields])
+            new_fields = set(
+                [f for f in index_expressions if f not in cur_fields])
             if new_fields:
                 self._update_all_indexes(new_fields)
 

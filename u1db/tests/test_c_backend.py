@@ -98,27 +98,27 @@ class TestCDatabase(BackendTests):
         # code, rather than also testing the index management code.
         self.db = c_backend_wrapper.CDatabase(':memory:')
         doc = self.db.create_doc(tests.simple_doc)
-        self.db.create_index("key-idx", ["key"])
+        self.db.create_index("key-idx", "key")
         docs = self.db.get_from_index('key-idx', [('value',)])
         self.assertEqual([doc], docs)
 
     def test_get_from_index_2(self):
         self.db = c_backend_wrapper.CDatabase(':memory:')
         doc = self.db.create_doc(tests.nested_doc)
-        self.db.create_index("multi-idx", ["key", "sub.doc"])
+        self.db.create_index("multi-idx", "key", "sub.doc")
         docs = self.db.get_from_index('multi-idx', [('value', 'underneath')])
         self.assertEqual([doc], docs)
 
     def test_get_index_keys(self):
         self.db = c_backend_wrapper.CDatabase(':memory:')
         self.db.create_doc(tests.simple_doc)
-        self.db.create_index("key-idx", ["key"])
+        self.db.create_index("key-idx", "key")
         keys = self.db.get_index_keys('key-idx')
         self.assertEqual(["value"], keys)
 
     def test__query_init_one_field(self):
         self.db = c_backend_wrapper.CDatabase(':memory:')
-        self.db.create_index("key-idx", ["key"])
+        self.db.create_index("key-idx", "key")
         query = self.db._query_init("key-idx")
         self.assertEqual("key-idx", query.index_name)
         self.assertEqual(1, query.num_fields)
@@ -126,7 +126,7 @@ class TestCDatabase(BackendTests):
 
     def test__query_init_two_fields(self):
         self.db = c_backend_wrapper.CDatabase(':memory:')
-        self.db.create_index("two-idx", ["key", "key2"])
+        self.db.create_index("two-idx", "key", "key2")
         query = self.db._query_init("two-idx")
         self.assertEqual("two-idx", query.index_name)
         self.assertEqual(2, query.num_fields)
