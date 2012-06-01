@@ -99,14 +99,14 @@ class TestCDatabase(BackendTests):
         self.db = c_backend_wrapper.CDatabase(':memory:')
         doc = self.db.create_doc(tests.simple_doc)
         self.db.create_index("key-idx", "key")
-        docs = self.db.get_from_index('key-idx', [('value',)])
+        docs = self.db.get_from_index('key-idx', 'value')
         self.assertEqual([doc], docs)
 
     def test_get_from_index_2(self):
         self.db = c_backend_wrapper.CDatabase(':memory:')
         doc = self.db.create_doc(tests.nested_doc)
         self.db.create_index("multi-idx", "key", "sub.doc")
-        docs = self.db.get_from_index('multi-idx', [('value', 'underneath')])
+        docs = self.db.get_from_index('multi-idx', 'value', 'underneath')
         self.assertEqual([doc], docs)
 
     def test_get_index_keys(self):

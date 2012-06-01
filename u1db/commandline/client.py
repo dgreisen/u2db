@@ -432,7 +432,7 @@ class CmdGetFromIndex(OneDbCmd):
     def run(self, database, index, values):
         try:
             db = self._open(database, create=False)
-            docs = db.get_from_index(index, [values])
+            docs = db.get_from_index(index, *values)
         except errors.DatabaseDoesNotExist:
             self.stderr.write("Database does not exist.\n")
         except errors.IndexDoesNotExist:

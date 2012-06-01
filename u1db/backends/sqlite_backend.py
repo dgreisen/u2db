@@ -576,7 +576,7 @@ class SQLiteDatabase(CommonBackend):
         assert value[-1] == '*'
         return value[:-1] + '%'
 
-    def get_from_index(self, index_name, key_values):
+    def get_from_index(self, index_name, *key_values):
         definition = self._get_index_definition(index_name)
         # First, build the definition. We join the document_fields table
         # against itself, as many times as the 'width' of our definition.
@@ -596,50 +596,47 @@ class SQLiteDatabase(CommonBackend):
                       + (" AND d%d.value LIKE ? ESCAPE '.'" % (i,))
                       for i in range(len(definition))]
         c = self._db_handle.cursor()
-        result = []
         is_wildcard = False
-        for key_value in key_values:
-            # Merge the lists together, so that:
-            # [field1, field2, field3], [val1, val2, val3]
-            # Becomes:
-            # (field1, val1, field2, val2, field3, val3)
-            args = []
-            where = []
-            if len(key_value) != len(definition):
-                raise errors.InvalidValueForIndex()
-            for idx, (field, value) in enumerate(zip(definition, key_value)):
-                args.append(field)
-                if value.endswith('*'):
-                    if value == '*':
-                        where.append(wildcard_where[idx])
-                    else:
-                        # This is a glob match
-                        if is_wildcard:
-                            # We can't have a partial wildcard following
-                            # another wildcard
-                            raise errors.InvalidGlobbing
-                        where.append(like_where[idx])
-                        args.append(self._transform_glob(value))
-                    is_wildcard = True
+        # Merge the lists together, so that:
+        # [field1, field2, field3], [val1, val2, val3]
+        # Becomes:
+        # (field1, val1, field2, val2, field3, val3)
+        args = []
+        where = []
+        if len(key_values) != len(definition):
+            raise errors.InvalidValueForIndex()
+        for idx, (field, value) in enumerate(zip(definition, key_values)):
+            args.append(field)
+            if value.endswith('*'):
+                if value == '*':
+                    where.append(wildcard_where[idx])
                 else:
+                    # This is a glob match
                     if is_wildcard:
+                        # We can't have a partial wildcard following
+                        # another wildcard
                         raise errors.InvalidGlobbing
-                    where.append(exact_where[idx])
-                    args.append(value)
-            statement = (
-                "SELECT d.doc_id, d.doc_rev, d.content FROM document d, %s "
-                "WHERE %s ORDER BY %s;" % (
-                    ', '.join(tables), ' AND '.join(where),
-                    ', '.join(
-                        ['d%d.value' % i for i in range(len(definition))])))
-            try:
-                c.execute(statement, tuple(args))
-            except dbapi2.OperationalError, e:
-                raise dbapi2.OperationalError(str(e) +
-                    '\nstatement: %s\nargs: %s\n' % (statement, args))
-            res = c.fetchall()
-            result.extend([self._factory(r[0], r[1], r[2]) for r in res])
-        return result
+                    where.append(like_where[idx])
+                    args.append(self._transform_glob(value))
+                is_wildcard = True
+            else:
+                if is_wildcard:
+                    raise errors.InvalidGlobbing
+                where.append(exact_where[idx])
+                args.append(value)
+        statement = (
+            "SELECT d.doc_id, d.doc_rev, d.content FROM document d, %s "
+            "WHERE %s ORDER BY %s;" % (
+                ', '.join(tables), ' AND '.join(where),
+                ', '.join(
+                    ['d%d.value' % i for i in range(len(definition))])))
+        try:
+            c.execute(statement, tuple(args))
+        except dbapi2.OperationalError, e:
+            raise dbapi2.OperationalError(str(e) +
+                '\nstatement: %s\nargs: %s\n' % (statement, args))
+        res = c.fetchall()
+        return [self._factory(r[0], r[1], r[2]) for r in res]
 
     def get_index_keys(self, index):
         c = self._db_handle.cursor()
