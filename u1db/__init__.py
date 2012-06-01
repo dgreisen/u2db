@@ -177,7 +177,7 @@ class Database(object):
         """
         raise NotImplementedError(self.list_indexes)
 
-    def get_from_index(self, index_name, key_values):
+    def get_from_index(self, index_name, *key_values):
         """Return documents that match the keys supplied.
 
         You must supply exactly the same number of values as has been defined
@@ -190,9 +190,9 @@ class Database(object):
 
         :return: List of [Document]
         :param index_name: The index to query
-        :param key_values: A list of tuple of values to match. eg, if you have
-            an index with 3 field,s then you would have:
-            [(x-val1, x-val2, x-val3), (y-val1, y-val2, y-val3), ...])
+        :param key_values: tuples of values to match. eg, if you have
+            an index with 3 fields then you would have:
+            (x-val1, x-val2, x-val3), (y-val1, y-val2, y-val3), ...
         """
         raise NotImplementedError(self.get_from_index)
 

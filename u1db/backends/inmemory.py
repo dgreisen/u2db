@@ -210,7 +210,7 @@ class InMemoryDatabase(CommonBackend):
             definitions.append((idx._name, idx._definition))
         return definitions
 
-    def get_from_index(self, index_name, key_values):
+    def get_from_index(self, index_name, *key_values):
         try:
             index = self._indexes[index_name]
         except KeyError:
@@ -337,16 +337,13 @@ class InMemoryIndex(object):
             return -1
         return last
 
-    def lookup(self, key_values):
+    def lookup(self, values):
         """Find docs that match the values."""
-        result = []
-        for values in key_values:
-            last = self._find_non_wildcards(values)
-            if last == -1:
-                result.extend(self._lookup_exact(values))
-            else:
-                result.extend(self._lookup_prefix(values[:last]))
-        return result
+        last = self._find_non_wildcards(values)
+        if last == -1:
+            return self._lookup_exact(values)
+        else:
+            return self._lookup_prefix(values[:last])
 
     def keys(self):
         """Find the indexed keys."""
