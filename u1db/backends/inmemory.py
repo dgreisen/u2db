@@ -222,6 +222,24 @@ class InMemoryDatabase(CommonBackend):
             result.append(self._factory(doc_id, doc_rev, doc))
         return result
 
+    def get_range_from_index(self, index_name, start_value=None,
+                             end_value=None):
+        """Return all documents with key values in the specified range."""
+        try:
+            index = self._indexes[index_name]
+        except KeyError:
+            raise errors.IndexDoesNotExist
+        if isinstance(start_value, basestring):
+            start_value = (start_value,)
+        if isinstance(end_value, basestring):
+            end_value = (end_value,)
+        doc_ids = index.lookup_range(start_value, end_value)
+        result = []
+        for doc_id in doc_ids:
+            doc_rev, doc = self._docs[doc_id]
+            result.append(self._factory(doc_id, doc_rev, doc))
+        return result
+
     def get_index_keys(self, index_name):
         try:
             index = self._indexes[index_name]
@@ -344,6 +362,21 @@ class InMemoryIndex(object):
             return self._lookup_exact(values)
         else:
             return self._lookup_prefix(values[:last])
+
+    def lookup_range(self, start_values, end_values):
+        """Find docs within the range."""
+        if start_values:
+            start_values = '\x01'.join(start_values)
+        if end_values:
+            end_values = '\x01'.join(end_values)
+        found = []
+        for key, doc_ids in sorted(self._values.iteritems()):
+            if start_values and start_values > key:
+                continue
+            if end_values and end_values < key:
+                continue
+            found.extend(doc_ids)
+        return found
 
     def keys(self):
         """Find the indexed keys."""
