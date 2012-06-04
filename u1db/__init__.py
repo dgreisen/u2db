@@ -180,21 +180,40 @@ class Database(object):
     def get_from_index(self, index_name, *key_values):
         """Return documents that match the keys supplied.
 
-        You must supply exactly the same number of values as has been defined
+        You must supply exactly the same number of values as have been defined
         in the index. It is possible to do a prefix match by using '*' to
         indicate a wildcard match. You can only supply '*' to trailing entries,
-        (eg [('val', '*', '*')] is allowed, but [('*', 'val', 'val')] is not.)
+        (eg 'val', '*', '*' is allowed, but '*', 'val', 'val' is not.)
         It is also possible to append a '*' to the last supplied value (eg
-        [('val*', '*', '*')] or [('val', 'val*', '*')], but not [('val*',
-        'val', '*')])
+        'val*', '*', '*' or 'val', 'val*', '*', but not 'val*', 'val', '*')
 
         :return: List of [Document]
         :param index_name: The index to query
-        :param key_values: tuples of values to match. eg, if you have
+        :param key_values: values to match. eg, if you have
             an index with 3 fields then you would have:
-            (x-val1, x-val2, x-val3), (y-val1, y-val2, y-val3), ...
+            get_from_index(index_name, val1, val2, val3)
         """
         raise NotImplementedError(self.get_from_index)
+
+    def get_range_from_index(self, index_name, start_value, end_value):
+        """Return documents that fall within the specified range.
+
+        For both start_value and end_value, one must supply exactly the same
+        number of values as have been defined in the index, or pass None. In
+        case of a single column index, a string is accepted as an alternative
+        for a tuple with a single value. No wildcards of any kind are
+        supported.
+
+        :return: List of [Document]
+        :param index_name: The index to query
+        :param start_values: tuples of values that define the upperbound of the
+            range. eg, if you have an index with 3 fields then you would have:
+            (x-val1, x-val2, x-val3), (y-val1, y-val2, y-val3), ...
+        :param end_values: tuples of values that define the upperbound of the
+            range. eg, if you have an index with 3 fields then you would have:
+            (x-val1, x-val2, x-val3), (y-val1, y-val2, y-val3), ...
+        """
+        raise NotImplementedError(self.get_range_from_index)
 
     def get_index_keys(self, index_name):
         """Return all keys under which documents are indexed in this index.
