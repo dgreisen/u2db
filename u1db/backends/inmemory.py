@@ -365,6 +365,8 @@ class InMemoryIndex(object):
 
     def lookup_range(self, start_values, end_values):
         """Find docs within the range."""
+        # TODO: Wildly inefficient, which is unlikely to be a problem for the
+        # inmemory implementation.
         if start_values:
             start_values = '\x01'.join(start_values)
         if end_values:
@@ -374,7 +376,7 @@ class InMemoryIndex(object):
             if start_values and start_values > key:
                 continue
             if end_values and end_values < key:
-                continue
+                break
             found.extend(doc_ids)
         return found
 
