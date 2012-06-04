@@ -104,8 +104,7 @@ cdef extern from "u1db/u1db.h":
                              ...)
     int u1db_get_range_from_index(u1database *db, u1query *query,
                                   void *context, u1db_doc_callback cb,
-                                  int n_start_values, const_char_ptr
-                                  *start_values, int n_end_values,
+                                  int n_values, const_char_ptr *start_values,
                                   const_char_ptr *end_values)
     int u1db_delete_index(u1database *db, char *index_name)
     int u1db_list_indexes(u1database *db, void *context,
@@ -1142,28 +1141,27 @@ cdef class CDatabase(object):
         handle_status("get_from_index", status)
         return res
 
-    def get_range_from_index(self, index_name, start_value, end_value):
+    def get_range_from_index(self, index_name, start_value=None,
+                             end_value=None):
         cdef CQuery query
         cdef const_char_ptr *start_values
-        cdef int n_start_values
+        cdef int n_values
         cdef const_char_ptr *end_values
-        cdef int n_end_values
 
         if start_value is not None:
             if isinstance(start_value, basestring):
                 start_value = (start_value,)
             new_objs_1 = _list_to_str_array(
-                start_value, &start_values, &n_start_values)
+                start_value, &start_values, &n_values)
         else:
-            n_start_values = 0
+            n_values = 0
             start_values = NULL
         if end_value is not None:
             if isinstance(end_value, basestring):
                 end_value = (end_value,)
             new_objs_2 = _list_to_str_array(
-                end_value, &end_values, &n_end_values)
+                end_value, &end_values, &n_values)
         else:
-            n_end_values = 0
             end_values = NULL
         query = self._query_init(index_name)
         res = []
@@ -1171,7 +1169,7 @@ cdef class CDatabase(object):
             handle_status("get_range_from_index",
                 u1db_get_range_from_index(
                     self._db, query._query, <void*>res, _append_doc_to_list,
-                    n_start_values, start_values, n_end_values, end_values))
+                    n_values, start_values, end_values))
         finally:
             if start_values != NULL:
                 free(<void*>start_values)

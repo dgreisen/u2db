@@ -631,10 +631,64 @@ finish:
 int
 u1db_get_range_from_index(u1database *db, u1query *query,
                           void *context, u1db_doc_callback cb,
-                          int n_start_values, const char **start_values,
-                          int n_end_values, const char **end_values)
+                          int n_values, const char **start_values,
+                          const char **end_values)
 {
-    int status = U1DB_OK;
+    int i, bind_arg, status = U1DB_OK;
+    char *query_str = NULL;
+    sqlite3_stmt *statement = NULL;
+    char *doc_id = NULL;
+
+    if (db == NULL || query == NULL || cb == NULL || n_values < 0) {
+        return U1DB_INVALID_PARAMETER;
+    }
+    if (n_values != query->num_fields) {
+        return U1DB_INVALID_VALUE_FOR_INDEX;
+    }
+    status = u1db__format_range_query(
+        query->num_fields, start_values, end_values, &query_str);
+    if (status != U1DB_OK) { goto finish; }
+    status = sqlite3_prepare_v2(db->sql_handle, query_str, -1,
+                                &statement, NULL);
+    if (status != SQLITE_OK) { goto finish; }
+    // Bind all of the 'field_name' parameters. sqlite_bind starts at 1
+    bind_arg = 1;
+    for (i = 0; i < query->num_fields; ++i) {
+        status = sqlite3_bind_text(
+            statement, bind_arg, query->fields[i], -1, SQLITE_TRANSIENT);
+        if (status != SQLITE_OK) { goto finish; }
+        bind_arg++;
+        if (start_values != NULL) {
+            status = sqlite3_bind_text(
+                statement, bind_arg, start_values[i], -1, SQLITE_TRANSIENT);
+            if (status != SQLITE_OK) { goto finish; }
+            bind_arg++;
+        }
+        if (end_values != NULL) {
+            status = sqlite3_bind_text(
+                statement, bind_arg, end_values[i], -1, SQLITE_TRANSIENT);
+            if (status != SQLITE_OK) { goto finish; }
+            bind_arg++;
+        }
+    }
+    status = sqlite3_step(statement);
+    while (status == SQLITE_ROW) {
+        doc_id = (char*)sqlite3_column_text(statement, 0);
+        // We use u1db_get_docs so we can pass check_for_conflicts=0, which is
+        // currently expected by the test suite.
+        status = u1db_get_docs(
+            db, 1, (const char**)&doc_id, 0, 0, context, cb);
+        if (status != U1DB_OK) { goto finish; }
+        status = sqlite3_step(statement);
+    }
+    if (status == SQLITE_DONE) {
+        status = U1DB_OK;
+    }
+finish:
+    sqlite3_finalize(statement);
+    if (query_str != NULL) {
+        free(query_str);
+    }
     return status;
 }
 
@@ -712,7 +766,7 @@ add_to_buf(char **buf, int *buf_size, const char *fmt, ...)
 
 int
 u1db__format_query(int n_fields, const char **values, char **buf,
-                    int *wildcard)
+                   int *wildcard)
 {
     int status = U1DB_OK;
     int buf_size, i;
@@ -787,6 +841,70 @@ finish:
     return status;
 }
 
+int
+u1db__format_range_query(int n_fields, const char **start_values,
+                         const char **end_values, char **buf)
+{
+    int status = U1DB_OK;
+    int buf_size, i;
+    char *cur = NULL;
+    const char *val = NULL;
+
+    if (n_fields < 1) {
+        return U1DB_INVALID_PARAMETER;
+    }
+    // 81 for 1 doc, 166 for 2, 251 for 3
+    buf_size = (1 + n_fields) * 100;
+    // The first field is treated specially
+    cur = (char*)calloc(buf_size, 1);
+    if (cur == NULL) {
+        return U1DB_NOMEM;
+    }
+    *buf = cur;
+    add_to_buf(&cur, &buf_size, "SELECT d0.doc_id FROM document_fields d0");
+    for (i = 1; i < n_fields; ++i) {
+        add_to_buf(&cur, &buf_size, ", document_fields d%d", i);
+    }
+    add_to_buf(&cur, &buf_size, " WHERE d0.field_name = ?");
+    for (i = 0; i < n_fields; ++i) {
+        if (i != 0) {
+            add_to_buf(&cur, &buf_size,
+                " AND d0.doc_id = d%d.doc_id"
+                " AND d%d.field_name = ?",
+                i, i);
+        }
+        if (start_values != NULL) {
+            val = start_values[i];
+            if (val == NULL) {
+                status = U1DB_INVALID_VALUE_FOR_INDEX;
+                goto finish;
+            }
+            add_to_buf(&cur, &buf_size, " AND d%d.value >= ?", i);
+        }
+        if (end_values != NULL) {
+            val = end_values[i];
+            if (val == NULL) {
+                status = U1DB_INVALID_VALUE_FOR_INDEX;
+                goto finish;
+            }
+            add_to_buf(&cur, &buf_size, " AND d%d.value <= ?", i);
+        }
+
+    }
+    add_to_buf(&cur, &buf_size, " ORDER BY ");
+    for (i = 0; i < n_fields; ++i) {
+        if (i != 0) {
+            add_to_buf(&cur, &buf_size, ", ");
+        }
+        add_to_buf(&cur, &buf_size, "d%d.value", i);
+    }
+finish:
+    if (status != U1DB_OK && *buf != NULL) {
+        free(*buf);
+        *buf = NULL;
+    }
+    return status;
+}
 
 struct sqlcb_to_field_cb {
     void *user_context;

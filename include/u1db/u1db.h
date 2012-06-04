@@ -343,17 +343,14 @@ int u1db_get_from_index(u1database *db, u1query *query, void *context,
  *
  * @param query A u1query object, as created by u1db_query_init.
  * @param context Will be returned via the document callback
- * @param n_start_values The number of columns in the start value. If 0 assume
- *     no start value. (i.e. an open ended range.)
- * @param start_values An array of values.
- * @param n_end_values The number of columns in the end value. If 0 assume
- *     no end value. (i.e. an open ended range.)
- * @param end_values An array of values.
+ * @param n_start_values The number of values.
+ * @param start_values An array of values. If NULL, assume an open ended query.
+ * @param end_values An array of values. If NULL, assume an open ended query.
  */
 int u1db_get_range_from_index(u1database *db, u1query *query,
                               void *context, u1db_doc_callback cb,
-                              int n_start_values, const char **start_values,
-                              int n_end_values, const char **end_values);
+                              int n_values, const char **start_values,
+                              const char **end_values);
 /**
  * Get keys under which documents are indexed.
  *
