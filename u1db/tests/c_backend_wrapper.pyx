@@ -101,7 +101,13 @@ cdef extern from "u1db/u1db.h":
                   int (*cb)(void *context, const_char_ptr index_name,
                             int n_expressions, const_char_ptr *expressions))
     int u1db_get_from_index(u1database *db, u1query *query, void *context,
-                            u1db_doc_callback cb, int n_values, char *val0, ...)
+                            u1db_doc_callback cb, int n_values, char *val0,
+                            ...)
+    int u1db_get_range_from_index(u1database *db, u1query *query,
+                                  void *context, u1db_doc_callback cb,
+                                  int n_start_values, const_char_ptr
+                                  *start_values, int n_end_values,
+                                  const_char_ptr *end_values)
     int u1db_get_index_keys(u1database *db, char *index_name, void *context,
                             u1db_key_callback cb)
     int u1db_simple_lookup1(u1database *db, char *index_name, char *val1,
@@ -1097,6 +1103,43 @@ cdef class CDatabase(object):
         else:
             status = U1DB_NOT_IMPLEMENTED
         handle_status("get_from_index", status)
+        return res
+
+    def get_range_from_index(self, index_name, start_value, end_value):
+        cdef CQuery query
+        cdef const_char_ptr *start_values
+        cdef int n_start_values
+        cdef const_char_ptr *end_values
+        cdef int n_end_values
+
+        if start_value is not None:
+            if isinstance(start_value, basestring):
+                start_value = (start_value,)
+            new_objs_1 = _list_to_str_array(
+                start_value, &start_values, &n_start_values)
+        else:
+            n_start_values = 0
+            start_values = NULL
+        if end_value is not None:
+            if isinstance(end_value, basestring):
+                end_value = (end_value,)
+            new_objs_2 = _list_to_str_array(
+                end_value, &end_values, &n_end_values)
+        else:
+            n_end_values = 0
+            end_values = NULL
+        query = self._query_init(index_name)
+        res = []
+        try:
+            handle_status("get_range_from_index",
+                u1db_get_range_from_index(
+                    self._db, query._query, <void*>res, _append_doc_to_list,
+                    n_start_values, start_values, n_end_values, end_values))
+        finally:
+            if start_values != NULL:
+                free(<void*>start_values)
+            if end_values != NULL:
+                free(<void*>end_values)
         return res
 
     def get_index_keys(self, index_name):

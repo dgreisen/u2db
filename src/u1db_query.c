@@ -609,6 +609,16 @@ finish:
 }
 
 int
+u1db_get_range_from_index(u1database *db, u1query *query,
+                          void *context, u1db_doc_callback cb,
+                          int n_start_values, const char **start_values,
+                          int n_end_values, const char **end_values)
+{
+    int status = U1DB_OK;
+    return status;
+}
+
+int
 u1db_get_index_keys(u1database *db, char *index_name,
                     void *context, u1db_key_callback cb)
 {
