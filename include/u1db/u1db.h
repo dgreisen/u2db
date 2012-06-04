@@ -343,7 +343,7 @@ int u1db_get_from_index(u1database *db, u1query *query, void *context,
  *
  * @param query A u1query object, as created by u1db_query_init.
  * @param context Will be returned via the document callback
- * @param n_start_values The number of values.
+ * @param n_values The number of values.
  * @param start_values An array of values. If NULL, assume an open ended query.
  * @param end_values An array of values. If NULL, assume an open ended query.
  */
