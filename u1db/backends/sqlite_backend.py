@@ -652,10 +652,6 @@ class SQLiteDatabase(CommonBackend):
         range_where_upper = [
             novalue_where[i] + (" AND d%d.value <= ?" % (i,)) for i in
             range(len(definition))]
-        # Merge the lists together, so that:
-        # [field1, field2, field3], [val1, val2, val3]
-        # Becomes:
-        # (field1, val1, field2, val2, field3, val3)
         args = []
         where = []
         if start_value:
