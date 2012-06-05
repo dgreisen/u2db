@@ -638,6 +638,56 @@ class SQLiteDatabase(CommonBackend):
         res = c.fetchall()
         return [self._factory(r[0], r[1], r[2]) for r in res]
 
+    def get_range_from_index(self, index_name, start_value=None,
+                             end_value=None):
+        """Return all documents with key values in the specified range."""
+        definition = self._get_index_definition(index_name)
+        tables = ["document_fields d%d" % i for i in range(len(definition))]
+        novalue_where = [
+            "d.doc_id = d%d.doc_id AND d%d.field_name = ?" % (i, i) for i in
+            range(len(definition))]
+        range_where_lower = [
+            novalue_where[i] + (" AND d%d.value >= ?" % (i,)) for i in
+            range(len(definition))]
+        range_where_upper = [
+            novalue_where[i] + (" AND d%d.value <= ?" % (i,)) for i in
+            range(len(definition))]
+        args = []
+        where = []
+        if start_value:
+            if isinstance(start_value, basestring):
+                start_value = (start_value,)
+            if len(start_value) != len(definition):
+                raise errors.InvalidValueForIndex()
+            for idx, (field, value) in enumerate(zip(definition, start_value)):
+                args.append(field)
+                where.append(range_where_lower[idx])
+                args.append(value)
+        if end_value:
+            if isinstance(end_value, basestring):
+                end_value = (end_value,)
+            if len(end_value) != len(definition):
+                raise errors.InvalidValueForIndex()
+            for idx, (field, value) in enumerate(zip(definition, end_value)):
+                args.append(field)
+                where.append(range_where_upper[idx])
+                args.append(value)
+        statement = (
+            "SELECT d.doc_id, d.doc_rev, d.content FROM document d, %s "
+            "WHERE %s ORDER BY %s;" % (
+                ', '.join(tables),
+                ' AND '.join(where),
+                ', '.join(
+                    ['d%d.value' % i for i in range(len(definition))])))
+        c = self._db_handle.cursor()
+        try:
+            c.execute(statement, tuple(args))
+        except dbapi2.OperationalError, e:
+            raise dbapi2.OperationalError(str(e) +
+                '\nstatement: %s\nargs: %s\n' % (statement, args))
+        res = c.fetchall()
+        return [self._factory(r[0], r[1], r[2]) for r in res]
+
     def get_index_keys(self, index):
         c = self._db_handle.cursor()
         try:

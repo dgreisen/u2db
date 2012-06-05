@@ -92,21 +92,28 @@ cdef extern from "u1db/u1db.h":
                                   u1db_trans_info_callback cb)
     int u1db_get_doc_conflicts(u1database *db, char *doc_id, void *context,
                                u1db_doc_callback cb)
-
-    int u1db_create_index(u1database *db, char *index_name,
-                          int n_expressions, const_char_ptr *expressions)
+    int u1db_create_indexl(u1database *db, char *index_name, int n_expressions,
+                           const_char_ptr *expressions)
+    int u1db_create_index(u1database *db, char *index_name, int n_expressions,
+                          ...)
+    int u1db_get_from_indexl(u1database *db, u1query *query, void *context,
+                             u1db_doc_callback cb, int n_values, 
+                             const_char_ptr *values)
+    int u1db_get_from_index(u1database *db, u1query *query, void *context,
+                             u1db_doc_callback cb, int n_values, char *val0,
+                             ...)
+    int u1db_get_range_from_index(u1database *db, u1query *query,
+                                  void *context, u1db_doc_callback cb,
+                                  int n_values, const_char_ptr *start_values,
+                                  const_char_ptr *end_values)
     int u1db_delete_index(u1database *db, char *index_name)
-
     int u1db_list_indexes(u1database *db, void *context,
                   int (*cb)(void *context, const_char_ptr index_name,
                             int n_expressions, const_char_ptr *expressions))
-    int u1db_get_from_index(u1database *db, u1query *query, void *context,
-                            u1db_doc_callback cb, int n_values, char *val0, ...)
     int u1db_get_index_keys(u1database *db, char *index_name, void *context,
                             u1db_key_callback cb)
     int u1db_simple_lookup1(u1database *db, char *index_name, char *val1,
                             void *context, u1db_doc_callback cb)
-
     int u1db_query_init(u1database *db, char *index_name, u1query **query)
     void u1db_free_query(u1query **query)
 
@@ -212,7 +219,8 @@ cdef extern from "u1db/u1db_internal.h":
                             u1db_record **conflict_records)
     int u1db__sync_exchange_seen_ids(u1db_sync_exchange *se, int *n_ids,
                                      const_char_ptr **doc_ids)
-    int u1db__format_query(int n_fields, va_list argp, char **buf, int *wildcard)
+    int u1db__format_query(int n_fields, const_char_ptr *values, char **buf,
+                           int *wildcard)
     int u1db__get_sync_target(u1database *db, u1db_sync_target **sync_target)
     int u1db__free_sync_target(u1db_sync_target **sync_target)
     int u1db__sync_db_to_target(u1database *db, u1db_sync_target *target,
@@ -316,16 +324,6 @@ cdef int _append_index_definition_to_list(void *context,
     return 0
 
 
-cdef int _format_query_dotted(char **buf, int *wildcard, int n_fields, ...):
-    cdef va_list argp
-    cdef int status
-
-    va_start_int(argp, n_fields)
-    status = u1db__format_query(n_fields, argp, buf, wildcard)
-    va_end(argp)
-    return status
-
-
 cdef int return_doc_cb_wrapper(void *context, u1db_document *doc,
         int gen) with gil:
     cdef CDocument pydoc
@@ -374,22 +372,16 @@ def _format_query(fields):
     cdef int status
     cdef char *buf
     cdef int wildcard[10]
+    cdef const_char_ptr *values
+    cdef int n_values
 
-    if len(fields) == 0:
-        status = _format_query_dotted(&buf, wildcard, 0)
-    elif len(fields) == 1:
-        status = _format_query_dotted(&buf, wildcard, 1, <char*>fields[0])
-    elif len(fields) == 2:
-        status = _format_query_dotted(&buf, wildcard, 2, <char*>fields[0],
-                <char*>fields[1])
-    elif len(fields) == 3:
-        status = _format_query_dotted(&buf, wildcard, 3, <char*>fields[0],
-                <char*>fields[1], <char*>fields[2])
-    elif len(fields) == 4:
-        status = _format_query_dotted(&buf, wildcard, 4, <char*>fields[0],
-                <char*>fields[1], <char*>fields[2], <char *>fields[3])
-    else:
-        status = U1DB_NOT_IMPLEMENTED
+    # keep a reference to new_objs so that the pointers in expressions
+    # remain valid.
+    new_objs = _list_to_str_array(fields, &values, &n_values)
+    try:
+        status = u1db__format_query(n_values, values, &buf, wildcard)
+    finally:
+        free(<void*>values)
     handle_status("format_query", status)
     if buf == NULL:
         res = None
@@ -1036,7 +1028,7 @@ cdef class CDatabase(object):
         if status != U1DB_OK:
             raise RuntimeError("Failed to _sync_exchange: %d" % (status,))
 
-    def create_index(self, index_name, *index_expressions):
+    def create_indexl(self, index_name, index_expressions):
         cdef const_char_ptr *expressions
         cdef int n_expressions
 
@@ -1045,11 +1037,41 @@ cdef class CDatabase(object):
         new_objs = _list_to_str_array(
             index_expressions, &expressions, &n_expressions)
         try:
-            handle_status("create_index",
-                u1db_create_index(
-                    self._db, index_name, n_expressions, expressions))
+            status = u1db_create_indexl(
+                self._db, index_name, n_expressions, expressions)
         finally:
             free(<void*>expressions)
+        handle_status("create_index", status)
+
+    def create_index(self, index_name, *index_expressions):
+        extra = []
+        if len(index_expressions) == 0:
+            status = u1db_create_index(self._db, index_name, 0, NULL)
+        elif len(index_expressions) == 1:
+            status = u1db_create_index(
+                self._db, index_name, 1,
+                _ensure_str(index_expressions[0], extra))
+        elif len(index_expressions) == 2:
+            status = u1db_create_index(
+                self._db, index_name, 2,
+                _ensure_str(index_expressions[0], extra),
+                _ensure_str(index_expressions[1], extra))
+        elif len(index_expressions) == 3:
+            status = u1db_create_index(
+                self._db, index_name, 3,
+                _ensure_str(index_expressions[0], extra),
+                _ensure_str(index_expressions[1], extra),
+                _ensure_str(index_expressions[2], extra))
+        elif len(index_expressions) == 4:
+            status = u1db_create_index(
+                self._db, index_name, 4,
+                _ensure_str(index_expressions[0], extra),
+                _ensure_str(index_expressions[1], extra),
+                _ensure_str(index_expressions[2], extra),
+                _ensure_str(index_expressions[3], extra))
+        else:
+            status = U1DB_NOT_IMPLEMENTED
+        handle_status("create_index", status)
 
     def list_indexes(self):
         a_list = []
@@ -1062,9 +1084,29 @@ cdef class CDatabase(object):
         handle_status("delete_index",
             u1db_delete_index(self._db, index_name))
 
+    def get_from_indexl(self, index_name, key_values):
+        cdef const_char_ptr *values
+        cdef int n_values
+        cdef CQuery query
+
+        query = self._query_init(index_name)
+        res = []
+        # keep a reference to new_objs so that the pointers in expressions
+        # remain valid.
+        new_objs = _list_to_str_array(key_values, &values, &n_values)
+        try:
+            handle_status(
+                "get_from_index", u1db_get_from_indexl(
+                    self._db, query._query, <void*>res, _append_doc_to_list,
+                    n_values, values))
+        finally:
+            free(<void*>values)
+        return res
+
     def get_from_index(self, index_name, *key_values):
         cdef CQuery query
         cdef int status
+
         extra = []
         query = self._query_init(index_name)
         res = []
@@ -1097,6 +1139,42 @@ cdef class CDatabase(object):
         else:
             status = U1DB_NOT_IMPLEMENTED
         handle_status("get_from_index", status)
+        return res
+
+    def get_range_from_index(self, index_name, start_value=None,
+                             end_value=None):
+        cdef CQuery query
+        cdef const_char_ptr *start_values
+        cdef int n_values
+        cdef const_char_ptr *end_values
+
+        if start_value is not None:
+            if isinstance(start_value, basestring):
+                start_value = (start_value,)
+            new_objs_1 = _list_to_str_array(
+                start_value, &start_values, &n_values)
+        else:
+            n_values = 0
+            start_values = NULL
+        if end_value is not None:
+            if isinstance(end_value, basestring):
+                end_value = (end_value,)
+            new_objs_2 = _list_to_str_array(
+                end_value, &end_values, &n_values)
+        else:
+            end_values = NULL
+        query = self._query_init(index_name)
+        res = []
+        try:
+            handle_status("get_range_from_index",
+                u1db_get_range_from_index(
+                    self._db, query._query, <void*>res, _append_doc_to_list,
+                    n_values, start_values, end_values))
+        finally:
+            if start_values != NULL:
+                free(<void*>start_values)
+            if end_values != NULL:
+                free(<void*>end_values)
         return res
 
     def get_index_keys(self, index_name):
