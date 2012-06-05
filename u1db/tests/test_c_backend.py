@@ -93,12 +93,12 @@ class TestCDatabase(BackendTests):
                          " VALUES ('doc-id', 'doc-rev', '{}')")
         self.assertRaises(Exception, self.db.get_doc_conflicts, 'doc-id')
 
-    def test_create_indexl(self):
+    def test_create_index_list(self):
         # We manually poke data into the DB, so that we test just the "get_doc"
         # code, rather than also testing the index management code.
         self.db = c_backend_wrapper.CDatabase(':memory:')
         doc = self.db.create_doc(tests.simple_doc)
-        self.db.create_indexl("key-idx", ["key"])
+        self.db.create_index_list("key-idx", ["key"])
         docs = self.db.get_from_index('key-idx', 'value')
         self.assertEqual([doc], docs)
 
@@ -111,13 +111,13 @@ class TestCDatabase(BackendTests):
         docs = self.db.get_from_index('key-idx', 'value')
         self.assertEqual([doc], docs)
 
-    def test_get_from_indexl(self):
+    def test_get_from_index_list(self):
         # We manually poke data into the DB, so that we test just the "get_doc"
         # code, rather than also testing the index management code.
         self.db = c_backend_wrapper.CDatabase(':memory:')
         doc = self.db.create_doc(tests.simple_doc)
         self.db.create_index("key-idx", "key")
-        docs = self.db.get_from_indexl('key-idx', ['value'])
+        docs = self.db.get_from_index_list('key-idx', ['value'])
         self.assertEqual([doc], docs)
 
     def test_get_from_index_2(self):

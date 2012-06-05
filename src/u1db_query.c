@@ -535,8 +535,9 @@ finish:
 
 
 int
-u1db_get_from_indexl(u1database *db, u1query *query, void *context,
-                     u1db_doc_callback cb, int n_values, const char **values)
+u1db_get_from_index_list(u1database *db, u1query *query, void *context,
+                         u1db_doc_callback cb, int n_values,
+                         const char **values)
 {
     int status = U1DB_OK;
     sqlite3_stmt *statement = NULL;
@@ -619,7 +620,8 @@ u1db_get_from_index(u1database *db, u1query *query, void *context,
     for (i = 0; i < n_values; ++i) {
         values[i] = va_arg(argp, char *);
     }
-    status = u1db_get_from_indexl(db, query, context, cb, n_values, values);
+    status = u1db_get_from_index_list(
+        db, query, context, cb, n_values, values);
 finish:
     if (values != NULL)
         free(values);

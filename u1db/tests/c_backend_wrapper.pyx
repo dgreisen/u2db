@@ -92,13 +92,13 @@ cdef extern from "u1db/u1db.h":
                                   u1db_trans_info_callback cb)
     int u1db_get_doc_conflicts(u1database *db, char *doc_id, void *context,
                                u1db_doc_callback cb)
-    int u1db_create_indexl(u1database *db, char *index_name, int n_expressions,
-                           const_char_ptr *expressions)
+    int u1db_create_index_list(u1database *db, char *index_name,
+                               int n_expressions, const_char_ptr *expressions)
     int u1db_create_index(u1database *db, char *index_name, int n_expressions,
                           ...)
-    int u1db_get_from_indexl(u1database *db, u1query *query, void *context,
-                             u1db_doc_callback cb, int n_values, 
-                             const_char_ptr *values)
+    int u1db_get_from_index_list(u1database *db, u1query *query, void *context,
+                                 u1db_doc_callback cb, int n_values,
+                                 const_char_ptr *values)
     int u1db_get_from_index(u1database *db, u1query *query, void *context,
                              u1db_doc_callback cb, int n_values, char *val0,
                              ...)
@@ -1024,7 +1024,7 @@ cdef class CDatabase(object):
         if status != U1DB_OK:
             raise RuntimeError("Failed to _sync_exchange: %d" % (status,))
 
-    def create_indexl(self, index_name, index_expressions):
+    def create_index_list(self, index_name, index_expressions):
         cdef const_char_ptr *expressions
         cdef int n_expressions
 
@@ -1033,7 +1033,7 @@ cdef class CDatabase(object):
         new_objs = _list_to_str_array(
             index_expressions, &expressions, &n_expressions)
         try:
-            status = u1db_create_indexl(
+            status = u1db_create_index_list(
                 self._db, index_name, n_expressions, expressions)
         finally:
             free(<void*>expressions)
@@ -1080,7 +1080,7 @@ cdef class CDatabase(object):
         handle_status("delete_index",
             u1db_delete_index(self._db, index_name))
 
-    def get_from_indexl(self, index_name, key_values):
+    def get_from_index_list(self, index_name, key_values):
         cdef const_char_ptr *values
         cdef int n_values
         cdef CQuery query
@@ -1092,7 +1092,7 @@ cdef class CDatabase(object):
         new_objs = _list_to_str_array(key_values, &values, &n_values)
         try:
             handle_status(
-                "get_from_index", u1db_get_from_indexl(
+                "get_from_index", u1db_get_from_index_list(
                     self._db, query._query, <void*>res, _append_doc_to_list,
                     n_values, values))
         finally:

@@ -267,8 +267,8 @@ int u1db_create_index(u1database *db, const char *index_name, int n_expressions,
  * @param n_expressions The number of index expressions.
  * @param expressions   An array of expressions.
  */
-int u1db_create_indexl(u1database *db, const char *index_name,
-                       int n_expressions, const char **expressions);
+int u1db_create_index_list(u1database *db, const char *index_name,
+                           int n_expressions, const char **expressions);
 
 
 /**
@@ -320,9 +320,9 @@ void u1db_free_query(u1query **query);
  * @param n_values The number of parameters being passed, must be >= 1
  * @param values The values to match in the index.
  */
-int u1db_get_from_indexl(u1database *db, u1query *query, void *context,
-                         u1db_doc_callback cb, int n_values,
-                         const char **values);
+int u1db_get_from_index_list(u1database *db, u1query *query, void *context,
+                             u1db_doc_callback cb, int n_values,
+                             const char **values);
 
 
 /**
