@@ -359,7 +359,8 @@ int u1db__format_query(int n_fields, const char **values, char **buf,
  *     and callers must free() it.
  */
 int u1db__format_range_query(int n_fields, const char **start_values,
-                             const char **end_values, char **buf);
+                             const char **end_values, char **buf,
+                             int *start_wildcard, int *end_wildcard);
 
 
 /**

@@ -866,6 +866,17 @@ class DatabaseIndexTests(tests.DatabaseBaseTests):
             [doc5, doc3, doc4, doc2],
             self.db.get_range_from_index('test-idx', None, 'value2*'))
 
+    def test_get_wildcard_range_from_index_start_end(self):
+        self.db.create_doc('{"key": "a"}')
+        doc2 = self.db.create_doc('{"key": "boo3"}')
+        doc3 = self.db.create_doc('{"key": "catalyst"}')
+        doc4 = self.db.create_doc('{"key": "whaever"}')
+        doc5 = self.db.create_doc('{"key": "zerg"}')
+        self.db.create_index('test-idx', 'key')
+        self.assertEqual(
+            [doc3, doc4],
+            self.db.get_range_from_index('test-idx', 'cat*', 'zap*'))
+
     def test_get_range_from_index_multi_column_start_end(self):
         self.db.create_doc('{"key": "value3", "key2": "value4"}')
         doc2 = self.db.create_doc('{"key": "value2", "key2": "value3"}')
