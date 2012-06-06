@@ -93,6 +93,8 @@ append(string_list *list, const char *data)
     if (new_item == NULL)
         return U1DB_NOMEM;
     new_item->data = strdup(data);
+    if (new_item->data == NULL)
+        return U1DB_NOMEM;
     if (list->head == NULL)
     {
         list->head = new_item;
@@ -381,6 +383,8 @@ op_split_words(string_list *result, const string_list *values,
     for (item = values->head; item != NULL; item = item->next)
     {
         intermediate = strdup(item->data);
+        if (intermediate == NULL)
+            return U1DB_NOMEM;
         intermediate_ptr = intermediate;
         while (intermediate_ptr != NULL) {
             space_chr = strchr(intermediate_ptr, ' ');
@@ -459,6 +463,10 @@ lookup_index_fields(u1database *db, u1query *query)
             goto finish;
         }
         query->fields[offset] = strdup(field);
+        if (query->fields[offset] == NULL) {
+            status = U1DB_NOMEM;
+            goto finish;
+        }
         status = sqlite3_step(statement);
     }
     if (status == SQLITE_DONE) {
@@ -638,7 +646,7 @@ u1db_get_range_from_index(u1database *db, u1query *query,
     char *query_str = NULL;
     sqlite3_stmt *statement = NULL;
     char *doc_id = NULL;
-    char *value_copy = NULL;
+    char *stripped = NULL;
     int start_wildcard[20] = {0};
     int end_wildcard[20] = {0};
 
@@ -671,12 +679,16 @@ u1db_get_range_from_index(u1database *db, u1query *query,
                     SQLITE_TRANSIENT);
                 bind_arg++;
             } else if (start_wildcard[i] == 2) {
-                if (value_copy != NULL)
-                    free(value_copy);
-                value_copy = strdup(start_values[i]);
-                value_copy[strlen(value_copy) - 1] = '\0';
+                if (stripped != NULL)
+                    free(stripped);
+                stripped = strdup(start_values[i]);
+                if (stripped == NULL) {
+                    status = U1DB_NOMEM;
+                    goto finish;
+                }
+                stripped[strlen(stripped) - 1] = '\0';
                 status = sqlite3_bind_text(
-                    statement, bind_arg, value_copy, -1, SQLITE_TRANSIENT);
+                    statement, bind_arg, stripped, -1, SQLITE_TRANSIENT);
                 bind_arg++;
             }
             if (status != SQLITE_OK) { goto finish; }
@@ -688,12 +700,16 @@ u1db_get_range_from_index(u1database *db, u1query *query,
                     SQLITE_TRANSIENT);
                 bind_arg++;
             } else if (end_wildcard[i] == 2) {
-                if (value_copy != NULL)
-                    free(value_copy);
-                value_copy = strdup(end_values[i]);
-                value_copy[strlen(value_copy) - 1] = '\0';
+                if (stripped != NULL)
+                    free(stripped);
+                stripped = strdup(end_values[i]);
+                if (stripped == NULL) {
+                    status = U1DB_NOMEM;
+                    goto finish;
+                }
+                stripped[strlen(stripped) - 1] = '\0';
                 status = sqlite3_bind_text(
-                    statement, bind_arg, value_copy, -1, SQLITE_TRANSIENT);
+                    statement, bind_arg, stripped, -1, SQLITE_TRANSIENT);
                 bind_arg++;
                 status = sqlite3_bind_text(
                     statement, bind_arg, end_values[i], -1, SQLITE_TRANSIENT);
@@ -720,8 +736,8 @@ finish:
     if (query_str != NULL) {
         free(query_str);
     }
-    if (value_copy != NULL)
-        free(value_copy);
+    if (stripped != NULL)
+        free(stripped);
     return status;
 }
 
@@ -998,12 +1014,16 @@ parse(const char *field, transformation *result, int value_type)
 {
     transformation *inner = NULL;
     char *new_field = NULL, *new_ptr, *argptr, *argend;
-    char *word, *first_comma;
+    char *word = NULL, *first_comma;
     int status = U1DB_OK;
     int i, size;
     int new_value_type = json_type_string;
     char *field_copy, *end = NULL;
     field_copy = strdup(field);
+    if (field_copy == NULL) {
+        status = U1DB_NOMEM;
+        goto finish;
+    }
     end = field_copy;
     while (*end != '(' && *end != ')' && *end != '\0')
     {
@@ -1024,6 +1044,10 @@ parse(const char *field, transformation *result, int value_type)
         strncpy(word, field_copy, size);
     }
     new_field = strdup(end);
+    if (new_field == NULL) {
+        status = U1DB_NOMEM;
+        goto finish;
+    }
     new_ptr = new_field;
     if (status != U1DB_OK)
         goto finish;
@@ -1113,10 +1137,12 @@ parse(const char *field, transformation *result, int value_type)
         result->value_type = value_type;
     }
 finish:
-    free(word);
-    free(field_copy);
+    if (word != NULL)
+        free(word);
+    if (field_copy != NULL)
+        free(field_copy);
     if (new_field != NULL)
-    free(new_field);
+        free(new_field);
     return status;
 }
 
