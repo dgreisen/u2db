@@ -656,7 +656,7 @@ class SQLiteDatabase(CommonBackend):
             range(len(definition))]
         like_where = [
             novalue_where[i] + (
-                " AND (d%d.value <= ? OR d%d.value LIKE ? ESCAPE '.')" %
+                " AND (d%d.value < ? OR d%d.value LIKE ? ESCAPE '.')" %
                 (i, i))
             for i in range(len(definition))]
         range_where_lower = [
