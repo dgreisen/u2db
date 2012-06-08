@@ -603,6 +603,8 @@ u1db__sync_db_to_target(u1database *db, u1db_sync_target *target,
     if (local_gen == local_gen_known_by_target
         && target_gen == target_gen_known_by_local)
     {
+        // We know status == U1DB_OK, and we can shortcut the rest of the
+        // logic, no need to look for more information.
         goto finish;
     }
     *local_gen_before_sync = local_gen;
