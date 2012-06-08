@@ -34,12 +34,6 @@ from u1db import (
     vectorclock,
     )
 
-SQL_INDEX_KEYS = """
-    SELECT document_fields.value FROM index_definitions INNER JOIN
-    document_fields ON field = field_name WHERE index_definitions.name = ?
-    GROUP BY document_fields.value;
-    """
-
 
 class SQLiteDatabase(CommonBackend):
     """A U1DB implementation that uses SQLite as its persistence layer."""
