@@ -199,8 +199,8 @@ class Database(object):
     def get_index_keys(self, index_name):
         """Return all keys under which documents are indexed in this index.
 
-        :return: [(key, frequency)] A list of indexed keys and the frequency
-            they occur.
+        :return: [] A list of indexed keys, or, in the case of
+        multicolumn indexes, a list of tuples of indexed keys.
         :param index_name: The index to query
         """
         raise NotImplementedError(self.get_index_keys)

@@ -1143,6 +1143,22 @@ class DatabaseIndexTests(tests.DatabaseBaseTests):
             ['value1', 'value2'],
             sorted(self.db.get_index_keys('test-idx')))
 
+    def test_get_index_keys_from_multicolumn_index(self):
+        self.db.create_index('test-idx', 'key1', 'key2')
+        content1 = '{"key1": "value1", "key2": "val2-1"}'
+        content2 = '{"key1": "value2", "key2": "val2-2"}'
+        content3 = '{"key1": "value2", "key2": "val2-2"}'
+        content4 = '{"key1": "value2", "key2": "val3"}'
+        self.db.create_doc(content1)
+        self.db.create_doc(content2)
+        self.db.create_doc(content3)
+        self.db.create_doc(content4)
+        self.assertEqual([
+            ('value1', 'val2-1'),
+            ('value2', 'val2-2'),
+            ('value2', 'val3')],
+            sorted(self.db.get_index_keys('test-idx')))
+
 
 class PythonBackendTests(tests.DatabaseBaseTests):
 
