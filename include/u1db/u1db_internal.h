@@ -102,6 +102,11 @@ struct _u1db_sync_target {
      *                      target that source_db has last seen, it will then
      *                      be filled with the final generation of the target
      *                      database from the returned document stream.
+     * @param target_trans_id (IN/OUT) This is associated with the generation
+     *                        of the target that the source has seen. Will be
+     *                        filled in with the final generation of the
+     *                        target. Note the value passed in and the value
+     *                        returned should be freed by the caller.
      * @param context   Passed to cb.
      * @param cb        After sending the requested documents, we read the
      *                  response stream. For each document in the stream, we

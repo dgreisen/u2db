@@ -571,6 +571,7 @@ u1db__sync_db_to_target(u1database *db, u1db_sync_target *target,
     struct _return_doc_state return_doc_state = {0};
     const char *target_uid, *local_uid;
     char *local_trans_id = NULL;
+    char *local_target_trans_id = NULL;
     char *target_trans_id_known_by_local = NULL;
     char *local_trans_id_known_by_target = NULL;
     int target_gen, local_gen;
@@ -592,6 +593,7 @@ u1db__sync_db_to_target(u1database *db, u1db_sync_target *target,
     status = u1db__get_sync_gen_info(db, target_uid,
         &target_gen_known_by_local, &target_trans_id_known_by_local);
     if (status != U1DB_OK) { goto finish; }
+    local_target_trans_id = target_trans_id_known_by_local;
     local_gen = local_gen_known_by_target;
 
     // Before we start the sync exchange, get the list of doc_ids that we want
@@ -640,8 +642,17 @@ finish:
     if (local_trans_id_known_by_target != NULL) {
         free(local_trans_id_known_by_target);
     }
+    if (local_target_trans_id != NULL) {
+        if (target_trans_id_known_by_local == local_target_trans_id) {
+            // Don't double free
+            target_trans_id_known_by_local = NULL;
+        }
+        free(local_target_trans_id);
+        local_target_trans_id = NULL;
+    }
     if (target_trans_id_known_by_local != NULL) {
         free(target_trans_id_known_by_local);
+        target_trans_id_known_by_local = NULL;
     }
     if (to_send_state.doc_ids_to_return != NULL) {
         int i;
