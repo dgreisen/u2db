@@ -346,6 +346,16 @@ int u1db__generate_hex_uuid(char *uuid);
 int u1db__format_query(int n_fields, va_list argp, char **buf, int *wildcard);
 
 /**
+ * Format an index keys query
+ *
+ * @param n_fields  The number of fields being passed in, (the number of args
+ *     in argp)
+ * @param buf (OUT) The character array. This will be dynamically allocated,
+ *     and callers must free() it.
+ */
+int u1db__format_index_keys_query(int n_fields, char **buf);
+
+/**
  * Given this document content, update the indexed fields in the db.
  */
 int u1db__update_indexes(u1database *db, const char *doc_id,
