@@ -46,11 +46,15 @@ class SQLiteDatabase(CommonBackend):
 
     _sqlite_registry = {}
 
-    def __init__(self, sqlite_file):
+    def __init__(self, sqlite_file, document_factory=None):
         """Create a new sqlite file."""
         self._db_handle = dbapi2.connect(sqlite_file)
         self._real_replica_uid = None
         self._ensure_schema()
+        self._factory = document_factory or Document
+
+    def set_document_factory(self, factory):
+        self._factory = factory
 
     def get_sync_target(self):
         return SQLiteSyncTarget(self)
@@ -69,7 +73,7 @@ class SQLiteDatabase(CommonBackend):
     WAIT_FOR_PARALLEL_INIT_HALF_INTERVAL = 0.5
 
     @classmethod
-    def _open_database(cls, sqlite_file):
+    def _open_database(cls, sqlite_file, document_factory=None):
         if not os.path.isfile(sqlite_file):
             raise errors.DatabaseDoesNotExist()
         tries = 2
@@ -89,19 +93,22 @@ class SQLiteDatabase(CommonBackend):
                 raise err  # go for the richest error?
             tries -= 1
             time.sleep(cls.WAIT_FOR_PARALLEL_INIT_HALF_INTERVAL)
-        return SQLiteDatabase._sqlite_registry[v](sqlite_file)
+        return SQLiteDatabase._sqlite_registry[v](
+            sqlite_file, document_factory=document_factory)
 
     @classmethod
-    def open_database(cls, sqlite_file, create, backend_cls=None):
+    def open_database(cls, sqlite_file, create, backend_cls=None,
+                      document_factory=None):
         try:
-            return cls._open_database(sqlite_file)
+            return cls._open_database(
+                sqlite_file, document_factory=document_factory)
         except errors.DatabaseDoesNotExist:
             if not create:
                 raise
             if backend_cls is None:
                 # default is SQLitePartialExpandDatabase
                 backend_cls = SQLitePartialExpandDatabase
-            return backend_cls(sqlite_file)
+            return backend_cls(sqlite_file, document_factory=document_factory)
 
     @staticmethod
     def delete_database(sqlite_file):
@@ -279,7 +286,7 @@ class SQLiteDatabase(CommonBackend):
         if val is None:
             return None
         doc_rev, content = val
-        return Document(doc_id, doc_rev, content)
+        return self._factory(doc_id, doc_rev, content)
 
     def _has_conflicts(self, doc_id):
         c = self._db_handle.cursor()
@@ -311,7 +318,7 @@ class SQLiteDatabase(CommonBackend):
         for doc_id, doc_rev, content in rows:
             if content is None and not include_deleted:
                 continue
-            results.append(Document(doc_id, doc_rev, content))
+            results.append(self._factory(doc_id, doc_rev, content))
         return (generation, results)
 
     def put_doc(self, doc):
@@ -425,7 +432,7 @@ class SQLiteDatabase(CommonBackend):
         c = self._db_handle.cursor()
         c.execute("SELECT doc_rev, content FROM conflicts WHERE doc_id = ?",
                   (doc_id,))
-        return [Document(doc_id, doc_rev, content)
+        return [self._factory(doc_id, doc_rev, content)
                 for doc_rev, content in c.fetchall()]
 
     def _get_conflict_revs(self, doc_id):
@@ -569,7 +576,7 @@ class SQLiteDatabase(CommonBackend):
         assert value[-1] == '*'
         return value[:-1] + '%'
 
-    def get_from_index(self, index_name, key_values):
+    def get_from_index(self, index_name, *key_values):
         definition = self._get_index_definition(index_name)
         # First, build the definition. We join the document_fields table
         # against itself, as many times as the 'width' of our definition.
@@ -589,47 +596,47 @@ class SQLiteDatabase(CommonBackend):
                       + (" AND d%d.value LIKE ? ESCAPE '.'" % (i,))
                       for i in range(len(definition))]
         c = self._db_handle.cursor()
-        result = []
         is_wildcard = False
-        for key_value in key_values:
-            # Merge the lists together, so that:
-            # [field1, field2, field3], [val1, val2, val3]
-            # Becomes:
-            # (field1, val1, field2, val2, field3, val3)
-            args = []
-            where = []
-            if len(key_value) != len(definition):
-                raise errors.InvalidValueForIndex()
-            for idx, (field, value) in enumerate(zip(definition, key_value)):
-                args.append(field)
-                if value.endswith('*'):
-                    if value == '*':
-                        where.append(wildcard_where[idx])
-                    else:
-                        # This is a glob match
-                        if is_wildcard:
-                            # We can't have a partial wildcard following
-                            # another wildcard
-                            raise errors.InvalidGlobbing
-                        where.append(like_where[idx])
-                        args.append(self._transform_glob(value))
-                    is_wildcard = True
+        # Merge the lists together, so that:
+        # [field1, field2, field3], [val1, val2, val3]
+        # Becomes:
+        # (field1, val1, field2, val2, field3, val3)
+        args = []
+        where = []
+        if len(key_values) != len(definition):
+            raise errors.InvalidValueForIndex()
+        for idx, (field, value) in enumerate(zip(definition, key_values)):
+            args.append(field)
+            if value.endswith('*'):
+                if value == '*':
+                    where.append(wildcard_where[idx])
                 else:
+                    # This is a glob match
                     if is_wildcard:
+                        # We can't have a partial wildcard following
+                        # another wildcard
                         raise errors.InvalidGlobbing
-                    where.append(exact_where[idx])
-                    args.append(value)
-            statement = ("SELECT d.doc_id, d.doc_rev, d.content"
-                         " FROM document d, "
-                         + ', '.join(tables) + " WHERE " + ' AND '.join(where))
-            try:
-                c.execute(statement, tuple(args))
-            except dbapi2.OperationalError, e:
-                raise dbapi2.OperationalError(str(e) +
-                    '\nstatement: %s\nargs: %s\n' % (statement, args))
-            res = c.fetchall()
-            result.extend([Document(r[0], r[1], r[2]) for r in res])
-        return result
+                    where.append(like_where[idx])
+                    args.append(self._transform_glob(value))
+                is_wildcard = True
+            else:
+                if is_wildcard:
+                    raise errors.InvalidGlobbing
+                where.append(exact_where[idx])
+                args.append(value)
+        statement = (
+            "SELECT d.doc_id, d.doc_rev, d.content FROM document d, %s "
+            "WHERE %s ORDER BY %s;" % (
+                ', '.join(tables), ' AND '.join(where),
+                ', '.join(
+                    ['d%d.value' % i for i in range(len(definition))])))
+        try:
+            c.execute(statement, tuple(args))
+        except dbapi2.OperationalError, e:
+            raise dbapi2.OperationalError(str(e) +
+                '\nstatement: %s\nargs: %s\n' % (statement, args))
+        res = c.fetchall()
+        return [self._factory(r[0], r[1], r[2]) for r in res]
 
     def get_index_keys(self, index):
         c = self._db_handle.cursor()
@@ -713,12 +720,12 @@ class SQLitePartialExpandDatabase(SQLiteDatabase):
         c.execute("INSERT INTO transaction_log(doc_id, transaction_id)"
                   " VALUES (?, ?)", (doc.doc_id, trans_id))
 
-    def create_index(self, index_name, index_expression):
+    def create_index(self, index_name, *index_expressions):
         with self._db_handle:
             c = self._db_handle.cursor()
             cur_fields = self._get_indexed_fields()
             definition = [(index_name, idx, field)
-                          for idx, field in enumerate(index_expression)]
+                          for idx, field in enumerate(index_expressions)]
             try:
                 c.executemany("INSERT INTO index_definitions VALUES (?, ?, ?)",
                               definition)
@@ -727,8 +734,8 @@ class SQLitePartialExpandDatabase(SQLiteDatabase):
                 if stored_def == [x[-1] for x in definition]:
                     return
                 raise errors.IndexNameTakenError, e, sys.exc_info()[2]
-            new_fields = set([f for f in index_expression
-                              if f not in cur_fields])
+            new_fields = set(
+                [f for f in index_expressions if f not in cur_fields])
             if new_fields:
                 self._update_all_indexes(new_fields)
 

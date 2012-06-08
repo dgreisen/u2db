@@ -234,8 +234,9 @@ class CmdPut(OneDbCmd):
             else:
                 self.stderr.write("Given revision is not current.\n")
         except errors.ConflictedDoc:
-            self.stderr.write("Document has conflicts.\n"
-                              "Inspect with get-doc-conflicts, then resolve.\n")
+            self.stderr.write(
+                "Document has conflicts.\n"
+                "Inspect with get-doc-conflicts, then resolve.\n")
         else:
             return
         return 1
@@ -327,7 +328,7 @@ class CmdCreateIndex(OneDbCmd):
     def run(self, database, index, expression):
         try:
             db = self._open(database, create=False)
-            db.create_index(index, expression)
+            db.create_index(index, *expression)
         except errors.DatabaseDoesNotExist:
             self.stderr.write("Database does not exist.\n")
             return 1
@@ -401,7 +402,7 @@ class CmdGetIndexKeys(OneDbCmd):
         try:
             db = self._open(database, create=False)
             for i in db.get_index_keys(index):
-                self.stdout.write("%s\n" % (i,))
+                self.stdout.write("%s\n" % (i.encode('utf-8'),))
         except errors.DatabaseDoesNotExist:
             self.stderr.write("Database does not exist.\n")
         except errors.IndexDoesNotExist:
@@ -431,7 +432,7 @@ class CmdGetFromIndex(OneDbCmd):
     def run(self, database, index, values):
         try:
             db = self._open(database, create=False)
-            docs = db.get_from_index(index, [values])
+            docs = db.get_from_index(index, *values)
         except errors.DatabaseDoesNotExist:
             self.stderr.write("Database does not exist.\n")
         except errors.IndexDoesNotExist:
@@ -465,7 +466,7 @@ class CmdGetFromIndex(OneDbCmd):
                 if v.endswith('*'):
                     break
             # values has at least one element, so i is defined
-            fixed.extend('*'*(len(values)-i-1))
+            fixed.extend('*' * (len(values) - i - 1))
             self.stderr.write(
                 "Invalid query: a star can only be followed by stars.\n"
                 "For example, the following would be valid:\n"

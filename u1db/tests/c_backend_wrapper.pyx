@@ -1047,14 +1047,14 @@ cdef class CDatabase(object):
         if status != U1DB_OK:
             raise RuntimeError("Failed to _sync_exchange: %d" % (status,))
 
-    def create_index(self, index_name, index_expression):
+    def create_index(self, index_name, *index_expressions):
         cdef const_char_ptr *expressions
         cdef int n_expressions
 
         # keep a reference to new_objs so that the pointers in expressions
         # remain valid.
         new_objs = _list_to_str_array(
-            index_expression, &expressions, &n_expressions)
+            index_expressions, &expressions, &n_expressions)
         try:
             handle_status("create_index",
                 u1db_create_index(
@@ -1073,42 +1073,41 @@ cdef class CDatabase(object):
         handle_status("delete_index",
             u1db_delete_index(self._db, index_name))
 
-    def get_from_index(self, index_name, key_values):
+    def get_from_index(self, index_name, *key_values):
         cdef CQuery query
         cdef int status
         extra = []
         query = self._query_init(index_name)
         res = []
         status = U1DB_OK
-        for entry in key_values:
-            if len(entry) == 0:
-                status = u1db_get_from_index(self._db, query._query,
-                    <void*>res, _append_doc_to_list, 0, NULL)
-            elif len(entry) == 1:
-                status = u1db_get_from_index(self._db, query._query,
-                    <void*>res, _append_doc_to_list, 1,
-                    _ensure_str(entry[0], extra))
-            elif len(entry) == 2:
-                status = u1db_get_from_index(self._db, query._query,
-                    <void*>res, _append_doc_to_list, 2,
-                    _ensure_str(entry[0], extra),
-                    _ensure_str(entry[1], extra))
-            elif len(entry) == 3:
-                status = u1db_get_from_index(self._db, query._query,
-                    <void*>res, _append_doc_to_list, 3,
-                    _ensure_str(entry[0], extra),
-                    _ensure_str(entry[1], extra),
-                    _ensure_str(entry[2], extra))
-            elif len(entry) == 4:
-                status = u1db_get_from_index(self._db, query._query,
-                    <void*>res, _append_doc_to_list, 4,
-                    _ensure_str(entry[0], extra),
-                    _ensure_str(entry[1], extra),
-                    _ensure_str(entry[2], extra),
-                    _ensure_str(entry[3], extra))
-            else:
-                status = U1DB_NOT_IMPLEMENTED
-            handle_status("get_from_index", status)
+        if len(key_values) == 0:
+            status = u1db_get_from_index(self._db, query._query,
+                <void*>res, _append_doc_to_list, 0, NULL)
+        elif len(key_values) == 1:
+            status = u1db_get_from_index(self._db, query._query,
+                <void*>res, _append_doc_to_list, 1,
+                _ensure_str(key_values[0], extra))
+        elif len(key_values) == 2:
+            status = u1db_get_from_index(self._db, query._query,
+                <void*>res, _append_doc_to_list, 2,
+                _ensure_str(key_values[0], extra),
+                _ensure_str(key_values[1], extra))
+        elif len(key_values) == 3:
+            status = u1db_get_from_index(self._db, query._query,
+                <void*>res, _append_doc_to_list, 3,
+                _ensure_str(key_values[0], extra),
+                _ensure_str(key_values[1], extra),
+                _ensure_str(key_values[2], extra))
+        elif len(key_values) == 4:
+            status = u1db_get_from_index(self._db, query._query,
+                <void*>res, _append_doc_to_list, 4,
+                _ensure_str(key_values[0], extra),
+                _ensure_str(key_values[1], extra),
+                _ensure_str(key_values[2], extra),
+                _ensure_str(key_values[3], extra))
+        else:
+            status = U1DB_NOT_IMPLEMENTED
+        handle_status("get_from_index", status)
         return res
 
     def get_index_keys(self, index_name):

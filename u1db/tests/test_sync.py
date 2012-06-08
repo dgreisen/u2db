@@ -460,7 +460,7 @@ class DatabaseSyncTests(tests.DatabaseBaseTests):
 
     def test_sync_pulls_changes(self):
         doc = self.db2.create_doc(simple_doc)
-        self.db1.create_index('test-idx', ['key'])
+        self.db1.create_index('test-idx', 'key')
         self.assertEqual(0, self.sync(self.db1, self.db2))
         self.assertGetDoc(self.db1, doc.doc_id, doc.rev, simple_doc, False)
         self.assertEqual(1, self.db1._get_sync_gen_info('test2')[0])
@@ -469,8 +469,7 @@ class DatabaseSyncTests(tests.DatabaseBaseTests):
             {'receive': {'docs': [], 'last_known_gen': 0},
              'return': {'docs': [(doc.doc_id, doc.rev)],
                         'last_gen': 1}})
-        self.assertEqual([doc],
-                         self.db1.get_from_index('test-idx', [('value',)]))
+        self.assertEqual([doc], self.db1.get_from_index('test-idx', 'value'))
 
     def test_sync_pulling_doesnt_update_other_if_changed(self):
         doc = self.db2.create_doc(simple_doc)
@@ -544,7 +543,7 @@ class DatabaseSyncTests(tests.DatabaseBaseTests):
         doc1 = self.db1.create_doc(simple_doc)
         doc_id = doc1.doc_id
         doc1_rev = doc1.rev
-        self.db1.create_index('test-idx', ['key'])
+        self.db1.create_index('test-idx', 'key')
         new_doc = '{"key": "altval"}'
         doc2 = self.db2.create_doc(new_doc, doc_id=doc_id)
         doc2_rev = doc2.rev
@@ -559,14 +558,13 @@ class DatabaseSyncTests(tests.DatabaseBaseTests):
         self.assertTransactionLog([doc_id, doc_id], self.db1)
         self.assertGetDoc(self.db1, doc_id, doc2_rev, new_doc, True)
         self.assertGetDoc(self.db2, doc_id, doc2_rev, new_doc, False)
-        self.assertEqual([doc2],
-                         self.db1.get_from_index('test-idx', [('altval',)]))
-        self.assertEqual([], self.db1.get_from_index('test-idx', [('value',)]))
+        self.assertEqual([doc2], self.db1.get_from_index('test-idx', 'altval'))
+        self.assertEqual([], self.db1.get_from_index('test-idx', 'value'))
 
     def test_sync_sees_remote_delete_conflicted(self):
         doc1 = self.db1.create_doc(simple_doc)
         doc_id = doc1.doc_id
-        self.db1.create_index('test-idx', ['key'])
+        self.db1.create_index('test-idx', 'key')
         self.sync(self.db1, self.db2)
         doc2 = self.make_document(doc1.doc_id, doc1.rev, doc1.get_json())
         new_doc = '{"key": "altval"}'
@@ -585,13 +583,13 @@ class DatabaseSyncTests(tests.DatabaseBaseTests):
         self.assertGetDocIncludeDeleted(self.db1, doc_id, doc2.rev, None, True)
         self.assertGetDocIncludeDeleted(
             self.db2, doc_id, doc2.rev, None, False)
-        self.assertEqual([], self.db1.get_from_index('test-idx', [('value',)]))
+        self.assertEqual([], self.db1.get_from_index('test-idx', 'value'))
 
     def test_sync_local_race_conflicted(self):
         doc = self.db1.create_doc(simple_doc)
         doc_id = doc.doc_id
         doc1_rev = doc.rev
-        self.db1.create_index('test-idx', ['key'])
+        self.db1.create_index('test-idx', 'key')
         self.sync(self.db1, self.db2)
         content1 = '{"key": "localval"}'
         content2 = '{"key": "altval"}'
@@ -610,18 +608,16 @@ class DatabaseSyncTests(tests.DatabaseBaseTests):
         self.sync(self.db1, self.db2, trace_hook=after_whatschanged)
         self.assertEqual([True], triggered)
         self.assertGetDoc(self.db1, doc_id, doc2_rev2, content2, True)
-        self.assertEqual([doc],
-                         self.db1.get_from_index('test-idx', [('altval',)]))
-        self.assertEqual([], self.db1.get_from_index('test-idx', [('value',)]))
-        self.assertEqual([], self.db1.get_from_index('test-idx',
-                                                     [('localval',)]))
+        self.assertEqual([doc], self.db1.get_from_index('test-idx', 'altval'))
+        self.assertEqual([], self.db1.get_from_index('test-idx', 'value'))
+        self.assertEqual([], self.db1.get_from_index('test-idx', 'localval'))
 
     def test_sync_propagates_deletes(self):
         doc1 = self.db1.create_doc(simple_doc)
         doc_id = doc1.doc_id
-        self.db1.create_index('test-idx', ['key'])
+        self.db1.create_index('test-idx', 'key')
         self.sync(self.db1, self.db2)
-        self.db2.create_index('test-idx', ['key'])
+        self.db2.create_index('test-idx', 'key')
         self.db3 = self.create_database('test3')
         self.sync(self.db1, self.db3)
         self.db1.delete_doc(doc1)
@@ -636,8 +632,8 @@ class DatabaseSyncTests(tests.DatabaseBaseTests):
             self.db1, doc_id, deleted_rev, None, False)
         self.assertGetDocIncludeDeleted(
             self.db2, doc_id, deleted_rev, None, False)
-        self.assertEqual([], self.db1.get_from_index('test-idx', [('value',)]))
-        self.assertEqual([], self.db2.get_from_index('test-idx', [('value',)]))
+        self.assertEqual([], self.db1.get_from_index('test-idx', 'value'))
+        self.assertEqual([], self.db2.get_from_index('test-idx', 'value'))
         self.sync(self.db2, self.db3)
         self.assertLastExchangeLog(self.db3,
             {'receive': {'docs': [(doc_id, deleted_rev)],

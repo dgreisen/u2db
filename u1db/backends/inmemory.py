@@ -30,7 +30,7 @@ from u1db.backends import CommonBackend, CommonSyncTarget
 class InMemoryDatabase(CommonBackend):
     """A database that only stores the data internally."""
 
-    def __init__(self, replica_uid):
+    def __init__(self, replica_uid, document_factory=None):
         self._transaction_log = []
         self._docs = {}
         # Map from doc_id => [(doc_rev, doc)] conflicts beyond 'winner'
@@ -39,6 +39,10 @@ class InMemoryDatabase(CommonBackend):
         self._indexes = {}
         self._replica_uid = replica_uid
         self._last_exchange_log = None
+        self._factory = document_factory or Document
+
+    def set_document_factory(self, factory):
+        self._factory = factory
 
     def close(self):
         # This is a no-op, We don't want to free the data because one client
@@ -106,7 +110,7 @@ class InMemoryDatabase(CommonBackend):
             doc_rev, content = self._docs[doc_id]
         except KeyError:
             return None
-        return Document(doc_id, doc_rev, content)
+        return self._factory(doc_id, doc_rev, content)
 
     def _has_conflicts(self, doc_id):
         return doc_id in self._conflicts
@@ -127,7 +131,7 @@ class InMemoryDatabase(CommonBackend):
         for doc_id, (doc_rev, content) in self._docs.items():
             if content is None and not include_deleted:
                 continue
-            results.append(Document(doc_id, doc_rev, content))
+            results.append(self._factory(doc_id, doc_rev, content))
         return (generation, results)
 
     def get_doc_conflicts(self, doc_id):
@@ -135,7 +139,7 @@ class InMemoryDatabase(CommonBackend):
             return []
         result = [self._get_doc(doc_id)]
         result[0].has_conflicts = True
-        result.extend([Document(doc_id, rev, content)
+        result.extend([self._factory(doc_id, rev, content)
                        for rev, content in self._conflicts[doc_id]])
         return result
 
@@ -185,12 +189,13 @@ class InMemoryDatabase(CommonBackend):
         doc.make_tombstone()
         self.put_doc(doc)
 
-    def create_index(self, index_name, index_expression):
+    def create_index(self, index_name, *index_expressions):
         if index_name in self._indexes:
-            if self._indexes[index_name]._definition == index_expression:
+            if self._indexes[index_name]._definition == list(
+                    index_expressions):
                 return
             raise errors.IndexNameTakenError
-        index = InMemoryIndex(index_name, index_expression)
+        index = InMemoryIndex(index_name, list(index_expressions))
         for doc_id, (doc_rev, doc) in self._docs.iteritems():
             if doc is not None:
                 index.add_json(doc_id, doc)
@@ -205,7 +210,7 @@ class InMemoryDatabase(CommonBackend):
             definitions.append((idx._name, idx._definition))
         return definitions
 
-    def get_from_index(self, index_name, key_values):
+    def get_from_index(self, index_name, *key_values):
         try:
             index = self._indexes[index_name]
         except KeyError:
@@ -214,7 +219,7 @@ class InMemoryDatabase(CommonBackend):
         result = []
         for doc_id in doc_ids:
             doc_rev, doc = self._docs[doc_id]
-            result.append(Document(doc_id, doc_rev, doc))
+            result.append(self._factory(doc_id, doc_rev, doc))
         return result
 
     def get_index_keys(self, index_name):
@@ -332,16 +337,13 @@ class InMemoryIndex(object):
             return -1
         return last
 
-    def lookup(self, key_values):
+    def lookup(self, values):
         """Find docs that match the values."""
-        result = []
-        for values in key_values:
-            last = self._find_non_wildcards(values)
-            if last == -1:
-                result.extend(self._lookup_exact(values))
-            else:
-                result.extend(self._lookup_prefix(values[:last]))
-        return result
+        last = self._find_non_wildcards(values)
+        if last == -1:
+            return self._lookup_exact(values)
+        else:
+            return self._lookup_prefix(values[:last])
 
     def keys(self):
         """Find the indexed keys."""
@@ -354,7 +356,7 @@ class InMemoryIndex(object):
         key_prefix = '\x01'.join(value)
         key_prefix = key_prefix.rstrip('*')
         all_doc_ids = []
-        for key, doc_ids in self._values.iteritems():
+        for key, doc_ids in sorted(self._values.iteritems()):
             if key.startswith(key_prefix):
                 all_doc_ids.extend(doc_ids)
         return all_doc_ids
