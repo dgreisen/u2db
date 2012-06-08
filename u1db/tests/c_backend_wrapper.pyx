@@ -277,7 +277,10 @@ cdef int _append_doc_to_list(void *context, u1db_document *doc) with gil:
 
 cdef int _append_key_to_list(void *context, const_char_ptr key) with gil:
     a_list = <object>context
-    a_list.append(key)
+    if key != NULL:
+        a_list.append(key)
+    else:
+        a_list.append(None)
     return 0
 
 cdef _list_to_array(lst, const_char_ptr **res, int *count):
@@ -1102,10 +1105,21 @@ cdef class CDatabase(object):
     def get_index_keys(self, index_name):
         cdef int status
         result = []
+        keys = []
         status = U1DB_OK
         status = u1db_get_index_keys(
-            self._db, index_name, <void*>result, _append_key_to_list)
+            self._db, index_name, <void*>keys, _append_key_to_list)
         handle_status("get_index_keys", status)
+        intermediate = []
+        for key in keys:
+            if key is None:
+                if len(intermediate) == 1:
+                    result.append(intermediate[0])
+                else:
+                    result.append(tuple(intermediate))
+                intermediate = []
+                continue
+            intermediate.append(key)
         return result
 
     def _query_init(self, index_name):

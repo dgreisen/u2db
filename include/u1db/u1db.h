@@ -315,7 +315,8 @@ int u1db_get_from_index(u1database *db, u1query *query,
  * Get keys under which documents are indexed.
  *
  * @param index_name Name of the index for which to get keys.
- * @param context Will be returned via the document callback
+ * @param context Will be returned via the document callback. cb will be called
+ *     once for each column, with a NULL value to separate rows.
  */
 int u1db_get_index_keys(u1database *db, char *index_name, void *context,
                         u1db_key_callback cb);

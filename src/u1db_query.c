@@ -621,6 +621,9 @@ u1db_get_index_keys(u1database *db, char *index_name,
     char *query_str = NULL;
     sqlite3_stmt *statement;
 
+    status = init_list(&field_names);
+    if (status != U1DB_OK)
+        goto finish;
     status = sqlite3_prepare_v2(
         db->sql_handle,
         "SELECT field FROM index_definitions WHERE name = ? ORDER BY "
@@ -639,9 +642,6 @@ u1db_get_index_keys(u1database *db, char *index_name,
         status = U1DB_INDEX_DOES_NOT_EXIST;
         goto finish;
     }
-    status = init_list(&field_names);
-    if (status != U1DB_OK)
-        goto finish;
     while (status == SQLITE_ROW) {
         num_fields++;
         status = append(field_names, (char*)sqlite3_column_text(statement, 0));
@@ -649,12 +649,13 @@ u1db_get_index_keys(u1database *db, char *index_name,
             goto finish;
         status = sqlite3_step(statement);
     }
-    if (status != SQLITE_OK) {
+    if (status != SQLITE_DONE) {
         goto finish;
     }
     sqlite3_finalize(statement);
     status = u1db__format_index_keys_query(num_fields, &query_str);
-    if (status != SQLITE_OK) {
+
+    if (status != U1DB_OK) {
         goto finish;
     }
     status = sqlite3_prepare_v2(
@@ -674,11 +675,13 @@ u1db_get_index_keys(u1database *db, char *index_name,
     while (status == SQLITE_ROW) {
         for (i = 0; i < num_fields; ++i) {
             key = (char*)sqlite3_column_text(statement, i);
-            if ((status = cb(context, key)) != U1DB_OK)
+            if ((status = cb(context, key)) != U1DB_OK) {
                 goto finish;
+            }
         }
-        if ((status = cb(context, NULL)) != U1DB_OK)
+        if ((status = cb(context, NULL)) != U1DB_OK) {
             goto finish;
+        }
         status = sqlite3_step(statement);
     }
     if (status == SQLITE_DONE) {
@@ -798,15 +801,18 @@ u1db__format_index_keys_query(int n_fields, char **buf)
     }
     *buf = cur;
     add_to_buf(&cur, &buf_size, "SELECT ");
-    for (i = 1; i < n_fields; ++i) {
+    for (i = 0; i < n_fields; ++i) {
         if (i != 0) {
             add_to_buf(&cur, &buf_size, ", ");
         }
         add_to_buf(&cur, &buf_size, " d%d.value", i);
     }
-    add_to_buf(&cur, &buf_size, " FROM document d");
-    for (i = 1; i < n_fields; ++i) {
-        add_to_buf(&cur, &buf_size, ", document_fields d%d", i);
+    add_to_buf(&cur, &buf_size, " FROM ");
+    for (i = 0; i < n_fields; ++i) {
+        if (i != 0) {
+            add_to_buf(&cur, &buf_size, ", ");
+        }
+        add_to_buf(&cur, &buf_size, "document_fields d%d", i);
     }
     add_to_buf(&cur, &buf_size, " WHERE d0.field_name = ?");
     for (i = 0; i < n_fields; ++i) {
