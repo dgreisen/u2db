@@ -32,12 +32,13 @@ static int st_record_sync_info(u1db_sync_target *st,
 static int st_sync_exchange(u1db_sync_target *st,
                           const char *source_replica_uid, int n_docs,
                           u1db_document **docs, int *generations,
-                          int *target_gen, void *context,
-                          u1db_doc_gen_callback cb);
+                          int *target_gen, char **target_trans_id,
+                          void *context, u1db_doc_gen_callback cb);
 static int st_sync_exchange_doc_ids(u1db_sync_target *st,
         u1database *source_db,
         int n_doc_ids, const char **doc_ids, int *generations,
-        int *target_gen, void *context, u1db_doc_gen_callback cb);
+        int *target_gen, char **target_trans_id,
+        void *context, u1db_doc_gen_callback cb);
 static int st_get_sync_exchange(u1db_sync_target *st,
                          const char *source_replica_uid,
                          int source_gen,
@@ -202,6 +203,10 @@ st_finalize_sync_exchange(u1db_sync_target *st, u1db_sync_exchange **exchange)
         free((*exchange)->gen_for_doc_ids);
         (*exchange)->gen_for_doc_ids = NULL;
     }
+    if ((*exchange)->target_trans_id != NULL) {
+        free((*exchange)->target_trans_id);
+        (*exchange)->target_trans_id = NULL;
+    }
     free(*exchange);
     *exchange = NULL;
 }
@@ -360,7 +365,7 @@ u1db__sync_exchange_find_doc_ids_to_return(u1db_sync_exchange *se)
         if (status != U1DB_OK) { goto finish; }
     }
     state.exclude_ids = se->seen_ids;
-    status = u1db_whats_changed(se->db, &se->target_gen, &target_trans_id,
+    status = u1db_whats_changed(se->db, &se->target_gen, &se->target_trans_id,
             (void*)&state, whats_changed_to_doc_ids);
     if (status != U1DB_OK) {
         free(state.doc_ids_to_return);
@@ -476,13 +481,13 @@ get_and_insert_docs(u1database *source_db, u1db_sync_exchange *se,
 static int
 st_sync_exchange(u1db_sync_target *st, const char *source_replica_uid,
                  int n_docs, u1db_document **docs,
-                 int *generations, int *target_gen, void *context,
-                 u1db_doc_gen_callback cb)
+                 int *generations, int *target_gen, char **target_trans_id,
+                 void *context, u1db_doc_gen_callback cb)
 {
     int status, i;
     u1db_sync_exchange *exchange = NULL;
     if (st == NULL || generations == NULL || target_gen == NULL
-            || cb == NULL)
+            || target_trans_id == NULL || cb == NULL)
     {
         return U1DB_INVALID_PARAMETER;
     }
@@ -501,7 +506,12 @@ st_sync_exchange(u1db_sync_target *st, const char *source_replica_uid,
     if (status != U1DB_OK) { goto finish; }
     status = u1db__sync_exchange_return_docs(exchange, context, cb);
     if (status != U1DB_OK) { goto finish; }
-    *target_gen = exchange->target_gen;
+    if (status == U1DB_OK) {
+        *target_gen = exchange->target_gen;
+        *target_trans_id = exchange->target_trans_id;
+        // We set this to NULL, because the caller is now responsible for it
+        exchange->target_trans_id = NULL;
+    }
 finish:
     st->finalize_sync_exchange(st, &exchange);
     return status;
@@ -511,12 +521,14 @@ finish:
 static int
 st_sync_exchange_doc_ids(u1db_sync_target *st, u1database *source_db,
         int n_doc_ids, const char **doc_ids, int *generations,
-        int *target_gen, void *context, u1db_doc_gen_callback cb)
+        int *target_gen, char **target_trans_id,
+        void *context, u1db_doc_gen_callback cb)
 {
     int status;
     const char *source_replica_uid = NULL;
     u1db_sync_exchange *exchange = NULL;
-    if (st == NULL || source_db == NULL || target_gen == NULL || cb == NULL)
+    if (st == NULL || source_db == NULL || target_gen == NULL
+        || target_trans_id == NULL || cb == NULL)
     {
         return U1DB_INVALID_PARAMETER;
     }
@@ -538,6 +550,12 @@ st_sync_exchange_doc_ids(u1db_sync_target *st, u1database *source_db,
     status = u1db__sync_exchange_return_docs(exchange, context, cb);
     if (status != U1DB_OK) { goto finish; }
     *target_gen = exchange->target_gen;
+    if (status == U1DB_OK) {
+        *target_gen = exchange->target_gen;
+        *target_trans_id = exchange->target_trans_id;
+        // We set this to NULL, because the caller is now responsible for it
+        exchange->target_trans_id = NULL;
+    }
 finish:
     st->finalize_sync_exchange(st, &exchange);
     return status;
@@ -553,6 +571,7 @@ u1db__sync_db_to_target(u1database *db, u1db_sync_target *target,
     struct _return_doc_state return_doc_state = {0};
     const char *target_uid, *local_uid;
     char *local_trans_id = NULL;
+    char *local_target_trans_id = NULL;
     char *target_trans_id_known_by_local = NULL;
     char *local_trans_id_known_by_target = NULL;
     int target_gen, local_gen;
@@ -574,6 +593,7 @@ u1db__sync_db_to_target(u1database *db, u1db_sync_target *target,
     status = u1db__get_sync_gen_info(db, target_uid,
         &target_gen_known_by_local, &target_trans_id_known_by_local);
     if (status != U1DB_OK) { goto finish; }
+    local_target_trans_id = target_trans_id_known_by_local;
     local_gen = local_gen_known_by_target;
 
     // Before we start the sync exchange, get the list of doc_ids that we want
@@ -585,6 +605,8 @@ u1db__sync_db_to_target(u1database *db, u1db_sync_target *target,
     if (local_gen == local_gen_known_by_target
         && target_gen == target_gen_known_by_local)
     {
+        // We know status == U1DB_OK, and we can shortcut the rest of the
+        // logic, no need to look for more information.
         goto finish;
     }
     *local_gen_before_sync = local_gen;
@@ -595,7 +617,7 @@ u1db__sync_db_to_target(u1database *db, u1db_sync_target *target,
         to_send_state.num_doc_ids,
         (const char**)to_send_state.doc_ids_to_return,
         to_send_state.gen_for_doc_ids,
-        &target_gen_known_by_local,
+        &target_gen_known_by_local, &target_trans_id_known_by_local,
         &return_doc_state, return_doc_to_insert_from_target);
     if (status != U1DB_OK) { goto finish; }
     status = u1db__get_generation(db, &local_gen);
@@ -620,8 +642,17 @@ finish:
     if (local_trans_id_known_by_target != NULL) {
         free(local_trans_id_known_by_target);
     }
+    if (local_target_trans_id != NULL) {
+        if (target_trans_id_known_by_local == local_target_trans_id) {
+            // Don't double free
+            target_trans_id_known_by_local = NULL;
+        }
+        free(local_target_trans_id);
+        local_target_trans_id = NULL;
+    }
     if (target_trans_id_known_by_local != NULL) {
         free(target_trans_id_known_by_local);
+        target_trans_id_known_by_local = NULL;
     }
     if (to_send_state.doc_ids_to_return != NULL) {
         int i;

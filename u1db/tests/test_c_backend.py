@@ -260,11 +260,11 @@ class TestCSyncTarget(BackendTests):
 
         def return_doc_cb(doc, gen):
             returned.append((doc, gen))
-
-        target_gen = self.st.sync_exchange_doc_ids(db2, [(doc2.doc_id, 1)], 0,
-                                                   return_doc_cb)
+        val = self.st.sync_exchange_doc_ids(db2, [(doc2.doc_id, 1)], 0,
+                                            return_doc_cb)
+        last_trans_id = self.db._get_transaction_log()[-1][1]
         self.assertEqual(2, self.db._get_generation())
-        self.assertEqual(2, target_gen)
+        self.assertEqual((2, last_trans_id), val)
         self.assertGetDoc(self.db, doc2.doc_id, doc2.rev, tests.nested_doc,
                           False)
         self.assertEqual([(doc1, 1)], returned)

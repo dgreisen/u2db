@@ -114,7 +114,7 @@ class Synchronizer(object):
 
         # exchange documents and try to insert the returned ones with
         # the target, return target synced-up-to gen
-        new_gen = sync_target.sync_exchange(docs_by_generation,
+        new_gen, new_trans_id = sync_target.sync_exchange(docs_by_generation,
                         self.source._replica_uid, target_last_known_gen,
                         return_doc_cb=self._insert_doc_from_target)
         # record target synced-up-to generation including applying what we sent
@@ -136,6 +136,7 @@ class SyncExchange(object):
         self.seen_ids = {}  # incoming ids not superseded
         self.changes_to_return = None
         self.new_gen = None
+        self.new_trans_id = None
         # for tests
         self._incoming_trace = []
         self._trace_hook = None
@@ -208,6 +209,7 @@ class SyncExchange(object):
             self.source_last_known_generation)
         self._trace('after whats_changed')
         self.new_gen = gen
+        self.new_trans_id = trans_id
         seen_ids = self.seen_ids
         # changed docs that weren't superseded by or converged with
         self.changes_to_return = [(doc_id, gen) for (doc_id, gen, _) in changes
@@ -264,7 +266,7 @@ class LocalSyncTarget(u1db.SyncTarget):
         new_gen = sync_exch.find_changes_to_return()
         # final step: return docs and record source replica sync point
         sync_exch.return_docs(return_doc_cb)
-        return new_gen
+        return new_gen, sync_exch.new_trans_id
 
     def _set_trace_hook(self, cb):
         self._trace_hook = cb
