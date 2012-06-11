@@ -653,10 +653,7 @@ class SQLiteDatabase(CommonBackend):
         except dbapi2.OperationalError, e:
             raise dbapi2.OperationalError(str(e) +
                 '\nstatement: %s\nargs: %s\n' % (statement, tuple(definition)))
-        res = c.fetchall()
-        if res and len(res[0]) == 1:
-            return [row[0] for row in res]
-        return res
+        return c.fetchall()
 
     def delete_index(self, index_name):
         with self._db_handle:

@@ -1113,10 +1113,7 @@ cdef class CDatabase(object):
         intermediate = []
         for key in keys:
             if key is None:
-                if len(intermediate) == 1:
-                    result.append(intermediate[0])
-                else:
-                    result.append(tuple(intermediate))
+                result.append(tuple(intermediate))
                 intermediate = []
                 continue
             intermediate.append(key)

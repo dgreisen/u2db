@@ -1140,7 +1140,7 @@ class DatabaseIndexTests(tests.DatabaseBaseTests):
         self.db.create_doc(content2)
         self.db.create_doc(content3)
         self.assertEqual(
-            ['value1', 'value2'],
+            [('value1',), ('value2',)],
             sorted(self.db.get_index_keys('test-idx')))
 
     def test_get_index_keys_from_multicolumn_index(self):

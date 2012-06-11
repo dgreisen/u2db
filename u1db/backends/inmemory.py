@@ -228,11 +228,8 @@ class InMemoryDatabase(CommonBackend):
         except KeyError:
             raise errors.IndexDoesNotExist
         keys = index.keys()
-        if keys and '\x01' in keys[0]:
-            # XXX inefficiency warning
-            return list(set([tuple(key.split('\x01')) for key in keys]))
         # XXX inefficiency warning
-        return list(set(keys))
+        return list(set([tuple(key.split('\x01')) for key in keys]))
 
     def whats_changed(self, old_generation=0):
         changes = []

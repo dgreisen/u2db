@@ -78,7 +78,7 @@ class TodoStore(object):
 
     def get_all_tags(self):
         """Get all tags in use in the entire database."""
-        return self.db.get_index_keys(TAGS_INDEX)
+        return [key[0] for key in self.db.get_index_keys(TAGS_INDEX)]
 
     def get_tasks_by_tags(self, tags):
         """Get all tasks that have every tag in tags."""
