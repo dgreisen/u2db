@@ -23,6 +23,10 @@
 #include <ctype.h>
 #include <json/json.h>
 
+#define NO_GLOB 0
+#define IS_GLOB 1
+#define ENDS_IN_GLOB 2
+
 #define OPS 4
 #define MAX_INT_STR_LEN 21
 #ifndef max
@@ -576,12 +580,12 @@ u1db_get_from_indexl(u1database *db, u1query *query, void *context,
                                    SQLITE_TRANSIENT);
         bind_arg++;
         if (status != SQLITE_OK) { goto finish; }
-        if (wildcard[i] == 0) {
+        if (wildcard[i] == NO_GLOB) {
             // Not a wildcard, so add the argument
             status = sqlite3_bind_text(statement, bind_arg, values[i], -1,
                                        SQLITE_TRANSIENT);
             bind_arg++;
-        } else if (wildcard[i] == 2) {
+        } else if (wildcard[i] == ENDS_IN_GLOB) {
             status = sqlite3_bind_text(statement, bind_arg, values[i], -1,
                                        SQLITE_TRANSIENT);
             bind_arg++;
@@ -673,12 +677,12 @@ u1db_get_range_from_index(u1database *db, u1query *query,
         if (status != SQLITE_OK) { goto finish; }
         bind_arg++;
         if (start_values != NULL) {
-            if (start_wildcard[i] == 0) {
+            if (start_wildcard[i] == NO_GLOB) {
                 status = sqlite3_bind_text(
                     statement, bind_arg, start_values[i], -1,
                     SQLITE_TRANSIENT);
                 bind_arg++;
-            } else if (start_wildcard[i] == 2) {
+            } else if (start_wildcard[i] == ENDS_IN_GLOB) {
                 if (stripped != NULL)
                     free(stripped);
                 stripped = strdup(start_values[i]);
@@ -694,12 +698,12 @@ u1db_get_range_from_index(u1database *db, u1query *query,
             if (status != SQLITE_OK) { goto finish; }
         }
         if (end_values != NULL) {
-            if (end_wildcard[i] == 0) {
+            if (end_wildcard[i] == NO_GLOB) {
                 status = sqlite3_bind_text(
                     statement, bind_arg, end_values[i], -1,
                     SQLITE_TRANSIENT);
                 bind_arg++;
-            } else if (end_wildcard[i] == 2) {
+            } else if (end_wildcard[i] == ENDS_IN_GLOB) {
                 if (stripped != NULL)
                     free(stripped);
                 stripped = strdup(end_values[i]);
@@ -852,12 +856,12 @@ u1db__format_query(int n_fields, const char **values, char **buf,
             goto finish;
         }
         if (val[0] == '*') {
-            wildcard[i] = 1;
+            wildcard[i] = IS_GLOB;
             have_wildcard = 1;
             add_to_buf(&cur, &buf_size, " AND d%d.value NOT NULL", i);
         } else if (val[0] != '\0' && val[strlen(val)-1] == '*') {
             // glob
-            wildcard[i] = 2;
+            wildcard[i] = ENDS_IN_GLOB;
             if (have_wildcard) {
                 //globs not allowed after another wildcard
                 status = U1DB_INVALID_GLOBBING;
@@ -866,7 +870,7 @@ u1db__format_query(int n_fields, const char **values, char **buf,
             have_wildcard = 1;
             add_to_buf(&cur, &buf_size, " AND d%d.value GLOB ?", i);
         } else {
-            wildcard[i] = 0;
+            wildcard[i] = NO_GLOB;
             if (have_wildcard) {
                 // Can't have a non-wildcard after a wildcard
                 status = U1DB_INVALID_GLOBBING;
@@ -932,12 +936,12 @@ u1db__format_range_query(int n_fields, const char **start_values,
                 goto finish;
             }
             if (val[0] == '*') {
-                start_wildcard[i] = 1;
+                start_wildcard[i] = IS_GLOB;
                 have_start_wildcard= 1;
                 add_to_buf(&cur, &buf_size, " and d%d.value not null", i);
             } else if (val[0] != '\0' && val[strlen(val)-1] == '*') {
                 // glob
-                start_wildcard[i] = 2;
+                start_wildcard[i] = ENDS_IN_GLOB;
                 if (have_start_wildcard) {
                     //globs not allowed after another wildcard
                     status = U1DB_INVALID_GLOBBING;
@@ -946,7 +950,7 @@ u1db__format_range_query(int n_fields, const char **start_values,
                 have_start_wildcard = 1;
                 add_to_buf(&cur, &buf_size, " and d%d.value >= ?", i);
             } else {
-                start_wildcard[i] = 0;
+                start_wildcard[i] = NO_GLOB;
                 if (have_start_wildcard) {
                     // can't have a non-wildcard after a wildcard
                     status = U1DB_INVALID_GLOBBING;
@@ -962,12 +966,12 @@ u1db__format_range_query(int n_fields, const char **start_values,
                 goto finish;
             }
             if (val[0] == '*') {
-                end_wildcard[i] = 1;
+                end_wildcard[i] = IS_GLOB;
                 have_end_wildcard = 1;
                 add_to_buf(&cur, &buf_size, " AND d%d.value NOT NULL", i);
             } else if (val[0] != '\0' && val[strlen(val)-1] == '*') {
                 // glob
-                end_wildcard[i] = 2;
+                end_wildcard[i] = ENDS_IN_GLOB;
                 if (have_end_wildcard) {
                     //globs not allowed after another wildcard
                     status = U1DB_INVALID_GLOBBING;
@@ -978,7 +982,7 @@ u1db__format_range_query(int n_fields, const char **start_values,
                     &cur, &buf_size,
                     " AND (d%d.value < ? OR d%d.value GLOB ?)", i, i);
             } else {
-                end_wildcard[i] = 0;
+                end_wildcard[i] = NO_GLOB;
                 if (have_end_wildcard) {
                     // Can't have a non-wildcard after a wildcard
                     status = U1DB_INVALID_GLOBBING;
