@@ -1696,8 +1696,8 @@ u1db__is_doc_id_valid(const char *doc_id)
 
 
 int
-u1db_create_indexl(u1database *db, const char *index_name, int n_expressions,
-                   const char **expressions)
+u1db_create_index_list(u1database *db, const char *index_name,
+                       int n_expressions, const char **expressions)
 {
     int status = U1DB_OK, i = 0;
     sqlite3_stmt *statement = NULL;
@@ -1816,7 +1816,8 @@ u1db_create_index(u1database *db, const char *index_name, int n_expressions,
     for (i = 0; i < n_expressions; ++i) {
         expressions[i] = va_arg(argp, char *);
     }
-    status = u1db_create_indexl(db, index_name, n_expressions, expressions);
+    status = u1db_create_index_list(
+        db, index_name, n_expressions, expressions);
 finish:
     if (expressions != NULL)
         free(expressions);

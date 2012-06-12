@@ -545,10 +545,10 @@ finish:
     return status;
 }
 
-
 int
-u1db_get_from_indexl(u1database *db, u1query *query, void *context,
-                     u1db_doc_callback cb, int n_values, const char **values)
+u1db_get_from_index_list(u1database *db, u1query *query, void *context,
+                         u1db_doc_callback cb, int n_values,
+                         const char **values)
 {
     int status = U1DB_OK;
     sqlite3_stmt *statement = NULL;
@@ -612,33 +612,6 @@ finish:
     }
     return status;
 }
-
-
-int
-u1db_get_from_index(u1database *db, u1query *query, void *context,
-                    u1db_doc_callback cb, int n_values, ...)
-{
-    int i, status = U1DB_OK;
-    va_list argp;
-    const char **values = NULL;
-
-    values = (const char **)calloc(n_values, sizeof(char*));
-    if (values == NULL) {
-        status = U1DB_NOMEM;
-        goto finish;
-    }
-    va_start(argp, n_values);
-    for (i = 0; i < n_values; ++i) {
-        values[i] = va_arg(argp, char *);
-    }
-    status = u1db_get_from_indexl(db, query, context, cb, n_values, values);
-finish:
-    if (values != NULL)
-        free(values);
-    va_end(argp);
-    return status;
-}
-
 
 int
 u1db_get_range_from_index(u1database *db, u1query *query,
@@ -744,6 +717,34 @@ finish:
         free(stripped);
     return status;
 }
+
+
+int
+u1db_get_from_index(u1database *db, u1query *query, void *context,
+                    u1db_doc_callback cb, int n_values, ...)
+{
+    int i, status = U1DB_OK;
+    va_list argp;
+    const char **values = NULL;
+
+    values = (const char **)calloc(n_values, sizeof(char*));
+    if (values == NULL) {
+        status = U1DB_NOMEM;
+        goto finish;
+    }
+    va_start(argp, n_values);
+    for (i = 0; i < n_values; ++i) {
+        values[i] = va_arg(argp, char *);
+    }
+    status = u1db_get_from_index_list(
+        db, query, context, cb, n_values, values);
+finish:
+    if (values != NULL)
+        free(values);
+    va_end(argp);
+    return status;
+}
+
 
 int
 u1db_get_index_keys(u1database *db, char *index_name,
