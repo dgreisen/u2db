@@ -36,7 +36,6 @@ typedef struct operation_
     int value_type;
 } operation;
 
-
 typedef struct string_list_item_
 {
     char *data;
@@ -74,7 +73,8 @@ typedef struct transformation_
 } transformation;
 
 typedef int(*op_function)(string_list *, const string_list *,
-                        const string_list *);
+                          const string_list *);
+
 
 static int
 init_list(string_list **list)
@@ -615,10 +615,11 @@ u1db_get_index_keys(u1database *db, char *index_name,
     int status = U1DB_OK;
     int num_fields = 0;
     int bind_arg, i;
-    char *key = NULL;
+    const char **key = NULL;
     string_list *field_names = NULL;
     string_list_item *field_name = NULL;
     char *query_str = NULL;
+    char *field = NULL;
     sqlite3_stmt *statement;
 
     status = init_list(&field_names);
@@ -672,14 +673,17 @@ u1db_get_index_keys(u1database *db, char *index_name,
             goto finish;
     }
     status = sqlite3_step(statement);
+    key = (const char**)calloc(num_fields, sizeof(char*));
+    if (key == NULL) {
+        status = U1DB_NOMEM;
+        goto finish;
+    }
     while (status == SQLITE_ROW) {
         for (i = 0; i < num_fields; ++i) {
-            key = (char*)sqlite3_column_text(statement, i);
-            if ((status = cb(context, key)) != U1DB_OK) {
-                goto finish;
-            }
+            field = (char*)sqlite3_column_text(statement, i);
+            key[i] = field;
         }
-        if ((status = cb(context, NULL)) != U1DB_OK) {
+        if ((status = cb(context, num_fields, key)) != U1DB_OK) {
             goto finish;
         }
         status = sqlite3_step(statement);
@@ -688,6 +692,11 @@ u1db_get_index_keys(u1database *db, char *index_name,
         status = U1DB_OK;
     }
 finish:
+    if (key != NULL)
+        free(key);
+    if (query_str != NULL) {
+        free(query_str);
+    }
     destroy_list(field_names);
     sqlite3_finalize(statement);
     return status;
