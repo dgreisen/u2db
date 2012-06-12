@@ -198,20 +198,24 @@ class Database(object):
     def get_range_from_index(self, index_name, start_value, end_value):
         """Return documents that fall within the specified range.
 
-        For both start_value and end_value, one must supply exactly the same
-        number of values as have been defined in the index, or pass None. In
-        case of a single column index, a string is accepted as an alternative
-        for a tuple with a single value. No wildcards of any kind are
-        supported.
+        Both ends of the range are inclusive. For both start_value and
+        end_value, one must supply exactly the same number of values as have
+        been defined in the index, or pass None. In case of a single column
+        index, a string is accepted as an alternative for a tuple with a single
+        value. It is possible to do a prefix match by using '*' to indicate
+        a wildcard match. You can only supply '*' to trailing entries, (eg
+        'val', '*', '*' is allowed, but '*', 'val', 'val' is not.) It is also
+        possible to append a '*' to the last supplied value (eg 'val*', '*',
+        '*' or 'val', 'val*', '*', but not 'val*', 'val', '*')
 
         :return: List of [Document]
         :param index_name: The index to query
-        :param start_values: tuples of values that define the upperbound of the
+        :param start_values: tuples of values that define the lower bound of
+            the range. eg, if you have an index with 3 fields then you would
+            have: (val1, val2, val3)
+        :param end_values: tuples of values that define the upper bound of the
             range. eg, if you have an index with 3 fields then you would have:
-            (x-val1, x-val2, x-val3), (y-val1, y-val2, y-val3), ...
-        :param end_values: tuples of values that define the upperbound of the
-            range. eg, if you have an index with 3 fields then you would have:
-            (x-val1, x-val2, x-val3), (y-val1, y-val2, y-val3), ...
+            (val1, val2, val3)
         """
         raise NotImplementedError(self.get_range_from_index)
 

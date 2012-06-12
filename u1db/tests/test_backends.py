@@ -844,6 +844,39 @@ class DatabaseIndexTests(tests.DatabaseBaseTests):
             [doc4, doc2],
             self.db.get_range_from_index('test-idx', None, 'value2'))
 
+    def test_get_wildcard_range_from_index_start(self):
+        doc1 = self.db.create_doc('{"key": "value4"}')
+        doc2 = self.db.create_doc('{"key": "value23"}')
+        doc3 = self.db.create_doc('{"key": "value2"}')
+        doc4 = self.db.create_doc('{"key": "value22"}')
+        self.db.create_doc('{"key": "value1"}')
+        self.db.create_index('test-idx', 'key')
+        self.assertEqual(
+            [doc3, doc4, doc2, doc1],
+            self.db.get_range_from_index('test-idx', 'value2*'))
+
+    def test_get_wildcard_range_from_index_end(self):
+        self.db.create_doc('{"key": "value4"}')
+        doc2 = self.db.create_doc('{"key": "value23"}')
+        doc3 = self.db.create_doc('{"key": "value2"}')
+        doc4 = self.db.create_doc('{"key": "value22"}')
+        doc5 = self.db.create_doc('{"key": "value1"}')
+        self.db.create_index('test-idx', 'key')
+        self.assertEqual(
+            [doc5, doc3, doc4, doc2],
+            self.db.get_range_from_index('test-idx', None, 'value2*'))
+
+    def test_get_wildcard_range_from_index_start_end(self):
+        self.db.create_doc('{"key": "a"}')
+        doc2 = self.db.create_doc('{"key": "boo3"}')
+        doc3 = self.db.create_doc('{"key": "catalyst"}')
+        doc4 = self.db.create_doc('{"key": "whaever"}')
+        doc5 = self.db.create_doc('{"key": "zerg"}')
+        self.db.create_index('test-idx', 'key')
+        self.assertEqual(
+            [doc3, doc4],
+            self.db.get_range_from_index('test-idx', 'cat*', 'zap*'))
+
     def test_get_range_from_index_multi_column_start_end(self):
         self.db.create_doc('{"key": "value3", "key2": "value4"}')
         doc2 = self.db.create_doc('{"key": "value2", "key2": "value3"}')
@@ -875,6 +908,71 @@ class DatabaseIndexTests(tests.DatabaseBaseTests):
             [doc4, doc3, doc2],
             self.db.get_range_from_index(
                 'test-idx', None, ('value2', 'value3')))
+
+    def test_get_wildcard_range_from_index_multi_column_start(self):
+        doc1 = self.db.create_doc('{"key": "value3", "key2": "value4"}')
+        doc2 = self.db.create_doc('{"key": "value2", "key2": "value23"}')
+        doc3 = self.db.create_doc('{"key": "value2", "key2": "value2"}')
+        self.db.create_doc('{"key": "value1", "key2": "value1"}')
+        self.db.create_index('test-idx', 'key', 'key2')
+        self.assertEqual(
+            [doc3, doc2, doc1],
+            self.db.get_range_from_index('test-idx', ('value2', 'value2*')))
+
+    def test_get_wildcard_range_from_index_multi_column_end(self):
+        self.db.create_doc('{"key": "value3", "key2": "value4"}')
+        doc2 = self.db.create_doc('{"key": "value2", "key2": "value23"}')
+        doc3 = self.db.create_doc('{"key": "value2", "key2": "value2"}')
+        doc4 = self.db.create_doc('{"key": "value1", "key2": "value1"}')
+        self.db.create_index('test-idx', 'key', 'key2')
+        self.assertEqual(
+            [doc4, doc3, doc2],
+            self.db.get_range_from_index(
+                'test-idx', None, ('value2', 'value2*')))
+
+    def test_get_glob_range_from_index_multi_column_start(self):
+        doc1 = self.db.create_doc('{"key": "value3", "key2": "value4"}')
+        doc2 = self.db.create_doc('{"key": "value2", "key2": "value23"}')
+        self.db.create_doc('{"key": "value1", "key2": "value2"}')
+        self.db.create_doc('{"key": "value1", "key2": "value1"}')
+        self.db.create_index('test-idx', 'key', 'key2')
+        self.assertEqual(
+            [doc2, doc1],
+            self.db.get_range_from_index('test-idx', ('value2', '*')))
+
+    def test_get_glob_range_from_index_multi_column_end(self):
+        self.db.create_doc('{"key": "value3", "key2": "value4"}')
+        doc2 = self.db.create_doc('{"key": "value2", "key2": "value23"}')
+        doc3 = self.db.create_doc('{"key": "value1", "key2": "value2"}')
+        doc4 = self.db.create_doc('{"key": "value1", "key2": "value1"}')
+        self.db.create_index('test-idx', 'key', 'key2')
+        self.assertEqual(
+            [doc4, doc3, doc2],
+            self.db.get_range_from_index('test-idx', None, ('value2', '*')))
+
+    def test_get_range_from_index_illegal_wildcard_order(self):
+        self.db.create_index('test-idx', 'k1', 'k2')
+        self.assertRaises(
+            errors.InvalidGlobbing,
+            self.db.get_range_from_index, 'test-idx', ('*', 'v2'))
+
+    def test_get_range_from_index_illegal_glob_after_wildcard(self):
+        self.db.create_index('test-idx', 'k1', 'k2')
+        self.assertRaises(
+            errors.InvalidGlobbing,
+            self.db.get_range_from_index, 'test-idx', ('*', 'v*'))
+
+    def test_get_range_from_index_illegal_wildcard_order_end(self):
+        self.db.create_index('test-idx', 'k1', 'k2')
+        self.assertRaises(
+            errors.InvalidGlobbing,
+            self.db.get_range_from_index, 'test-idx', None, ('*', 'v2'))
+
+    def test_get_range_from_index_illegal_glob_after_wildcard_end(self):
+        self.db.create_index('test-idx', 'k1', 'k2')
+        self.assertRaises(
+            errors.InvalidGlobbing,
+            self.db.get_range_from_index, 'test-idx', None, ('*', 'v*'))
 
     def test_get_from_index_fails_if_no_index(self):
         self.assertRaises(

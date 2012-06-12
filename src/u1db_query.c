@@ -23,6 +23,10 @@
 #include <ctype.h>
 #include <json/json.h>
 
+#define NO_GLOB 0
+#define IS_GLOB 1
+#define ENDS_IN_GLOB 2
+
 #define OPS 4
 #define MAX_INT_STR_LEN 21
 #ifndef max
@@ -93,6 +97,8 @@ append(string_list *list, const char *data)
     if (new_item == NULL)
         return U1DB_NOMEM;
     new_item->data = strdup(data);
+    if (new_item->data == NULL)
+        return U1DB_NOMEM;
     if (list->head == NULL)
     {
         list->head = new_item;
@@ -381,6 +387,8 @@ op_split_words(string_list *result, const string_list *values,
     for (item = values->head; item != NULL; item = item->next)
     {
         intermediate = strdup(item->data);
+        if (intermediate == NULL)
+            return U1DB_NOMEM;
         intermediate_ptr = intermediate;
         while (intermediate_ptr != NULL) {
             space_chr = strchr(intermediate_ptr, ' ');
@@ -459,6 +467,10 @@ lookup_index_fields(u1database *db, u1query *query)
             goto finish;
         }
         query->fields[offset] = strdup(field);
+        if (query->fields[offset] == NULL) {
+            status = U1DB_NOMEM;
+            goto finish;
+        }
         status = sqlite3_step(statement);
     }
     if (status == SQLITE_DONE) {
@@ -533,7 +545,6 @@ finish:
     return status;
 }
 
-
 int
 u1db_get_from_index_list(u1database *db, u1query *query, void *context,
                          u1db_doc_callback cb, int n_values,
@@ -569,12 +580,12 @@ u1db_get_from_index_list(u1database *db, u1query *query, void *context,
                                    SQLITE_TRANSIENT);
         bind_arg++;
         if (status != SQLITE_OK) { goto finish; }
-        if (wildcard[i] == 0) {
+        if (wildcard[i] == NO_GLOB) {
             // Not a wildcard, so add the argument
             status = sqlite3_bind_text(statement, bind_arg, values[i], -1,
                                        SQLITE_TRANSIENT);
             bind_arg++;
-        } else if (wildcard[i] == 2) {
+        } else if (wildcard[i] == ENDS_IN_GLOB) {
             status = sqlite3_bind_text(statement, bind_arg, values[i], -1,
                                        SQLITE_TRANSIENT);
             bind_arg++;
@@ -602,7 +613,6 @@ finish:
     return status;
 }
 
-
 int
 u1db_get_range_from_index(u1database *db, u1query *query,
                           void *context, u1db_doc_callback cb,
@@ -613,6 +623,9 @@ u1db_get_range_from_index(u1database *db, u1query *query,
     char *query_str = NULL;
     sqlite3_stmt *statement = NULL;
     char *doc_id = NULL;
+    char *stripped = NULL;
+    int start_wildcard[20] = {0};
+    int end_wildcard[20] = {0};
 
     if (db == NULL || query == NULL || cb == NULL || n_values < 0) {
         return U1DB_INVALID_PARAMETER;
@@ -621,7 +634,8 @@ u1db_get_range_from_index(u1database *db, u1query *query,
         return U1DB_INVALID_VALUE_FOR_INDEX;
     }
     status = u1db__format_range_query(
-        query->num_fields, start_values, end_values, &query_str);
+        query->num_fields, start_values, end_values, &query_str,
+        start_wildcard, end_wildcard);
     if (status != U1DB_OK) { goto finish; }
     status = sqlite3_prepare_v2(db->sql_handle, query_str, -1,
                                 &statement, NULL);
@@ -634,16 +648,49 @@ u1db_get_range_from_index(u1database *db, u1query *query,
         if (status != SQLITE_OK) { goto finish; }
         bind_arg++;
         if (start_values != NULL) {
-            status = sqlite3_bind_text(
-                statement, bind_arg, start_values[i], -1, SQLITE_TRANSIENT);
-            if (status != SQLITE_OK) { goto finish; }
-            bind_arg++;
+            if (start_wildcard[i] == NO_GLOB) {
+                status = sqlite3_bind_text(
+                    statement, bind_arg, start_values[i], -1,
+                    SQLITE_TRANSIENT);
+                bind_arg++;
+            } else if (start_wildcard[i] == ENDS_IN_GLOB) {
+                if (stripped != NULL)
+                    free(stripped);
+                stripped = strdup(start_values[i]);
+                if (stripped == NULL) {
+                    status = U1DB_NOMEM;
+                    goto finish;
+                }
+                stripped[strlen(stripped) - 1] = '\0';
+                status = sqlite3_bind_text(
+                    statement, bind_arg, stripped, -1, SQLITE_TRANSIENT);
+                bind_arg++;
+            }
+           if (status != SQLITE_OK) { goto finish; }
         }
         if (end_values != NULL) {
-            status = sqlite3_bind_text(
-                statement, bind_arg, end_values[i], -1, SQLITE_TRANSIENT);
+            if (end_wildcard[i] == NO_GLOB) {
+                status = sqlite3_bind_text(
+                    statement, bind_arg, end_values[i], -1,
+                    SQLITE_TRANSIENT);
+                bind_arg++;
+            } else if (end_wildcard[i] == ENDS_IN_GLOB) {
+                if (stripped != NULL)
+                    free(stripped);
+                stripped = strdup(end_values[i]);
+                if (stripped == NULL) {
+                    status = U1DB_NOMEM;
+                    goto finish;
+                }
+                stripped[strlen(stripped) - 1] = '\0';
+                status = sqlite3_bind_text(
+                    statement, bind_arg, stripped, -1, SQLITE_TRANSIENT);
+                bind_arg++;
+                status = sqlite3_bind_text(
+                    statement, bind_arg, end_values[i], -1, SQLITE_TRANSIENT);
+                bind_arg++;
+            }
             if (status != SQLITE_OK) { goto finish; }
-            bind_arg++;
         }
     }
     status = sqlite3_step(statement);
@@ -664,6 +711,8 @@ finish:
     if (query_str != NULL) {
         free(query_str);
     }
+    if (stripped != NULL)
+        free(stripped);
     return status;
 }
 
@@ -806,12 +855,12 @@ u1db__format_query(int n_fields, const char **values, char **buf,
             goto finish;
         }
         if (val[0] == '*') {
-            wildcard[i] = 1;
+            wildcard[i] = IS_GLOB;
             have_wildcard = 1;
             add_to_buf(&cur, &buf_size, " AND d%d.value NOT NULL", i);
         } else if (val[0] != '\0' && val[strlen(val)-1] == '*') {
             // glob
-            wildcard[i] = 2;
+            wildcard[i] = ENDS_IN_GLOB;
             if (have_wildcard) {
                 //globs not allowed after another wildcard
                 status = U1DB_INVALID_GLOBBING;
@@ -820,7 +869,7 @@ u1db__format_query(int n_fields, const char **values, char **buf,
             have_wildcard = 1;
             add_to_buf(&cur, &buf_size, " AND d%d.value GLOB ?", i);
         } else {
-            wildcard[i] = 0;
+            wildcard[i] = NO_GLOB;
             if (have_wildcard) {
                 // Can't have a non-wildcard after a wildcard
                 status = U1DB_INVALID_GLOBBING;
@@ -846,12 +895,15 @@ finish:
 
 int
 u1db__format_range_query(int n_fields, const char **start_values,
-                         const char **end_values, char **buf)
+                         const char **end_values, char **buf,
+                         int *start_wildcard, int *end_wildcard)
 {
     int status = U1DB_OK;
     int buf_size, i;
     char *cur = NULL;
     const char *val = NULL;
+    int have_start_wildcard = 0;
+    int have_end_wildcard = 0;
 
     if (n_fields < 1) {
         return U1DB_INVALID_PARAMETER;
@@ -882,7 +934,29 @@ u1db__format_range_query(int n_fields, const char **start_values,
                 status = U1DB_INVALID_VALUE_FOR_INDEX;
                 goto finish;
             }
-            add_to_buf(&cur, &buf_size, " AND d%d.value >= ?", i);
+            if (val[0] == '*') {
+                start_wildcard[i] = IS_GLOB;
+                have_start_wildcard= 1;
+                add_to_buf(&cur, &buf_size, " and d%d.value not null", i);
+            } else if (val[0] != '\0' && val[strlen(val)-1] == '*') {
+                // glob
+                start_wildcard[i] = ENDS_IN_GLOB;
+                if (have_start_wildcard) {
+                    //globs not allowed after another wildcard
+                    status = U1DB_INVALID_GLOBBING;
+                    goto finish;
+                }
+                have_start_wildcard = 1;
+                add_to_buf(&cur, &buf_size, " and d%d.value >= ?", i);
+            } else {
+                start_wildcard[i] = NO_GLOB;
+                if (have_start_wildcard) {
+                    // can't have a non-wildcard after a wildcard
+                    status = U1DB_INVALID_GLOBBING;
+                    goto finish;
+                }
+                add_to_buf(&cur, &buf_size, " and d%d.value >= ?", i);
+            }
         }
         if (end_values != NULL) {
             val = end_values[i];
@@ -890,7 +964,31 @@ u1db__format_range_query(int n_fields, const char **start_values,
                 status = U1DB_INVALID_VALUE_FOR_INDEX;
                 goto finish;
             }
-            add_to_buf(&cur, &buf_size, " AND d%d.value <= ?", i);
+            if (val[0] == '*') {
+                end_wildcard[i] = IS_GLOB;
+                have_end_wildcard = 1;
+                add_to_buf(&cur, &buf_size, " AND d%d.value NOT NULL", i);
+            } else if (val[0] != '\0' && val[strlen(val)-1] == '*') {
+                // glob
+                end_wildcard[i] = ENDS_IN_GLOB;
+                if (have_end_wildcard) {
+                    //globs not allowed after another wildcard
+                    status = U1DB_INVALID_GLOBBING;
+                    goto finish;
+                }
+                have_end_wildcard = 1;
+                add_to_buf(
+                    &cur, &buf_size,
+                    " AND (d%d.value < ? OR d%d.value GLOB ?)", i, i);
+            } else {
+                end_wildcard[i] = NO_GLOB;
+                if (have_end_wildcard) {
+                    // Can't have a non-wildcard after a wildcard
+                    status = U1DB_INVALID_GLOBBING;
+                    goto finish;
+                }
+                add_to_buf(&cur, &buf_size, " AND d%d.value <= ?", i);
+            }
         }
 
     }
@@ -919,12 +1017,16 @@ parse(const char *field, transformation *result, int value_type)
 {
     transformation *inner = NULL;
     char *new_field = NULL, *new_ptr, *argptr, *argend;
-    char *word, *first_comma;
+    char *word = NULL, *first_comma;
     int status = U1DB_OK;
     int i, size;
     int new_value_type = json_type_string;
     char *field_copy, *end = NULL;
     field_copy = strdup(field);
+    if (field_copy == NULL) {
+        status = U1DB_NOMEM;
+        goto finish;
+    }
     end = field_copy;
     while (*end != '(' && *end != ')' && *end != '\0')
     {
@@ -940,12 +1042,15 @@ parse(const char *field, transformation *result, int value_type)
         }
     }
     else {
-        // TODO: unicode fieldnames ?
         size = (end - field_copy);
         word = (char *)calloc(size + 1, 1);
         strncpy(word, field_copy, size);
     }
     new_field = strdup(end);
+    if (new_field == NULL) {
+        status = U1DB_NOMEM;
+        goto finish;
+    }
     new_ptr = new_field;
     if (status != U1DB_OK)
         goto finish;
@@ -1035,10 +1140,12 @@ parse(const char *field, transformation *result, int value_type)
         result->value_type = value_type;
     }
 finish:
-    free(word);
-    free(field_copy);
+    if (word != NULL)
+        free(word);
+    if (field_copy != NULL)
+        free(field_copy);
     if (new_field != NULL)
-    free(new_field);
+        free(new_field);
     return status;
 }
 
