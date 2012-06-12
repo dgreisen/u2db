@@ -102,6 +102,11 @@ struct _u1db_sync_target {
      *                      target that source_db has last seen, it will then
      *                      be filled with the final generation of the target
      *                      database from the returned document stream.
+     * @param target_trans_id (IN/OUT) This is associated with the generation
+     *                        of the target that the source has seen. Will be
+     *                        filled in with the final generation of the
+     *                        target. Note the value passed in and the value
+     *                        returned should be freed by the caller.
      * @param context   Passed to cb.
      * @param cb        After sending the requested documents, we read the
      *                  response stream. For each document in the stream, we
@@ -109,17 +114,17 @@ struct _u1db_sync_target {
      */
     int (*sync_exchange_doc_ids)(u1db_sync_target *st, u1database *source_db,
             int n_doc_ids, const char **doc_ids, int *generations,
-            int *target_gen,
+            int *target_gen, char **target_trans_id,
             void *context, u1db_doc_gen_callback cb);
 
     /**
      * Same as sync_exchange, only using document objects.
      */
     int (*sync_exchange)(u1db_sync_target *st,
-                              const char *source_replica_uid, int n_docs,
-                              u1db_document **docs, int *generations,
-                              int *target_gen, void *context,
-                              u1db_doc_gen_callback cb);
+                         const char *source_replica_uid, int n_docs,
+                         u1db_document **docs, int *generations,
+                         int *target_gen, char **target_trans_id,
+                         void *context, u1db_doc_gen_callback cb);
     /**
      * Create a sync_exchange state object.
      *
@@ -161,6 +166,7 @@ struct _u1db_sync_exchange {
     u1database *db;
     const char *source_replica_uid;
     int target_gen;
+    char *target_trans_id;
     struct lh_table *seen_ids;
     int num_doc_ids;
     int *gen_for_doc_ids;
@@ -331,19 +337,21 @@ int u1db__generate_hex_uuid(char *uuid);
 /**
  * Format a given query.
  *
- * @param n_fields  The number of fields being passed in, (the number of args
- * 		    in argp)
- * @param argp	    Arguments being passed. It is assumed that all arguments
- * 		    will be of type "char*".
+ * @param n_fields The number of fields being passed in, (the number of args
+ *     in argp)
+ * @param values Array of values being passed.
  * @param buf (OUT) The character array. This will be dynamically allocated,
- * 		    and callers must free() it.
+ *      print key_values
+ *     and callers must free() it.
  * @param wildcard (IN/OUT) Any array indicating a wildcard type for this
- * 			 argument. A 0 indicates this is an exact match, a 1
- * 			 indicates this is a pure wildcard (eg, "*") and a 2
- * 			 indicates this is a glob (eg "f*").
- * 			 This must point to an array at least n_fields wide.
+ *     argument. A 0 indicates this is an exact match, a 1
+ *     indicates this is a pure wildcard (eg, "*") and a 2
+ *     indicates this is a glob (eg "f*").
+ *     This must point to an array at least n_fields wide.
  */
-int u1db__format_query(int n_fields, va_list argp, char **buf, int *wildcard);
+int u1db__format_query(int n_fields, const char **values, char **buf,
+                       int *wildcard);
+
 
 /**
  * Format an index keys query

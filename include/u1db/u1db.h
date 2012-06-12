@@ -128,7 +128,6 @@ int u1db_create_doc(u1database *db, const char *json, const char *doc_id,
  */
 int u1db_put_doc(u1database *db, u1db_document *doc);
 
-
 /**
  * Mark conflicts as having been resolved.
  * @param doc (IN/OUT) The new content. doc->doc_rev will be updated with the
@@ -219,6 +218,7 @@ int u1db_delete_doc(u1database *db, u1db_document *doc);
  *               get all changes in the database. The integer will be updated
  *               to point at the current generation.
  * @param trans_id The transaction identifier associated with the generation.
+ *               Callers are responsible for freeing this memory.
  * @param cb     A callback function. This will be called passing in 'context',
  *               and a document identifier for each document that has been
  *               modified. This includes the generation and associated
@@ -256,10 +256,22 @@ int u1db_doc_set_json(u1db_document *doc, const char *json);
  *
  * @param index_name    An identifier for this index.
  * @param n_expressions The number of index expressions.
+ * @param exp0... The values to match in the index, all of these should be char*
+ */
+int u1db_create_index(u1database *db, const char *index_name, int n_expressions,
+                      ...);
+
+
+/**
+ * Create an index that you can query for matching documents.
+ *
+ * @param index_name    An identifier for this index.
+ * @param n_expressions The number of index expressions.
  * @param expressions   An array of expressions.
  */
-int u1db_create_index(u1database *db, const char *index_name,
-                      int n_expressions, const char **expressions);
+int u1db_create_index_list(u1database *db, const char *index_name,
+                           int n_expressions, const char **expressions);
+
 
 /**
  * Delete a defined index.
@@ -293,12 +305,27 @@ int u1db_list_indexes(u1database *db, void *context,
  */
 int u1db_query_init(u1database *db, const char *index_name, u1query **query);
 
+
 /**
  * Free the memory pointed to by query and all associated buffers.
  *
  * query will be updated to point to NULL when finished.
  */
 void u1db_free_query(u1query **query);
+
+
+/**
+ * Get documents which match a given index.
+ *
+ * @param query A u1query object, as created by u1db_query_init.
+ * @param context Will be returned via the document callback
+ * @param n_values The number of parameters being passed, must be >= 1
+ * @param values The values to match in the index.
+ */
+int u1db_get_from_index_list(u1database *db, u1query *query, void *context,
+                             u1db_doc_callback cb, int n_values,
+                             const char **values);
+
 
 /**
  * Get documents which match a given index.
@@ -308,9 +335,9 @@ void u1db_free_query(u1query **query);
  * @param n_values The number of parameters being passed, must be >= 1
  * @param val0... The values to match in the index, all of these should be char*
  */
-int u1db_get_from_index(u1database *db, u1query *query,
-                        void *context, u1db_doc_callback cb,
-                        int n_values, ...);
+int u1db_get_from_index(u1database *db, u1query *query, void *context,
+                        u1db_doc_callback cb, int n_values, ...);
+
 
 /**
  * Get keys under which documents are indexed.
@@ -321,6 +348,8 @@ int u1db_get_from_index(u1database *db, u1query *query,
  */
 int u1db_get_index_keys(u1database *db, char *index_name, void *context,
                         u1db_key_callback cb);
+
+
 /**
  * Get documents matching a single column index.
  */

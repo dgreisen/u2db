@@ -535,17 +535,15 @@ finish:
 
 
 int
-u1db_get_from_index(u1database *db, u1query *query,
-                    void *context, u1db_doc_callback cb,
-                    int n_values, ...)
+u1db_get_from_index_list(u1database *db, u1query *query, void *context,
+                         u1db_doc_callback cb, int n_values,
+                         const char **values)
 {
     int status = U1DB_OK;
     sqlite3_stmt *statement = NULL;
     char *doc_id = NULL;
     char *query_str = NULL;
     int i, bind_arg;
-    va_list argp;
-    const char *valN = NULL;
     int wildcard[20] = {0};
 
     if (db == NULL || query == NULL || cb == NULL || n_values < 0)
@@ -558,29 +556,26 @@ u1db_get_from_index(u1database *db, u1query *query,
     if (n_values > 20) {
         return U1DB_NOT_IMPLEMENTED;
     }
-    va_start(argp, n_values);
-    status = u1db__format_query(query->num_fields, argp, &query_str, wildcard);
-    va_end(argp);
+    status = u1db__format_query(
+        query->num_fields, values, &query_str, wildcard);
     if (status != U1DB_OK) { goto finish; }
     status = sqlite3_prepare_v2(db->sql_handle, query_str, -1,
                                 &statement, NULL);
     if (status != SQLITE_OK) { goto finish; }
     // Bind all of the 'field_name' parameters. sqlite_bind starts at 1
     bind_arg = 1;
-    va_start(argp, n_values);
     for (i = 0; i < query->num_fields; ++i) {
         status = sqlite3_bind_text(statement, bind_arg, query->fields[i], -1,
                                    SQLITE_TRANSIENT);
         bind_arg++;
         if (status != SQLITE_OK) { goto finish; }
-        valN = va_arg(argp, char *);
         if (wildcard[i] == 0) {
             // Not a wildcard, so add the argument
-            status = sqlite3_bind_text(statement, bind_arg, valN, -1,
+            status = sqlite3_bind_text(statement, bind_arg, values[i], -1,
                                        SQLITE_TRANSIENT);
             bind_arg++;
         } else if (wildcard[i] == 2) {
-            status = sqlite3_bind_text(statement, bind_arg, valN, -1,
+            status = sqlite3_bind_text(statement, bind_arg, values[i], -1,
                                        SQLITE_TRANSIENT);
             bind_arg++;
         }
@@ -600,13 +595,40 @@ u1db_get_from_index(u1database *db, u1query *query,
         status = U1DB_OK;
     }
 finish:
-    va_end(argp);
     sqlite3_finalize(statement);
     if (query_str != NULL) {
         free(query_str);
     }
     return status;
 }
+
+
+int
+u1db_get_from_index(u1database *db, u1query *query, void *context,
+                    u1db_doc_callback cb, int n_values, ...)
+{
+    int i, status = U1DB_OK;
+    va_list argp;
+    const char **values = NULL;
+
+    values = (const char **)calloc(n_values, sizeof(char*));
+    if (values == NULL) {
+        status = U1DB_NOMEM;
+        goto finish;
+    }
+    va_start(argp, n_values);
+    for (i = 0; i < n_values; ++i) {
+        values[i] = va_arg(argp, char *);
+    }
+    status = u1db_get_from_index_list(
+        db, query, context, cb, n_values, values);
+finish:
+    if (values != NULL)
+        free(values);
+    va_end(argp);
+    return status;
+}
+
 
 int
 u1db_get_index_keys(u1database *db, char *index_name,
@@ -619,7 +641,6 @@ u1db_get_index_keys(u1database *db, char *index_name,
     string_list *field_names = NULL;
     string_list_item *field_name = NULL;
     char *query_str = NULL;
-    char *field = NULL;
     sqlite3_stmt *statement;
 
     status = init_list(&field_names);
@@ -680,8 +701,7 @@ u1db_get_index_keys(u1database *db, char *index_name,
     }
     while (status == SQLITE_ROW) {
         for (i = 0; i < num_fields; ++i) {
-            field = (char*)sqlite3_column_text(statement, i);
-            key[i] = field;
+            key[i]  = (char*)sqlite3_column_text(statement, i);
         }
         if ((status = cb(context, num_fields, key)) != U1DB_OK) {
             goto finish;
@@ -716,7 +736,8 @@ add_to_buf(char **buf, int *buf_size, const char *fmt, ...)
 
 
 int
-u1db__format_query(int n_fields, va_list argp, char **buf, int *wildcard)
+u1db__format_query(int n_fields, const char **values, char **buf,
+                    int *wildcard)
 {
     int status = U1DB_OK;
     int buf_size, i;
@@ -747,7 +768,7 @@ u1db__format_query(int n_fields, va_list argp, char **buf, int *wildcard)
                 " AND d%d.field_name = ?",
                 i, i);
         }
-        val = va_arg(argp, char *);
+        val = values[i];
         if (val == NULL) {
             status = U1DB_INVALID_VALUE_FOR_INDEX;
             goto finish;
@@ -846,7 +867,6 @@ u1db__format_index_keys_query(int n_fields, char **buf)
     }
     return status;
 }
-
 
 struct sqlcb_to_field_cb {
     void *user_context;
@@ -1061,7 +1081,7 @@ finish:
 }
 
 static int
-evaluate_index_and_insert_into_db(void *context, const char *expression, 
+evaluate_index_and_insert_into_db(void *context, const char *expression,
                                   transformation *tr)
 {
     struct evaluate_index_context *ctx;
