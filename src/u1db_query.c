@@ -636,14 +636,12 @@ u1db_get_range_from_index(u1database *db, u1query *query,
     status = u1db__format_range_query(
         query->num_fields, start_values, end_values, &query_str,
         start_wildcard, end_wildcard);
-
     if (status != U1DB_OK) { goto finish; }
     status = sqlite3_prepare_v2(db->sql_handle, query_str, -1,
                                 &statement, NULL);
     if (status != SQLITE_OK) { goto finish; }
     // Bind all of the 'field_name' parameters. sqlite_bind starts at 1
     bind_arg = 1;
-
     for (i = 0; i < query->num_fields; ++i) {
         status = sqlite3_bind_text(
             statement, bind_arg, query->fields[i], -1, SQLITE_TRANSIENT);
@@ -668,7 +666,7 @@ u1db_get_range_from_index(u1database *db, u1query *query,
                     statement, bind_arg, stripped, -1, SQLITE_TRANSIENT);
                 bind_arg++;
             }
-            if (status != SQLITE_OK) { goto finish; }
+           if (status != SQLITE_OK) { goto finish; }
         }
         if (end_values != NULL) {
             if (end_wildcard[i] == NO_GLOB) {
