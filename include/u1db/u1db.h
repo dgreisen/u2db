@@ -217,6 +217,7 @@ int u1db_delete_doc(u1database *db, u1db_document *doc);
  *               get all changes in the database. The integer will be updated
  *               to point at the current generation.
  * @param trans_id The transaction identifier associated with the generation.
+ *               Callers are responsible for freeing this memory.
  * @param cb     A callback function. This will be called passing in 'context',
  *               and a document identifier for each document that has been
  *               modified. This includes the generation and associated

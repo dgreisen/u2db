@@ -171,11 +171,11 @@ cdef extern from "u1db/u1db_internal.h":
         int (*sync_exchange)(u1db_sync_target *st,
                              char *source_replica_uid, int n_docs,
                              u1db_document **docs, int *generations,
-                             int *target_gen, void *context,
-                             u1db_doc_gen_callback cb) nogil
+                             int *target_gen, char **target_trans_id,
+                             void *context, u1db_doc_gen_callback cb) nogil
         int (*sync_exchange_doc_ids)(u1db_sync_target *st,
                 u1database *source_db, int n_doc_ids, const_char_ptr *doc_ids,
-                int *generations, int *target_gen,
+                int *generations, int *target_gen, char **target_trans_id,
                 void *context, u1db_doc_gen_callback cb) nogil
         int (*get_sync_exchange)(u1db_sync_target *st,
                                  char *source_replica_uid,
@@ -598,7 +598,7 @@ cdef class CSyncExchange(object):
 
     def insert_doc_from_source(self, CDocument doc, source_gen):
         self._check()
-        handle_status("sync_exchange",
+        handle_status("insert_doc_from_source",
             u1db__sync_exchange_insert_doc_from_source(self._exchange,
                 doc._doc, source_gen))
 
@@ -689,6 +689,7 @@ cdef class CSyncTarget(object):
         cdef int *generations
         cdef int num_doc_ids
         cdef int target_gen
+        cdef char *target_trans_id
         cdef int status
         cdef CDatabase sdb
 
@@ -703,6 +704,7 @@ cdef class CSyncTarget(object):
         if generations == NULL:
             free(<void *>doc_ids)
             raise MemoryError
+        res_trans_id = ''
         try:
             for i, (doc_id, gen) in enumerate(doc_id_generations):
                 doc_ids[i] = PyString_AsString(doc_id)
@@ -710,25 +712,31 @@ cdef class CSyncTarget(object):
             target_gen = last_known_generation
             with nogil:
                 status = self._st.sync_exchange_doc_ids(self._st, sdb._db,
-                    num_doc_ids, doc_ids, generations, &target_gen,
+                    num_doc_ids, doc_ids, generations,
+                    &target_gen, &target_trans_id,
                     <void*>return_doc_cb, return_doc_cb_wrapper)
             handle_status("sync_exchange_doc_ids", status)
         finally:
             free(<void *>doc_ids)
             free(generations)
+            if target_trans_id != NULL:
+                res_trans_id = target_trans_id
+                free(target_trans_id)
 
-        return target_gen
+        return target_gen, res_trans_id
 
     def sync_exchange(self, docs_by_generations, source_replica_uid,
                       last_known_generation, return_doc_cb):
         cdef CDocument cur_doc
         cdef u1db_document **docs = NULL
         cdef int *generations = NULL
+        cdef char *trans_id = NULL
         cdef int i, count, status, target_gen
 
         self._check()
         assert self._st.sync_exchange != NULL, "sync_exchange is NULL?"
         count = len(docs_by_generations)
+        res_trans_id = ''
         try:
             docs = <u1db_document **>calloc(count, sizeof(u1db_document*))
             if docs == NULL:
@@ -744,15 +752,18 @@ cdef class CSyncTarget(object):
             with nogil:
                 status = self._st.sync_exchange(self._st,
                         source_replica_uid, count,
-                        docs, generations, &target_gen, <void *>return_doc_cb,
-                        return_doc_cb_wrapper)
+                        docs, generations, &target_gen, &trans_id,
+                        <void *>return_doc_cb, return_doc_cb_wrapper)
             handle_status("sync_exchange", status)
         finally:
             if docs != NULL:
                 free(docs)
             if generations != NULL:
                 free(generations)
-        return target_gen
+            if trans_id != NULL:
+                res_trans_id = trans_id
+                free(trans_id)
+        return target_gen, res_trans_id
 
     def _set_trace_hook(self, cb):
         self._check()

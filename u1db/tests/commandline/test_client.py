@@ -623,6 +623,15 @@ class TestCmdGetIndexKeys(TestCaseWithDB):
         self.assertEqual(cmd.stdout.getvalue(), '42\n')
         self.assertEqual(cmd.stderr.getvalue(), '')
 
+    def test_get_index_keys_nonascii(self):
+        self.db.create_index("foo", "bar")
+        self.db.create_doc('{"bar": "\u00a4"}')
+        cmd = self.make_command(client.CmdGetIndexKeys)
+        retval = cmd.run(self.db_path, "foo")
+        self.assertEqual(retval, None)
+        self.assertEqual(cmd.stdout.getvalue(), '\xc2\xa4\n')
+        self.assertEqual(cmd.stderr.getvalue(), '')
+
     def test_get_index_keys_empty(self):
         self.db.create_index("foo", "bar")
         cmd = self.make_command(client.CmdGetIndexKeys)
