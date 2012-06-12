@@ -93,6 +93,25 @@ class CommonBackend(u1db.Database):
             result.append(doc)
         return result
 
+    def _validate_source_gen_and_trans_id(self, other_replica_uid,
+                                          other_generation,
+                                          other_transaction_id):
+        """Validate the new generation and transaction id.
+
+        other_generation must be greater than what we have stored for this
+        replica, *or* it must be the same and the transaction_id must be the
+        same as well.
+        """
+        old_generation, old_transaction_id = self._get_sync_gen_info(
+            other_replica_uid)
+        if other_generation < old_generation:
+            raise errors.InvalidGeneration
+        if other_generation > old_generation:
+            return True
+        if other_transaction_id == old_transaction_id:
+            return True
+        raise errors.InvalidTransactionId
+
     def _put_doc_if_newer(self, doc, save_conflict, replica_uid=None,
                           replica_gen=None, replica_trans_id=None):
         cur_doc = self._get_doc(doc.doc_id)

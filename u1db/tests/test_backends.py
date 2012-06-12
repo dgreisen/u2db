@@ -392,6 +392,29 @@ class LocalDatabaseTests(tests.DatabaseBaseTests):
         # The database wasn't altered
         self.assertGetDoc(self.db, doc1.doc_id, doc1.rev, simple_doc, False)
 
+    def test_validate_source_gen_and_trans_id_same(self):
+        self.db._set_sync_info('other', 1, 'T-sid')
+        self.assertTrue(
+            self.db._validate_source_gen_and_trans_id('other', 1, 'T-sid'))
+
+    def test_validate_source_gen_and_trans_id_newer(self):
+        self.db._set_sync_info('other', 1, 'T-sid')
+        self.assertTrue(
+            self.db._validate_source_gen_and_trans_id('other', 2, 'T-whatevs'))
+
+    def test_validate_source_gen_and_trans_id_wrong_txid(self):
+        self.db._set_sync_info('other', 1, 'T-sid')
+        self.assertRaises(
+            errors.InvalidTransactionId,
+            self.db._validate_source_gen_and_trans_id, 'other', 1, 'T-sad')
+
+    def test_validate_source_gen_and_trans_id_older(self):
+        self.db._set_sync_info('other', 1, 'T-sid')
+        self.db._set_sync_info('other', 2, 'T-sod')
+        self.assertRaises(
+            errors.InvalidGeneration,
+            self.db._validate_source_gen_and_trans_id, 'other', 1, 'T-sid')
+
     def test_put_doc_if_newer_replica_uid(self):
         doc1 = self.db.create_doc(simple_doc)
         self.db._set_sync_info('other', 1, 'T-sid')

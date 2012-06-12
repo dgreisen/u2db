@@ -204,6 +204,21 @@ int u1db__put_doc_if_newer(u1database *db, u1db_document *doc,
                            int *state, int *at_gen);
 
 /**
+ * Validate source generation and transaction id.
+ *
+ * @param replica_uid uid of source replica at the time of the
+ *     change we are syncing.
+ * @param replica_gen Generation of the replica at the time of the
+ *     change we are syncing.
+ * @param replica_trans_id Transaction id of the replica at the time of the
+ *     change we are syncing.
+ */
+int u1db__validate_source_gen_and_trans_id(u1database *db,
+                                           const char *replica_uid,
+                                           int replica_gen,
+                                           const char *replica_trans_id);
+
+/**
  * Internal API, Get the global database rev.
  */
 int u1db__get_generation(u1database *db, int *generation);
