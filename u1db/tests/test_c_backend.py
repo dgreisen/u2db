@@ -14,8 +14,10 @@
 # You should have received a copy of the GNU Lesser General Public License
 # along with u1db.  If not, see <http://www.gnu.org/licenses/>.
 
+import simplejson
 from u1db import (
     Document,
+    errors,
     tests,
     )
 from u1db.tests import c_backend_wrapper, c_backend_error
@@ -93,6 +95,60 @@ class TestCDatabase(BackendTests):
                          " VALUES ('doc-id', 'doc-rev', '{}')")
         self.assertRaises(Exception, self.db.get_doc_conflicts, 'doc-id')
 
+    def test_create_index_list(self):
+        # We manually poke data into the DB, so that we test just the "get_doc"
+        # code, rather than also testing the index management code.
+        self.db = c_backend_wrapper.CDatabase(':memory:')
+        doc = self.db.create_doc(tests.simple_doc)
+        self.db.create_index_list("key-idx", ["key"])
+        docs = self.db.get_from_index('key-idx', 'value')
+        self.assertEqual([doc], docs)
+
+    def test_create_index_list_on_non_ascii_field_name(self):
+        self.db = c_backend_wrapper.CDatabase(':memory:')
+        doc = self.db.create_doc(simplejson.dumps({u'\xe5': 'value'}))
+        self.db.create_index_list('test-idx', [u'\xe5'])
+        self.assertEqual([doc], self.db.get_from_index('test-idx', 'value'))
+
+    def test_list_indexes_with_non_ascii_field_names(self):
+        self.db = c_backend_wrapper.CDatabase(':memory:')
+        self.db.create_index_list('test-idx', [u'\xe5'])
+        self.assertEqual(
+            [('test-idx', [u'\xe5'])], self.db.list_indexes())
+
+    def test_create_index_evaluates_it(self):
+        self.db = c_backend_wrapper.CDatabase(':memory:')
+        doc = self.db.create_doc(tests.simple_doc)
+        self.db.create_index_list('test-idx', ['key'])
+        self.assertEqual([doc], self.db.get_from_index('test-idx', 'value'))
+
+    def test_wildcard_matches_unicode_value(self):
+        self.db = c_backend_wrapper.CDatabase(':memory:')
+        doc = self.db.create_doc(simplejson.dumps({"key": u"valu\xe5"}))
+        self.db.create_index_list('test-idx', ['key'])
+        self.assertEqual([doc], self.db.get_from_index('test-idx', '*'))
+
+    def test_create_index_fails_if_name_taken(self):
+        self.db = c_backend_wrapper.CDatabase(':memory:')
+        self.db.create_index_list('test-idx', ['key'])
+        self.assertRaises(errors.IndexNameTakenError,
+                          self.db.create_index_list,
+                          'test-idx', ['stuff'])
+
+    def test_create_index_does_not_fail_if_name_taken_with_same_index(self):
+        self.db = c_backend_wrapper.CDatabase(':memory:')
+        self.db.create_index_list('test-idx', ['key'])
+        self.db.create_index_list('test-idx', ['key'])
+        self.assertEqual([('test-idx', ['key'])], self.db.list_indexes())
+
+    def test_create_index_after_deleting_document(self):
+        self.db = c_backend_wrapper.CDatabase(':memory:')
+        doc = self.db.create_doc(tests.simple_doc)
+        doc2 = self.db.create_doc(tests.simple_doc)
+        self.db.delete_doc(doc2)
+        self.db.create_index_list('test-idx', ['key'])
+        self.assertEqual([doc], self.db.get_from_index('test-idx', 'value'))
+
     def test_get_from_index(self):
         # We manually poke data into the DB, so that we test just the "get_doc"
         # code, rather than also testing the index management code.
@@ -101,6 +157,35 @@ class TestCDatabase(BackendTests):
         self.db.create_index("key-idx", "key")
         docs = self.db.get_from_index('key-idx', 'value')
         self.assertEqual([doc], docs)
+
+    def test_get_from_index_list(self):
+        # We manually poke data into the DB, so that we test just the "get_doc"
+        # code, rather than also testing the index management code.
+        self.db = c_backend_wrapper.CDatabase(':memory:')
+        doc = self.db.create_doc(tests.simple_doc)
+        self.db.create_index("key-idx", "key")
+        docs = self.db.get_from_index_list('key-idx', ['value'])
+        self.assertEqual([doc], docs)
+
+    def test_get_from_index_list_multi(self):
+        self.db = c_backend_wrapper.CDatabase(':memory:')
+        content = '{"key": "value", "key2": "value2"}'
+        doc = self.db.create_doc(content)
+        self.db.create_index('test-idx', 'key', 'key2')
+        self.assertEqual(
+            [doc],
+            self.db.get_from_index_list('test-idx', ['value', 'value2']))
+
+    def test_get_from_index_list_multi_ordered(self):
+        self.db = c_backend_wrapper.CDatabase(':memory:')
+        doc1 = self.db.create_doc('{"key": "value3", "key2": "value4"}')
+        doc2 = self.db.create_doc('{"key": "value2", "key2": "value3"}')
+        doc3 = self.db.create_doc('{"key": "value2", "key2": "value2"}')
+        doc4 = self.db.create_doc('{"key": "value1", "key2": "value1"}')
+        self.db.create_index('test-idx', 'key', 'key2')
+        self.assertEqual(
+            [doc4, doc3, doc2, doc1],
+            self.db.get_from_index_list('test-idx', ['v*', '*']))
 
     def test_get_from_index_2(self):
         self.db = c_backend_wrapper.CDatabase(':memory:')
