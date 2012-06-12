@@ -745,7 +745,14 @@ class TestHTTPApp(tests.TestCase):
         self.assertEqual(200, resp.status)
         self.assertEqual('application/x-u1db-sync-stream',
                          resp.header('content-type'))
-        self.assertEqual('[\r\n{"new_generation": 2}\r\n]\r\n', resp.body)
+        bits = resp.body.split('\r\n')
+        self.assertEqual('[', bits[0])
+        last_trans_id = self.db0._get_transaction_log()[-1][1]
+        self.assertEqual({'new_generation': 2,
+                          'new_transaction_id': last_trans_id},
+                         simplejson.loads(bits[1]))
+        self.assertEqual(']', bits[2])
+        self.assertEqual('', bits[3])
         self.assertEqual([('replica', 10), ('replica', 11)], gens)
 
     def test_sync_exchange_send_entry_too_large(self):
@@ -782,7 +789,9 @@ class TestHTTPApp(tests.TestCase):
         parts = resp.body.splitlines()
         self.assertEqual(5, len(parts))
         self.assertEqual('[', parts[0])
-        self.assertEqual({'new_generation': 2},
+        last_trans_id = self.db0._get_transaction_log()[-1][1]
+        self.assertEqual({'new_generation': 2,
+                          'new_transaction_id': last_trans_id},
                          simplejson.loads(parts[1].rstrip(",")))
         self.assertEqual({'content': '{"value": "there"}',
                           'rev': doc.rev, 'id': doc.doc_id, 'gen': 1},
@@ -811,7 +820,7 @@ class TestHTTPApp(tests.TestCase):
         parts = resp.body.splitlines()
         self.assertEqual(3, len(parts))
         self.assertEqual('[', parts[0])
-        self.assertEqual({'new_generation': 0},
+        self.assertEqual({'new_generation': 0, 'new_transaction_id': ''},
                          simplejson.loads(parts[1].rstrip(",")))
         self.assertEqual({'error': 'unavailable'}, simplejson.loads(parts[2]))
 

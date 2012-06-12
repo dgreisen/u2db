@@ -217,6 +217,7 @@ int u1db_delete_doc(u1database *db, u1db_document *doc);
  *               get all changes in the database. The integer will be updated
  *               to point at the current generation.
  * @param trans_id The transaction identifier associated with the generation.
+ *               Callers are responsible for freeing this memory.
  * @param cb     A callback function. This will be called passing in 'context',
  *               and a document identifier for each document that has been
  *               modified. This includes the generation and associated
@@ -267,9 +268,8 @@ int u1db_create_index(u1database *db, const char *index_name, int n_expressions,
  * @param n_expressions The number of index expressions.
  * @param expressions   An array of expressions.
  */
-int u1db_create_indexl(u1database *db, const char *index_name,
-                       int n_expressions, const char **expressions);
-
+int u1db_create_index_list(u1database *db, const char *index_name,
+                           int n_expressions, const char **expressions);
 
 /**
  * Delete a defined index.
@@ -320,10 +320,9 @@ void u1db_free_query(u1query **query);
  * @param n_values The number of parameters being passed, must be >= 1
  * @param values The values to match in the index.
  */
-int u1db_get_from_indexl(u1database *db, u1query *query, void *context,
-                         u1db_doc_callback cb, int n_values,
-                         const char **values);
-
+int u1db_get_from_index_list(u1database *db, u1query *query, void *context,
+                             u1db_doc_callback cb, int n_values,
+                             const char **values);
 
 /**
  * Get documents which match a given index.
@@ -335,8 +334,6 @@ int u1db_get_from_indexl(u1database *db, u1query *query, void *context,
  */
 int u1db_get_from_index(u1database *db, u1query *query, void *context,
                         u1db_doc_callback cb, int n_values, ...);
-
-
 
 /**
  * Get documents with key values in the specified range
