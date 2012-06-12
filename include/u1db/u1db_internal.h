@@ -337,11 +337,10 @@ int u1db__generate_hex_uuid(char *uuid);
 /**
  * Format a given query.
  *
- * @param n_fields The number of fields being passed in, (the number of args
- *     in argp)
+ * @param n_fields The number of fields being passed in. (The number of values
+ *     in values)
  * @param values Array of values being passed.
  * @param buf (OUT) The character array. This will be dynamically allocated,
- *      print key_values
  *     and callers must free() it.
  * @param wildcard (IN/OUT) Any array indicating a wildcard type for this
  *     argument. A 0 indicates this is an exact match, a 1
@@ -352,6 +351,21 @@ int u1db__generate_hex_uuid(char *uuid);
 int u1db__format_query(int n_fields, const char **values, char **buf,
                        int *wildcard);
 
+/**
+ * Format a given range query.
+ *
+ * @param n_fields The number of fields being passed in. (The number of values
+ *     in start_values and end_values)
+ * @param start_values Array of values used to define the lower bound of the
+ *     query.
+ * @param end_values Array of values used to define the upper bound of the
+ *     query.
+ * @param buf (OUT) The character array. This will be dynamically allocated,
+ *     and callers must free() it.
+ */
+int u1db__format_range_query(int n_fields, const char **start_values,
+                             const char **end_values, char **buf,
+                             int *start_wildcard, int *end_wildcard);
 
 /**
  * Format an index keys query

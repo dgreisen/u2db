@@ -562,13 +562,18 @@ class SQLiteDatabase(CommonBackend):
 
     @staticmethod
     def _transform_glob(value, escape_char='.'):
-        """Transform the given glob value into a valid LIKE statement.
-        """
+        """Transform the given glob value into a valid LIKE statement."""
         to_escape = [escape_char, '%', '_']
         for esc in to_escape:
             value = value.replace(esc, escape_char + esc)
         assert value[-1] == '*'
         return value[:-1] + '%'
+
+    @staticmethod
+    def _strip_glob(value):
+        """Remove the trailing * from a value."""
+        assert value[-1] == '*'
+        return value[:-1]
 
     def get_from_index(self, index_name, *key_values):
         definition = self._get_index_definition(index_name)
@@ -624,6 +629,97 @@ class SQLiteDatabase(CommonBackend):
                 ', '.join(tables), ' AND '.join(where),
                 ', '.join(
                     ['d%d.value' % i for i in range(len(definition))])))
+        try:
+            c.execute(statement, tuple(args))
+        except dbapi2.OperationalError, e:
+            raise dbapi2.OperationalError(str(e) +
+                '\nstatement: %s\nargs: %s\n' % (statement, args))
+        res = c.fetchall()
+        return [self._factory(r[0], r[1], r[2]) for r in res]
+
+    def get_range_from_index(self, index_name, start_value=None,
+                             end_value=None):
+        """Return all documents with key values in the specified range."""
+        definition = self._get_index_definition(index_name)
+        tables = ["document_fields d%d" % i for i in range(len(definition))]
+        novalue_where = [
+            "d.doc_id = d%d.doc_id AND d%d.field_name = ?" % (i, i) for i in
+            range(len(definition))]
+        wildcard_where = [
+            novalue_where[i] + (" AND d%d.value NOT NULL" % (i,)) for i in
+            range(len(definition))]
+        like_where = [
+            novalue_where[i] + (
+                " AND (d%d.value < ? OR d%d.value LIKE ? ESCAPE '.')" %
+                (i, i))
+            for i in range(len(definition))]
+        range_where_lower = [
+            novalue_where[i] + (" AND d%d.value >= ?" % (i,)) for i in
+            range(len(definition))]
+        range_where_upper = [
+            novalue_where[i] + (" AND d%d.value <= ?" % (i,)) for i in
+            range(len(definition))]
+        args = []
+        where = []
+        if start_value:
+            if isinstance(start_value, basestring):
+                start_value = (start_value,)
+            if len(start_value) != len(definition):
+                raise errors.InvalidValueForIndex()
+            is_wildcard = False
+            for idx, (field, value) in enumerate(zip(definition, start_value)):
+                args.append(field)
+                if value.endswith('*'):
+                    if value == '*':
+                        where.append(wildcard_where[idx])
+                    else:
+                        # This is a glob match
+                        if is_wildcard:
+                            # We can't have a partial wildcard following
+                            # another wildcard
+                            raise errors.InvalidGlobbing
+                        where.append(range_where_lower[idx])
+                        args.append(self._strip_glob(value))
+                    is_wildcard = True
+                else:
+                    if is_wildcard:
+                        raise errors.InvalidGlobbing
+                    where.append(range_where_lower[idx])
+                    args.append(value)
+        if end_value:
+            if isinstance(end_value, basestring):
+                end_value = (end_value,)
+            if len(end_value) != len(definition):
+                raise errors.InvalidValueForIndex()
+            is_wildcard = False
+            for idx, (field, value) in enumerate(zip(definition, end_value)):
+                args.append(field)
+                if value.endswith('*'):
+                    if value == '*':
+                        where.append(wildcard_where[idx])
+                    else:
+                        # This is a glob match
+                        if is_wildcard:
+                            # We can't have a partial wildcard following
+                            # another wildcard
+                            raise errors.InvalidGlobbing
+                        where.append(like_where[idx])
+                        args.append(self._strip_glob(value))
+                        args.append(self._transform_glob(value))
+                    is_wildcard = True
+                else:
+                    if is_wildcard:
+                        raise errors.InvalidGlobbing
+                    where.append(range_where_upper[idx])
+                    args.append(value)
+        statement = (
+            "SELECT d.doc_id, d.doc_rev, d.content FROM document d, %s "
+            "WHERE %s ORDER BY %s;" % (
+                ', '.join(tables),
+                ' AND '.join(where),
+                ', '.join(
+                    ['d%d.value' % i for i in range(len(definition))])))
+        c = self._db_handle.cursor()
         try:
             c.execute(statement, tuple(args))
         except dbapi2.OperationalError, e:

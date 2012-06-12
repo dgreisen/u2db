@@ -272,7 +272,6 @@ int u1db_create_index(u1database *db, const char *index_name, int n_expressions,
 int u1db_create_index_list(u1database *db, const char *index_name,
                            int n_expressions, const char **expressions);
 
-
 /**
  * Delete a defined index.
  */
@@ -326,7 +325,6 @@ int u1db_get_from_index_list(u1database *db, u1query *query, void *context,
                              u1db_doc_callback cb, int n_values,
                              const char **values);
 
-
 /**
  * Get documents which match a given index.
  *
@@ -338,7 +336,19 @@ int u1db_get_from_index_list(u1database *db, u1query *query, void *context,
 int u1db_get_from_index(u1database *db, u1query *query, void *context,
                         u1db_doc_callback cb, int n_values, ...);
 
-
+/**
+ * Get documents with key values in the specified range
+ *
+ * @param query A u1query object, as created by u1db_query_init.
+ * @param context Will be returned via the document callback
+ * @param n_values The number of values.
+ * @param start_values An array of values. If NULL, assume an open ended query.
+ * @param end_values An array of values. If NULL, assume an open ended query.
+ */
+int u1db_get_range_from_index(u1database *db, u1query *query,
+                              void *context, u1db_doc_callback cb,
+                              int n_values, const char **start_values,
+                              const char **end_values);
 /**
  * Get keys under which documents are indexed.
  *
