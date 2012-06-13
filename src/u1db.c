@@ -722,6 +722,40 @@ finish:
     return status;
 }
 
+int
+u1db__validate_source(u1database *db, const char *replica_uid, int replica_gen,
+                      const char *replica_trans_id, u1db_vectorclock *cur,
+                      u1db_vectorclock *other, int *state)
+{
+    int old_generation;
+    char *old_trans_id = NULL;
+    int status = U1DB_OK;
+
+    status = u1db__get_sync_gen_info(
+        db, replica_uid, &old_generation, &old_trans_id);
+    if (status != U1DB_OK)
+        goto finish;
+    if (replica_gen < old_generation) {
+        if (u1db__vectorclock_is_newer(cur, other)) {
+            *state = U1DB_SUPERSEDED;
+            goto finish;
+        }
+        status = U1DB_INVALID_GENERATION;
+        goto finish;
+    }
+    if (replica_gen > old_generation)
+        goto finish;
+    if (strcmp(replica_trans_id, old_trans_id) != 0) {
+        status = U1DB_INVALID_TRANSACTION_ID;
+        goto finish;
+    }
+    *state = U1DB_SUPERSEDED;
+finish:
+    if (old_trans_id != NULL)
+        free(old_trans_id);
+    return status;
+}
+
 
 int
 u1db__put_doc_if_newer(u1database *db, u1db_document *doc, int save_conflict,
@@ -748,6 +782,31 @@ u1db__put_doc_if_newer(u1database *db, u1db_document *doc, int save_conflict,
     status = lookup_doc(db, doc->doc_id, &stored_doc_rev, &stored_content,
                         &stored_content_len, &statement);
     if (status != SQLITE_OK) { goto finish; }
+    // TODO: u1db__vectorclock_from_str returns NULL if there is an error
+    //       in the vector clock, or if we run out of memory... Probably
+    //       shouldn't be U1DB_NOMEM
+    stored_vc = u1db__vectorclock_from_str(stored_doc_rev);
+    if (stored_vc == NULL) {
+        status = U1DB_NOMEM;
+        goto finish;
+    }
+    new_vc = u1db__vectorclock_from_str(doc->doc_rev);
+    if (new_vc == NULL) {
+        status = U1DB_NOMEM;
+        goto finish;
+    }
+    if (replica_uid != NULL && replica_trans_id != NULL) {
+        status = u1db__validate_source(
+            db, replica_uid, replica_gen, replica_trans_id, stored_vc, new_vc,
+            state);
+        if (status != U1DB_OK) {
+            goto finish;
+        }
+        if (*state != 0) {
+            status = u1db__get_generation(db, at_gen);
+            goto finish;
+        }
+    }
     if (stored_doc_rev == NULL) {
         status = U1DB_OK;
         *state = U1DB_INSERTED;
@@ -757,19 +816,6 @@ u1db__put_doc_if_newer(u1database *db, u1db_document *doc, int save_conflict,
         *state = U1DB_CONVERGED;
         store = 0;
     } else {
-        // TODO: u1db__vectorclock_from_str returns NULL if there is an error
-        //       in the vector clock, or if we run out of memory... Probably
-        //       shouldn't be U1DB_NOMEM
-        stored_vc = u1db__vectorclock_from_str(stored_doc_rev);
-        if (stored_vc == NULL) {
-            status = U1DB_NOMEM;
-            goto finish;
-        }
-        new_vc = u1db__vectorclock_from_str(doc->doc_rev);
-        if (new_vc == NULL) {
-            status = U1DB_NOMEM;
-            goto finish;
-        }
         if (u1db__vectorclock_is_newer(new_vc, stored_vc)) {
             // Just take the newer version
             store = 1;

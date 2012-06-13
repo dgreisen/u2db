@@ -93,6 +93,26 @@ class CommonBackend(u1db.Database):
             result.append(doc)
         return result
 
+    def _validate_source(self, other_replica_uid, other_generation,
+                         other_transaction_id, cur_vcr, other_vcr):
+        """Validate the new generation and transaction id.
+
+        other_generation must be greater than what we have stored for this
+        replica, *or* it must be the same and the transaction_id must be the
+        same as well.
+        """
+        old_generation, old_transaction_id = self._get_sync_gen_info(
+            other_replica_uid)
+        if other_generation < old_generation:
+            if cur_vcr.is_newer(other_vcr):
+                return 'superseded'
+            raise errors.InvalidGeneration
+        if other_generation > old_generation:
+            return
+        if other_transaction_id == old_transaction_id:
+            return 'superseded'
+        raise errors.InvalidTransactionId
+
     def _put_doc_if_newer(self, doc, save_conflict, replica_uid=None,
                           replica_gen=None, replica_trans_id=None):
         cur_doc = self._get_doc(doc.doc_id)
@@ -101,6 +121,12 @@ class CommonBackend(u1db.Database):
             cur_vcr = VectorClockRev(None)
         else:
             cur_vcr = VectorClockRev(cur_doc.rev)
+        if replica_uid is not None and replica_gen is not None:
+            state = self._validate_source(
+                replica_uid, replica_gen, replica_trans_id, cur_vcr,
+                doc_vcr)
+            if state is not None:
+                return state, self._get_generation()
         if doc_vcr.is_newer(cur_vcr):
             self._put_and_update_indexes(cur_doc, doc)
             self._prune_conflicts(doc, doc_vcr)
