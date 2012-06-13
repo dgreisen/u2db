@@ -291,7 +291,7 @@ cdef int _append_key_to_list(void *context, int num_fields,
     for i from 0 <= i < num_fields:
         field = key[i]
         field_list.append(field.decode('utf-8'))
-    a_list.append(field_list)
+    a_list.append(tuple(field_list))
     return 0
 
 cdef _list_to_array(lst, const_char_ptr **res, int *count):
@@ -1201,7 +1201,7 @@ cdef class CDatabase(object):
         status = u1db_get_index_keys(
             self._db, index_name, <void*>keys, _append_key_to_list)
         handle_status("get_index_keys", status)
-        return [tuple(key) for key in keys]
+        return keys
 
     def _query_init(self, index_name):
         cdef CQuery query
