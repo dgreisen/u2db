@@ -815,7 +815,7 @@ u1db_get_index_keys(u1database *db, char *index_name,
     }
     while (status == SQLITE_ROW) {
         for (i = 0; i < num_fields; ++i) {
-            key[i]  = (char*)sqlite3_column_text(statement, i);
+            key[i]  = (const char*)sqlite3_column_text(statement, i);
         }
         if ((status = cb(context, num_fields, key)) != U1DB_OK) {
             goto finish;
@@ -826,8 +826,9 @@ u1db_get_index_keys(u1database *db, char *index_name,
         status = U1DB_OK;
     }
 finish:
-    if (key != NULL)
+    if (key != NULL) {
         free(key);
+    }
     if (query_str != NULL) {
         free(query_str);
     }
