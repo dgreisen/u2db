@@ -58,7 +58,8 @@ cdef extern from "u1db/u1db.h":
 
     ctypedef char* const_char_ptr "const char*"
     ctypedef int (*u1db_doc_callback)(void *context, u1db_document *doc)
-    ctypedef int (*u1db_key_callback)(void *context, char *key)
+    ctypedef int (*u1db_key_callback)(void *context, int num_fields,
+                                      const_char_ptr *key)
     ctypedef int (*u1db_doc_gen_callback)(void *context,
         u1db_document *doc, int gen)
     ctypedef int (*u1db_trans_info_callback)(void *context,
@@ -283,9 +284,14 @@ cdef int _append_doc_to_list(void *context, u1db_document *doc) with gil:
     a_list.append(pydoc)
     return 0
 
-cdef int _append_key_to_list(void *context, const_char_ptr key) with gil:
-    a_list = <object>context
-    a_list.append(key)
+cdef int _append_key_to_list(void *context, int num_fields,
+                             const_char_ptr *key) with gil:
+    a_list = <object>(context)
+    field_list = []
+    for i from 0 <= i < num_fields:
+        field = key[i]
+        field_list.append(field.decode('utf-8'))
+    a_list.append(tuple(field_list))
     return 0
 
 cdef _list_to_array(lst, const_char_ptr **res, int *count):
@@ -1190,12 +1196,12 @@ cdef class CDatabase(object):
 
     def get_index_keys(self, index_name):
         cdef int status
-        result = []
+        keys = []
         status = U1DB_OK
         status = u1db_get_index_keys(
-            self._db, index_name, <void*>result, _append_key_to_list)
+            self._db, index_name, <void*>keys, _append_key_to_list)
         handle_status("get_index_keys", status)
-        return result
+        return keys
 
     def _query_init(self, index_name):
         cdef CQuery query

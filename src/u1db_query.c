@@ -40,7 +40,6 @@ typedef struct operation_
     int value_type;
 } operation;
 
-
 typedef struct string_list_item_
 {
     char *data;
@@ -78,7 +77,8 @@ typedef struct transformation_
 } transformation;
 
 typedef int(*op_function)(string_list *, const string_list *,
-                        const string_list *);
+                          const string_list *);
+
 
 static int
 init_list(string_list **list)
@@ -749,14 +749,21 @@ u1db_get_index_keys(u1database *db, char *index_name,
                     void *context, u1db_key_callback cb)
 {
     int status = U1DB_OK;
-    char *key = NULL;
+    int num_fields = 0;
+    int bind_arg, i;
+    const char **key = NULL;
+    string_list *field_names = NULL;
+    string_list_item *field_name = NULL;
+    char *query_str = NULL;
     sqlite3_stmt *statement;
+
+    status = init_list(&field_names);
+    if (status != U1DB_OK)
+        goto finish;
     status = sqlite3_prepare_v2(
         db->sql_handle,
-        "SELECT document_fields.value FROM "
-        "index_definitions INNER JOIN document_fields ON "
-        "index_definitions.field = document_fields.field_name WHERE "
-        "index_definitions.name = ? GROUP BY document_fields.value;",
+        "SELECT field FROM index_definitions WHERE name = ? ORDER BY "
+        "offset;",
         -1, &statement, NULL);
     if (status != SQLITE_OK) {
         goto finish;
@@ -768,37 +775,64 @@ u1db_get_index_keys(u1database *db, char *index_name,
     }
     status = sqlite3_step(statement);
     if (status == SQLITE_DONE) {
-        sqlite3_finalize(statement);
-        status = sqlite3_prepare_v2(
-            db->sql_handle,
-            "SELECT field FROM index_definitions WHERE name = ?;",
-            -1, &statement, NULL);
-        if (status != SQLITE_OK) {
-            goto finish;
-        }
-        status = sqlite3_bind_text(
-            statement, 1, index_name, -1, SQLITE_TRANSIENT);
-        if (status != SQLITE_OK) {
-            goto finish;
-        }
-        status = sqlite3_step(statement);
-        if (status == SQLITE_DONE) {
-            status = U1DB_INDEX_DOES_NOT_EXIST;
-        } else {
-            status = U1DB_OK;
-        }
+        status = U1DB_INDEX_DOES_NOT_EXIST;
         goto finish;
     }
     while (status == SQLITE_ROW) {
-        key = (char*)sqlite3_column_text(statement, 0);
-        if ((status = cb(context, key)) != U1DB_OK)
+        num_fields++;
+        status = append(field_names, (char*)sqlite3_column_text(statement, 0));
+        if (status != U1DB_OK)
             goto finish;
+        status = sqlite3_step(statement);
+    }
+    if (status != SQLITE_DONE) {
+        goto finish;
+    }
+    sqlite3_finalize(statement);
+    status = u1db__format_index_keys_query(num_fields, &query_str);
+
+    if (status != U1DB_OK) {
+        goto finish;
+    }
+    status = sqlite3_prepare_v2(
+        db->sql_handle, query_str, -1, &statement, NULL);
+    if (status != SQLITE_OK) {
+        goto finish;
+    }
+    bind_arg = 1;
+    for (field_name = field_names->head; field_name != NULL; field_name =
+             field_name->next) {
+        status = sqlite3_bind_text(
+            statement, bind_arg++, field_name->data, -1, SQLITE_TRANSIENT);
+        if (status != SQLITE_OK)
+            goto finish;
+    }
+    status = sqlite3_step(statement);
+    key = (const char**)calloc(num_fields, sizeof(char*));
+    if (key == NULL) {
+        status = U1DB_NOMEM;
+        goto finish;
+    }
+    while (status == SQLITE_ROW) {
+        for (i = 0; i < num_fields; ++i) {
+            key[i]  = (const char*)sqlite3_column_text(statement, i);
+        }
+        if ((status = cb(context, num_fields, key)) != U1DB_OK) {
+            goto finish;
+        }
         status = sqlite3_step(statement);
     }
     if (status == SQLITE_DONE) {
         status = U1DB_OK;
     }
 finish:
+    if (key != NULL) {
+        free(key);
+    }
+    if (query_str != NULL) {
+        free(query_str);
+    }
+    destroy_list(field_names);
     sqlite3_finalize(statement);
     return status;
 }
@@ -1000,6 +1034,62 @@ u1db__format_range_query(int n_fields, const char **start_values,
         add_to_buf(&cur, &buf_size, "d%d.value", i);
     }
 finish:
+    if (status != U1DB_OK && *buf != NULL) {
+        free(*buf);
+        *buf = NULL;
+    }
+    return status;
+}
+
+int
+u1db__format_index_keys_query(int n_fields, char **buf)
+{
+    int status = U1DB_OK;
+    int buf_size, i;
+    char *cur = NULL;
+
+    if (n_fields < 1) {
+        return U1DB_INVALID_PARAMETER;
+    }
+    // 81 for 1 doc, 166 for 2, 251 for 3
+    buf_size = (1 + n_fields) * 100;
+    // The first field is treated specially
+    cur = (char*)calloc(buf_size, 1);
+    if (cur == NULL) {
+        return U1DB_NOMEM;
+    }
+    *buf = cur;
+    add_to_buf(&cur, &buf_size, "SELECT ");
+    for (i = 0; i < n_fields; ++i) {
+        if (i != 0) {
+            add_to_buf(&cur, &buf_size, ", ");
+        }
+        add_to_buf(&cur, &buf_size, " d%d.value", i);
+    }
+    add_to_buf(&cur, &buf_size, " FROM ");
+    for (i = 0; i < n_fields; ++i) {
+        if (i != 0) {
+            add_to_buf(&cur, &buf_size, ", ");
+        }
+        add_to_buf(&cur, &buf_size, "document_fields d%d", i);
+    }
+    add_to_buf(&cur, &buf_size, " WHERE d0.field_name = ?");
+    for (i = 0; i < n_fields; ++i) {
+        if (i != 0) {
+            add_to_buf(&cur, &buf_size,
+                " AND d0.doc_id = d%d.doc_id"
+                " AND d%d.field_name = ?",
+                i, i);
+        }
+        add_to_buf(&cur, &buf_size, " AND d%d.value NOT NULL", i);
+    }
+    add_to_buf(&cur, &buf_size, " GROUP BY ");
+    for (i = 0; i < n_fields; ++i) {
+        if (i != 0) {
+            add_to_buf(&cur, &buf_size, ", ");
+        }
+        add_to_buf(&cur, &buf_size, "d%d.value", i);
+    }
     if (status != U1DB_OK && *buf != NULL) {
         free(*buf);
         *buf = NULL;

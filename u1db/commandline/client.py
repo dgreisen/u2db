@@ -401,8 +401,9 @@ class CmdGetIndexKeys(OneDbCmd):
     def run(self, database, index):
         try:
             db = self._open(database, create=False)
-            for i in db.get_index_keys(index):
-                self.stdout.write("%s\n" % (i.encode('utf-8'),))
+            for key in db.get_index_keys(index):
+                self.stdout.write("%s\n" % (", ".join(
+                    [i.encode('utf-8') for i in key],)))
         except errors.DatabaseDoesNotExist:
             self.stderr.write("Database does not exist.\n")
         except errors.IndexDoesNotExist:
