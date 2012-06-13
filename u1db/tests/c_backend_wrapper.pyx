@@ -79,11 +79,10 @@ cdef extern from "u1db/u1db.h":
     int u1db_get_all_docs(u1database *db, int include_deleted, int *generation,
                           void *context, u1db_doc_callback cb)
     int u1db_put_doc(u1database *db, u1db_document *doc)
-    int u1db__validate_source_gen_and_trans_id(u1database *db,
-                                               const_char_ptr replica_uid,
-                                               int replica_gen,
-                                               const_char_ptr
-                                               replica_trans_id)
+    int u1db__validate_source(u1database *db, const_char_ptr replica_uid,
+                              int replica_gen, const_char_ptr replica_trans_id,
+                              u1db_vectorclock *cur_vcr,
+                              u1db_vectorclock *other_vcr, int *state)
     int u1db__put_doc_if_newer(u1database *db, u1db_document *doc,
                                int save_conflict, char *replica_uid,
                                int replica_gen, char *replica_trans_id,
@@ -893,19 +892,26 @@ cdef class CDatabase(object):
             u1db_put_doc(self._db, doc._doc))
         return doc.rev
 
-    def _validate_source_gen_and_trans_id(self, replica_uid, replica_gen,
-                                          replica_trans_id):
+    def _validate_source(self, replica_uid, replica_gen, replica_trans_id,
+                         cur_vcr, other_vcr):
         cdef const_char_ptr c_uid, c_trans_id
-        cdef int c_gen
+        cdef int c_gen, state = 0
+        cdef VectorClockRev cur
+        cdef VectorClockRev other
 
+        cur = VectorClockRev(cur_vcr.as_str())
+        other = VectorClockRev(other_vcr.as_str())
         c_uid = replica_uid
         c_trans_id = replica_trans_id
         c_gen = replica_gen
         handle_status(
             "invalid generation or transaction id",
-            u1db__validate_source_gen_and_trans_id(
-                self._db, c_uid, c_gen, c_trans_id))
-        return True
+            u1db__validate_source(
+                self._db, c_uid, c_gen, c_trans_id, cur._clock, other._clock,
+                &state))
+        if state == U1DB_SUPERSEDED:
+            return 'superseded'
+        return
 
     def _put_doc_if_newer(self, CDocument doc, save_conflict, replica_uid=None,
                           replica_gen=None, replica_trans_id=None):

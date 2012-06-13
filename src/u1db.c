@@ -723,19 +723,23 @@ finish:
 }
 
 int
-u1db__validate_source_gen_and_trans_id(u1database *db,
-                                       const char *replica_uid,
-                                       int replica_gen,
-                                       const char *replica_trans_id)
+u1db__validate_source(u1database *db, const char *replica_uid, int replica_gen,
+                      const char *replica_trans_id, u1db_vectorclock *cur,
+                      u1db_vectorclock *other, int *state)
 {
     int old_generation;
     char *old_trans_id = NULL;
     int status = U1DB_OK;
+
     status = u1db__get_sync_gen_info(
         db, replica_uid, &old_generation, &old_trans_id);
     if (status != U1DB_OK)
         goto finish;
     if (replica_gen < old_generation) {
+        if (u1db__vectorclock_is_newer(cur, other)) {
+            *state = U1DB_SUPERSEDED;
+            goto finish;
+        }
         status = U1DB_INVALID_GENERATION;
         goto finish;
     }
@@ -743,7 +747,9 @@ u1db__validate_source_gen_and_trans_id(u1database *db,
         goto finish;
     if (strcmp(replica_trans_id, old_trans_id) != 0) {
         status = U1DB_INVALID_TRANSACTION_ID;
+        goto finish;
     }
+    *state = U1DB_SUPERSEDED;
 finish:
     if (old_trans_id != NULL)
         free(old_trans_id);

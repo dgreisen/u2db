@@ -394,26 +394,44 @@ class LocalDatabaseTests(tests.DatabaseBaseTests):
 
     def test_validate_source_gen_and_trans_id_same(self):
         self.db._set_sync_info('other', 1, 'T-sid')
-        self.assertTrue(
-            self.db._validate_source_gen_and_trans_id('other', 1, 'T-sid'))
+        v1 = vectorclock.VectorClockRev('other:1|self:1')
+        v2 = vectorclock.VectorClockRev('other:2|self:2')
+        self.assertEqual(
+            'superseded',
+            self.db._validate_source('other', 1, 'T-sid', v1, v2))
 
-    def test_validate_source_gen_and_trans_id_newer(self):
+    def test_validate_source_gen_newer(self):
         self.db._set_sync_info('other', 1, 'T-sid')
-        self.assertTrue(
-            self.db._validate_source_gen_and_trans_id('other', 2, 'T-whatevs'))
+        v1 = vectorclock.VectorClockRev('other:1|self:1')
+        v2 = vectorclock.VectorClockRev('other:2|self:2')
+        self.assertIsNone(
+            self.db._validate_source('other', 2, 'T-whatevs', v1, v2))
 
-    def test_validate_source_gen_and_trans_id_wrong_txid(self):
+    def test_validate_source_wrong_txid(self):
         self.db._set_sync_info('other', 1, 'T-sid')
+        v1 = vectorclock.VectorClockRev('other:1|self:1')
+        v2 = vectorclock.VectorClockRev('other:2|self:2')
         self.assertRaises(
             errors.InvalidTransactionId,
-            self.db._validate_source_gen_and_trans_id, 'other', 1, 'T-sad')
+            self.db._validate_source, 'other', 1, 'T-sad', v1, v2)
 
-    def test_validate_source_gen_and_trans_id_older(self):
+    def test_validate_source_gen_older_and_vcr_older(self):
         self.db._set_sync_info('other', 1, 'T-sid')
         self.db._set_sync_info('other', 2, 'T-sod')
+        v1 = vectorclock.VectorClockRev('other:1|self:1')
+        v2 = vectorclock.VectorClockRev('other:2|self:2')
+        self.assertEqual(
+            'superseded',
+            self.db._validate_source('other', 1, 'T-sid', v2, v1))
+
+    def test_validate_source_gen_older_vcr_newer(self):
+        self.db._set_sync_info('other', 1, 'T-sid')
+        self.db._set_sync_info('other', 2, 'T-sod')
+        v1 = vectorclock.VectorClockRev('other:1|self:1')
+        v2 = vectorclock.VectorClockRev('other:2|self:2')
         self.assertRaises(
             errors.InvalidGeneration,
-            self.db._validate_source_gen_and_trans_id, 'other', 1, 'T-sid')
+            self.db._validate_source, 'other', 1, 'T-sid', v1, v2)
 
     def test_put_doc_if_newer_replica_uid(self):
         doc1 = self.db.create_doc(simple_doc)

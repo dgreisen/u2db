@@ -22,6 +22,7 @@
 #include <stdarg.h>
 #include "u1db/u1db.h"
 #include "u1db/compat.h"
+#include "u1db/u1db_vectorclock.h"
 
 typedef struct sqlite3 sqlite3;
 typedef struct sqlite3_stmt sqlite3_stmt;
@@ -212,11 +213,15 @@ int u1db__put_doc_if_newer(u1database *db, u1db_document *doc,
  *     change we are syncing.
  * @param replica_trans_id Transaction id of the replica at the time of the
  *     change we are syncing.
+ * @param cur_vcr Vector clock for the document in the database.
+ * @param other_vcr Vector clock of the document being put.
+ * @param state (OUT) 0 for success, U1DB_SUPERSEDED if the document is
+ *     superseded.
  */
-int u1db__validate_source_gen_and_trans_id(u1database *db,
-                                           const char *replica_uid,
-                                           int replica_gen,
-                                           const char *replica_trans_id);
+int u1db__validate_source(u1database *db, const char *replica_uid,
+                          int replica_gen, const char *replica_trans_id,
+                          u1db_vectorclock *cur_vcr,
+                          u1db_vectorclock *other_vcr, int *state);
 
 /**
  * Internal API, Get the global database rev.

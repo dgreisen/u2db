@@ -303,14 +303,14 @@ class Database(object):
         """
         raise NotImplementedError(self._set_sync_info)
 
-    def _validate_source_gen_and_trans_id(self, replica_uid, replica_gen,
-                                          replica_trans_id):
+    def _validate_source(self, replica_uid, replica_gen, replica_trans_id,
+                         cur_vcr, other_vcr):
         """Validate the replica generation and transaction id.
 
         Make sure the replica generation and transaction id are in agreement
         with our knowledge of the source replica.
         """
-        raise NotImplementedError(self._validate_source_gen_and_trans_id)
+        raise NotImplementedError(self._validate_source)
 
     def _put_doc_if_newer(self, doc, save_conflict, replica_uid=None,
                           replica_gen=None, replica_trans_id=None):
