@@ -47,10 +47,6 @@ class InvalidGeneration(U1DBError):
     """Generation was previously synced with a different transaction id."""
 
 
-class GenerationAlreadySynced(U1DBError):
-    """Generation was previously synced."""
-
-
 class ConflictedDoc(U1DBError):
     """The document is conflicted, you must call resolve before put()"""
 
