@@ -108,7 +108,7 @@ class CommonBackend(u1db.Database):
                 return 'superseded'
             raise errors.InvalidGeneration
         if other_generation > old_generation:
-            return
+            return 'ok'
         if other_transaction_id == old_transaction_id:
             return 'superseded'
         raise errors.InvalidTransactionId

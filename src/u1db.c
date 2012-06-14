@@ -731,6 +731,7 @@ u1db__validate_source(u1database *db, const char *replica_uid, int replica_gen,
     char *old_trans_id = NULL;
     int status = U1DB_OK;
 
+    *state = U1DB_OK;
     status = u1db__get_sync_gen_info(
         db, replica_uid, &old_generation, &old_trans_id);
     if (status != U1DB_OK)
