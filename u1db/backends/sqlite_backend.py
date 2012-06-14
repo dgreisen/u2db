@@ -34,12 +34,6 @@ from u1db import (
     vectorclock,
     )
 
-SQL_INDEX_KEYS = """
-    SELECT document_fields.value FROM index_definitions INNER JOIN
-    document_fields ON field = field_name WHERE index_definitions.name = ?
-    GROUP BY document_fields.value;
-    """
-
 
 class SQLiteDatabase(CommonBackend):
     """A U1DB implementation that uses SQLite as its persistence layer."""
@@ -734,18 +728,28 @@ class SQLiteDatabase(CommonBackend):
         res = c.fetchall()
         return [self._factory(r[0], r[1], r[2]) for r in res]
 
-    def get_index_keys(self, index):
+    def get_index_keys(self, index_name):
         c = self._db_handle.cursor()
+        definition = self._get_index_definition(index_name)
+        value_fields = ', '.join([
+            'd%d.value' % i for i in range(len(definition))])
+        tables = ["document_fields d%d" % i for i in range(len(definition))]
+        novalue_where = [
+            "d.doc_id = d%d.doc_id AND d%d.field_name = ?" % (i, i) for i in
+            range(len(definition))]
+        where = [
+            novalue_where[i] + (" AND d%d.value NOT NULL" % (i,)) for i in
+            range(len(definition))]
+        statement = (
+            "SELECT %s FROM document d, %s WHERE %s GROUP BY %s;" % (
+                value_fields, ', '.join(tables), ' AND '.join(where),
+                value_fields))
         try:
-            c.execute(SQL_INDEX_KEYS, (index,))
+            c.execute(statement, tuple(definition))
         except dbapi2.OperationalError, e:
             raise dbapi2.OperationalError(str(e) +
-                '\nstatement: %s\nargs: %s\n' % (SQL_INDEX_KEYS, (index,)))
-        res = c.fetchall()
-        if not res:
-            # raise IndexDoesNotExist if appropriate
-            self._get_index_definition(index)
-        return [r[0] for r in res]
+                '\nstatement: %s\nargs: %s\n' % (statement, tuple(definition)))
+        return c.fetchall()
 
     def delete_index(self, index_name):
         with self._db_handle:

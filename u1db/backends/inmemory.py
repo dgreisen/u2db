@@ -250,7 +250,9 @@ class InMemoryDatabase(CommonBackend):
             index = self._indexes[index_name]
         except KeyError:
             raise errors.IndexDoesNotExist
-        return list(set(index.keys()))
+        keys = index.keys()
+        # XXX inefficiency warning
+        return list(set([tuple(key.split('\x01')) for key in keys]))
 
     def whats_changed(self, old_generation=0):
         changes = []
