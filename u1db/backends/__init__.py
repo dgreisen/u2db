@@ -108,7 +108,7 @@ class CommonBackend(u1db.Database):
                 return 'superseded'
             raise errors.InvalidGeneration
         if other_generation > old_generation:
-            return
+            return 'ok'
         if other_transaction_id == old_transaction_id:
             return 'superseded'
         raise errors.InvalidTransactionId
@@ -125,7 +125,7 @@ class CommonBackend(u1db.Database):
             state = self._validate_source(
                 replica_uid, replica_gen, replica_trans_id, cur_vcr,
                 doc_vcr)
-            if state is not None:
+            if state != 'ok':
                 return state, self._get_generation()
         if doc_vcr.is_newer(cur_vcr):
             self._put_and_update_indexes(cur_doc, doc)

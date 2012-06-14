@@ -911,7 +911,7 @@ cdef class CDatabase(object):
                 &state))
         if state == U1DB_SUPERSEDED:
             return 'superseded'
-        return
+        return 'ok'
 
     def _put_doc_if_newer(self, CDocument doc, save_conflict, replica_uid=None,
                           replica_gen=None, replica_trans_id=None):

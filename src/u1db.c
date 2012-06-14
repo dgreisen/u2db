@@ -731,6 +731,7 @@ u1db__validate_source(u1database *db, const char *replica_uid, int replica_gen,
     char *old_trans_id = NULL;
     int status = U1DB_OK;
 
+    *state = U1DB_OK;
     status = u1db__get_sync_gen_info(
         db, replica_uid, &old_generation, &old_trans_id);
     if (status != U1DB_OK)
@@ -802,7 +803,7 @@ u1db__put_doc_if_newer(u1database *db, u1db_document *doc, int save_conflict,
         if (status != U1DB_OK) {
             goto finish;
         }
-        if (*state != 0) {
+        if (*state != U1DB_OK) {
             status = u1db__get_generation(db, at_gen);
             goto finish;
         }

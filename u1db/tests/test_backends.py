@@ -449,7 +449,8 @@ class LocalDatabaseTests(tests.DatabaseBaseTests):
         self.db._set_sync_info('other', 1, 'T-sid')
         v1 = vectorclock.VectorClockRev('other:1|self:1')
         v2 = vectorclock.VectorClockRev('other:2|self:2')
-        self.assertIsNone(
+        self.assertEqual(
+            'ok',
             self.db._validate_source('other', 2, 'T-whatevs', v1, v2))
 
     def test_validate_source_wrong_txid(self):
