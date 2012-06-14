@@ -41,7 +41,8 @@ typedef struct _u1db_document
 typedef struct _u1query u1query;
 typedef int (*u1db_doc_callback)(void *context, u1db_document *doc);
 typedef int (*u1db_key_callback)(void *context, const char *key);
-typedef int (*u1db_doc_gen_callback)(void *context, u1db_document *doc, int gen);
+typedef int (*u1db_doc_gen_callback)(void *context, u1db_document *doc,
+                                     int gen, const char *trans_id);
 typedef int (*u1db_doc_id_gen_callback)(void *context, const char *doc_id, int gen);
 typedef int (*u1db_trans_info_callback)(void *context, const char *doc_id,
                                         int gen, const char *trans_id);

@@ -45,14 +45,19 @@ static int st_http_get_sync_exchange(u1db_sync_target *st,
                          int source_gen,
                          u1db_sync_exchange **exchange);
 static int st_http_sync_exchange(u1db_sync_target *st,
-                      const char *source_replica_uid,
-                      int n_docs, u1db_document **docs,
-                      int *generations, int *target_gen, char **target_trans_id,
-                      void *context, u1db_doc_gen_callback cb);
+                                 const char *source_replica_uid, int n_docs,
+                                 u1db_document **docs, int *generations,
+                                 const char **trans_ids, int *target_gen,
+                                 char **target_trans_id, void *context,
+                                 u1db_doc_gen_callback cb);
 static int st_http_sync_exchange_doc_ids(u1db_sync_target *st,
-        u1database *source_db, int n_doc_ids, const char **doc_ids,
-        int *generations, int *target_gen, char **target_trans_id,
-        void *context, u1db_doc_gen_callback cb);
+                                         u1database *source_db, int n_doc_ids,
+                                         const char **doc_ids,
+                                         int *generations,
+                                         const char **trans_ids,
+                                         int *target_gen,
+                                         char **target_trans_id, void *context,
+                                         u1db_doc_gen_callback cb);
 static void st_http_finalize_sync_exchange(u1db_sync_target *st,
                                u1db_sync_exchange **exchange);
 static int st_http_set_trace_hook(u1db_sync_target *st,
@@ -410,8 +415,8 @@ st_http_get_sync_info(u1db_sync_target *st,
         goto finish;
     }
     if (req.body_buffer == NULL) {
-	status = U1DB_INVALID_HTTP_RESPONSE;
-	goto finish;
+        status = U1DB_INVALID_HTTP_RESPONSE;
+        goto finish;
     }
     json = json_tokener_parse(req.body_buffer);
     if (json == NULL) {
@@ -663,7 +668,7 @@ finish:
 
 
 static int
-doc_to_tempfile(u1db_document *doc, int gen, FILE *fd)
+doc_to_tempfile(u1db_document *doc, int gen, const char *trans_id, FILE *fd)
 {
     int status = U1DB_OK;
     json_object *json = NULL;
@@ -678,6 +683,7 @@ doc_to_tempfile(u1db_document *doc, int gen, FILE *fd)
     json_object_object_add(
         json, "content", doc->json?json_object_new_string(doc->json):NULL);
     json_object_object_add(json, "gen", json_object_new_int(gen));
+    json_object_object_add(json, "trans_id", json_object_new_string(trans_id));
     fputs(json_object_to_json_string(json), fd);
 finish:
     if (json != NULL) {
@@ -791,6 +797,7 @@ process_response(u1db_sync_target *st, void *context, u1db_doc_gen_callback cb,
     const char *doc_id, *content, *rev;
     const char *tmp = NULL;
     int gen;
+    const char *trans_id = NULL;
     u1db_document *doc;
 
     json = json_tokener_parse(response);
@@ -837,12 +844,14 @@ process_response(u1db_sync_target *st, void *context, u1db_doc_gen_callback cb,
         content = json_object_get_string(attr);
         attr = json_object_object_get(obj, "gen");
         gen = json_object_get_int(attr);
+        attr = json_object_object_get(obj, "trans_id");
+        trans_id = json_object_get_string(attr);
         doc = u1db__allocate_document(doc_id, rev, content, 0);
         if (doc == NULL) {
             status = U1DB_NOMEM;
             goto finish;
         }
-        status = cb(context, doc, gen);
+        status = cb(context, doc, gen, trans_id);
         if (status != U1DB_OK) { goto finish; }
     }
 finish:
@@ -875,11 +884,10 @@ cleanup_temp_files(char tmpname[], FILE *temp_fd, struct _http_request *req)
 }
 
 static int
-st_http_sync_exchange(u1db_sync_target *st,
-                      const char *source_replica_uid,
-                      int n_docs, u1db_document **docs,
-                      int *generations, int *target_gen, char **target_trans_id,
-                      void *context,
+st_http_sync_exchange(u1db_sync_target *st, const char *source_replica_uid,
+                      int n_docs, u1db_document **docs, int *generations,
+                      const char **trans_ids, int *target_gen,
+                      char **target_trans_id, void *context,
                       u1db_doc_gen_callback cb)
 {
     int status, i;
@@ -898,7 +906,8 @@ st_http_sync_exchange(u1db_sync_target *st,
     status = init_temp_file(tmpname, &temp_fd, *target_gen);
     if (status != U1DB_OK) { goto finish; }
     for (i = 0; i < n_docs; ++i) {
-        status = doc_to_tempfile(docs[i], generations[i], temp_fd);
+        status = doc_to_tempfile(
+            docs[i], generations[i], trans_ids[i], temp_fd);
         if (status != U1DB_OK) { goto finish; }
     }
     status = finalize_and_send_temp_file(st, temp_fd, source_replica_uid, &req);
@@ -915,6 +924,7 @@ struct _get_doc_to_tempfile_context {
     int offset;
     int num;
     int *generations;
+    const char **trans_ids;
     FILE *temp_fd;
 };
 
@@ -930,6 +940,7 @@ get_docs_to_tempfile(void *context, u1db_document *doc)
         status = U1DB_INTERNAL_ERROR;
     } else {
         status = doc_to_tempfile(doc, state->generations[state->offset],
+                                 state->trans_ids[state->offset],
                                  state->temp_fd);
     }
     u1db_free_doc(&doc);
@@ -943,9 +954,10 @@ int u1db_get_docs(u1database *db, int n_doc_ids, const char **doc_ids,
 
 static int
 st_http_sync_exchange_doc_ids(u1db_sync_target *st, u1database *source_db,
-        int n_doc_ids, const char **doc_ids, int *generations,
-        int *target_gen, char **target_trans_id,
-        void *context, u1db_doc_gen_callback cb)
+                              int n_doc_ids, const char **doc_ids,
+                              int *generations, const char **trans_ids,
+                              int *target_gen, char **target_trans_id,
+                              void *context, u1db_doc_gen_callback cb)
 {
     int status;
     FILE *temp_fd = NULL;
@@ -968,6 +980,7 @@ st_http_sync_exchange_doc_ids(u1db_sync_target *st, u1database *source_db,
     if (status != U1DB_OK) { goto finish; }
     state.num = n_doc_ids;
     state.generations = generations;
+    state.trans_ids = trans_ids;
     state.temp_fd = temp_fd;
     status = u1db_get_docs(source_db, n_doc_ids, doc_ids, 0, 1,
             &state, get_docs_to_tempfile);

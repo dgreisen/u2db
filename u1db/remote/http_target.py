@@ -65,7 +65,7 @@ class HTTPSyncTarget(http_client.HTTPClientBase, SyncTarget):
                 line, comma = utils.check_and_strip_comma(entry)
                 entry = simplejson.loads(line)
                 doc = Document(entry['id'], entry['rev'], entry['content'])
-                return_doc_cb(doc, entry['gen'])
+                return_doc_cb(doc, entry['gen'], entry['trans_id'])
         if parts[-1] != ']':
             try:
                 partdic = simplejson.loads(parts[-1])
@@ -98,9 +98,9 @@ class HTTPSyncTarget(http_client.HTTPClientBase, SyncTarget):
         comma = ''
         size += prepare(last_known_generation=last_known_generation)
         comma = ','
-        for doc, gen in docs_by_generations:
+        for doc, gen, trans_id in docs_by_generations:
             size += prepare(id=doc.doc_id, rev=doc.rev, content=doc.get_json(),
-                            gen=gen)
+                            gen=gen, trans_id=trans_id)
         entries.append('\r\n]')
         size += len(entries[-1])
         self._conn.putheader('content-length', str(size))
