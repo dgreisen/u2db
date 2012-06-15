@@ -1414,6 +1414,42 @@ u1db__get_generation_info(u1database *db, int *generation, char **trans_id)
     return status;
 }
 
+int
+u1db_validate_gen_and_trans_id(u1database *db, int generation,
+                               const char *trans_id)
+{
+    int status = U1DB_OK;
+    sqlite3_stmt *statement;
+
+    if (generation == 0)
+        goto finish;
+    if (db == NULL) {
+        return U1DB_INVALID_PARAMETER;
+    }
+    status = sqlite3_prepare_v2(db->sql_handle,
+        "SELECT transaction_id FROM transaction_log WHERE generation = ?", -1,
+        &statement, NULL);
+    if (status != SQLITE_OK) { goto finish; }
+    status = sqlite3_bind_int(statement, 1, generation);
+    if (status != SQLITE_OK) { goto finish; }
+    status = sqlite3_step(statement);
+    if (status == SQLITE_DONE) {
+        status = U1DB_INVALID_GENERATION;
+        goto finish;
+    } else if (status == SQLITE_ROW) {
+        // Note: We may want to handle the column containing NULL
+        if (strcmp(trans_id,
+                   (const char *)sqlite3_column_text(statement, 0)) == 0) {
+            status = U1DB_OK;
+            goto finish;
+        }
+        status = U1DB_INVALID_TRANSACTION_ID;
+    }
+finish:
+    sqlite3_finalize(statement);
+    return status;
+}
+
 char *
 u1db__allocate_doc_id(u1database *db)
 {

@@ -239,6 +239,11 @@ int u1db__get_generation_info(u1database *db, int *generation,
                               char **trans_id);
 
 /**
+ * Internal API, Validate generation and transaction id.
+ */
+int u1db_validate_gen_and_trans_id(u1database *db, int generation,
+                                   const char *trans_id);
+/**
  * Internal API, Allocate a new document id, for cases when callers do not
  * supply their own. Callers of this API are expected to free the result.
  */

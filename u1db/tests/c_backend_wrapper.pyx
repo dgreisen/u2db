@@ -205,6 +205,8 @@ cdef extern from "u1db/u1db_internal.h":
 
     int u1db__get_generation(u1database *, int *db_rev)
     int u1db__get_generation_info(u1database *, int *db_rev, char **trans_id)
+    int u1db_validate_gen_and_trans_id(u1database *, int db_rev,
+                                       const_char_ptr trans_id)
     char *u1db__allocate_doc_id(u1database *)
     int u1db__sql_close(u1database *)
     int u1db__sql_is_open(u1database *)
@@ -1075,6 +1077,11 @@ cdef class CDatabase(object):
             raw_trans_id = trans_id
             free(trans_id)
         return generation, raw_trans_id
+
+    def validate_gen_and_trans_id(self, generation, trans_id):
+        handle_status(
+            "validate_gen_and_trans_id",
+            u1db_validate_gen_and_trans_id(self._db, generation, trans_id))
 
     def _get_sync_gen_info(self, replica_uid):
         cdef int generation, status

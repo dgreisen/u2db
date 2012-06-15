@@ -82,6 +82,15 @@ class InMemoryDatabase(CommonBackend):
     def _get_generation_info(self):
         return len(self._transaction_log), self._transaction_log[-1][1]
 
+    def validate_gen_and_trans_id(self, generation, trans_id):
+        if generation == 0:
+            return
+        if generation > len(self._transaction_log):
+            raise errors.InvalidGeneration
+        if self._transaction_log[generation - 1][1] == trans_id:
+            return
+        raise errors.InvalidTransactionId
+
     def put_doc(self, doc):
         if doc.doc_id is None:
             raise errors.InvalidDocId()
