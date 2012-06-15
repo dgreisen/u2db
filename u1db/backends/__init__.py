@@ -52,8 +52,11 @@ class CommonBackend(u1db.Database):
         if not check_doc_id_re.match(doc_id):
             raise errors.InvalidDocId()
 
-    def _get_generation(self):
-        raise NotImplementedError(self._get_generation)
+    def _get_generation_info(self):
+        """Return the current generation and transaction id for the database.
+
+        """
+        raise NotImplementedError(self._get_generation_info)
 
     def _get_doc(self, doc_id):
         """Extract the document from storage.
@@ -126,7 +129,7 @@ class CommonBackend(u1db.Database):
                 self._force_doc_sync_conflict(doc)
         if replica_uid is not None and replica_gen is not None:
             self._do_set_sync_info(replica_uid, replica_gen, replica_trans_id)
-        return state, self._get_generation()
+        return state, self._get_generation_info()
 
     def _ensure_maximal_rev(self, cur_rev, extra_revs):
         vcr = VectorClockRev(cur_rev)
