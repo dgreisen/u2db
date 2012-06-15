@@ -1422,7 +1422,7 @@ u1db_validate_gen_and_trans_id(u1database *db, int generation,
     sqlite3_stmt *statement;
 
     if (generation == 0)
-        goto finish;
+        return status;
     if (db == NULL) {
         return U1DB_INVALID_PARAMETER;
     }
