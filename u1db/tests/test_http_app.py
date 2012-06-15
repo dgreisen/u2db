@@ -715,9 +715,9 @@ class TestHTTPApp(tests.TestCase):
     def test_sync_exchange_send(self):
         entries = {
             10: {'id': 'doc-here', 'rev': 'replica:1', 'content':
-                 '{"value": "here"}', 'gen': 10},
+                 '{"value": "here"}', 'gen': 10, 'trans_id': 'T-sid'},
             11: {'id': 'doc-here2', 'rev': 'replica:1', 'content':
-                 '{"value": "here2"}', 'gen': 11}
+                 '{"value": "here2"}', 'gen': 11, 'trans_id': 'T-sed'}
             }
 
         gens = []
@@ -793,12 +793,18 @@ class TestHTTPApp(tests.TestCase):
         self.assertEqual({'new_generation': 2,
                           'new_transaction_id': last_trans_id},
                          simplejson.loads(parts[1].rstrip(",")))
-        self.assertEqual({'content': '{"value": "there"}',
-                          'rev': doc.rev, 'id': doc.doc_id, 'gen': 1},
-                         simplejson.loads(parts[2].rstrip(",")))
-        self.assertEqual({'content': '{"value": "there2"}',
-                          'rev': doc2.rev, 'id': doc2.doc_id, 'gen': 2},
-                         simplejson.loads(parts[3].rstrip(",")))
+        part2 = simplejson.loads(parts[2].rstrip(","))
+        self.assertTrue(part2['trans_id'].startswith('T-'))
+        self.assertEqual('{"value": "there"}', part2['content'])
+        self.assertEqual(doc.rev, part2['rev'])
+        self.assertEqual(doc.doc_id, part2['id'])
+        self.assertEqual(1, part2['gen'])
+        part3 = simplejson.loads(parts[3].rstrip(","))
+        self.assertTrue(part3['trans_id'].startswith('T-'))
+        self.assertEqual('{"value": "there2"}', part3['content'])
+        self.assertEqual(doc2.rev, part3['rev'])
+        self.assertEqual(doc2.doc_id, part3['id'])
+        self.assertEqual(2, part3['gen'])
         self.assertEqual(']', parts[4])
 
     def test_sync_exchange_error_in_stream(self):

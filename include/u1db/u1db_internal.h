@@ -99,6 +99,8 @@ struct _u1db_sync_target {
      *                  want to send to the sync target
      * @param generations   An array of generations. Each generation
      *                      corresponds to a doc_id.
+     * @param trans_ids   An array of transaction ids. Each transaction id
+     *                      corresponds to a doc_id.
      * @param target_gen    (IN/OUT) Seed this with the generation of the
      *                      target that source_db has last seen, it will then
      *                      be filled with the final generation of the target
@@ -115,7 +117,7 @@ struct _u1db_sync_target {
      */
     int (*sync_exchange_doc_ids)(u1db_sync_target *st, u1database *source_db,
             int n_doc_ids, const char **doc_ids, int *generations,
-            int *target_gen, char **target_trans_id,
+            const char **trans_ids, int *target_gen, char **target_trans_id,
             void *context, u1db_doc_gen_callback cb);
 
     /**
@@ -124,7 +126,8 @@ struct _u1db_sync_target {
     int (*sync_exchange)(u1db_sync_target *st,
                          const char *source_replica_uid, int n_docs,
                          u1db_document **docs, int *generations,
-                         int *target_gen, char **target_trans_id,
+                         const char **trans_ids, int *target_gen,
+                         char **target_trans_id,
                          void *context, u1db_doc_gen_callback cb);
     /**
      * Create a sync_exchange state object.
@@ -171,6 +174,7 @@ struct _u1db_sync_exchange {
     struct lh_table *seen_ids;
     int num_doc_ids;
     int *gen_for_doc_ids;
+    const char **trans_ids_for_doc_ids;
     char **doc_ids_to_return;
     void *trace_context;
     u1db__trace_callback trace_cb;
@@ -468,7 +472,7 @@ int u1db__sync_exchange_seen_ids(u1db_sync_exchange *se, int *n_ids,
  * We have received a doc from source, record it.
  */
 int u1db__sync_exchange_insert_doc_from_source(u1db_sync_exchange *se,
-        u1db_document *doc, int source_gen);
+        u1db_document *doc, int source_gen, const char *trans_id);
 
 /**
  * We are done receiving docs, find what we want to return.
@@ -486,8 +490,9 @@ int u1db__sync_exchange_find_doc_ids_to_return(u1db_sync_exchange *se);
  *                  u1db_free_doc().
  */
 int u1db__sync_exchange_return_docs(u1db_sync_exchange *se, void *context,
-        int (*cb)(void *context, u1db_document *doc, int gen));
-
+                                    int (*cb)(void *context,
+                                    u1db_document *doc, int gen,
+                                    const char *trans_id));
 
 /**
  * Create a sync target pointing at a given URL.

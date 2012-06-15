@@ -40,7 +40,7 @@ class Synchronizer(object):
         self.target_replica_uid = None
         self.num_inserted = 0
 
-    def _insert_doc_from_target(self, doc, replica_gen):
+    def _insert_doc_from_target(self, doc, replica_gen, trans_id):
         """Try to insert synced document from target.
 
         Implements TAKE OTHER semantics: any document from the target
@@ -54,7 +54,7 @@ class Synchronizer(object):
         # was effectively inserted.
         state, _ = self.source._put_doc_if_newer(doc, save_conflict=True,
             replica_uid=self.target_replica_uid, replica_gen=replica_gen,
-            replica_trans_id=None)
+            replica_trans_id=trans_id)
         if state == 'inserted':
             self.num_inserted += 1
         elif state == 'converged':
@@ -110,7 +110,10 @@ class Synchronizer(object):
         # prepare to send all the changed docs
         docs_to_send = self.source.get_docs(changed_doc_ids,
             check_for_conflicts=False, include_deleted=True)
-        docs_by_generation = zip(docs_to_send, (gen for _, gen, _ in changes))
+        # TODO: there must be a way to not iterate twice
+        docs_by_generation = zip(
+            docs_to_send, (gen for _, gen, _ in changes),
+            (trans for _, _, trans in changes))
 
         # exchange documents and try to insert the returned ones with
         # the target, return target synced-up-to gen
@@ -154,7 +157,7 @@ class SyncExchange(object):
             return
         self._trace_hook(state)
 
-    def insert_doc_from_source(self, doc, source_gen):
+    def insert_doc_from_source(self, doc, source_gen, trans_id):
         """Try to insert synced document from source.
 
         Conflicting documents are not inserted but will be sent over
@@ -172,7 +175,7 @@ class SyncExchange(object):
         """
         state, at_gen = self._db._put_doc_if_newer(doc, save_conflict=False,
             replica_uid=self.source_replica_uid, replica_gen=source_gen,
-            replica_trans_id=None)
+            replica_trans_id=trans_id)
         if state == 'inserted':
             self.seen_ids[doc.doc_id] = at_gen
         elif state == 'converged':
@@ -213,10 +216,10 @@ class SyncExchange(object):
         self.new_trans_id = trans_id
         seen_ids = self.seen_ids
         # changed docs that weren't superseded by or converged with
-        self.changes_to_return = [(doc_id, gen) for (doc_id, gen, _) in changes
-                                  # there was a subsequent update
-                                  if doc_id not in seen_ids or
-                                     seen_ids.get(doc_id) < gen]
+        self.changes_to_return = [
+            (doc_id, gen, trans_id) for (doc_id, gen, trans_id) in changes
+            # there was a subsequent update
+            if doc_id not in seen_ids or seen_ids.get(doc_id) < gen]
         return self.new_gen
 
     def return_docs(self, return_doc_cb):
@@ -225,21 +228,23 @@ class SyncExchange(object):
 
         The final step of a sync exchange.
 
-        :param: return_doc_cb(doc, gen): is a callback
+        :param: return_doc_cb(doc, gen, trans_id): is a callback
                 used to return the documents with their last change generation
                 to the target replica.
         :return: None
         """
         changes_to_return = self.changes_to_return
         # return docs, including conflicts
-        changed_doc_ids = [doc_id for doc_id, _ in changes_to_return]
+        changed_doc_ids = [doc_id for doc_id, _, _ in changes_to_return]
         self._trace('before get_docs')
         docs = self._db.get_docs(
             changed_doc_ids, check_for_conflicts=False, include_deleted=True)
 
-        docs_by_gen = izip(docs, (gen for _, gen in changes_to_return))
-        for doc, gen in docs_by_gen:
-            return_doc_cb(doc, gen)
+        docs_by_gen = izip(
+            docs, (gen for _, gen, _ in changes_to_return),
+            (trans_id for _, _, trans_id in changes_to_return))
+        for doc, gen, trans_id in docs_by_gen:
+            return_doc_cb(doc, gen, trans_id)
         # for tests
         self._db._last_exchange_log['return'] = {
             'docs': [(d.doc_id, d.rev) for d in docs],
@@ -261,8 +266,8 @@ class LocalSyncTarget(u1db.SyncTarget):
         if self._trace_hook:
             sync_exch._set_trace_hook(self._trace_hook)
         # 1st step: try to insert incoming docs and record progress
-        for doc, doc_gen in docs_by_generations:
-            sync_exch.insert_doc_from_source(doc, doc_gen)
+        for doc, doc_gen, trans_id in docs_by_generations:
+            sync_exch.insert_doc_from_source(doc, doc_gen, trans_id)
         # 2nd step: find changed documents (including conflicts) to return
         new_gen = sync_exch.find_changes_to_return()
         # final step: return docs and record source replica sync point
