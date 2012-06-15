@@ -44,7 +44,7 @@ class InvalidTransactionId(U1DBError):
 
 
 class InvalidGeneration(U1DBError):
-    """Generation was previously synced."""
+    """Generation was previously synced with a different transaction id."""
 
 
 class ConflictedDoc(U1DBError):

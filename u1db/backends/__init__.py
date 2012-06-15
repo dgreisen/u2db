@@ -124,6 +124,12 @@ class CommonBackend(u1db.Database):
             cur_vcr = VectorClockRev(None)
         else:
             cur_vcr = VectorClockRev(cur_doc.rev)
+        if replica_uid is not None and replica_gen is not None:
+            state = self._validate_source(
+                replica_uid, replica_gen, replica_trans_id, cur_vcr,
+                doc_vcr)
+            if state != 'ok':
+                return state, self._get_generation()
         if doc_vcr.is_newer(cur_vcr):
             self._put_and_update_indexes(cur_doc, doc)
             self._prune_conflicts(doc, doc_vcr)
