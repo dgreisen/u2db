@@ -257,14 +257,21 @@ class SQLiteDatabase(CommonBackend):
 
     _replica_uid = property(_get_replica_uid)
 
+    def _get_generation(self):
+        c = self._db_handle.cursor()
+        c.execute('SELECT max(generation) FROM transaction_log')
+        val = c.fetchone()[0]
+        if val is None:
+            return 0
+        return val
+
     def _get_generation_info(self):
         c = self._db_handle.cursor()
         c.execute(
-            'SELECT max(generation), transaction_id FROM transaction_log '
-            'GROUP BY generation, transaction_id')
+            'SELECT max(generation), transaction_id FROM transaction_log ')
         val = c.fetchone()
-        if val is None:
-            return 0
+        if val[0] is None:
+            return(0, val[1])
         return val
 
     def _get_transaction_log(self):

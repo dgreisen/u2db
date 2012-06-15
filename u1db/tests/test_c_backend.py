@@ -73,6 +73,14 @@ class TestCDatabase(BackendTests):
         db.create_doc(tests.simple_doc)
         self.assertEqual(1, db._get_generation())
 
+    def test__get_generation_info(self):
+        db = c_backend_wrapper.CDatabase(':memory:')
+        self.assertEqual((0, None), db._get_generation_info())
+        db.create_doc(tests.simple_doc)
+        info = db._get_generation_info()
+        self.assertEqual(1, info[0])
+        self.assertTrue(info[1].startswith('T-'))
+
     def test__set_replica_uid(self):
         db = c_backend_wrapper.CDatabase(':memory:')
         self.assertIsNot(None, db._replica_uid)

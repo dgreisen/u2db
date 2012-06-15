@@ -76,6 +76,9 @@ class InMemoryDatabase(CommonBackend):
         # snapshot!
         return self._transaction_log[:]
 
+    def _get_generation(self):
+        return len(self._transaction_log)
+
     def _get_generation_info(self):
         return len(self._transaction_log), self._transaction_log[-1][1]
 

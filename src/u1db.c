@@ -1376,6 +1376,44 @@ u1db__get_generation(u1database *db, int *generation)
     return status;
 }
 
+int
+u1db__get_generation_info(u1database *db, int *generation, char **trans_id)
+{
+    int status;
+    const char *tmp;
+
+    sqlite3_stmt *statement;
+    if (db == NULL || generation == NULL) {
+        return U1DB_INVALID_PARAMETER;
+    }
+    status = sqlite3_prepare_v2(db->sql_handle,
+        "SELECT max(generation), transaction_id FROM transaction_log", -1,
+        &statement, NULL);
+    if (status != SQLITE_OK) {
+        return status;
+    }
+    status = sqlite3_step(statement);
+    if (status == SQLITE_DONE) {
+        // No records, we are at rev 0
+        status = SQLITE_OK;
+        *generation = 0;
+    } else if (status == SQLITE_ROW) {
+        status = SQLITE_OK;
+        *generation = sqlite3_column_int(statement, 0);
+        tmp = (const char *)sqlite3_column_text(statement, 1);
+        if (tmp == NULL) {
+            *trans_id = NULL;
+        } else {
+            *trans_id = strdup(tmp);
+            if (*trans_id == NULL) {
+                status = U1DB_NOMEM;
+            }
+        }
+    }
+    sqlite3_finalize(statement);
+    return status;
+}
+
 char *
 u1db__allocate_doc_id(u1database *db)
 {
