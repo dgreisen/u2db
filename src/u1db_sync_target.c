@@ -206,6 +206,10 @@ st_finalize_sync_exchange(u1db_sync_target *st, u1db_sync_exchange **exchange)
         free((*exchange)->gen_for_doc_ids);
         (*exchange)->gen_for_doc_ids = NULL;
     }
+    if ((*exchange)->trans_ids_for_doc_ids != NULL) {
+        free((*exchange)->trans_ids_for_doc_ids);
+        (*exchange)->trans_ids_for_doc_ids = NULL;
+    }
     if ((*exchange)->target_trans_id != NULL) {
         free((*exchange)->target_trans_id);
         (*exchange)->target_trans_id = NULL;

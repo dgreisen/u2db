@@ -745,6 +745,8 @@ cdef class CSyncTarget(object):
                 free(<void *>doc_ids)
             if generations != NULL:
                 free(generations)
+            if trans_ids != NULL:
+                free(trans_ids)
             if target_trans_id != NULL:
                 res_trans_id = target_trans_id
                 free(target_trans_id)
