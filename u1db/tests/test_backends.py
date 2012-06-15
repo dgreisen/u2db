@@ -392,6 +392,48 @@ class LocalDatabaseTests(tests.DatabaseBaseTests):
         # The database wasn't altered
         self.assertGetDoc(self.db, doc1.doc_id, doc1.rev, simple_doc, False)
 
+    def test_validate_source_gen_and_trans_id_same(self):
+        self.db._set_sync_info('other', 1, 'T-sid')
+        v1 = vectorclock.VectorClockRev('other:1|self:1')
+        v2 = vectorclock.VectorClockRev('other:2|self:2')
+        self.assertEqual(
+            'superseded',
+            self.db._validate_source('other', 1, 'T-sid', v1, v2))
+
+    def test_validate_source_gen_newer(self):
+        self.db._set_sync_info('other', 1, 'T-sid')
+        v1 = vectorclock.VectorClockRev('other:1|self:1')
+        v2 = vectorclock.VectorClockRev('other:2|self:2')
+        self.assertEqual(
+            'ok',
+            self.db._validate_source('other', 2, 'T-whatevs', v1, v2))
+
+    def test_validate_source_wrong_txid(self):
+        self.db._set_sync_info('other', 1, 'T-sid')
+        v1 = vectorclock.VectorClockRev('other:1|self:1')
+        v2 = vectorclock.VectorClockRev('other:2|self:2')
+        self.assertRaises(
+            errors.InvalidTransactionId,
+            self.db._validate_source, 'other', 1, 'T-sad', v1, v2)
+
+    def test_validate_source_gen_older_and_vcr_older(self):
+        self.db._set_sync_info('other', 1, 'T-sid')
+        self.db._set_sync_info('other', 2, 'T-sod')
+        v1 = vectorclock.VectorClockRev('other:1|self:1')
+        v2 = vectorclock.VectorClockRev('other:2|self:2')
+        self.assertEqual(
+            'superseded',
+            self.db._validate_source('other', 1, 'T-sid', v2, v1))
+
+    def test_validate_source_gen_older_vcr_newer(self):
+        self.db._set_sync_info('other', 1, 'T-sid')
+        self.db._set_sync_info('other', 2, 'T-sod')
+        v1 = vectorclock.VectorClockRev('other:1|self:1')
+        v2 = vectorclock.VectorClockRev('other:2|self:2')
+        self.assertRaises(
+            errors.InvalidGeneration,
+            self.db._validate_source, 'other', 1, 'T-sid', v1, v2)
+
     def test_put_doc_if_newer_replica_uid(self):
         doc1 = self.db.create_doc(simple_doc)
         self.db._set_sync_info('other', 1, 'T-sid')
