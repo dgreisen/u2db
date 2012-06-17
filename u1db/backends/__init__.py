@@ -102,6 +102,15 @@ class CommonBackend(u1db.Database):
             result.append(doc)
         return result
 
+    def validate_gen_and_trans_id(self, generation, trans_id):
+        """Validate the generation and transaction id.
+
+        Raises an InvalidGeneration when the generation does not exist, and an
+        InvalidTransactionId when it does but with a different transaction id.
+
+        """
+        raise NotImplementedError(self.validate_gen_and_trans_id)
+
     def _validate_source(self, other_replica_uid, other_generation,
                          other_transaction_id, cur_vcr, other_vcr):
         """Validate the new generation and transaction id.

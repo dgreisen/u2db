@@ -437,6 +437,25 @@ class LocalDatabaseTests(tests.DatabaseBaseTests):
             self.db._put_doc_if_newer, doc, save_conflict=False,
             replica_uid='other', replica_gen=1, replica_trans_id='T-sad')
 
+    def test_validate_gen_and_trans_id(self):
+        self.db.create_doc(simple_doc)
+        gen, trans_id = self.db._get_generation_info()
+        self.db.validate_gen_and_trans_id(gen, trans_id)
+
+    def test_validate_gen_and_trans_id_invalid_txid(self):
+        self.db.create_doc(simple_doc)
+        gen, _ = self.db._get_generation_info()
+        self.assertRaises(
+            errors.InvalidTransactionId,
+            self.db.validate_gen_and_trans_id, gen, 'wrong')
+
+    def test_validate_gen_and_trans_id_invalid_txid(self):
+        self.db.create_doc(simple_doc)
+        gen, trans_id = self.db._get_generation_info()
+        self.assertRaises(
+            errors.InvalidGeneration,
+            self.db.validate_gen_and_trans_id, gen + 1, trans_id)
+
     def test_validate_source_gen_and_trans_id_same(self):
         self.db._set_sync_info('other', 1, 'T-sid')
         v1 = vectorclock.VectorClockRev('other:1|self:1')
