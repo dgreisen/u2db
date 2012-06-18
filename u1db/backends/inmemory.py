@@ -27,10 +27,15 @@ from u1db import (
 from u1db.backends import CommonBackend, CommonSyncTarget
 
 
+def get_prefix(value):
+    key_prefix = '\x01'.join(value)
+    return key_prefix.rstrip('*')
+
+
 class InMemoryDatabase(CommonBackend):
     """A database that only stores the data internally."""
 
-    def __init__(self, replica_uid):
+    def __init__(self, replica_uid, document_factory=None):
         self._transaction_log = []
         self._docs = {}
         # Map from doc_id => [(doc_rev, doc)] conflicts beyond 'winner'
@@ -39,6 +44,10 @@ class InMemoryDatabase(CommonBackend):
         self._indexes = {}
         self._replica_uid = replica_uid
         self._last_exchange_log = None
+        self._factory = document_factory or Document
+
+    def set_document_factory(self, factory):
+        self._factory = factory
 
     def close(self):
         # This is a no-op, We don't want to free the data because one client
@@ -77,13 +86,16 @@ class InMemoryDatabase(CommonBackend):
         if self._has_conflicts(doc.doc_id):
             raise errors.ConflictedDoc()
         old_doc = self._get_doc(doc.doc_id)
-        if old_doc is not None:
-            if old_doc.rev != doc.rev:
-                raise errors.RevisionConflict()
+        if old_doc and doc.rev is None and old_doc.is_tombstone():
+            new_rev = self._allocate_doc_rev(old_doc.rev)
         else:
-            if doc.rev is not None:
-                raise errors.RevisionConflict()
-        new_rev = self._allocate_doc_rev(doc.rev)
+            if old_doc is not None:
+                if old_doc.rev != doc.rev:
+                    raise errors.RevisionConflict()
+            else:
+                if doc.rev is not None:
+                    raise errors.RevisionConflict()
+            new_rev = self._allocate_doc_rev(doc.rev)
         doc.rev = new_rev
         self._put_and_update_indexes(old_doc, doc)
         return new_rev
@@ -103,7 +115,7 @@ class InMemoryDatabase(CommonBackend):
             doc_rev, content = self._docs[doc_id]
         except KeyError:
             return None
-        return Document(doc_id, doc_rev, content)
+        return self._factory(doc_id, doc_rev, content)
 
     def _has_conflicts(self, doc_id):
         return doc_id in self._conflicts
@@ -117,12 +129,22 @@ class InMemoryDatabase(CommonBackend):
         doc.has_conflicts = (doc.doc_id in self._conflicts)
         return doc
 
+    def get_all_docs(self, include_deleted=False):
+        """Return all documents in the database."""
+        generation = self._get_generation()
+        results = []
+        for doc_id, (doc_rev, content) in self._docs.items():
+            if content is None and not include_deleted:
+                continue
+            results.append(self._factory(doc_id, doc_rev, content))
+        return (generation, results)
+
     def get_doc_conflicts(self, doc_id):
         if doc_id not in self._conflicts:
             return []
         result = [self._get_doc(doc_id)]
         result[0].has_conflicts = True
-        result.extend([Document(doc_id, rev, content)
+        result.extend([self._factory(doc_id, rev, content)
                        for rev, content in self._conflicts[doc_id]])
         return result
 
@@ -181,12 +203,13 @@ class InMemoryDatabase(CommonBackend):
         doc.make_tombstone()
         self.put_doc(doc)
 
-    def create_index(self, index_name, index_expression):
+    def create_index(self, index_name, *index_expressions):
         if index_name in self._indexes:
-            if self._indexes[index_name]._definition == index_expression:
+            if self._indexes[index_name]._definition == list(
+                    index_expressions):
                 return
             raise errors.IndexNameTakenError
-        index = InMemoryIndex(index_name, index_expression)
+        index = InMemoryIndex(index_name, list(index_expressions))
         for doc_id, (doc_rev, doc) in self._docs.iteritems():
             if doc is not None:
                 index.add_json(doc_id, doc)
@@ -201,7 +224,7 @@ class InMemoryDatabase(CommonBackend):
             definitions.append((idx._name, idx._definition))
         return definitions
 
-    def get_from_index(self, index_name, key_values):
+    def get_from_index(self, index_name, *key_values):
         try:
             index = self._indexes[index_name]
         except KeyError:
@@ -210,7 +233,25 @@ class InMemoryDatabase(CommonBackend):
         result = []
         for doc_id in doc_ids:
             doc_rev, doc = self._docs[doc_id]
-            result.append(Document(doc_id, doc_rev, doc))
+            result.append(self._factory(doc_id, doc_rev, doc))
+        return result
+
+    def get_range_from_index(self, index_name, start_value=None,
+                             end_value=None):
+        """Return all documents with key values in the specified range."""
+        try:
+            index = self._indexes[index_name]
+        except KeyError:
+            raise errors.IndexDoesNotExist
+        if isinstance(start_value, basestring):
+            start_value = (start_value,)
+        if isinstance(end_value, basestring):
+            end_value = (end_value,)
+        doc_ids = index.lookup_range(start_value, end_value)
+        result = []
+        for doc_id in doc_ids:
+            doc_rev, doc = self._docs[doc_id]
+            result.append(self._factory(doc_id, doc_rev, doc))
         return result
 
     def get_index_keys(self, index_name):
@@ -218,7 +259,9 @@ class InMemoryDatabase(CommonBackend):
             index = self._indexes[index_name]
         except KeyError:
             raise errors.IndexDoesNotExist
-        return list(set(index.keys()))
+        keys = index.keys()
+        # XXX inefficiency warning
+        return list(set([tuple(key.split('\x01')) for key in keys]))
 
     def whats_changed(self, old_generation=0):
         changes = []
@@ -328,16 +371,39 @@ class InMemoryIndex(object):
             return -1
         return last
 
-    def lookup(self, key_values):
+    def lookup(self, values):
         """Find docs that match the values."""
-        result = []
-        for values in key_values:
-            last = self._find_non_wildcards(values)
-            if last == -1:
-                result.extend(self._lookup_exact(values))
+        last = self._find_non_wildcards(values)
+        if last == -1:
+            return self._lookup_exact(values)
+        else:
+            return self._lookup_prefix(values[:last])
+
+    def lookup_range(self, start_values, end_values):
+        """Find docs within the range."""
+        # TODO: Wildly inefficient, which is unlikely to be a problem for the
+        # inmemory implementation.
+        if start_values:
+            self._find_non_wildcards(start_values)
+            start_values = get_prefix(start_values)
+        if end_values:
+            if self._find_non_wildcards(end_values) == -1:
+                exact = True
             else:
-                result.extend(self._lookup_prefix(values[:last]))
-        return result
+                exact = False
+            end_values = get_prefix(end_values)
+        found = []
+        for key, doc_ids in sorted(self._values.iteritems()):
+            if start_values and start_values > key:
+                continue
+            if end_values and end_values < key:
+                if exact:
+                    break
+                else:
+                    if not key.startswith(end_values):
+                        break
+            found.extend(doc_ids)
+        return found
 
     def keys(self):
         """Find the indexed keys."""
@@ -347,10 +413,9 @@ class InMemoryIndex(object):
         """Find docs that match the prefix string in values."""
         # TODO: We need a different data structure to make prefix style fast,
         #       some sort of sorted list would work, but a plain dict doesn't.
-        key_prefix = '\x01'.join(value)
-        key_prefix = key_prefix.rstrip('*')
+        key_prefix = get_prefix(value)
         all_doc_ids = []
-        for key, doc_ids in self._values.iteritems():
+        for key, doc_ids in sorted(self._values.iteritems()):
             if key.startswith(key_prefix):
                 all_doc_ids.extend(doc_ids)
         return all_doc_ids

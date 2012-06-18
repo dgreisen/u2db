@@ -71,7 +71,7 @@ class CommonBackend(u1db.Database):
     def create_doc(self, content, doc_id=None):
         if doc_id is None:
             doc_id = self._allocate_doc_id()
-        doc = u1db.Document(doc_id, None, content)
+        doc = self._factory(doc_id, None, content)
         self.put_doc(doc)
         return doc
 

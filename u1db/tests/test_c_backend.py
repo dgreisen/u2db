@@ -14,8 +14,10 @@
 # You should have received a copy of the GNU Lesser General Public License
 # along with u1db.  If not, see <http://www.gnu.org/licenses/>.
 
+import simplejson
 from u1db import (
     Document,
+    errors,
     tests,
     )
 from u1db.tests import c_backend_wrapper, c_backend_error
@@ -83,7 +85,7 @@ class TestCDatabase(BackendTests):
         self.assertIsNot(None, self.db._replica_uid)
         self.assertEqual(32, len(self.db._replica_uid))
         # casting to an int from the uid *is* the check for correct behavior.
-        val = int(self.db._replica_uid, 16)
+        int(self.db._replica_uid, 16)
 
     def test_get_conflicts_with_borked_data(self):
         self.db = c_backend_wrapper.CDatabase(':memory:')
@@ -93,32 +95,115 @@ class TestCDatabase(BackendTests):
                          " VALUES ('doc-id', 'doc-rev', '{}')")
         self.assertRaises(Exception, self.db.get_doc_conflicts, 'doc-id')
 
+    def test_create_index_list(self):
+        # We manually poke data into the DB, so that we test just the "get_doc"
+        # code, rather than also testing the index management code.
+        self.db = c_backend_wrapper.CDatabase(':memory:')
+        doc = self.db.create_doc(tests.simple_doc)
+        self.db.create_index_list("key-idx", ["key"])
+        docs = self.db.get_from_index('key-idx', 'value')
+        self.assertEqual([doc], docs)
+
+    def test_create_index_list_on_non_ascii_field_name(self):
+        self.db = c_backend_wrapper.CDatabase(':memory:')
+        doc = self.db.create_doc(simplejson.dumps({u'\xe5': 'value'}))
+        self.db.create_index_list('test-idx', [u'\xe5'])
+        self.assertEqual([doc], self.db.get_from_index('test-idx', 'value'))
+
+    def test_list_indexes_with_non_ascii_field_names(self):
+        self.db = c_backend_wrapper.CDatabase(':memory:')
+        self.db.create_index_list('test-idx', [u'\xe5'])
+        self.assertEqual(
+            [('test-idx', [u'\xe5'])], self.db.list_indexes())
+
+    def test_create_index_evaluates_it(self):
+        self.db = c_backend_wrapper.CDatabase(':memory:')
+        doc = self.db.create_doc(tests.simple_doc)
+        self.db.create_index_list('test-idx', ['key'])
+        self.assertEqual([doc], self.db.get_from_index('test-idx', 'value'))
+
+    def test_wildcard_matches_unicode_value(self):
+        self.db = c_backend_wrapper.CDatabase(':memory:')
+        doc = self.db.create_doc(simplejson.dumps({"key": u"valu\xe5"}))
+        self.db.create_index_list('test-idx', ['key'])
+        self.assertEqual([doc], self.db.get_from_index('test-idx', '*'))
+
+    def test_create_index_fails_if_name_taken(self):
+        self.db = c_backend_wrapper.CDatabase(':memory:')
+        self.db.create_index_list('test-idx', ['key'])
+        self.assertRaises(errors.IndexNameTakenError,
+                          self.db.create_index_list,
+                          'test-idx', ['stuff'])
+
+    def test_create_index_does_not_fail_if_name_taken_with_same_index(self):
+        self.db = c_backend_wrapper.CDatabase(':memory:')
+        self.db.create_index_list('test-idx', ['key'])
+        self.db.create_index_list('test-idx', ['key'])
+        self.assertEqual([('test-idx', ['key'])], self.db.list_indexes())
+
+    def test_create_index_after_deleting_document(self):
+        self.db = c_backend_wrapper.CDatabase(':memory:')
+        doc = self.db.create_doc(tests.simple_doc)
+        doc2 = self.db.create_doc(tests.simple_doc)
+        self.db.delete_doc(doc2)
+        self.db.create_index_list('test-idx', ['key'])
+        self.assertEqual([doc], self.db.get_from_index('test-idx', 'value'))
+
     def test_get_from_index(self):
         # We manually poke data into the DB, so that we test just the "get_doc"
         # code, rather than also testing the index management code.
         self.db = c_backend_wrapper.CDatabase(':memory:')
         doc = self.db.create_doc(tests.simple_doc)
-        self.db.create_index("key-idx", ["key"])
-        docs = self.db.get_from_index('key-idx', [('value',)])
+        self.db.create_index("key-idx", "key")
+        docs = self.db.get_from_index('key-idx', 'value')
         self.assertEqual([doc], docs)
+
+    def test_get_from_index_list(self):
+        # We manually poke data into the DB, so that we test just the "get_doc"
+        # code, rather than also testing the index management code.
+        self.db = c_backend_wrapper.CDatabase(':memory:')
+        doc = self.db.create_doc(tests.simple_doc)
+        self.db.create_index("key-idx", "key")
+        docs = self.db.get_from_index_list('key-idx', ['value'])
+        self.assertEqual([doc], docs)
+
+    def test_get_from_index_list_multi(self):
+        self.db = c_backend_wrapper.CDatabase(':memory:')
+        content = '{"key": "value", "key2": "value2"}'
+        doc = self.db.create_doc(content)
+        self.db.create_index('test-idx', 'key', 'key2')
+        self.assertEqual(
+            [doc],
+            self.db.get_from_index_list('test-idx', ['value', 'value2']))
+
+    def test_get_from_index_list_multi_ordered(self):
+        self.db = c_backend_wrapper.CDatabase(':memory:')
+        doc1 = self.db.create_doc('{"key": "value3", "key2": "value4"}')
+        doc2 = self.db.create_doc('{"key": "value2", "key2": "value3"}')
+        doc3 = self.db.create_doc('{"key": "value2", "key2": "value2"}')
+        doc4 = self.db.create_doc('{"key": "value1", "key2": "value1"}')
+        self.db.create_index('test-idx', 'key', 'key2')
+        self.assertEqual(
+            [doc4, doc3, doc2, doc1],
+            self.db.get_from_index_list('test-idx', ['v*', '*']))
 
     def test_get_from_index_2(self):
         self.db = c_backend_wrapper.CDatabase(':memory:')
         doc = self.db.create_doc(tests.nested_doc)
-        self.db.create_index("multi-idx", ["key", "sub.doc"])
-        docs = self.db.get_from_index('multi-idx', [('value', 'underneath')])
+        self.db.create_index("multi-idx", "key", "sub.doc")
+        docs = self.db.get_from_index('multi-idx', 'value', 'underneath')
         self.assertEqual([doc], docs)
 
     def test_get_index_keys(self):
         self.db = c_backend_wrapper.CDatabase(':memory:')
         self.db.create_doc(tests.simple_doc)
-        self.db.create_index("key-idx", ["key"])
+        self.db.create_index("key-idx", "key")
         keys = self.db.get_index_keys('key-idx')
-        self.assertEqual(["value"], keys)
+        self.assertEqual([("value",)], keys)
 
     def test__query_init_one_field(self):
         self.db = c_backend_wrapper.CDatabase(':memory:')
-        self.db.create_index("key-idx", ["key"])
+        self.db.create_index("key-idx", "key")
         query = self.db._query_init("key-idx")
         self.assertEqual("key-idx", query.index_name)
         self.assertEqual(1, query.num_fields)
@@ -126,7 +211,7 @@ class TestCDatabase(BackendTests):
 
     def test__query_init_two_fields(self):
         self.db = c_backend_wrapper.CDatabase(':memory:')
-        self.db.create_index("two-idx", ["key", "key2"])
+        self.db.create_index("two-idx", "key", "key2")
         query = self.db._query_init("two-idx")
         self.assertEqual("two-idx", query.index_name)
         self.assertEqual(2, query.num_fields)
@@ -140,14 +225,15 @@ class TestCDatabase(BackendTests):
     def test__format_query(self):
         self.assertFormatQueryEquals(
             "SELECT d0.doc_id FROM document_fields d0"
-            " WHERE d0.field_name = ? AND d0.value = ?",
+            " WHERE d0.field_name = ? AND d0.value = ? ORDER BY d0.value",
             [0], ["1"])
         self.assertFormatQueryEquals(
             "SELECT d0.doc_id"
             " FROM document_fields d0, document_fields d1"
             " WHERE d0.field_name = ? AND d0.value = ?"
             " AND d0.doc_id = d1.doc_id"
-            " AND d1.field_name = ? AND d1.value = ?",
+            " AND d1.field_name = ? AND d1.value = ?"
+            " ORDER BY d0.value, d1.value",
             [0, 0], ["1", "2"])
         self.assertFormatQueryEquals(
             "SELECT d0.doc_id"
@@ -156,26 +242,28 @@ class TestCDatabase(BackendTests):
             " AND d0.doc_id = d1.doc_id"
             " AND d1.field_name = ? AND d1.value = ?"
             " AND d0.doc_id = d2.doc_id"
-            " AND d2.field_name = ? AND d2.value = ?",
+            " AND d2.field_name = ? AND d2.value = ?"
+            " ORDER BY d0.value, d1.value, d2.value",
             [0, 0, 0], ["1", "2", "3"])
 
     def test__format_query_wildcard(self):
         self.assertFormatQueryEquals(
             "SELECT d0.doc_id FROM document_fields d0"
-            " WHERE d0.field_name = ? AND d0.value NOT NULL",
+            " WHERE d0.field_name = ? AND d0.value NOT NULL ORDER BY d0.value",
             [1], ["*"])
         self.assertFormatQueryEquals(
             "SELECT d0.doc_id"
             " FROM document_fields d0, document_fields d1"
             " WHERE d0.field_name = ? AND d0.value = ?"
             " AND d0.doc_id = d1.doc_id"
-            " AND d1.field_name = ? AND d1.value NOT NULL",
+            " AND d1.field_name = ? AND d1.value NOT NULL"
+            " ORDER BY d0.value, d1.value",
             [0, 1], ["1", "*"])
 
     def test__format_query_glob(self):
         self.assertFormatQueryEquals(
             "SELECT d0.doc_id FROM document_fields d0"
-            " WHERE d0.field_name = ? AND d0.value GLOB ?",
+            " WHERE d0.field_name = ? AND d0.value GLOB ? ORDER BY d0.value",
             [2], ["1*"])
 
 
@@ -187,7 +275,8 @@ class TestCSyncTarget(BackendTests):
         self.st = self.db.get_sync_target()
 
     def test_attached_to_db(self):
-        self.assertEqual(self.db._replica_uid, self.st.get_sync_info("misc")[0])
+        self.assertEqual(
+            self.db._replica_uid, self.st.get_sync_info("misc")[0])
 
     def test_get_sync_exchange(self):
         exc = self.st._get_sync_exchange("source-uid", 10)
@@ -213,7 +302,8 @@ class TestCSyncTarget(BackendTests):
         self.assertEqual([], exc.get_seen_ids())
         # The insert should be rejected and the doc_id not considered 'seen'
         exc.insert_doc_from_source(doc2, 10)
-        self.assertGetDoc(self.db, doc.doc_id, doc.rev, tests.simple_doc, False)
+        self.assertGetDoc(
+            self.db, doc.doc_id, doc.rev, tests.simple_doc, False)
         self.assertEqual([], exc.get_seen_ids())
 
     def test_sync_exchange_find_doc_ids(self):
@@ -237,8 +327,10 @@ class TestCSyncTarget(BackendTests):
 
     def test_sync_exchange_return_docs(self):
         returned = []
+
         def return_doc_cb(doc, gen):
             returned.append((doc, gen))
+
         doc1 = self.db.create_doc(tests.simple_doc)
         exc = self.st._get_sync_exchange("source-uid", 0)
         exc.find_doc_ids_to_return()
@@ -250,12 +342,14 @@ class TestCSyncTarget(BackendTests):
         db2 = c_backend_wrapper.CDatabase(':memory:')
         doc2 = db2.create_doc(tests.nested_doc, doc_id='doc-2')
         returned = []
+
         def return_doc_cb(doc, gen):
             returned.append((doc, gen))
-        target_gen = self.st.sync_exchange_doc_ids(db2, [(doc2.doc_id, 1)], 0,
-                                                   return_doc_cb)
+        val = self.st.sync_exchange_doc_ids(db2, [(doc2.doc_id, 1)], 0,
+                                            return_doc_cb)
+        last_trans_id = self.db._get_transaction_log()[-1][1]
         self.assertEqual(2, self.db._get_generation())
-        self.assertEqual(2, target_gen)
+        self.assertEqual((2, last_trans_id), val)
         self.assertGetDoc(self.db, doc2.doc_id, doc2.rev, tests.nested_doc,
                           False)
         self.assertEqual([(doc1, 1)], returned)
@@ -402,7 +496,7 @@ class TestCDocument(BackendTests):
         return c_backend_wrapper.make_document(*args, **kwargs)
 
     def test_create(self):
-        doc = self.make_document('doc-id', 'uid:1', tests.simple_doc)
+        self.make_document('doc-id', 'uid:1', tests.simple_doc)
 
     def assertPyDocEqualCDoc(self, *args, **kwargs):
         cdoc = self.make_document(*args, **kwargs)
@@ -452,7 +546,7 @@ class TestUUID(BackendTests):
             self.assertIsInstance(uuid, str)
             self.assertEqual(32, len(uuid))
             # This will raise ValueError if it isn't a valid hex string
-            v = long(uuid, 16)
+            long(uuid, 16)
             # Version 4 uuids have 2 other requirements, the high 4 bits of the
             # seventh byte are always '0x4', and the middle bits of byte 9 are
             # always set

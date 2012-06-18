@@ -513,8 +513,10 @@ u1db_put_doc(u1database *db, u1db_document *doc)
                         &old_content_len, &statement);
     if (status != SQLITE_OK) { goto finish; }
     if (doc->doc_rev == NULL) {
-        if (old_doc_rev == NULL) {
-            // We are creating a new document from scratch. No problem.
+        if (old_doc_rev == NULL || old_content == NULL) {
+            // We are either creating a new document from scratch, or
+            // overwriting a previously deleted document, neither of which
+            // should lead to conflicts.
             status = 0;
         } else {
             // We were supplied a NULL doc rev, but the doc already exists
@@ -1066,6 +1068,45 @@ u1db_get_docs(u1database *db, int n_doc_ids, const char **doc_ids,
         if (status != SQLITE_DONE) { goto finish; }
         status = sqlite3_reset(statement);
         if (status != SQLITE_OK) { goto finish; }
+    }
+finish:
+    sqlite3_finalize(statement);
+    return status;
+}
+
+int
+u1db_get_all_docs(u1database *db, int include_deleted, int *generation,
+                  void *context, u1db_doc_callback cb)
+{
+    int status;
+    sqlite3_stmt *statement;
+
+    if (db == NULL || cb == NULL) {
+        return U1DB_INVALID_PARAMETER;
+    }
+    status = u1db__get_generation(db, generation);
+    if (status != U1DB_OK)
+        return status;
+    status = sqlite3_prepare_v2(db->sql_handle,
+        "SELECT doc_id, doc_rev, content FROM document", -1, &statement, NULL);
+    if (status != SQLITE_OK) { goto finish; }
+    status = sqlite3_step(statement);
+    while (status == SQLITE_ROW) {
+        const char *doc_id;
+        const char *revision;
+        const char *content;
+        u1db_document *doc;
+        doc_id = (char *)sqlite3_column_text(statement, 0);
+        revision = (char *)sqlite3_column_text(statement, 1);
+        content = (char *)sqlite3_column_text(statement, 2);
+        if (content != NULL || include_deleted) {
+            doc = u1db__allocate_document(doc_id, revision, content, 0);
+            cb(context, doc);
+        }
+        status = sqlite3_step(statement);
+    }
+    if (status == SQLITE_DONE) {
+        status = SQLITE_OK;
     }
 finish:
     sqlite3_finalize(statement);
@@ -1688,12 +1729,13 @@ u1db__is_doc_id_valid(const char *doc_id)
     return U1DB_OK;
 }
 
+
 int
-u1db_create_index(u1database *db, const char *index_name, int n_expressions,
-                  const char **expressions)
+u1db_create_index_list(u1database *db, const char *index_name,
+                       int n_expressions, const char **expressions)
 {
     int status = U1DB_OK, i = 0;
-    sqlite3_stmt *statement;
+    sqlite3_stmt *statement = NULL;
     const char **unique_expressions;
     int n_unique;
 
@@ -1711,14 +1753,20 @@ u1db_create_index(u1database *db, const char *index_name, int n_expressions,
     }
     status = u1db__find_unique_expressions(db, n_expressions, expressions,
             &n_unique, &unique_expressions);
-    if (status != U1DB_OK) { goto finish; }
+    if (status != U1DB_OK) {
+        goto finish;
+    }
     status = sqlite3_prepare_v2(db->sql_handle,
         "SELECT field FROM index_definitions"
         " WHERE name = ? ORDER BY offset DESC",
         -1, &statement, NULL);
-    if (status != SQLITE_OK) { goto finish; }
+    if (status != SQLITE_OK) {
+        goto finish;
+    }
     status = sqlite3_bind_text(statement, 1, index_name, -1, SQLITE_TRANSIENT);
-    if (status != SQLITE_OK) { goto finish; }
+    if (status != SQLITE_OK) {
+        goto finish;
+    }
     status = sqlite3_step(statement);
     i=0;
     while (status == SQLITE_ROW) {
@@ -1730,7 +1778,9 @@ u1db_create_index(u1database *db, const char *index_name, int n_expressions,
         status = sqlite3_step(statement);
         i++;
     }
-    if (status != SQLITE_DONE) { goto finish; }
+    if (status != SQLITE_DONE) {
+        goto finish;
+    }
     if (i>0) {
         status = SQLITE_OK;
         goto finish;
@@ -1743,13 +1793,19 @@ u1db_create_index(u1database *db, const char *index_name, int n_expressions,
         goto finish;
     }
     status = sqlite3_bind_text(statement, 1, index_name, -1, SQLITE_TRANSIENT);
-    if (status != SQLITE_OK) { goto finish; }
+    if (status != SQLITE_OK) {
+        goto finish;
+    }
     for (i = 0; i < n_expressions; ++i) {
         status = sqlite3_bind_int(statement, 2, i);
-        if (status != SQLITE_OK) { goto finish; }
+        if (status != SQLITE_OK) {
+            goto finish;
+        }
         status = sqlite3_bind_text(statement, 3, expressions[i], -1,
                                    SQLITE_TRANSIENT);
-        if (status != SQLITE_OK) { goto finish; }
+        if (status != SQLITE_OK) {
+            goto finish;
+        }
         status = sqlite3_step(statement);
         if (status != SQLITE_DONE) {
             if (status == SQLITE_CONSTRAINT) {
@@ -1759,7 +1815,9 @@ u1db_create_index(u1database *db, const char *index_name, int n_expressions,
             goto finish;
         }
         status = sqlite3_reset(statement);
-        if (status != SQLITE_OK) { goto finish; }
+        if (status != SQLITE_OK) {
+            goto finish;
+        }
     }
     status = u1db__index_all_docs(db, n_unique, unique_expressions);
 finish:
@@ -1774,6 +1832,34 @@ finish:
     }
     return status;
 }
+
+
+int
+u1db_create_index(u1database *db, const char *index_name, int n_expressions,
+                  ...)
+{
+    int i, status = U1DB_OK;
+    va_list argp;
+    const char **expressions = NULL;
+
+    expressions = (const char **)calloc(n_expressions, sizeof(char*));
+    if (expressions == NULL) {
+        status = U1DB_NOMEM;
+        goto finish;
+    }
+    va_start(argp, n_expressions);
+    for (i = 0; i < n_expressions; ++i) {
+        expressions[i] = va_arg(argp, char *);
+    }
+    status = u1db_create_index_list(
+        db, index_name, n_expressions, expressions);
+finish:
+    if (expressions != NULL)
+        free(expressions);
+    va_end(argp);
+    return status;
+}
+
 
 
 int

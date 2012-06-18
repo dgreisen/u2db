@@ -40,7 +40,8 @@ typedef struct _u1db_document
 
 typedef struct _u1query u1query;
 typedef int (*u1db_doc_callback)(void *context, u1db_document *doc);
-typedef int (*u1db_key_callback)(void *context, const char *key);
+typedef int (*u1db_key_callback)(void *context, int num_fields,
+                                 const char **key);
 typedef int (*u1db_doc_gen_callback)(void *context, u1db_document *doc, int gen);
 typedef int (*u1db_doc_id_gen_callback)(void *context, const char *doc_id, int gen);
 typedef int (*u1db_trans_info_callback)(void *context, const char *doc_id,
@@ -127,7 +128,6 @@ int u1db_create_doc(u1database *db, const char *json, const char *doc_id,
  */
 int u1db_put_doc(u1database *db, u1db_document *doc);
 
-
 /**
  * Mark conflicts as having been resolved.
  * @param doc (IN/OUT) The new content. doc->doc_rev will be updated with the
@@ -143,6 +143,7 @@ int u1db_resolve_doc(u1database *db, u1db_document *doc,
  * Get the document defined by the given document id.
  *
  * @param doc_id The document we are looking for
+ * @param include_deleted If true, return the document even if it was deleted.
  * @param doc (OUT) a document (or NULL) matching the request
  * @return status, will be U1DB_OK if there is no error, even if there is no
  *      document matching that doc_id.
@@ -158,6 +159,7 @@ int u1db_get_doc(u1database *db, const char *doc_id, int include_deleted,
  * @param doc_ids An array of document ids to retrieve.
  * @param check_for_conflicts If true, check if each document has any
  *          conflicts, if false, the conflict checking will be skipped.
+ * @param include_deleted If true, return documents even if they were deleted.
  * @param context A void* that is returned via the callback function.
  * @param cb This will be called with each document requested. The api is
  *           cb(void* context, u1db_document *doc). The returned documents are
@@ -167,6 +169,20 @@ int u1db_get_doc(u1database *db, const char *doc_id, int include_deleted,
 int u1db_get_docs(u1database *db, int n_doc_ids, const char **doc_ids,
                   int check_for_conflicts, int include_deleted, void *context,
                   u1db_doc_callback cb);
+
+/**
+ * Retrieve all documents from the database.
+ *
+ * @param include_deleted If true, return documents even if they were deleted.
+ * @param generation (OUT) the generation the database is at
+ * @param context A void* that is returned via the callback function.
+ * @param cb This will be called with each document requested. The api is
+ *           cb(void* context, u1db_document *doc). The returned documents are
+ *           allocated on the heap, and must be freed by the caller via
+ *           u1db_free_doc.
+ */
+int u1db_get_all_docs(u1database *db, int include_deleted, int *generation,
+                      void *context, u1db_doc_callback cb);
 
 /**
  * Get all of the contents associated with a conflicted document.
@@ -202,6 +218,7 @@ int u1db_delete_doc(u1database *db, u1db_document *doc);
  *               get all changes in the database. The integer will be updated
  *               to point at the current generation.
  * @param trans_id The transaction identifier associated with the generation.
+ *               Callers are responsible for freeing this memory.
  * @param cb     A callback function. This will be called passing in 'context',
  *               and a document identifier for each document that has been
  *               modified. This includes the generation and associated
@@ -239,10 +256,21 @@ int u1db_doc_set_json(u1db_document *doc, const char *json);
  *
  * @param index_name    An identifier for this index.
  * @param n_expressions The number of index expressions.
+ * @param exp0... The values to match in the index, all of these should be char*
+ */
+int u1db_create_index(u1database *db, const char *index_name, int n_expressions,
+                      ...);
+
+
+/**
+ * Create an index that you can query for matching documents.
+ *
+ * @param index_name    An identifier for this index.
+ * @param n_expressions The number of index expressions.
  * @param expressions   An array of expressions.
  */
-int u1db_create_index(u1database *db, const char *index_name,
-                      int n_expressions, const char **expressions);
+int u1db_create_index_list(u1database *db, const char *index_name,
+                           int n_expressions, const char **expressions);
 
 /**
  * Delete a defined index.
@@ -276,12 +304,26 @@ int u1db_list_indexes(u1database *db, void *context,
  */
 int u1db_query_init(u1database *db, const char *index_name, u1query **query);
 
+
 /**
  * Free the memory pointed to by query and all associated buffers.
  *
  * query will be updated to point to NULL when finished.
  */
 void u1db_free_query(u1query **query);
+
+
+/**
+ * Get documents which match a given index.
+ *
+ * @param query A u1query object, as created by u1db_query_init.
+ * @param context Will be returned via the document callback
+ * @param n_values The number of parameters being passed, must be >= 1
+ * @param values The values to match in the index.
+ */
+int u1db_get_from_index_list(u1database *db, u1query *query, void *context,
+                             u1db_doc_callback cb, int n_values,
+                             const char **values);
 
 /**
  * Get documents which match a given index.
@@ -291,18 +333,33 @@ void u1db_free_query(u1query **query);
  * @param n_values The number of parameters being passed, must be >= 1
  * @param val0... The values to match in the index, all of these should be char*
  */
-int u1db_get_from_index(u1database *db, u1query *query,
-                        void *context, u1db_doc_callback cb,
-                        int n_values, ...);
+int u1db_get_from_index(u1database *db, u1query *query, void *context,
+                        u1db_doc_callback cb, int n_values, ...);
 
+/**
+ * Get documents with key values in the specified range
+ *
+ * @param query A u1query object, as created by u1db_query_init.
+ * @param context Will be returned via the document callback
+ * @param n_values The number of values.
+ * @param start_values An array of values. If NULL, assume an open ended query.
+ * @param end_values An array of values. If NULL, assume an open ended query.
+ */
+int u1db_get_range_from_index(u1database *db, u1query *query,
+                              void *context, u1db_doc_callback cb,
+                              int n_values, const char **start_values,
+                              const char **end_values);
 /**
  * Get keys under which documents are indexed.
  *
  * @param index_name Name of the index for which to get keys.
- * @param context Will be returned via the document callback
+ * @param context Will be returned via the document callback. cb will be called
+ *     once for each column, with a NULL value to separate rows.
  */
 int u1db_get_index_keys(u1database *db, char *index_name, void *context,
                         u1db_key_callback cb);
+
+
 /**
  * Get documents matching a single column index.
  */

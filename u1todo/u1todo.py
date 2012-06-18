@@ -27,8 +27,8 @@ EMPTY_TASK = json.dumps({"title": "", "done": False, "tags": []})
 TAGS_INDEX = 'tags'
 DONE_INDEX = 'done'
 INDEXES = {
-    TAGS_INDEX: ['tags'],
-    DONE_INDEX: ['bool(done)'],
+    TAGS_INDEX: 'tags',
+    DONE_INDEX: 'bool(done)',
 }
 
 TAGS = re.compile('#(\w+)|\[(.+)\]')
@@ -78,7 +78,7 @@ class TodoStore(object):
 
     def get_all_tags(self):
         """Get all tags in use in the entire database."""
-        return self.db.get_index_keys(TAGS_INDEX)
+        return [key[0] for key in self.db.get_index_keys(TAGS_INDEX)]
 
     def get_tasks_by_tags(self, tags):
         """Get all tasks that have every tag in tags."""
@@ -86,15 +86,15 @@ class TodoStore(object):
             # No tags specified, so return all tasks.
             return self.get_all_tasks()
         # Get all tasks for the first tag.
-        results = dict((doc.doc_id, doc) for doc in
-            self.db.get_from_index(TAGS_INDEX, [(tags[0],)]))
+        results = dict(
+            (doc.doc_id, doc) for doc in
+            self.db.get_from_index(TAGS_INDEX, tags[0]))
         # Now loop over the rest of the tags (if any) and remove from the
         # results any document that does not have that particular tag.
         for tag in tags[1:]:
             # Get the ids of all documents with this tag.
             ids = [
-                doc.doc_id for doc in
-                self.db.get_from_index(TAGS_INDEX, [(tag,)])]
+                doc.doc_id for doc in self.db.get_from_index(TAGS_INDEX, tag)]
             for key in results.keys():
                 if key not in ids:
                     # Remove the document from result, because it does not have
@@ -157,8 +157,7 @@ class TodoStore(object):
         # Since the DONE_INDEX indexes anything that has a value in the field
         # "done", and all tasks do (either True or False), it's a good way to
         # get all tasks out of the database.
-        return [
-            Task(doc) for doc in self.db.get_from_index(DONE_INDEX, ["*"])]
+        return [Task(doc) for doc in self.db.get_from_index(DONE_INDEX, "*")]
 
 
 class Task(object):

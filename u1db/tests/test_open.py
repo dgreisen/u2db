@@ -24,6 +24,7 @@ from u1db import (
     tests,
     )
 from u1db.backends import sqlite_backend
+from u1db.tests.test_backends import TestAlternativeDocument
 
 
 class TestU1DBOpen(tests.TestCase):
@@ -43,6 +44,12 @@ class TestU1DBOpen(tests.TestCase):
         self.addCleanup(db.close)
         self.assertTrue(os.path.exists(self.db_path))
         self.assertIsInstance(db, sqlite_backend.SQLiteDatabase)
+
+    def test_open_with_factory(self):
+        db = u1db_open(self.db_path, create=True,
+                       document_factory=TestAlternativeDocument)
+        self.addCleanup(db.close)
+        self.assertEqual(TestAlternativeDocument, db._factory)
 
     def test_open_existing(self):
         db = sqlite_backend.SQLitePartialExpandDatabase(self.db_path)
