@@ -24,7 +24,7 @@
 static int st_get_sync_info(u1db_sync_target *st,
         const char *source_replica_uid,
         const char **st_replica_uid, int *st_gen, int *source_gen,
-        char **trans_id);
+        char **source_trans_id);
 
 static int st_record_sync_info(u1db_sync_target *st,
         const char *source_replica_uid, int source_gen, const char *trans_id);
@@ -106,7 +106,7 @@ u1db__free_sync_target(u1db_sync_target **sync_target)
 static int
 st_get_sync_info(u1db_sync_target *st, const char *source_replica_uid,
         const char **st_replica_uid, int *st_gen, int *source_gen,
-        char **trans_id)
+        char **source_trans_id)
 {
     int status = U1DB_OK;
     u1database *db;
@@ -125,8 +125,8 @@ st_get_sync_info(u1db_sync_target *st, const char *source_replica_uid,
     db = (u1database *)st->implementation;
     status = u1db_get_replica_uid(db, st_replica_uid);
     if (status != U1DB_OK) { goto finish; }
-    status = u1db__get_sync_gen_info(db, source_replica_uid, source_gen,
-                                     trans_id);
+    status = u1db__get_sync_gen_info(
+        db, source_replica_uid, source_gen, source_trans_id);
     if (status != U1DB_OK) { goto finish; }
     status = u1db__get_generation(db, st_gen);
 finish:
@@ -614,7 +614,9 @@ u1db__sync_db_to_target(u1database *db, u1db_sync_target *target,
     status = target->get_sync_info(target, local_uid, &target_uid, &target_gen,
                    &local_gen_known_by_target, &local_trans_id_known_by_target);
     if (status != U1DB_OK) { goto finish; }
-    status = u1db__validate_source(
+    status = u1db_validate_gen_and_trans_id(
+            db, local_gen_known_by_target, local_trans_id_known_by_target);
+    if (status != U1DB_OK) { goto finish; }
     status = u1db__get_sync_gen_info(db, target_uid,
         &target_gen_known_by_local, &target_trans_id_known_by_local);
     if (status != U1DB_OK) { goto finish; }
@@ -624,8 +626,9 @@ u1db__sync_db_to_target(u1database *db, u1db_sync_target *target,
     // Before we start the sync exchange, get the list of doc_ids that we want
     // to send. We have to do this first, so that local_gen_before_sync will
     // match exactly the list of doc_ids we send
-    status = u1db_whats_changed(db, &local_gen, &local_trans_id,
-                            (void*)&to_send_state, whats_changed_to_doc_ids);
+    status = u1db_whats_changed(
+        db, &local_gen, &local_trans_id, (void*)&to_send_state,
+        whats_changed_to_doc_ids);
     if (status != U1DB_OK) { goto finish; }
     if (local_gen == local_gen_known_by_target
         && target_gen == target_gen_known_by_local)
@@ -645,19 +648,23 @@ u1db__sync_db_to_target(u1database *db, u1db_sync_target *target,
         &target_gen_known_by_local, &target_trans_id_known_by_local,
         &return_doc_state, return_doc_to_insert_from_target);
     if (status != U1DB_OK) { goto finish; }
-    status = u1db__get_generation(db, &local_gen);
+    if (local_trans_id != NULL) {
+        free(local_trans_id);
+    }
+    status = u1db__get_generation_info(db, &local_gen, &local_trans_id);
     if (status != U1DB_OK) { goto finish; }
     // Now we successfully sent and received docs, make sure we record the
     // current remote generation
-    status = u1db__set_sync_info(db, target_uid, target_gen_known_by_local,
-                                 "T-sid");
+    status = u1db__set_sync_info(
+        db, target_uid, target_gen_known_by_local,
+        target_trans_id_known_by_local);
     if (status != U1DB_OK) { goto finish; }
     if (return_doc_state.num_inserted > 0 &&
-            ((*local_gen_before_sync + return_doc_state.num_inserted)
-              == local_gen))
+        ((*local_gen_before_sync + return_doc_state.num_inserted)
+         == local_gen))
     {
-        status = target->record_sync_info(target, local_uid, local_gen,
-                                          "T-sid");
+        status = target->record_sync_info(
+            target, local_uid, local_gen, local_trans_id);
         if (status != U1DB_OK) { goto finish; }
     }
 finish:

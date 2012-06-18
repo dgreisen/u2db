@@ -865,8 +865,8 @@ u1db__put_doc_if_newer(u1database *db, u1db_document *doc, int save_conflict,
                            (stored_doc_rev != NULL));
     }
     if (status == U1DB_OK && replica_uid != NULL) {
-        status = u1db__set_sync_info(db, replica_uid, replica_gen,
-                                     replica_trans_id);
+        status = u1db__set_sync_info(
+            db, replica_uid, replica_gen, replica_trans_id);
     }
     if (status == U1DB_OK && at_gen != NULL) {
         status = u1db__get_generation(db, at_gen);
@@ -1229,14 +1229,26 @@ get_last_transaction_id(u1database *db, int *gen, char **trans_id)
         status = U1DB_OK;
         *gen = 0;
         *trans_id = strdup("");
+        if (*trans_id == NULL) {
+            status = U1DB_NOMEM;
+            goto finish;
+        }
     } else if (status == SQLITE_ROW) {
         status = U1DB_OK;
         *gen = sqlite3_column_int(statement, 0);
         tmp = (const char *)sqlite3_column_text(statement, 1);
         if (tmp == NULL) {
             *trans_id = strdup("");
+            if (*trans_id == NULL) {
+                status = U1DB_NOMEM;
+                goto finish;
+            }
         } else {
             *trans_id = strdup(tmp);
+            if (*trans_id == NULL) {
+                status = U1DB_NOMEM;
+                goto finish;
+            }
         }
     }
 finish:
@@ -1583,7 +1595,10 @@ u1db__get_sync_gen_info(u1database *db, const char *replica_uid,
         // Note: We may want to handle the column containing NULL
         tmp = (const char *)sqlite3_column_text(statement, 1);
         if (tmp == NULL) {
-            *trans_id = NULL;
+            *trans_id = strdup("");
+            if (*trans_id == NULL) {
+                status = U1DB_NOMEM;
+            }
         } else {
             *trans_id = strdup(tmp);
             if (*trans_id == NULL) {
