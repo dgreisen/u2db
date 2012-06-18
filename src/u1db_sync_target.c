@@ -614,6 +614,7 @@ u1db__sync_db_to_target(u1database *db, u1db_sync_target *target,
     status = target->get_sync_info(target, local_uid, &target_uid, &target_gen,
                    &local_gen_known_by_target, &local_trans_id_known_by_target);
     if (status != U1DB_OK) { goto finish; }
+    status = u1db__validate_source(
     status = u1db__get_sync_gen_info(db, target_uid,
         &target_gen_known_by_local, &target_trans_id_known_by_local);
     if (status != U1DB_OK) { goto finish; }

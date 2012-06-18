@@ -712,6 +712,15 @@ class DatabaseSyncTests(tests.DatabaseBaseTests):
 
         self.sync(self.db1, self.db2, trace_hook=put_hook)
 
+    def test_sync_detects_diverged_source(self):
+        self.db1.create_doc(tests.simple_doc, doc_id="divergent")
+        self.sync(self.db1, self.db2)
+        db3 = self.create_database('test3')
+        db3.create_doc(tests.nested_doc, doc_id="divergent")
+        db3._set_replica_uid(self.db1._replica_uid)
+        self.assertRaises(
+            errors.InvalidTransactionId, self.sync, db3, self.db2)
+
 
 class TestDbSync(tests.TestCaseWithServer):
     """Test db.sync remote sync shortcut"""
