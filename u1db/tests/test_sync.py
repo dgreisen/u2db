@@ -662,6 +662,12 @@ class DatabaseSyncTests(tests.DatabaseBaseTests):
         doc1 = self.db1.create_doc('{"a": 1}', doc_id='the-doc')
         db3 = self.create_database('test3')
         self.sync(self.db2, self.db1)
+        self.assertEqual(
+            self.db1._get_generation_info(),
+            self.db2._get_sync_gen_info(self.db1._replica_uid))
+        self.assertEqual(
+            self.db2._get_generation_info(),
+            self.db1._get_sync_gen_info(self.db2._replica_uid))
         self.sync(db3, self.db1)
         # update on 2
         doc2 = self.make_document('the-doc', doc1.rev, '{"a": 2}')
@@ -695,7 +701,19 @@ class DatabaseSyncTests(tests.DatabaseBaseTests):
         self.db2.create_doc('{"b": 1}', doc_id='the-doc')
         db3.create_doc('{"c": 1}', doc_id='the-doc')
         self.sync(db3, self.db1)
+        self.assertEqual(
+            self.db1._get_generation_info(),
+            db3._get_sync_gen_info(self.db1._replica_uid))
+        self.assertEqual(
+            db3._get_generation_info(),
+            self.db1._get_sync_gen_info(db3._replica_uid))
         self.sync(db3, self.db2)
+        self.assertEqual(
+            self.db2._get_generation_info(),
+            db3._get_sync_gen_info(self.db2._replica_uid))
+        self.assertEqual(
+            db3._get_generation_info(),
+            self.db2._get_sync_gen_info(db3._replica_uid))
         self.assertEqual(3, len(db3.get_doc_conflicts('the-doc')))
         doc1.set_json('{"a": 2}')
         self.db1.put_doc(doc1)
