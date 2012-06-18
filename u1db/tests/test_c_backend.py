@@ -73,6 +73,14 @@ class TestCDatabase(BackendTests):
         db.create_doc(tests.simple_doc)
         self.assertEqual(1, db._get_generation())
 
+    def test__get_generation_info(self):
+        db = c_backend_wrapper.CDatabase(':memory:')
+        self.assertEqual((0, None), db._get_generation_info())
+        db.create_doc(tests.simple_doc)
+        info = db._get_generation_info()
+        self.assertEqual(1, info[0])
+        self.assertTrue(info[1].startswith('T-'))
+
     def test__set_replica_uid(self):
         db = c_backend_wrapper.CDatabase(':memory:')
         self.assertIsNot(None, db._replica_uid)
@@ -287,10 +295,10 @@ class TestCSyncTarget(BackendTests):
         doc = c_backend_wrapper.make_document('doc-id', 'replica:1',
                 tests.simple_doc)
         self.assertEqual([], exc.get_seen_ids())
-        exc.insert_doc_from_source(doc, 10)
+        exc.insert_doc_from_source(doc, 10, 'T-sid')
         self.assertGetDoc(self.db, 'doc-id', 'replica:1', tests.simple_doc,
                           False)
-        self.assertEqual((10, None),
+        self.assertEqual((10, 'T-sid'),
                          self.db._get_sync_gen_info('source-uid'))
         self.assertEqual(['doc-id'], exc.get_seen_ids())
 
@@ -301,7 +309,7 @@ class TestCSyncTarget(BackendTests):
                 tests.nested_doc)
         self.assertEqual([], exc.get_seen_ids())
         # The insert should be rejected and the doc_id not considered 'seen'
-        exc.insert_doc_from_source(doc2, 10)
+        exc.insert_doc_from_source(doc2, 10, 'T-sid')
         self.assertGetDoc(
             self.db, doc.doc_id, doc.rev, tests.simple_doc, False)
         self.assertEqual([], exc.get_seen_ids())
@@ -311,7 +319,10 @@ class TestCSyncTarget(BackendTests):
         exc = self.st._get_sync_exchange("source-uid", 0)
         self.assertEqual(0, exc.target_gen)
         exc.find_doc_ids_to_return()
-        self.assertEqual([(doc.doc_id, 1)], exc.get_doc_ids_to_return())
+        doc_id = exc.get_doc_ids_to_return()[0]
+        self.assertEqual(
+            (doc.doc_id, 1), doc_id[:-1])
+        self.assertTrue(doc_id[-1].startswith('T-'))
         self.assertEqual(1, exc.target_gen)
 
     def test_sync_exchange_find_doc_ids_not_including_recently_inserted(self):
@@ -320,22 +331,23 @@ class TestCSyncTarget(BackendTests):
         exc = self.st._get_sync_exchange("source-uid", 0)
         doc3 = c_backend_wrapper.make_document(doc1.doc_id,
                 doc1.rev + "|zreplica:2", tests.simple_doc)
-        exc.insert_doc_from_source(doc3, 10)
+        exc.insert_doc_from_source(doc3, 10, 'T-sid')
         exc.find_doc_ids_to_return()
-        self.assertEqual([(doc2.doc_id, 2)], exc.get_doc_ids_to_return())
+        self.assertEqual(
+            (doc2.doc_id, 2), exc.get_doc_ids_to_return()[0][:-1])
         self.assertEqual(3, exc.target_gen)
 
     def test_sync_exchange_return_docs(self):
         returned = []
 
-        def return_doc_cb(doc, gen):
-            returned.append((doc, gen))
+        def return_doc_cb(doc, gen, trans_id):
+            returned.append((doc, gen, trans_id))
 
         doc1 = self.db.create_doc(tests.simple_doc)
         exc = self.st._get_sync_exchange("source-uid", 0)
         exc.find_doc_ids_to_return()
         exc.return_docs(return_doc_cb)
-        self.assertEqual([(doc1, 1)], returned)
+        self.assertEqual((doc1, 1), returned[0][:-1])
 
     def test_sync_exchange_doc_ids(self):
         doc1 = self.db.create_doc(tests.simple_doc, doc_id='doc-1')
@@ -343,16 +355,17 @@ class TestCSyncTarget(BackendTests):
         doc2 = db2.create_doc(tests.nested_doc, doc_id='doc-2')
         returned = []
 
-        def return_doc_cb(doc, gen):
-            returned.append((doc, gen))
-        val = self.st.sync_exchange_doc_ids(db2, [(doc2.doc_id, 1)], 0,
-                                            return_doc_cb)
+        def return_doc_cb(doc, gen, trans_id):
+            returned.append((doc, gen, trans_id))
+
+        val = self.st.sync_exchange_doc_ids(
+            db2, [(doc2.doc_id, 1, 'T-sid')], 0, return_doc_cb)
         last_trans_id = self.db._get_transaction_log()[-1][1]
         self.assertEqual(2, self.db._get_generation())
         self.assertEqual((2, last_trans_id), val)
         self.assertGetDoc(self.db, doc2.doc_id, doc2.rev, tests.nested_doc,
                           False)
-        self.assertEqual([(doc1, 1)], returned)
+        self.assertEqual((doc1, 1), returned[0][:-1])
 
 
 class TestCHTTPSyncTarget(BackendTests):

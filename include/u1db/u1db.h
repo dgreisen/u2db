@@ -42,7 +42,8 @@ typedef struct _u1query u1query;
 typedef int (*u1db_doc_callback)(void *context, u1db_document *doc);
 typedef int (*u1db_key_callback)(void *context, int num_fields,
                                  const char **key);
-typedef int (*u1db_doc_gen_callback)(void *context, u1db_document *doc, int gen);
+typedef int (*u1db_doc_gen_callback)(void *context, u1db_document *doc,
+                                     int gen, const char *trans_id);
 typedef int (*u1db_doc_id_gen_callback)(void *context, const char *doc_id, int gen);
 typedef int (*u1db_trans_info_callback)(void *context, const char *doc_id,
                                         int gen, const char *trans_id);
@@ -76,6 +77,10 @@ typedef int (*u1db_trans_info_callback)(void *context, const char *doc_id,
 #define U1DB_SUPERSEDED 2
 #define U1DB_CONVERGED 3
 #define U1DB_CONFLICTED 4
+
+// Used by validate_source_gen_and_trans_id
+#define U1DB_INVALID_TRANSACTION_ID -20
+#define U1DB_INVALID_GENERATION -21
 
 /**
  * The basic constructor for a new connection.

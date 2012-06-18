@@ -32,13 +32,15 @@ static int st_record_sync_info(u1db_sync_target *st,
 static int st_sync_exchange(u1db_sync_target *st,
                           const char *source_replica_uid, int n_docs,
                           u1db_document **docs, int *generations,
-                          int *target_gen, char **target_trans_id,
-                          void *context, u1db_doc_gen_callback cb);
+                          const char **trans_ids, int *target_gen,
+                          char **target_trans_id, void *context,
+                          u1db_doc_gen_callback cb);
 static int st_sync_exchange_doc_ids(u1db_sync_target *st,
-        u1database *source_db,
-        int n_doc_ids, const char **doc_ids, int *generations,
-        int *target_gen, char **target_trans_id,
-        void *context, u1db_doc_gen_callback cb);
+                                    u1database *source_db, int n_doc_ids,
+                                    const char **doc_ids, int *generations,
+                                    const char **trans_ids, int *target_gen,
+                                    char **target_trans_id, void *context,
+                                    u1db_doc_gen_callback cb);
 static int st_get_sync_exchange(u1db_sync_target *st,
                          const char *source_replica_uid,
                          int source_gen,
@@ -57,6 +59,7 @@ struct _get_docs_to_doc_gen_context {
     void *user_context;
     u1db_doc_gen_callback user_cb;
     int *gen_for_doc_ids;
+    const char **trans_ids_for_doc_ids;
     int free_when_done;
 };
 
@@ -203,6 +206,10 @@ st_finalize_sync_exchange(u1db_sync_target *st, u1db_sync_exchange **exchange)
         free((*exchange)->gen_for_doc_ids);
         (*exchange)->gen_for_doc_ids = NULL;
     }
+    if ((*exchange)->trans_ids_for_doc_ids != NULL) {
+        free((*exchange)->trans_ids_for_doc_ids);
+        (*exchange)->trans_ids_for_doc_ids = NULL;
+    }
     if ((*exchange)->target_trans_id != NULL) {
         free((*exchange)->target_trans_id);
         (*exchange)->target_trans_id = NULL;
@@ -275,7 +282,7 @@ u1db__sync_exchange_seen_ids(u1db_sync_exchange *se, int *n_ids,
 
 int
 u1db__sync_exchange_insert_doc_from_source(u1db_sync_exchange *se,
-        u1db_document *doc, int source_gen)
+        u1db_document *doc, int source_gen, const char *trans_id)
 {
     int status = U1DB_OK;
     int insert_state;
@@ -285,7 +292,8 @@ u1db__sync_exchange_insert_doc_from_source(u1db_sync_exchange *se,
     }
     // fprintf(stderr, "Inserting %s from source\n", doc->doc_id);
     status = u1db__put_doc_if_newer(se->db, doc, 0, se->source_replica_uid,
-                                    source_gen, NULL, &insert_state, &at_gen);
+                                    source_gen, trans_id, &insert_state,
+                                    &at_gen);
     if (insert_state == U1DB_INSERTED || insert_state == U1DB_CONVERGED) {
         lh_table_insert(se->seen_ids, strdup(doc->doc_id),
         (void *)(intptr_t)at_gen);
@@ -305,6 +313,7 @@ struct _whats_changed_doc_ids_state {
     struct lh_table *exclude_ids;
     char **doc_ids_to_return;
     int *gen_for_doc_ids;
+    const char **trans_ids_for_doc_ids;
 };
 
 // Callback for whats_changed to map the callback into the sync_exchange
@@ -327,25 +336,29 @@ whats_changed_to_doc_ids(void *context, const char *doc_id, int gen,
     if (state->num_doc_ids >= state->max_doc_ids) {
         state->max_doc_ids = (state->max_doc_ids * 2) + 10;
         if (state->doc_ids_to_return == NULL) {
-            state->doc_ids_to_return = (char **)calloc(state->max_doc_ids,
-                                                       sizeof(char*));
-            state->gen_for_doc_ids = (int *)calloc(state->max_doc_ids,
-                                                   sizeof(int));
+            state->doc_ids_to_return = (char **)calloc(
+                state->max_doc_ids, sizeof(char*));
+            state->gen_for_doc_ids = (int *)calloc(
+                state->max_doc_ids, sizeof(int));
+            state->trans_ids_for_doc_ids = (const char **)calloc(
+                state->max_doc_ids, sizeof(char*));
         } else {
             state->doc_ids_to_return = (char **)realloc(
-                    state->doc_ids_to_return,
-                    state->max_doc_ids * sizeof(char*));
-            state->gen_for_doc_ids = (int *)realloc(state->gen_for_doc_ids,
-                    state->max_doc_ids * sizeof(int));
+                state->doc_ids_to_return, state->max_doc_ids * sizeof(char*));
+            state->gen_for_doc_ids = (int *)realloc(
+                state->gen_for_doc_ids, state->max_doc_ids * sizeof(int));
+            state->trans_ids_for_doc_ids = (const char **)realloc(
+                state->gen_for_doc_ids, state->max_doc_ids * sizeof(char*));
         }
-        if (state->doc_ids_to_return == NULL
-                || state->gen_for_doc_ids == NULL)
+        if (state->doc_ids_to_return == NULL || state->gen_for_doc_ids == NULL
+                || state->trans_ids_for_doc_ids == NULL)
         {
             return U1DB_NOMEM;
         }
     }
     state->doc_ids_to_return[state->num_doc_ids] = strdup(doc_id);
     state->gen_for_doc_ids[state->num_doc_ids] = gen;
+    state->trans_ids_for_doc_ids[state->num_doc_ids] = trans_id;
     state->num_doc_ids++;
     return 0;
 }
@@ -370,6 +383,7 @@ u1db__sync_exchange_find_doc_ids_to_return(u1db_sync_exchange *se)
     if (status != U1DB_OK) {
         free(state.doc_ids_to_return);
         free(state.gen_for_doc_ids);
+        free(state.trans_ids_for_doc_ids);
         goto finish;
     }
     if (se->trace_cb) {
@@ -379,6 +393,7 @@ u1db__sync_exchange_find_doc_ids_to_return(u1db_sync_exchange *se)
     se->num_doc_ids = state.num_doc_ids;
     se->doc_ids_to_return = state.doc_ids_to_return;
     se->gen_for_doc_ids = state.gen_for_doc_ids;
+    se->trans_ids_for_doc_ids = state.trans_ids_for_doc_ids;
 finish:
     if (target_trans_id != NULL) {
         free(target_trans_id);
@@ -397,8 +412,9 @@ get_docs_to_gen_docs(void *context, u1db_document *doc)
     // Note: using doc_offset in this way assumes that u1db_get_docs will
     //       always return them in exactly the order we requested. This is
     //       probably true, though.
-    status = ctx->user_cb(ctx->user_context, doc,
-            ctx->gen_for_doc_ids[ctx->doc_offset]);
+    status = ctx->user_cb(
+        ctx->user_context, doc, ctx->gen_for_doc_ids[ctx->doc_offset],
+        ctx->trans_ids_for_doc_ids[ctx->doc_offset]);
     ctx->doc_offset++;
     if (ctx->free_when_done) {
         u1db_free_doc(&doc);
@@ -409,7 +425,8 @@ get_docs_to_gen_docs(void *context, u1db_document *doc)
 
 int
 u1db__sync_exchange_return_docs(u1db_sync_exchange *se, void *context,
-        int (*cb)(void *context, u1db_document *doc, int gen))
+                                int (*cb)(void *context, u1db_document *doc,
+                                          int gen, const char *trans_id))
 {
     int status = U1DB_OK;
     struct _get_docs_to_doc_gen_context state = {0};
@@ -420,6 +437,7 @@ u1db__sync_exchange_return_docs(u1db_sync_exchange *se, void *context,
     state.user_cb = cb;
     state.doc_offset = 0;
     state.gen_for_doc_ids = se->gen_for_doc_ids;
+    state.trans_ids_for_doc_ids = se->trans_ids_for_doc_ids;
     if (se->trace_cb) {
         status = se->trace_cb(se->trace_context, "before get_docs");
         if (status != U1DB_OK) { goto finish; }
@@ -440,14 +458,16 @@ struct _return_doc_state {
 };
 
 static int
-return_doc_to_insert_from_target(void *context, u1db_document *doc, int gen)
+return_doc_to_insert_from_target(void *context, u1db_document *doc, int gen,
+                                 const char *trans_id)
 {
     int status, insert_state;
     struct _return_doc_state *state;
     state = (struct _return_doc_state *)context;
 
-    status = u1db__put_doc_if_newer(state->db, doc, 1, state->target_uid, gen,
-                                    NULL, &insert_state, NULL);
+    status = u1db__put_doc_if_newer(
+        state->db, doc, 1, state->target_uid, gen, trans_id, &insert_state,
+        NULL);
     u1db_free_doc(&doc);
     if (status == U1DB_OK) {
         if (insert_state == U1DB_INSERTED || insert_state == U1DB_CONFLICTED) {
@@ -462,7 +482,8 @@ return_doc_to_insert_from_target(void *context, u1db_document *doc, int gen)
 
 static int
 get_and_insert_docs(u1database *source_db, u1db_sync_exchange *se,
-                    int n_doc_ids, const char **doc_ids, int *generations)
+                    int n_doc_ids, const char **doc_ids, int *generations,
+                    const char **trans_ids)
 {
     struct _get_docs_to_doc_gen_context get_doc_state = {0};
 
@@ -473,6 +494,7 @@ get_and_insert_docs(u1database *source_db, u1db_sync_exchange *se,
     get_doc_state.user_cb =
         (u1db_doc_gen_callback)u1db__sync_exchange_insert_doc_from_source;
     get_doc_state.gen_for_doc_ids = generations;
+    get_doc_state.trans_ids_for_doc_ids = trans_ids;
     return u1db_get_docs(source_db, n_doc_ids, doc_ids,
             0, 1, &get_doc_state, get_docs_to_gen_docs);
 }
@@ -480,11 +502,13 @@ get_and_insert_docs(u1database *source_db, u1db_sync_exchange *se,
 
 static int
 st_sync_exchange(u1db_sync_target *st, const char *source_replica_uid,
-                 int n_docs, u1db_document **docs,
-                 int *generations, int *target_gen, char **target_trans_id,
-                 void *context, u1db_doc_gen_callback cb)
+                 int n_docs, u1db_document **docs, int *generations,
+                 const char **trans_ids, int *target_gen,
+                 char **target_trans_id, void *context,
+                 u1db_doc_gen_callback cb)
 {
     int status, i;
+
     u1db_sync_exchange *exchange = NULL;
     if (st == NULL || generations == NULL || target_gen == NULL
             || target_trans_id == NULL || cb == NULL)
@@ -498,8 +522,8 @@ st_sync_exchange(u1db_sync_target *st, const char *source_replica_uid,
                                    *target_gen, &exchange);
     if (status != U1DB_OK) { goto finish; }
     for (i = 0; i < n_docs; ++i) {
-        status = u1db__sync_exchange_insert_doc_from_source(exchange, docs[i],
-                                                            generations[i]);
+        status = u1db__sync_exchange_insert_doc_from_source(
+            exchange, docs[i], generations[i], trans_ids[i]);
         if (status != U1DB_OK) { goto finish; }
     }
     status = u1db__sync_exchange_find_doc_ids_to_return(exchange);
@@ -521,7 +545,7 @@ finish:
 static int
 st_sync_exchange_doc_ids(u1db_sync_target *st, u1database *source_db,
         int n_doc_ids, const char **doc_ids, int *generations,
-        int *target_gen, char **target_trans_id,
+        const char **trans_ids, int *target_gen, char **target_trans_id,
         void *context, u1db_doc_gen_callback cb)
 {
     int status;
@@ -542,7 +566,7 @@ st_sync_exchange_doc_ids(u1db_sync_target *st, u1database *source_db,
     if (status != U1DB_OK) { goto finish; }
     if (n_doc_ids > 0) {
         status = get_and_insert_docs(source_db, exchange,
-            n_doc_ids, doc_ids, generations);
+            n_doc_ids, doc_ids, generations, trans_ids);
         if (status != U1DB_OK) { goto finish; }
     }
     status = u1db__sync_exchange_find_doc_ids_to_return(exchange);
@@ -616,7 +640,7 @@ u1db__sync_db_to_target(u1database *db, u1db_sync_target *target,
     status = target->sync_exchange_doc_ids(target, db,
         to_send_state.num_doc_ids,
         (const char**)to_send_state.doc_ids_to_return,
-        to_send_state.gen_for_doc_ids,
+        to_send_state.gen_for_doc_ids, to_send_state.trans_ids_for_doc_ids,
         &target_gen_known_by_local, &target_trans_id_known_by_local,
         &return_doc_state, return_doc_to_insert_from_target);
     if (status != U1DB_OK) { goto finish; }
@@ -664,6 +688,9 @@ finish:
     }
     if (to_send_state.gen_for_doc_ids != NULL) {
         free(to_send_state.gen_for_doc_ids);
+    }
+    if (to_send_state.trans_ids_for_doc_ids != NULL) {
+        free(to_send_state.trans_ids_for_doc_ids);
     }
     return status;
 }
