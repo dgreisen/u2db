@@ -30,11 +30,11 @@ static int st_record_sync_info(u1db_sync_target *st,
         const char *source_replica_uid, int source_gen, const char *trans_id);
 
 static int st_sync_exchange(u1db_sync_target *st,
-                          const char *source_replica_uid, int n_docs,
-                          u1db_document **docs, int *generations,
-                          const char **trans_ids, int *target_gen,
-                          char **target_trans_id, void *context,
-                          u1db_doc_gen_callback cb);
+                            const char *source_replica_uid, int n_docs,
+                            u1db_document **docs, int *generations,
+                            const char **trans_ids, int *target_gen,
+                            char **target_trans_id, void *context,
+                            u1db_doc_gen_callback cb);
 static int st_sync_exchange_doc_ids(u1db_sync_target *st,
                                     u1database *source_db, int n_doc_ids,
                                     const char **doc_ids, int *generations,
@@ -521,6 +521,9 @@ st_sync_exchange(u1db_sync_target *st, const char *source_replica_uid,
     status = st->get_sync_exchange(st, source_replica_uid,
                                    *target_gen, &exchange);
     if (status != U1DB_OK) { goto finish; }
+    status = u1db_validate_gen_and_trans_id(
+        exchange->db, *target_gen, *target_trans_id);
+    if (status != U1DB_OK) { goto finish; }
     for (i = 0; i < n_docs; ++i) {
         status = u1db__sync_exchange_insert_doc_from_source(
             exchange, docs[i], generations[i], trans_ids[i]);
@@ -530,12 +533,10 @@ st_sync_exchange(u1db_sync_target *st, const char *source_replica_uid,
     if (status != U1DB_OK) { goto finish; }
     status = u1db__sync_exchange_return_docs(exchange, context, cb);
     if (status != U1DB_OK) { goto finish; }
-    if (status == U1DB_OK) {
-        *target_gen = exchange->target_gen;
-        *target_trans_id = exchange->target_trans_id;
-        // We set this to NULL, because the caller is now responsible for it
-        exchange->target_trans_id = NULL;
-    }
+    *target_gen = exchange->target_gen;
+    *target_trans_id = exchange->target_trans_id;
+    // We set this to NULL, because the caller is now responsible for it
+    exchange->target_trans_id = NULL;
 finish:
     st->finalize_sync_exchange(st, &exchange);
     return status;

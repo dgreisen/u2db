@@ -119,9 +119,10 @@ class Synchronizer(object):
 
         # exchange documents and try to insert the returned ones with
         # the target, return target synced-up-to gen
-        new_gen, new_trans_id = sync_target.sync_exchange(docs_by_generation,
-                        self.source._replica_uid, target_last_known_gen,
-                        return_doc_cb=self._insert_doc_from_target)
+        new_gen, new_trans_id = sync_target.sync_exchange(
+            docs_by_generation, self.source._replica_uid,
+            target_last_known_gen, target_trans_id,
+            return_doc_cb=self._insert_doc_from_target)
         # record target synced-up-to generation including applying what we sent
         self.source._set_sync_info(
             self.target_replica_uid, new_gen, new_trans_id)
@@ -262,9 +263,12 @@ class LocalSyncTarget(u1db.SyncTarget):
         self._trace_hook = None
 
     def sync_exchange(self, docs_by_generations, source_replica_uid,
-                      last_known_generation, return_doc_cb):
-        sync_exch = SyncExchange(self._db, source_replica_uid,
-                                 last_known_generation)
+                      last_known_generation, last_known_trans_id,
+                      return_doc_cb):
+        self._db.validate_gen_and_trans_id(
+            last_known_generation, last_known_trans_id)
+        sync_exch = SyncExchange(
+            self._db, source_replica_uid, last_known_generation)
         if self._trace_hook:
             sync_exch._set_trace_hook(self._trace_hook)
         # 1st step: try to insert incoming docs and record progress

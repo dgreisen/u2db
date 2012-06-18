@@ -160,9 +160,9 @@ class DatabaseSyncTargetTests(tests.DatabaseBaseTests,
         docs_by_gen = [
             (self.make_document('doc-id', 'replica:1', simple_doc), 10,
              'T-sid')]
-        new_gen, trans_id = self.st.sync_exchange(docs_by_gen, 'replica',
-                                        last_known_generation=0,
-                                        return_doc_cb=self.receive_doc)
+        new_gen, trans_id = self.st.sync_exchange(
+            docs_by_gen, 'replica', last_known_generation=0,
+            last_known_trans_id=None, return_doc_cb=self.receive_doc)
         self.assertGetDoc(self.db, 'doc-id', 'replica:1', simple_doc, False)
         self.assertTransactionLog(['doc-id'], self.db)
         last_trans_id = self.getLastTransId(self.db)
@@ -175,9 +175,9 @@ class DatabaseSyncTargetTests(tests.DatabaseBaseTests,
         edit_rev = 'replica:1|' + doc.rev
         docs_by_gen = [
             (self.make_document(doc.doc_id, edit_rev, None), 10, 'T-sid')]
-        new_gen, trans_id = self.st.sync_exchange(docs_by_gen, 'replica',
-                                        last_known_generation=0,
-                                        return_doc_cb=self.receive_doc)
+        new_gen, trans_id = self.st.sync_exchange(
+            docs_by_gen, 'replica', last_known_generation=0,
+            last_known_trans_id=None, return_doc_cb=self.receive_doc)
         self.assertGetDocIncludeDeleted(
             self.db, doc.doc_id, edit_rev, None, False)
         self.assertTransactionLog([doc.doc_id, doc.doc_id], self.db)
@@ -191,9 +191,9 @@ class DatabaseSyncTargetTests(tests.DatabaseBaseTests,
             (self.make_document('doc-id', 'replica:1', simple_doc), 10, 'T-1'),
             (self.make_document('doc-id2', 'replica:1', nested_doc), 11,
              'T-2')]
-        new_gen, trans_id = self.st.sync_exchange(docs_by_gen, 'replica',
-                                        last_known_generation=0,
-                                        return_doc_cb=self.receive_doc)
+        new_gen, trans_id = self.st.sync_exchange(
+            docs_by_gen, 'replica', last_known_generation=0,
+            last_known_trans_id=None, return_doc_cb=self.receive_doc)
         self.assertGetDoc(self.db, 'doc-id', 'replica:1', simple_doc, False)
         self.assertGetDoc(self.db, 'doc-id2', 'replica:1', nested_doc, False)
         self.assertTransactionLog(['doc-id', 'doc-id2'], self.db)
@@ -211,7 +211,7 @@ class DatabaseSyncTargetTests(tests.DatabaseBaseTests,
              'T-sid')]
         new_gen, _ = self.st.sync_exchange(
             docs_by_gen, 'replica', last_known_generation=0,
-            return_doc_cb=self.receive_doc)
+            last_known_trans_id=None, return_doc_cb=self.receive_doc)
         self.assertTransactionLog([doc.doc_id], self.db)
         self.assertEqual(
             (doc.doc_id, doc.rev, simple_doc, 1), self.other_changes[0][:-1])
@@ -225,18 +225,19 @@ class DatabaseSyncTargetTests(tests.DatabaseBaseTests,
         self.assertTransactionLog([doc.doc_id], self.db)
         docs_by_gen = [
             (self.make_document(doc.doc_id, doc.rev, simple_doc), 10, 'T-sid')]
-        new_gen, _ = self.st.sync_exchange(docs_by_gen, 'replica',
-                                        last_known_generation=1,
-                                        return_doc_cb=self.receive_doc)
+        # XXX probably wrong txid:
+        new_gen, _ = self.st.sync_exchange(
+            docs_by_gen, 'replica', last_known_generation=1,
+            last_known_trans_id='T-sid', return_doc_cb=self.receive_doc)
         self.assertTransactionLog([doc.doc_id], self.db)
         self.assertEqual(([], 1), (self.other_changes, new_gen))
 
     def test_sync_exchange_returns_new_docs(self):
         doc = self.db.create_doc(simple_doc)
         self.assertTransactionLog([doc.doc_id], self.db)
-        new_gen, _ = self.st.sync_exchange([], 'other-replica',
-                                        last_known_generation=0,
-                                        return_doc_cb=self.receive_doc)
+        new_gen, _ = self.st.sync_exchange(
+            [], 'other-replica', last_known_generation=0,
+            last_known_trans_id=None, return_doc_cb=self.receive_doc)
         self.assertTransactionLog([doc.doc_id], self.db)
         self.assertEqual(
             (doc.doc_id, doc.rev, simple_doc, 1), self.other_changes[0][:-1])
@@ -249,9 +250,9 @@ class DatabaseSyncTargetTests(tests.DatabaseBaseTests,
         doc = self.db.create_doc(simple_doc)
         self.db.delete_doc(doc)
         self.assertTransactionLog([doc.doc_id, doc.doc_id], self.db)
-        new_gen, _ = self.st.sync_exchange([], 'other-replica',
-                                        last_known_generation=0,
-                                        return_doc_cb=self.receive_doc)
+        new_gen, _ = self.st.sync_exchange(
+            [], 'other-replica', last_known_generation=0,
+            last_known_trans_id=None, return_doc_cb=self.receive_doc)
         self.assertTransactionLog([doc.doc_id, doc.doc_id], self.db)
         self.assertEqual(
             (doc.doc_id, doc.rev, None, 2), self.other_changes[0][:-1])
@@ -264,9 +265,9 @@ class DatabaseSyncTargetTests(tests.DatabaseBaseTests,
         doc = self.db.create_doc(simple_doc)
         doc2 = self.db.create_doc(nested_doc)
         self.assertTransactionLog([doc.doc_id, doc2.doc_id], self.db)
-        new_gen, _ = self.st.sync_exchange([], 'other-replica',
-                                        last_known_generation=0,
-                                        return_doc_cb=self.receive_doc)
+        new_gen, _ = self.st.sync_exchange(
+            [], 'other-replica', last_known_generation=0,
+            last_known_trans_id=None, return_doc_cb=self.receive_doc)
         self.assertTransactionLog([doc.doc_id, doc2.doc_id], self.db)
         self.assertEqual(2, new_gen)
         self.assertEqual(
@@ -286,9 +287,9 @@ class DatabaseSyncTargetTests(tests.DatabaseBaseTests,
         docs_by_gen = [
             (self.make_document(doc.doc_id, 'test:1|z:2', new_doc), 10,
              'T-sid')]
-        new_gen, _ = self.st.sync_exchange(docs_by_gen, 'other-replica',
-                                        last_known_generation=0,
-                                        return_doc_cb=self.receive_doc)
+        new_gen, _ = self.st.sync_exchange(
+            docs_by_gen, 'other-replica', last_known_generation=0,
+            last_known_trans_id=None, return_doc_cb=self.receive_doc)
         self.assertTransactionLog([doc.doc_id, doc.doc_id], self.db)
         self.assertEqual(([], 2), (self.other_changes, new_gen))
 
@@ -312,7 +313,7 @@ class DatabaseSyncTargetTests(tests.DatabaseBaseTests,
              'T-sid')]
         new_gen, _ = self.st.sync_exchange(
             docs_by_gen, 'other-replica', last_known_generation=0,
-            return_doc_cb=self.receive_doc)
+            last_known_trans_id=None, return_doc_cb=self.receive_doc)
         self.assertEqual(expected, [c[:-1] for c in self.other_changes])
         self.assertEqual(3, new_gen)
 
@@ -328,9 +329,9 @@ class DatabaseSyncTargetTests(tests.DatabaseBaseTests,
         docs_by_gen = [
             (self.make_document(doc.doc_id, 'test:1|z:2', new_doc), 10,
              'T-sid')]
-        new_gen, _ = self.st.sync_exchange(docs_by_gen, 'other-replica',
-                                        last_known_generation=0,
-                                        return_doc_cb=self.receive_doc)
+        new_gen, _ = self.st.sync_exchange(
+            docs_by_gen, 'other-replica', last_known_generation=0,
+            last_known_trans_id=None, return_doc_cb=self.receive_doc)
         self.assertEqual(([], 2), (self.other_changes, new_gen))
 
     def test_sync_exchange_converged_handling(self):
@@ -339,9 +340,9 @@ class DatabaseSyncTargetTests(tests.DatabaseBaseTests,
             (self.make_document('new', 'other:1', '{}'), 4, 'T-foo'),
             (self.make_document(doc.doc_id, doc.rev, doc.get_json()), 5,
              'T-bar')]
-        new_gen, _ = self.st.sync_exchange(docs_by_gen, 'other-replica',
-                                        last_known_generation=0,
-                                        return_doc_cb=self.receive_doc)
+        new_gen, _ = self.st.sync_exchange(
+            docs_by_gen, 'other-replica', last_known_generation=0,
+            last_known_trans_id=None, return_doc_cb=self.receive_doc)
         self.assertEqual(([], 2), (self.other_changes, new_gen))
 
     def test_sync_exchange_detect_incomplete_exchange(self):
@@ -355,10 +356,11 @@ class DatabaseSyncTargetTests(tests.DatabaseBaseTests,
                    'log_exception', lambda h, exc_info: None)
         doc = self.db.create_doc(simple_doc)
         self.assertTransactionLog([doc.doc_id], self.db)
-        self.assertRaises((errors.U1DBError, errors.BrokenSyncStream),
-                          self.st.sync_exchange, [], 'other-replica',
-                          last_known_generation=0,
-                          return_doc_cb=self.receive_doc)
+        self.assertRaises(
+            (errors.U1DBError, errors.BrokenSyncStream),
+            self.st.sync_exchange, [], 'other-replica',
+            last_known_generation=0, last_known_trans_id=None,
+            return_doc_cb=self.receive_doc)
 
     def test_sync_exchange_doc_ids(self):
         sync_exchange_doc_ids = getattr(self.st, 'sync_exchange_doc_ids', None)
@@ -383,7 +385,7 @@ class DatabaseSyncTargetTests(tests.DatabaseBaseTests,
             called.append(state)
 
         self.set_trace_hook(cb)
-        self.st.sync_exchange([], 'replica', 0, self.receive_doc)
+        self.st.sync_exchange([], 'replica', 0, None, self.receive_doc)
         self.st.record_sync_info('replica', 0, 'T-sid')
         self.assertEqual(['before whats_changed',
                           'after whats_changed',

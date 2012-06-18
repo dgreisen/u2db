@@ -183,9 +183,9 @@ cdef extern from "u1db/u1db_internal.h":
         int (*sync_exchange)(u1db_sync_target *st,
                              char *source_replica_uid, int n_docs,
                              u1db_document **docs, int *generations,
-                             const_char_ptr *trans_ids, int *target_gen,
-                             char **target_trans_id, void *context,
-                             u1db_doc_gen_callback cb) nogil
+                             const_char_ptr *trans_ids,
+                             int *target_gen, char **target_trans_id,
+                             void *context, u1db_doc_gen_callback cb) nogil
         int (*sync_exchange_doc_ids)(u1db_sync_target *st,
                                      u1database *source_db, int n_doc_ids,
                                      const_char_ptr *doc_ids, int *generations,
@@ -766,12 +766,13 @@ cdef class CSyncTarget(object):
         return target_gen, res_trans_id
 
     def sync_exchange(self, docs_by_generations, source_replica_uid,
-                      last_known_generation, return_doc_cb):
+                      last_known_generation, last_known_trans_id,
+                      return_doc_cb):
         cdef CDocument cur_doc
         cdef u1db_document **docs = NULL
         cdef int *generations = NULL
         cdef const_char_ptr *trans_ids = NULL
-        cdef char *trans_id = NULL
+        cdef char *target_trans_id = NULL
         cdef int i, count, status, target_gen
 
         self._check()
@@ -794,11 +795,12 @@ cdef class CSyncTarget(object):
                 trans_ids[i] = docs_by_generations[i][2]
                 docs[i] = cur_doc._doc
             target_gen = last_known_generation
+            target_trans_id = last_known_trans_id
             with nogil:
-                status = self._st.sync_exchange(self._st,
-                        source_replica_uid, count,
-                        docs, generations, trans_ids, &target_gen, &trans_id,
-                        <void *>return_doc_cb, return_doc_cb_wrapper)
+                status = self._st.sync_exchange(
+                    self._st, source_replica_uid, count, docs, generations,
+                    trans_ids, &target_gen, &target_trans_id,
+                    <void *>return_doc_cb, return_doc_cb_wrapper)
             handle_status("sync_exchange", status)
         finally:
             if docs != NULL:
@@ -807,9 +809,9 @@ cdef class CSyncTarget(object):
                 free(generations)
             if trans_ids != NULL:
                 free(trans_ids)
-            if trans_id != NULL:
-                res_trans_id = trans_id
-                free(trans_id)
+            if target_trans_id != NULL:
+                res_trans_id = target_trans_id
+                #free(target_trans_id)
         return target_gen, res_trans_id
 
     def _set_trace_hook(self, cb):
