@@ -78,6 +78,10 @@ typedef int (*u1db_trans_info_callback)(void *context, const char *doc_id,
 #define U1DB_CONVERGED 3
 #define U1DB_CONFLICTED 4
 
+// Used by validate_source_gen_and_trans_id
+#define U1DB_INVALID_TRANSACTION_ID -20
+#define U1DB_INVALID_GENERATION -21
+
 /**
  * The basic constructor for a new connection.
  */

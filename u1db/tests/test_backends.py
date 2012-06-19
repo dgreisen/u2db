@@ -392,6 +392,93 @@ class LocalDatabaseTests(tests.DatabaseBaseTests):
         # The database wasn't altered
         self.assertGetDoc(self.db, doc1.doc_id, doc1.rev, simple_doc, False)
 
+    def test_put_doc_if_newer_newer_generation(self):
+        self.db._set_sync_info('other', 1, 'T-sid')
+        doc = self.make_document('doc_id', 'other:2', simple_doc)
+        state, _ = self.db._put_doc_if_newer(
+            doc, save_conflict=False, replica_uid='other', replica_gen=2,
+            replica_trans_id='T-irrelevant')
+        self.assertEqual('inserted', state)
+
+    def test_put_doc_if_newer_same_generation_same_txid(self):
+        self.db._set_sync_info('other', 1, 'T-sid')
+        doc = self.make_document('doc_id', 'other:2', simple_doc)
+        state, _ = self.db._put_doc_if_newer(
+            doc, save_conflict=False, replica_uid='other', replica_gen=1,
+            replica_trans_id='T-sid')
+        self.assertEqual('superseded', state)
+
+    def test_put_doc_if_newer_wrong_transaction_id(self):
+        self.db._set_sync_info('other', 1, 'T-sid')
+        doc = self.make_document('doc_id', 'other:1', simple_doc)
+        self.assertRaises(
+            errors.InvalidTransactionId,
+            self.db._put_doc_if_newer, doc, save_conflict=False,
+            replica_uid='other', replica_gen=1, replica_trans_id='T-sad')
+
+    def test_put_doc_if_newer_old_generation_older_doc(self):
+        orig_doc = '{"new": "doc"}'
+        doc = self.db.create_doc(orig_doc)
+        doc_rev1 = doc.rev
+        doc.set_json(simple_doc)
+        self.db.put_doc(doc)
+        self.db._set_sync_info('other', 5, 'T-sid')
+        older_doc = self.make_document(doc.doc_id, doc_rev1, simple_doc)
+        state, _ = self.db._put_doc_if_newer(
+            older_doc, save_conflict=False, replica_uid='other', replica_gen=3,
+            replica_trans_id='T-irrelevant')
+        self.assertEqual('superseded', state)
+
+    def test_put_doc_if_newer_old_generation_newer_doc(self):
+        self.db._set_sync_info('other', 5, 'T-sid')
+        doc = self.make_document('doc_id', 'other:1', simple_doc)
+        self.assertRaises(
+            errors.InvalidGeneration,
+            self.db._put_doc_if_newer, doc, save_conflict=False,
+            replica_uid='other', replica_gen=1, replica_trans_id='T-sad')
+
+    def test_validate_source_gen_and_trans_id_same(self):
+        self.db._set_sync_info('other', 1, 'T-sid')
+        v1 = vectorclock.VectorClockRev('other:1|self:1')
+        v2 = vectorclock.VectorClockRev('other:1|self:1')
+        self.assertEqual(
+            'superseded',
+            self.db._validate_source('other', 1, 'T-sid', v1, v2))
+
+    def test_validate_source_gen_newer(self):
+        self.db._set_sync_info('other', 1, 'T-sid')
+        v1 = vectorclock.VectorClockRev('other:1|self:1')
+        v2 = vectorclock.VectorClockRev('other:2|self:2')
+        self.assertEqual(
+            'ok',
+            self.db._validate_source('other', 2, 'T-whatevs', v1, v2))
+
+    def test_validate_source_wrong_txid(self):
+        self.db._set_sync_info('other', 1, 'T-sid')
+        v1 = vectorclock.VectorClockRev('other:1|self:1')
+        v2 = vectorclock.VectorClockRev('other:2|self:2')
+        self.assertRaises(
+            errors.InvalidTransactionId,
+            self.db._validate_source, 'other', 1, 'T-sad', v1, v2)
+
+    def test_validate_source_gen_older_and_vcr_older(self):
+        self.db._set_sync_info('other', 1, 'T-sid')
+        self.db._set_sync_info('other', 2, 'T-sod')
+        v1 = vectorclock.VectorClockRev('other:1|self:1')
+        v2 = vectorclock.VectorClockRev('other:2|self:2')
+        self.assertEqual(
+            'superseded',
+            self.db._validate_source('other', 1, 'T-sid', v2, v1))
+
+    def test_validate_source_gen_older_vcr_newer(self):
+        self.db._set_sync_info('other', 1, 'T-sid')
+        self.db._set_sync_info('other', 2, 'T-sod')
+        v1 = vectorclock.VectorClockRev('other:1|self:1')
+        v2 = vectorclock.VectorClockRev('other:2|self:2')
+        self.assertRaises(
+            errors.InvalidGeneration,
+            self.db._validate_source, 'other', 1, 'T-sid', v1, v2)
+
     def test_put_doc_if_newer_replica_uid(self):
         doc1 = self.db.create_doc(simple_doc)
         self.db._set_sync_info('other', 1, 'T-sid')
@@ -636,7 +723,8 @@ class LocalDatabaseWithConflictsTests(tests.DatabaseBaseTests):
         doc2 = self.make_document(doc1.doc_id, 'alternate:1', nested_doc)
         self.db._put_doc_if_newer(doc2, save_conflict=True)
         self.assertTrue(doc2.has_conflicts)
-        self.assertGetDoc(self.db, doc1.doc_id, 'alternate:1', nested_doc, True)
+        self.assertGetDoc(
+            self.db, doc1.doc_id, 'alternate:1', nested_doc, True)
         self.assertGetDocConflicts(self.db, doc1.doc_id,
             [('alternate:1', nested_doc), (doc1.rev, None)])
 
