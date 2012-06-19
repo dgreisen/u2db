@@ -582,6 +582,7 @@ cdef handle_status(context, int status):
     if status == U1DB_INTERNAL_ERROR:
         raise errors.U1DBError("internal error")
     if status == U1DB_BROKEN_SYNC_STREAM:
+        print "jawel"
         raise errors.BrokenSyncStream()
     if status == U1DB_CONFLICTED:
         raise errors.ConflictedDoc()
@@ -753,6 +754,8 @@ cdef class CSyncTarget(object):
                     &target_gen, &target_trans_id,
                     <void*>return_doc_cb, return_doc_cb_wrapper)
             handle_status("sync_exchange_doc_ids", status)
+            if target_trans_id != NULL:
+                res_trans_id = target_trans_id
         finally:
             if doc_ids != NULL:
                 free(<void *>doc_ids)
@@ -761,7 +764,6 @@ cdef class CSyncTarget(object):
             if trans_ids != NULL:
                 free(trans_ids)
             if target_trans_id != NULL:
-                res_trans_id = target_trans_id
                 free(target_trans_id)
         return target_gen, res_trans_id
 

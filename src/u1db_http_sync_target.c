@@ -725,7 +725,7 @@ make_tempfile(char tmpname[1024])
 
 static int
 init_temp_file(char tmpname[], FILE **temp_fd, int target_gen,
-               const char * target_trans_id)
+               char *target_trans_id)
 {
     int status = U1DB_OK;
     *temp_fd = make_tempfile(tmpname);
@@ -795,6 +795,7 @@ finalize_and_send_temp_file(u1db_sync_target *st, FILE *temp_fd,
     status = curl_easy_getinfo(state->curl, CURLINFO_RESPONSE_CODE, &http_code);
     if (status != CURLE_OK) { goto finish; }
     if (http_code != 200 && http_code != 201) {
+        printf("http_code %ld\n", http_code);
         status = U1DB_BROKEN_SYNC_STREAM;
         goto finish;
     }
@@ -822,6 +823,7 @@ process_response(u1db_sync_target *st, void *context, u1db_doc_gen_callback cb,
     const char *trans_id = NULL;
     u1db_document *doc;
 
+    printf("response: %s\n", response);
     json = json_tokener_parse(response);
     if (json == NULL || !json_object_is_type(json, json_type_array)) {
         status = U1DB_BROKEN_SYNC_STREAM;

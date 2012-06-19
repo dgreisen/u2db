@@ -122,7 +122,7 @@ class Synchronizer(object):
         new_gen, new_trans_id = sync_target.sync_exchange(
             docs_by_generation, self.source._replica_uid,
             target_last_known_gen, target_trans_id,
-            return_doc_cb=self._insert_doc_from_target)
+            self._insert_doc_from_target)
         # record target synced-up-to generation including applying what we sent
         self.source._set_sync_info(
             self.target_replica_uid, new_gen, new_trans_id)
