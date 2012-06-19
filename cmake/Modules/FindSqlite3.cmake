@@ -5,7 +5,12 @@
 #  Sqlite3_INCLUDE_DIRS - the Sqlite3 include directories
 #  Sqlite3_LIBRARIES - link these to use Sqlite3
 
+find_package(PkgConfig)
+pkg_check_modules(PC_SQLITE3 sqlite3)
+
 FIND_PATH(Sqlite3_INCLUDE_DIR sqlite3.h
+  HINTS
+  ${PC_SQLITE3_INCLUDE_DIRS}
   /usr/include
   /usr/local/include
   /opt/local/include
@@ -13,7 +18,8 @@ FIND_PATH(Sqlite3_INCLUDE_DIR sqlite3.h
 
 FIND_LIBRARY(Sqlite3_LIBRARY
   NAMES ${Sqlite3_NAMES} libsqlite3.so libsqlite3.dylib
-  PATHS /usr/lib /usr/local/lib /opt/local/lib
+  HINTS ${PC_SQLITE3_LIBRARY_DIRS}
+  /usr/lib /usr/local/lib /opt/local/lib
 )
 
 include(FindPackageHandleStandardArgs)

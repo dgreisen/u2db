@@ -5,7 +5,12 @@
 #  JSON_INCLUDE_DIRS - the JSON include directories
 #  JSON_LIBRARIES - link these to use JSON
 
+find_package(PkgConfig)
+pkg_check_modules(PC_JSON json)
+
 FIND_PATH(JSON_INCLUDE_DIR json.h
+  HINTS
+  ${PC_JSON_INCLUDE_DIRS}
   /usr/include
   /usr/local/include
   /opt/local/include
@@ -14,7 +19,8 @@ FIND_PATH(JSON_INCLUDE_DIR json.h
 
 FIND_LIBRARY(JSON_LIBRARY
   NAMES ${JSON_NAMES} libjson.so libjson.dylib
-  PATHS /usr/lib /usr/local/lib /opt/local/lib
+  HINTS ${PC_JSON_LIBRARY_DIRS}
+  /usr/lib /usr/local/lib /opt/local/lib
 )
 
 include(FindPackageHandleStandardArgs)

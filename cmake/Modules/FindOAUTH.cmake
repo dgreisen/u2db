@@ -5,7 +5,12 @@
 #  OAuth_INCLUDE_DIRS - the Glib include directories
 #  OAuth_LIBRARIES - link these to use Glib
 
+find_package(PkgConfig)
+pkg_check_modules(PC_OAUTH oauth)
+
 FIND_PATH(OAuth_INCLUDE_DIR oauth.h
+  HINTS
+  ${PC_OAUTH_INCLUDE_DIRS}
   /usr/include
   /usr/local/include
   /opt/local/include
@@ -14,7 +19,8 @@ FIND_PATH(OAuth_INCLUDE_DIR oauth.h
 
 FIND_LIBRARY(OAuth_LIBRARY
   NAMES ${OAuth_NAMES} liboauth.so liboauth.dylib
-  PATHS /usr/lib /usr/local/lib /opt/local/lib
+  HINTS ${PC_OAUTH_LIBRARY_DIRS}
+  /usr/lib /usr/local/lib /opt/local/lib
 )
 
 include(FindPackageHandleStandardArgs)
