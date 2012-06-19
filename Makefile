@@ -4,11 +4,11 @@
 check: build-inplace
 	python -m testtools.run discover
 
-build-inplace:
+build-inplace: build-cmake
 	export CFLAGS='-Werror';\
 	python setup.py build_ext -i
 
-build-debug:
+build-debug: build-cmake
 	export CFLAGS='-Werror';\
 	python-dbg setup.py build_ext -i
 
@@ -27,3 +27,6 @@ check-verbose:
 
 html-docs:
 	cd html-docs; make html
+
+build-cmake:
+	cd src; cmake . ; make
