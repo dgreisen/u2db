@@ -797,7 +797,10 @@ cdef class CSyncTarget(object):
                 trans_ids[i] = docs_by_generations[i][2]
                 docs[i] = cur_doc._doc
             target_gen = last_known_generation
-            target_trans_id = last_known_trans_id
+            if last_known_trans_id is None:
+                target_trans_id = NULL
+            else:
+                target_trans_id = last_known_trans_id
             with nogil:
                 status = self._st.sync_exchange(
                     self._st, source_replica_uid, count, docs, generations,
