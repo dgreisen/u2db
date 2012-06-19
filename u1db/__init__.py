@@ -558,8 +558,9 @@ class SyncTarget(object):
         newest.
 
         :param docs_by_generation: A list of [(Document, generation,
-            transaction_id)] pairs indicating documents which should be updated
-            on this replica paired with the generation of their latest change.
+            transaction_id)] tuples indicating documents which should be
+            updated on this replica paired with the generation and transaction
+            id of their latest change.
         :param source_replica_uid: The source replica's identifier
         :param last_known_generation: The last generation that the source
             replica knows about this
