@@ -582,7 +582,6 @@ cdef handle_status(context, int status):
     if status == U1DB_INTERNAL_ERROR:
         raise errors.U1DBError("internal error")
     if status == U1DB_BROKEN_SYNC_STREAM:
-        print "jawel"
         raise errors.BrokenSyncStream()
     if status == U1DB_CONFLICTED:
         raise errors.ConflictedDoc()
