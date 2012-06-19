@@ -395,7 +395,7 @@ class LocalDatabaseTests(tests.DatabaseBaseTests):
     def test_validate_source_gen_and_trans_id_same(self):
         self.db._set_sync_info('other', 1, 'T-sid')
         v1 = vectorclock.VectorClockRev('other:1|self:1')
-        v2 = vectorclock.VectorClockRev('other:2|self:2')
+        v2 = vectorclock.VectorClockRev('other:1|self:1')
         self.assertEqual(
             'superseded',
             self.db._validate_source('other', 1, 'T-sid', v1, v2))
