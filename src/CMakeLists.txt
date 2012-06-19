@@ -20,6 +20,10 @@ if (JSON_FOUND)
   include_directories(${JSON_INCLUDE_DIRS})
 endif (JSON_FOUND)
 
+find_package(Sqlite3 REQUIRED)
+if (Sqlite3_FOUND)
+  include_directories(${Sqlite3_INCLUDE_DIRS})
+endif (Sqlite3_FOUND)
 
 add_custom_command (
   OUTPUT ${CMAKE_SOURCE_DIR}/u1db_schema.c
