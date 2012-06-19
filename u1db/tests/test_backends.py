@@ -1518,7 +1518,7 @@ class PythonBackendTests(tests.DatabaseBaseTests):
             pass
 
         doc_other = self.make_document(doc.doc_id, other_rev, new_content)
-        docs_by_gen = [(doc_other, 10)]
+        docs_by_gen = [(doc_other, 10, 'T-sid')]
         st.sync_exchange(
             docs_by_gen, 'other-replica', last_known_generation=0,
             return_doc_cb=ignore)
