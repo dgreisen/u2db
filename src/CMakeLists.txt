@@ -31,4 +31,7 @@ add_custom_command (
   DEPENDS ${CMAKE_SOURCE_DIR}/../u1db/backends/dbschema.sql ${CMAKE_SOURCE_DIR}/../sql_to_c.py
   )
 
-add_library (u1db STATIC mkstemp_compat.c u1db.c u1db_http_sync_target.c u1db_query.c  u1db_sync_target.c  u1db_uuid.c  u1db_vectorclock.c u1db_schema.c)
+add_library (u1db_static STATIC mkstemp_compat.c u1db.c u1db_http_sync_target.c u1db_query.c  u1db_sync_target.c  u1db_uuid.c  u1db_vectorclock.c u1db_schema.c)
+add_library (u1db_shared SHARED mkstemp_compat.c u1db.c u1db_http_sync_target.c u1db_query.c  u1db_sync_target.c  u1db_uuid.c  u1db_vectorclock.c u1db_schema.c)
+
+SET_TARGET_PROPERTIES(u1db_shared PROPERTIES SOVERSION 1)
