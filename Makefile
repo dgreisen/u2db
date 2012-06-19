@@ -29,4 +29,5 @@ html-docs:
 	cd html-docs; make html
 
 build-cmake:
+	export CFLAGS='-fPIC';\
 	cd src; cmake . ; make
