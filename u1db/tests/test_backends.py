@@ -697,23 +697,6 @@ class LocalDatabaseWithConflictsTests(tests.DatabaseBaseTests):
                 replica_trans_id='T-id3')[0])
         self.assertEqual((3, 'T-id3'), self.db._get_sync_gen_info('other'))
 
-    def test_put_refuses_to_update_conflicted(self):
-        doc1 = self.db.create_doc(simple_doc)
-        content2 = '{"key": "altval"}'
-        doc2 = self.make_document(doc1.doc_id, 'altrev:1', content2)
-        self.db._put_doc_if_newer(doc2, save_conflict=True)
-        self.assertGetDoc(self.db, doc1.doc_id, doc2.rev, content2, True)
-        content3 = '{"key": "local"}'
-        doc2.set_json(content3)
-        self.assertRaises(errors.ConflictedDoc, self.db.put_doc, doc2)
-
-    def test_delete_refuses_for_conflicted(self):
-        doc1 = self.db.create_doc(simple_doc)
-        doc2 = self.make_document(doc1.doc_id, 'altrev:1', nested_doc)
-        self.db._put_doc_if_newer(doc2, save_conflict=True)
-        self.assertGetDoc(self.db, doc2.doc_id, doc2.rev, nested_doc, True)
-        self.assertRaises(errors.ConflictedDoc, self.db.delete_doc, doc2)
-
     def test_put_doc_if_newer_autoresolve_2(self):
         # this is an ordering variant of _3, but that already works
         # adding the test explicitly to catch the regression easily
@@ -767,6 +750,23 @@ class LocalDatabaseWithConflictsTests(tests.DatabaseBaseTests):
         rev_a1b1 = vectorclock.VectorClockRev('test:1|other:1')
         self.assertTrue(rev.is_newer(rev_a3))
         self.assertTrue(rev.is_newer(rev_a1b1))
+
+    def test_put_refuses_to_update_conflicted(self):
+        doc1 = self.db.create_doc(simple_doc)
+        content2 = '{"key": "altval"}'
+        doc2 = self.make_document(doc1.doc_id, 'altrev:1', content2)
+        self.db._put_doc_if_newer(doc2, save_conflict=True)
+        self.assertGetDoc(self.db, doc1.doc_id, doc2.rev, content2, True)
+        content3 = '{"key": "local"}'
+        doc2.set_json(content3)
+        self.assertRaises(errors.ConflictedDoc, self.db.put_doc, doc2)
+
+    def test_delete_refuses_for_conflicted(self):
+        doc1 = self.db.create_doc(simple_doc)
+        doc2 = self.make_document(doc1.doc_id, 'altrev:1', nested_doc)
+        self.db._put_doc_if_newer(doc2, save_conflict=True)
+        self.assertGetDoc(self.db, doc2.doc_id, doc2.rev, nested_doc, True)
+        self.assertRaises(errors.ConflictedDoc, self.db.delete_doc, doc2)
 
 
 class DatabaseIndexTests(tests.DatabaseBaseTests):
