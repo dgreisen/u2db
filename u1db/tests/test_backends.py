@@ -366,7 +366,7 @@ class LocalDatabaseTests(tests.DatabaseBaseTests):
         self.assertEqual('superseded', state)
         self.assertGetDoc(self.db, doc1.doc_id, doc1_rev2, simple_doc, False)
 
-    def test_put_doc_if_newer_automerge(self):
+    def test_put_doc_if_newer_autoresolve(self):
         doc1 = self.db.create_doc(simple_doc)
         rev = doc1.rev
         doc = self.make_document(doc1.doc_id, "whatever:1", doc1.get_json())
@@ -784,6 +784,60 @@ class LocalDatabaseWithConflictsTests(tests.DatabaseBaseTests):
                 replica_uid='other', replica_gen=3,
                 replica_trans_id='T-id3')[0])
         self.assertEqual((3, 'T-id3'), self.db._get_sync_gen_info('other'))
+
+    def test_put_doc_if_newer_autoresolve_2(self):
+        # this is an ordering variant of _3, but that already works
+        # adding the test explicitly to catch the regression easily
+        doc_a1 = self.db.create_doc(simple_doc)
+        doc_a2 = self.make_document(doc_a1.doc_id, 'test:2', "{}")
+        doc_a1b1 = self.make_document(doc_a1.doc_id, 'test:1|other:1',
+                                      '{"a":"42"}')
+        doc_a3 = self.make_document(doc_a1.doc_id, 'test:2|other:1', "{}")
+        state, _ = self.db._put_doc_if_newer(doc_a2, save_conflict=True)
+        self.assertEqual(state, 'inserted')
+        state, _ = self.db._put_doc_if_newer(doc_a1b1, save_conflict=True)
+        self.assertEqual(state, 'conflicted')
+        state, _ = self.db._put_doc_if_newer(doc_a3, save_conflict=True)
+        self.assertEqual(state, 'inserted')
+        self.assertFalse(self.db.get_doc(doc_a1.doc_id).has_conflicts)
+
+    def test_put_doc_if_newer_autoresolve_3(self):
+        doc_a1 = self.db.create_doc(simple_doc)
+        doc_a1b1 = self.make_document(doc_a1.doc_id, 'test:1|other:1', "{}")
+        doc_a2 = self.make_document(doc_a1.doc_id, 'test:2',  '{"a":"42"}')
+        doc_a3 = self.make_document(doc_a1.doc_id, 'test:3', "{}")
+        state, _ = self.db._put_doc_if_newer(doc_a1b1, save_conflict=True)
+        self.assertEqual(state, 'inserted')
+        state, _ = self.db._put_doc_if_newer(doc_a2, save_conflict=True)
+        self.assertEqual(state, 'conflicted')
+        state, _ = self.db._put_doc_if_newer(doc_a3, save_conflict=True)
+        self.assertEqual(state, 'superseded')
+        doc = self.db.get_doc(doc_a1.doc_id, True)
+        self.assertFalse(doc.has_conflicts)
+        rev = vectorclock.VectorClockRev(doc.rev)
+        rev_a3 = vectorclock.VectorClockRev('test:3')
+        rev_a1b1 = vectorclock.VectorClockRev('test:1|other:1')
+        self.assertTrue(rev.is_newer(rev_a3))
+        self.assertTrue(rev.is_newer(rev_a1b1))
+
+    def test_put_doc_if_newer_autoresolve_4(self):
+        doc_a1 = self.db.create_doc(simple_doc)
+        doc_a1b1 = self.make_document(doc_a1.doc_id, 'test:1|other:1', None)
+        doc_a2 = self.make_document(doc_a1.doc_id, 'test:2',  '{"a":"42"}')
+        doc_a3 = self.make_document(doc_a1.doc_id, 'test:3', None)
+        state, _ = self.db._put_doc_if_newer(doc_a1b1, save_conflict=True)
+        self.assertEqual(state, 'inserted')
+        state, _ = self.db._put_doc_if_newer(doc_a2, save_conflict=True)
+        self.assertEqual(state, 'conflicted')
+        state, _ = self.db._put_doc_if_newer(doc_a3, save_conflict=True)
+        self.assertEqual(state, 'superseded')
+        doc = self.db.get_doc(doc_a1.doc_id, True)
+        self.assertFalse(doc.has_conflicts)
+        rev = vectorclock.VectorClockRev(doc.rev)
+        rev_a3 = vectorclock.VectorClockRev('test:3')
+        rev_a1b1 = vectorclock.VectorClockRev('test:1|other:1')
+        self.assertTrue(rev.is_newer(rev_a3))
+        self.assertTrue(rev.is_newer(rev_a1b1))
 
     def test_put_refuses_to_update_conflicted(self):
         doc1 = self.db.create_doc(simple_doc)

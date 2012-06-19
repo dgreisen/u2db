@@ -446,6 +446,183 @@ class DatabaseSyncTests(tests.DatabaseBaseTests):
         self.assertTrue(v.is_newer(vectorclock.VectorClockRev(rev1)))
         self.assertTrue(v.is_newer(vectorclock.VectorClockRev(rev2)))
 
+    def test_sync_autoresolves_moar(self):
+        # here we test that when a database that has a conflicted document is
+        # the source of a sync, and the target database has a revision of the
+        # conflicted document that is newer than the source database's, and
+        # that target's database's document's content is the same as the
+        # source's document's conflict's, the source's document's conflict gets
+        # autoresolved, and the source's document's revision bumped.
+        #
+        # idea is as follows:
+        # A          B
+        # a1         -
+        #   `------->
+        # a1         a1
+        # v          v
+        # a2         a1b1
+        #   `------->
+        # a1b1+a2    a1b1
+        #            v
+        # a1b1+a2    a1b2 (a1b2 has same content as a2)
+        #   `------->
+        # a3b2       a1b2 (autoresolved)
+        #   `------->
+        # a3b2       a3b2
+        self.db1.create_doc(simple_doc, doc_id='doc')
+        self.sync(self.db1, self.db2)
+        for db, content in [(self.db1, '{}'), (self.db2, '{"hi": 42}')]:
+            doc = db.get_doc('doc')
+            doc.set_json(content)
+            db.put_doc(doc)
+        self.sync(self.db1, self.db2)
+        # db1 and db2 now both have a doc of {hi:42}, but db1 has a conflict
+        doc = self.db1.get_doc('doc')
+        rev1 = doc.rev
+        self.assertTrue(doc.has_conflicts)
+        # set db2 to have a doc of {} (same as db1 before the conflict)
+        doc = self.db2.get_doc('doc')
+        doc.set_json('{}')
+        self.db2.put_doc(doc)
+        rev2 = doc.rev
+        # sync it across
+        self.sync(self.db1, self.db2)
+        # tadaa!
+        doc = self.db1.get_doc('doc')
+        self.assertFalse(doc.has_conflicts)
+        vec1 = vectorclock.VectorClockRev(rev1)
+        vec2 = vectorclock.VectorClockRev(rev2)
+        vec3 = vectorclock.VectorClockRev(doc.rev)
+        self.assertTrue(vec3.is_newer(vec1))
+        self.assertTrue(vec3.is_newer(vec2))
+        # because the conflict is on the source, sync it another time
+        self.sync(self.db1, self.db2)
+        # make sure db2 now has the exact same thing
+        self.assertEqual(self.db1.get_doc('doc'), self.db2.get_doc('doc'))
+
+    def test_sync_autoresolves_moar_backwards(self):
+        # here we test that when a database that has a conflicted document is
+        # the target of a sync, and the source database has a revision of the
+        # conflicted document that is newer than the target database's, and
+        # that source's database's document's content is the same as the
+        # target's document's conflict's, the target's document's conflict gets
+        # autoresolved, and the document's revision bumped.
+        #
+        # idea is as follows:
+        # A          B
+        # a1         -
+        #   `------->
+        # a1         a1
+        # v          v
+        # a2         a1b1
+        #   `------->
+        # a1b1+a2    a1b1
+        #            v
+        # a1b1+a2    a1b2 (a1b2 has same content as a2)
+        #   <-------'
+        # a3b2       a3b2 (autoresolved and propagated)
+        self.db1.create_doc(simple_doc, doc_id='doc')
+        self.sync(self.db1, self.db2)
+        for db, content in [(self.db1, '{}'), (self.db2, '{"hi": 42}')]:
+            doc = db.get_doc('doc')
+            doc.set_json(content)
+            db.put_doc(doc)
+        self.sync(self.db1, self.db2)
+        # db1 and db2 now both have a doc of {hi:42}, but db1 has a conflict
+        doc = self.db1.get_doc('doc')
+        rev1 = doc.rev
+        self.assertTrue(doc.has_conflicts)
+        revc = self.db1.get_doc_conflicts('doc')[-1].rev
+        # set db2 to have a doc of {} (same as db1 before the conflict)
+        doc = self.db2.get_doc('doc')
+        doc.set_json('{}')
+        self.db2.put_doc(doc)
+        rev2 = doc.rev
+        # sync it across
+        self.sync(self.db2, self.db1)
+        # tadaa!
+        doc = self.db1.get_doc('doc')
+        self.assertFalse(doc.has_conflicts)
+        vec1 = vectorclock.VectorClockRev(rev1)
+        vec2 = vectorclock.VectorClockRev(rev2)
+        vec3 = vectorclock.VectorClockRev(doc.rev)
+        vecc = vectorclock.VectorClockRev(revc)
+        self.assertTrue(vec3.is_newer(vec1))
+        self.assertTrue(vec3.is_newer(vec2))
+        self.assertTrue(vec3.is_newer(vecc))
+        # make sure db2 now has the exact same thing
+        self.assertEqual(self.db1.get_doc('doc'), self.db2.get_doc('doc'))
+
+    def test_sync_autoresolves_moar_backwards_three(self):
+        # same as autoresolves_moar_backwards, but with three databases (note
+        # all the syncs go in the same direction -- this is a more natural
+        # scenario):
+        #
+        # A          B          C
+        # a1         -          -
+        #   `------->
+        # a1         a1         -
+        #              `------->
+        # a1         a1         a1
+        # v          v
+        # a2         a1b1       a1
+        #  `------------------->
+        # a2         a1b1       a2
+        #              `------->
+        #            a2+a1b1    a2
+        #                       v
+        # a2         a2+a1b1    a2c1 (same as a1b1)
+        #  `------------------->
+        # a2c1       a2+a1b1    a2c1
+        #   `------->
+        # a2b2c1     a2b2c1     a2c1
+        self.db3 = self.create_database('test3')
+        self.db1.create_doc(simple_doc, doc_id='doc')
+        self.sync(self.db1, self.db2)
+        self.sync(self.db2, self.db3)
+        for db, content in [(self.db2, '{"hi": 42}'),
+                            (self.db1, '{}'),
+                            ]:
+            doc = db.get_doc('doc')
+            doc.set_json(content)
+            db.put_doc(doc)
+        self.sync(self.db1, self.db3)
+        self.sync(self.db2, self.db3)
+        # db2 and db3 now both have a doc of {}, but db2 has a
+        # conflict
+        doc = self.db2.get_doc('doc')
+        self.assertTrue(doc.has_conflicts)
+        revc = self.db2.get_doc_conflicts('doc')[-1].rev
+        self.assertEqual('{}', doc.get_json())
+        self.assertEqual(self.db3.get_doc('doc').get_json(), doc.get_json())
+        self.assertEqual(self.db3.get_doc('doc').rev, doc.rev)
+        # set db3 to have a doc of {hi:42} (same as db2 before the conflict)
+        doc = self.db3.get_doc('doc')
+        doc.set_json('{"hi": 42}')
+        self.db3.put_doc(doc)
+        rev3 = doc.rev
+        # sync it across to db1
+        self.sync(self.db1, self.db3)
+        # db1 now has hi:42, with a rev that is newer than db2's doc
+        doc = self.db1.get_doc('doc')
+        rev1 = doc.rev
+        self.assertFalse(doc.has_conflicts)
+        self.assertEqual('{"hi": 42}', doc.get_json())
+        VCR=vectorclock.VectorClockRev
+        self.assertTrue(VCR(rev1).is_newer(VCR(self.db2.get_doc('doc').rev)))
+        # so sync it to db2
+        self.sync(self.db1, self.db2)
+        # tadaa!
+        doc = self.db2.get_doc('doc')
+        self.assertFalse(doc.has_conflicts)
+        # db2's revision of the document is strictly newer than db1's before
+        # the sync, and db3's before that sync way back when
+        self.assertTrue(VCR(doc.rev).is_newer(VCR(rev1)))
+        self.assertTrue(VCR(doc.rev).is_newer(VCR(rev3)))
+        self.assertTrue(VCR(doc.rev).is_newer(VCR(revc)))
+        # make sure both dbs now have the exact same thing
+        self.assertEqual(self.db1.get_doc('doc'), self.db2.get_doc('doc'))
+
     def test_sync_puts_changes(self):
         doc = self.db1.create_doc(simple_doc)
         self.assertEqual(1, self.sync(self.db1, self.db2))

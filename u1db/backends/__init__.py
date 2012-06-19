@@ -22,6 +22,7 @@ import uuid
 import u1db
 from u1db import (
     errors,
+    vectorclock,
 )
 import u1db.sync
 from u1db.vectorclock import VectorClockRev
@@ -128,9 +129,14 @@ class CommonBackend(u1db.Database):
             if state != 'ok':
                 return state, self._get_generation()
         if doc_vcr.is_newer(cur_vcr):
-            self._put_and_update_indexes(cur_doc, doc)
+            rev = doc.rev
             self._prune_conflicts(doc, doc_vcr)
-            state = 'inserted'
+            if doc.rev != rev:
+                # conflicts have been autoresolved
+                state = 'superseded'
+            else:
+                state = 'inserted'
+            self._put_and_update_indexes(cur_doc, doc)
         elif doc.rev == cur_doc.rev:
             # magical convergence
             state = 'converged'

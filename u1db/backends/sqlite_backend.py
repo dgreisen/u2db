@@ -429,11 +429,6 @@ class SQLiteDatabase(CommonBackend):
         return [self._factory(doc_id, doc_rev, content)
                 for doc_rev, content in c.fetchall()]
 
-    def _get_conflict_revs(self, doc_id):
-        c = self._db_handle.cursor()
-        c.execute("SELECT doc_rev FROM conflicts WHERE doc_id = ?", (doc_id,))
-        return c.fetchall()
-
     def get_doc_conflicts(self, doc_id):
         with self._db_handle:
             conflict_docs = self._get_conflicts(doc_id)
@@ -490,10 +485,19 @@ class SQLiteDatabase(CommonBackend):
 
     def _prune_conflicts(self, doc, doc_vcr):
         if self._has_conflicts(doc.doc_id):
+            autoresolved = False
             c_revs_to_prune = []
-            for c_rev, in self._get_conflict_revs(doc.doc_id):
-                if doc_vcr.is_newer(vectorclock.VectorClockRev(c_rev)):
-                    c_revs_to_prune.append(c_rev)
+            for c_doc in self._get_conflicts(doc.doc_id):
+                c_vcr = vectorclock.VectorClockRev(c_doc.rev)
+                if doc_vcr.is_newer(c_vcr):
+                    c_revs_to_prune.append(c_doc.rev)
+                elif doc.same_content_as(c_doc):
+                    c_revs_to_prune.append(c_doc.rev)
+                    doc_vcr.maximize(c_vcr)
+                    autoresolved = True
+            if autoresolved:
+                doc_vcr.increment(self._replica_uid)
+                doc.rev = doc_vcr.as_str()
             c = self._db_handle.cursor()
             self._delete_conflicts(c, doc, c_revs_to_prune)
 
