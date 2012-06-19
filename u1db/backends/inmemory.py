@@ -169,12 +169,21 @@ class InMemoryDatabase(CommonBackend):
 
     def _prune_conflicts(self, doc, doc_vcr):
         if self._has_conflicts(doc.doc_id):
+            autoresolved = False
             remaining_conflicts = []
             cur_conflicts = self._conflicts[doc.doc_id]
             for c_rev, c_doc in cur_conflicts:
-                if doc_vcr.is_newer(vectorclock.VectorClockRev(c_rev)):
+                c_vcr = vectorclock.VectorClockRev(c_rev)
+                if doc_vcr.is_newer(c_vcr):
+                    continue
+                if doc.same_content_as(Document(doc.doc_id, c_rev, c_doc)):
+                    doc_vcr.maximize(c_vcr)
+                    autoresolved = True
                     continue
                 remaining_conflicts.append((c_rev, c_doc))
+            if autoresolved:
+                doc_vcr.increment(self._replica_uid)
+                doc.rev = doc_vcr.as_str()
             self._replace_conflicts(doc, remaining_conflicts)
 
     def resolve_doc(self, doc, conflicted_doc_revs):
