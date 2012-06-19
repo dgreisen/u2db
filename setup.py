@@ -84,18 +84,10 @@ synchronize them with other stores.
         extra_libs.append('json')
         ext.append(Extension(
             "u1db.tests.c_backend_wrapper",
-            ["u1db/tests/c_backend_wrapper.pyx",
-             "src/mkstemp_compat.c",
-             "src/u1db.c",
-             "src/u1db_http_sync_target.c",
-             "src/u1db_query.c",
-             "src/u1db_schema.c",
-             "src/u1db_sync_target.c",
-             "src/u1db_uuid.c",
-             "src/u1db_vectorclock.c",
-             ],
+            ["u1db/tests/c_backend_wrapper.pyx"],
             include_dirs=["include"],
-            libraries=['sqlite3', 'oauth'] + extra_libs,
+            library_dirs=["src"],
+            libraries=['u1db', 'sqlite3', 'oauth'] + extra_libs,
             define_macros=[] + extra_defines,
             ))
 
