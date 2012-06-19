@@ -4,14 +4,11 @@
 check: build-inplace
 	python -m testtools.run discover
 
-build-inplace: src/u1db_schema.c
+build-inplace:
 	export CFLAGS='-Werror';\
 	python setup.py build_ext -i
 
-src/u1db_schema.c: u1db/backends/dbschema.sql sql_to_c.py
-	python sql_to_c.py u1db/backends/dbschema.sql u1db__schema src/u1db_schema.c
-
-build-debug: src/u1db_schema.c
+build-debug:
 	export CFLAGS='-Werror';\
 	python-dbg setup.py build_ext -i
 
