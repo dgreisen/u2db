@@ -718,12 +718,13 @@ cdef class CSyncTarget(object):
         return CSyncExchange(self, source_replica_uid, source_gen)
 
     def sync_exchange_doc_ids(self, source_db, doc_id_generations,
-                              last_known_generation, return_doc_cb):
+                              last_known_generation, last_known_trans_id,
+                              return_doc_cb):
         cdef const_char_ptr *doc_ids
         cdef int *generations
         cdef int num_doc_ids
         cdef int target_gen
-        cdef char *target_trans_id
+        cdef char *target_trans_id = NULL
         cdef int status
         cdef CDatabase sdb
 
@@ -748,6 +749,8 @@ cdef class CSyncTarget(object):
                 generations[i] = gen
                 trans_ids[i] = trans_id
             target_gen = last_known_generation
+            if last_known_trans_id is not None:
+                target_trans_id = last_known_trans_id
             with nogil:
                 status = self._st.sync_exchange_doc_ids(self._st, sdb._db,
                     num_doc_ids, doc_ids, generations, trans_ids,

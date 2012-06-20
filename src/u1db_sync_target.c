@@ -528,7 +528,6 @@ st_sync_exchange(u1db_sync_target *st, const char *source_replica_uid,
     status = u1db__sync_exchange_find_doc_ids_to_return(exchange);
     if (status != U1DB_OK) { goto finish; }
     status = u1db__sync_exchange_return_docs(exchange, context, cb);
-    if (status != U1DB_OK) { goto finish; }
 finish:
     *target_gen = exchange->target_gen;
     *target_trans_id = exchange->target_trans_id;
@@ -572,15 +571,11 @@ st_sync_exchange_doc_ids(u1db_sync_target *st, u1database *source_db,
     status = u1db__sync_exchange_find_doc_ids_to_return(exchange);
     if (status != U1DB_OK) { goto finish; }
     status = u1db__sync_exchange_return_docs(exchange, context, cb);
-    if (status != U1DB_OK) { goto finish; }
-    *target_gen = exchange->target_gen;
-    if (status == U1DB_OK) {
-        *target_gen = exchange->target_gen;
-        *target_trans_id = exchange->target_trans_id;
-        // We set this to NULL, because the caller is now responsible for it
-        exchange->target_trans_id = NULL;
-    }
 finish:
+    *target_gen = exchange->target_gen;
+    *target_trans_id = exchange->target_trans_id;
+    // We set this to NULL, because the caller is now responsible for it
+    exchange->target_trans_id = NULL;
     st->finalize_sync_exchange(st, &exchange);
     return status;
 }

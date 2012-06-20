@@ -371,7 +371,7 @@ class DatabaseSyncTargetTests(tests.DatabaseBaseTests,
         db2 = self.create_database('test2')
         doc = db2.create_doc(simple_doc)
         new_gen, trans_id = sync_exchange_doc_ids(
-            db2, [(doc.doc_id, 10, 'T-sid')], 0,
+            db2, [(doc.doc_id, 10, 'T-sid')], 0, None,
             return_doc_cb=self.receive_doc)
         self.assertGetDoc(self.db, doc.doc_id, doc.rev, simple_doc, False)
         self.assertTransactionLog([doc.doc_id], self.db)
