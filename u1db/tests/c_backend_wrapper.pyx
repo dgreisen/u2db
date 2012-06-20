@@ -814,7 +814,6 @@ cdef class CSyncTarget(object):
                 free(trans_ids)
             if target_trans_id != NULL:
                 res_trans_id = target_trans_id
-                # XXX Why you no free?
                 free(target_trans_id)
         return target_gen, res_trans_id
 
