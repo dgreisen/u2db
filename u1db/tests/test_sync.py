@@ -318,10 +318,12 @@ class DatabaseSyncTargetTests(tests.DatabaseBaseTests,
         self.assertEqual(3, new_gen)
 
     def test_sync_exchange_with_concurrent_updates(self):
+
         def after_whatschanged_cb(state):
             if state != 'after whats_changed':
                 return
             self.db.create_doc('{"new": "doc"}')
+
         self.set_trace_hook(after_whatschanged_cb)
         doc = self.db.create_doc(simple_doc)
         self.assertTransactionLog([doc.doc_id], self.db)
@@ -909,9 +911,27 @@ class DatabaseSyncTests(tests.DatabaseBaseTests):
 
         self.sync(self.db1, self.db2, trace_hook=put_hook)
 
+    def test_sync_detects_rollback_in_source(self):
+        self.db1.create_doc(tests.simple_doc, doc_id="divergent")
+        self.sync(self.db1, self.db2)
+        # make db2 think it's synced with a much later version of db1
+        self.db2._set_sync_info(self.db1._replica_uid, 28, 'T-madeup')
+        self.assertRaises(
+            errors.InvalidGeneration, self.sync, self.db1, self.db2)
+
+    def test_sync_detects_rollback_in_target(self):
+        self.db1.create_doc(tests.simple_doc, doc_id="divergent")
+        self.sync(self.db1, self.db2)
+        # make db1 think it's synced with a much later version of db2
+        self.db1._set_sync_info(self.db2._replica_uid, 28, 'T-madeup')
+        self.assertRaises(
+            errors.InvalidGeneration, self.sync, self.db1, self.db2)
+
     def test_sync_detects_diverged_source(self):
         self.db1.create_doc(tests.simple_doc, doc_id="divergent")
         self.sync(self.db1, self.db2)
+        # create a new db with the same replica as the source, and add
+        # a document, so it will have a different txid for the same generation.
         db3 = self.create_database('test3')
         db3.create_doc(tests.nested_doc, doc_id="divergent")
         db3._set_replica_uid(self.db1._replica_uid)
@@ -921,6 +941,8 @@ class DatabaseSyncTests(tests.DatabaseBaseTests):
     def test_sync_detects_diverged_target(self):
         self.db1.create_doc(tests.simple_doc, doc_id="divergent")
         self.sync(self.db1, self.db2)
+        # create a new db with the same replica as the target, and add
+        # a document, so it will have a different txid for the same generation.
         db3 = self.create_database('test3')
         db3.create_doc(tests.nested_doc, doc_id="divergent")
         db3._set_replica_uid(self.db2._replica_uid)
