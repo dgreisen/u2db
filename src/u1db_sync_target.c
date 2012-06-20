@@ -369,7 +369,6 @@ u1db__sync_exchange_find_doc_ids_to_return(u1db_sync_exchange *se)
 {
     int status;
     struct _whats_changed_doc_ids_state state = {0};
-    char *target_trans_id = NULL;
     if (se == NULL) {
         return U1DB_INVALID_PARAMETER;
     }
@@ -395,9 +394,6 @@ u1db__sync_exchange_find_doc_ids_to_return(u1db_sync_exchange *se)
     se->gen_for_doc_ids = state.gen_for_doc_ids;
     se->trans_ids_for_doc_ids = state.trans_ids_for_doc_ids;
 finish:
-    if (target_trans_id != NULL) {
-        free(target_trans_id);
-    }
     return status;
 }
 
@@ -533,11 +529,11 @@ st_sync_exchange(u1db_sync_target *st, const char *source_replica_uid,
     if (status != U1DB_OK) { goto finish; }
     status = u1db__sync_exchange_return_docs(exchange, context, cb);
     if (status != U1DB_OK) { goto finish; }
+finish:
     *target_gen = exchange->target_gen;
     *target_trans_id = exchange->target_trans_id;
     // We set this to NULL, because the caller is now responsible for it
     exchange->target_trans_id = NULL;
-finish:
     st->finalize_sync_exchange(st, &exchange);
     return status;
 }

@@ -705,6 +705,7 @@ cdef class CSyncTarget(object):
 
     def record_sync_info(self, source_replica_uid, source_gen, source_trans_id):
         cdef int status
+
         self._check()
         assert self._st.record_sync_info != NULL, "record_sync_info is NULL?"
         with nogil:
@@ -756,14 +757,14 @@ cdef class CSyncTarget(object):
             if target_trans_id != NULL:
                 res_trans_id = target_trans_id
         finally:
+            if target_trans_id != NULL:
+                free(target_trans_id)
             if doc_ids != NULL:
                 free(<void *>doc_ids)
             if generations != NULL:
                 free(generations)
             if trans_ids != NULL:
                 free(trans_ids)
-            if target_trans_id != NULL:
-                free(target_trans_id)
         return target_gen, res_trans_id
 
     def sync_exchange(self, docs_by_generations, source_replica_uid,
@@ -796,9 +797,7 @@ cdef class CSyncTarget(object):
                 trans_ids[i] = docs_by_generations[i][2]
                 docs[i] = cur_doc._doc
             target_gen = last_known_generation
-            if last_known_trans_id is None:
-                target_trans_id = NULL
-            else:
+            if last_known_trans_id is not None:
                 target_trans_id = last_known_trans_id
             with nogil:
                 status = self._st.sync_exchange(
@@ -815,7 +814,8 @@ cdef class CSyncTarget(object):
                 free(trans_ids)
             if target_trans_id != NULL:
                 res_trans_id = target_trans_id
-                #free(target_trans_id)
+                # XXX Why you no free?
+                free(target_trans_id)
         return target_gen, res_trans_id
 
     def _set_trace_hook(self, cb):
