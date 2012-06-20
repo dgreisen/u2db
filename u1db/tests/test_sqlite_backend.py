@@ -152,6 +152,9 @@ class TestSQLitePartialExpandDatabase(tests.TestCase):
     def test__get_generation(self):
         self.assertEqual(0, self.db._get_generation())
 
+    def test__get_generation_info(self):
+        self.assertEqual((0, None), self.db._get_generation_info())
+
     def test_create_index(self):
         self.db.create_index('test-idx', "key")
         self.assertEqual([('test-idx', ["key"])], self.db.list_indexes())
@@ -261,7 +264,7 @@ class TestSQLitePartialExpandDatabase(tests.TestCase):
     def test__open_database_with_factory(self):
         temp_dir = self.createTempDir(prefix='u1db-test-')
         path = temp_dir + '/test.sqlite'
-        db = sqlite_backend.SQLitePartialExpandDatabase(path)
+        sqlite_backend.SQLitePartialExpandDatabase(path)
         db2 = sqlite_backend.SQLiteDatabase._open_database(
             path, document_factory=TestAlternativeDocument)
         self.assertEqual(TestAlternativeDocument, db2._factory)
@@ -322,7 +325,7 @@ class TestSQLitePartialExpandDatabase(tests.TestCase):
     def test_open_database_with_factory(self):
         temp_dir = self.createTempDir(prefix='u1db-test-')
         path = temp_dir + '/existing.sqlite'
-        db = sqlite_backend.SQLitePartialExpandDatabase(path)
+        sqlite_backend.SQLitePartialExpandDatabase(path)
         db2 = sqlite_backend.SQLiteDatabase.open_database(
             path, create=False, document_factory=TestAlternativeDocument)
         self.assertEqual(TestAlternativeDocument, db2._factory)

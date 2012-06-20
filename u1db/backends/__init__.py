@@ -22,7 +22,6 @@ import uuid
 import u1db
 from u1db import (
     errors,
-    vectorclock,
 )
 import u1db.sync
 from u1db.vectorclock import VectorClockRev
@@ -54,7 +53,16 @@ class CommonBackend(u1db.Database):
             raise errors.InvalidDocId()
 
     def _get_generation(self):
+        """Return the current generation.
+
+        """
         raise NotImplementedError(self._get_generation)
+
+    def _get_generation_info(self):
+        """Return the current generation and transaction id.
+
+        """
+        raise NotImplementedError(self._get_generation_info)
 
     def _get_doc(self, doc_id):
         """Extract the document from storage.
@@ -93,6 +101,15 @@ class CommonBackend(u1db.Database):
                 doc.has_conflicts = self._has_conflicts(doc_id)
             result.append(doc)
         return result
+
+    def validate_gen_and_trans_id(self, generation, trans_id):
+        """Validate the generation and transaction id.
+
+        Raises an InvalidGeneration when the generation does not exist, and an
+        InvalidTransactionId when it does but with a different transaction id.
+
+        """
+        raise NotImplementedError(self.validate_gen_and_trans_id)
 
     def _validate_source(self, other_replica_uid, other_generation,
                          other_transaction_id, cur_vcr, other_vcr):

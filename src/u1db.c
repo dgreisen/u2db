@@ -900,8 +900,8 @@ u1db__put_doc_if_newer(u1database *db, u1db_document *doc, int save_conflict,
                            (stored_doc_rev != NULL));
     }
     if (status == U1DB_OK && replica_uid != NULL) {
-        status = u1db__set_sync_info(db, replica_uid, replica_gen,
-                                     replica_trans_id);
+        status = u1db__set_sync_info(
+            db, replica_uid, replica_gen, replica_trans_id);
     }
     if (status == U1DB_OK && at_gen != NULL) {
         status = u1db__get_generation(db, at_gen);
@@ -1264,14 +1264,26 @@ get_last_transaction_id(u1database *db, int *gen, char **trans_id)
         status = U1DB_OK;
         *gen = 0;
         *trans_id = strdup("");
+        if (*trans_id == NULL) {
+            status = U1DB_NOMEM;
+            goto finish;
+        }
     } else if (status == SQLITE_ROW) {
         status = U1DB_OK;
         *gen = sqlite3_column_int(statement, 0);
         tmp = (const char *)sqlite3_column_text(statement, 1);
         if (tmp == NULL) {
             *trans_id = strdup("");
+            if (*trans_id == NULL) {
+                status = U1DB_NOMEM;
+                goto finish;
+            }
         } else {
             *trans_id = strdup(tmp);
+            if (*trans_id == NULL) {
+                status = U1DB_NOMEM;
+                goto finish;
+            }
         }
     }
 finish:
@@ -1411,6 +1423,80 @@ u1db__get_generation(u1database *db, int *generation)
     return status;
 }
 
+int
+u1db__get_generation_info(u1database *db, int *generation, char **trans_id)
+{
+    int status;
+    const char *tmp;
+
+    sqlite3_stmt *statement;
+    if (db == NULL || generation == NULL) {
+        return U1DB_INVALID_PARAMETER;
+    }
+    status = sqlite3_prepare_v2(db->sql_handle,
+        "SELECT max(generation), transaction_id FROM transaction_log", -1,
+        &statement, NULL);
+    if (status != SQLITE_OK) {
+        return status;
+    }
+    status = sqlite3_step(statement);
+    if (status == SQLITE_DONE) {
+        // No records, we are at rev 0
+        status = SQLITE_OK;
+        *generation = 0;
+    } else if (status == SQLITE_ROW) {
+        status = SQLITE_OK;
+        *generation = sqlite3_column_int(statement, 0);
+        tmp = (const char *)sqlite3_column_text(statement, 1);
+        if (tmp == NULL) {
+            *trans_id = NULL;
+        } else {
+            *trans_id = strdup(tmp);
+            if (*trans_id == NULL) {
+                status = U1DB_NOMEM;
+            }
+        }
+    }
+    sqlite3_finalize(statement);
+    return status;
+}
+
+int
+u1db_validate_gen_and_trans_id(u1database *db, int generation,
+                               const char *trans_id)
+{
+    int status = U1DB_OK;
+    sqlite3_stmt *statement;
+
+    if (generation == 0)
+        return status;
+    if (db == NULL) {
+        return U1DB_INVALID_PARAMETER;
+    }
+    status = sqlite3_prepare_v2(db->sql_handle,
+        "SELECT transaction_id FROM transaction_log WHERE generation = ?", -1,
+        &statement, NULL);
+    if (status != SQLITE_OK) { goto finish; }
+    status = sqlite3_bind_int(statement, 1, generation);
+    if (status != SQLITE_OK) { goto finish; }
+    status = sqlite3_step(statement);
+    if (status == SQLITE_DONE) {
+        status = U1DB_INVALID_GENERATION;
+        goto finish;
+    } else if (status == SQLITE_ROW) {
+        // Note: We may want to handle the column containing NULL
+        if (strcmp(trans_id,
+                   (const char *)sqlite3_column_text(statement, 0)) == 0) {
+            status = U1DB_OK;
+            goto finish;
+        }
+        status = U1DB_INVALID_TRANSACTION_ID;
+    }
+finish:
+    sqlite3_finalize(statement);
+    return status;
+}
+
 char *
 u1db__allocate_doc_id(u1database *db)
 {
@@ -1544,7 +1630,10 @@ u1db__get_sync_gen_info(u1database *db, const char *replica_uid,
         // Note: We may want to handle the column containing NULL
         tmp = (const char *)sqlite3_column_text(statement, 1);
         if (tmp == NULL) {
-            *trans_id = NULL;
+            *trans_id = strdup("");
+            if (*trans_id == NULL) {
+                status = U1DB_NOMEM;
+            }
         } else {
             *trans_id = strdup(tmp);
             if (*trans_id == NULL) {

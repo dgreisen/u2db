@@ -265,6 +265,28 @@ class SQLiteDatabase(CommonBackend):
             return 0
         return val
 
+    def _get_generation_info(self):
+        c = self._db_handle.cursor()
+        c.execute(
+            'SELECT max(generation), transaction_id FROM transaction_log ')
+        val = c.fetchone()
+        if val[0] is None:
+            return(0, val[1])
+        return val
+
+    def validate_gen_and_trans_id(self, generation, trans_id):
+        if generation == 0:
+            return
+        c = self._db_handle.cursor()
+        c.execute(
+            'SELECT transaction_id FROM transaction_log WHERE generation = ?',
+            (generation,))
+        val = c.fetchone()
+        if val is None:
+            raise errors.InvalidGeneration
+        if val[0] != trans_id:
+            raise errors.InvalidTransactionId
+
     def _get_transaction_log(self):
         c = self._db_handle.cursor()
         c.execute("SELECT doc_id, transaction_id FROM transaction_log"
