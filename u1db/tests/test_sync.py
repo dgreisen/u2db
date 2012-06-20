@@ -223,12 +223,12 @@ class DatabaseSyncTargetTests(tests.DatabaseBaseTests,
     def test_sync_exchange_ignores_convergence(self):
         doc = self.db.create_doc(simple_doc)
         self.assertTransactionLog([doc.doc_id], self.db)
+        gen, txid = self.db._get_generation_info()
         docs_by_gen = [
             (self.make_document(doc.doc_id, doc.rev, simple_doc), 10, 'T-sid')]
-        # XXX probably wrong txid:
         new_gen, _ = self.st.sync_exchange(
-            docs_by_gen, 'replica', last_known_generation=1,
-            last_known_trans_id='T-sid', return_doc_cb=self.receive_doc)
+            docs_by_gen, 'replica', last_known_generation=gen,
+            last_known_trans_id=txid, return_doc_cb=self.receive_doc)
         self.assertTransactionLog([doc.doc_id], self.db)
         self.assertEqual(([], 1), (self.other_changes, new_gen))
 
@@ -625,7 +625,7 @@ class DatabaseSyncTests(tests.DatabaseBaseTests):
         rev1 = doc.rev
         self.assertFalse(doc.has_conflicts)
         self.assertEqual('{"hi": 42}', doc.get_json())
-        VCR=vectorclock.VectorClockRev
+        VCR = vectorclock.VectorClockRev
         self.assertTrue(VCR(rev1).is_newer(VCR(self.db2.get_doc('doc').rev)))
         # so sync it to db2
         self.sync(self.db1, self.db2)

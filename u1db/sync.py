@@ -97,9 +97,11 @@ class Synchronizer(object):
         (self.target_replica_uid, target_gen, target_my_gen,
          target_my_trans_id) = sync_target.get_sync_info(
              self.source._replica_uid)
-        # what's changed since that generation and this current gen
+        # validate that the generation and transaction id the target knows
+        # about us are valid.
         self.source.validate_gen_and_trans_id(
             target_my_gen, target_my_trans_id)
+        # what's changed since that generation and this current gen
         my_gen, _, changes = self.source.whats_changed(target_my_gen)
 
         # this source last-seen database generation for the target

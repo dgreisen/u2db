@@ -565,6 +565,9 @@ st_sync_exchange_doc_ids(u1db_sync_target *st, u1database *source_db,
     status = st->get_sync_exchange(st, source_replica_uid,
                                    *target_gen, &exchange);
     if (status != U1DB_OK) { goto finish; }
+    status = u1db_validate_gen_and_trans_id(
+        exchange->db, *target_gen, *target_trans_id);
+    if (status != U1DB_OK) { goto finish; }
     if (n_doc_ids > 0) {
         status = get_and_insert_docs(source_db, exchange,
             n_doc_ids, doc_ids, generations, trans_ids);
@@ -612,11 +615,12 @@ u1db__sync_db_to_target(u1database *db, u1db_sync_target *target,
     status = u1db_get_replica_uid(db, &local_uid);
     if (status != U1DB_OK) { goto finish; }
     // fprintf(stderr, "Local uid: %s\n", local_uid);
-    status = target->get_sync_info(target, local_uid, &target_uid, &target_gen,
-                   &local_gen_known_by_target, &local_trans_id_known_by_target);
+    status = target->get_sync_info(
+        target, local_uid, &target_uid, &target_gen,
+        &local_gen_known_by_target, &local_trans_id_known_by_target);
     if (status != U1DB_OK) { goto finish; }
     status = u1db_validate_gen_and_trans_id(
-            db, local_gen_known_by_target, local_trans_id_known_by_target);
+        db, local_gen_known_by_target, local_trans_id_known_by_target);
     if (status != U1DB_OK) { goto finish; }
     status = u1db__get_sync_gen_info(db, target_uid,
         &target_gen_known_by_local, &target_trans_id_known_by_local);
