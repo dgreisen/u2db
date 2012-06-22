@@ -25,6 +25,7 @@ import sys
 import urlparse
 import urllib
 
+from time import sleep
 from u1db import (
     errors,
     )
@@ -33,8 +34,8 @@ from u1db.remote import (
     )
 
 from u1db.remote.ssl_match_hostname import (
-    match_hostname,
     CertificateError,
+    match_hostname,
     )
 
 # Ubuntu/debian
@@ -89,6 +90,10 @@ class HTTPClientBase(object):
     # signatures though, to achieve security (against man-in-the-middle
     # attacks for example) one would need HTTPS
     oauth_signature_method = oauth.OAuthSignatureMethod_HMAC_SHA1()
+
+    # Will use these delays to retry on 503 befor finally giving up. The final
+    # 0 is there to not wait after the final try fails.
+    _delays = (2, 5, 10, 20, 40, 0)
 
     def __init__(self, url):
         self._url = urlparse.urlsplit(url)
@@ -186,8 +191,13 @@ class HTTPClientBase(object):
             headers['content-type'] = content_type
         headers.update(
             self._sign_request(method, unquoted_url, encoded_params))
-        self._conn.request(method, url_query, body, headers)
-        return self._response()
+        for delay in self._delays:
+            try:
+                self._conn.request(method, url_query, body, headers)
+                return self._response()
+            except errors.Unavailable, e:
+                sleep(delay)
+        raise e
 
     def _request_json(self, method, url_parts, params=None, body=None,
                                                             content_type=None):

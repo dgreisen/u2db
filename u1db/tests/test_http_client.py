@@ -204,6 +204,7 @@ class TestHTTPClientBase(tests.TestCaseWithServer):
 
     def test_unavailable_proper(self):
         cli = self.getClient()
+        cli._delays = (0, 0, 0, 0, 0)
         self.assertRaises(errors.Unavailable,
                           cli._request_json, 'POST', ['error'], {},
                           {'status': "503 Service Unavailable",
@@ -211,6 +212,7 @@ class TestHTTPClientBase(tests.TestCaseWithServer):
 
     def test_unavailable_random_source(self):
         cli = self.getClient()
+        cli._delays = (0, 0, 0, 0, 0)
         try:
             cli._request_json('POST', ['error'], {},
                               {'status': "503 Service Unavailable",
