@@ -49,12 +49,12 @@ add_custom_target(build-debug
 )
 
 add_custom_target(check-valgrind
-    COMMAND valgrind --tool=memcheck --suppressions=custom.supp python-dbg -m testtools.run discover
+    COMMAND valgrind --tool=memcheck --suppressions=${CMAKE_SOURCE_DIR}/custom.supp python-dbg -m testtools.run discover
     DEPENDS build-debug
 )
 
 add_custom_target(check-valgrind-leaks
-    COMMAND valgrind --tool=memcheck --suppressions=custom.supp --track-origins=yes --num-callers=40 --leak-resolution=high --leak-check=full python-dbg -m testtools.run discover
+    COMMAND valgrind --tool=memcheck --suppressions=${CMAKE_SOURCE_DIR}/custom.supp --track-origins=yes --num-callers=40 --leak-resolution=high --leak-check=full python-dbg -m testtools.run discover
     DEPENDS build-debug
 )
 
