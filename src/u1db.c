@@ -22,6 +22,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <sqlite3.h>
+#include <json/json.h>
 
 #include "u1db/u1db_internal.h"
 #include "u1db/u1db_vectorclock.h"
@@ -261,7 +262,9 @@ u1db_create_doc(u1database *db, const char *json, const char *doc_id,
         }
         doc_id = local_doc_id;
     }
-    *doc = u1db__allocate_document(doc_id, NULL, json, 0);
+    status = u1db__allocate_document(doc_id, NULL, json, 0, doc);
+    if (status != U1DB_OK)
+        goto finish;
     if (*doc == NULL) {
         status = U1DB_NOMEM;
         goto finish;
@@ -583,7 +586,9 @@ find_current_doc_for_conflict(u1database *db, const char *doc_id,
             status = U1DB_DOCUMENT_DOES_NOT_EXIST;
             goto finish;
         }
-        cur_doc = u1db__allocate_document(doc_id, doc_rev, content, 1);
+        status = u1db__allocate_document(doc_id, doc_rev, content, 1, &cur_doc);
+        if (status != U1DB_OK)
+            goto finish;
         if (cur_doc == NULL) {
             status = U1DB_NOMEM;
         } else {
@@ -630,7 +635,10 @@ u1db_get_doc_conflicts(u1database *db, const char *doc_id, void *context,
         } else {
             content = (const char*)sqlite3_column_text(statement, 1);
         }
-        cur_doc = u1db__allocate_document(doc_id, doc_rev, content, 0);
+        status = u1db__allocate_document(
+            doc_id, doc_rev, content, 0, &cur_doc);
+        if (status != U1DB_OK)
+            goto finish;
         if (cur_doc == NULL) {
             // fprintf(stderr, "Failed to allocate_document\n");
             status = U1DB_NOMEM;
@@ -1045,9 +1053,10 @@ u1db_get_doc(u1database *db, const char *doc_id, int include_deleted,
             goto finish;
         }
         if (content != NULL || include_deleted) {
-            *doc = u1db__allocate_document(doc_id, (const char*)doc_rev,
-                                        (const char*)content, 0);
-
+            status = u1db__allocate_document(
+                doc_id, (const char*)doc_rev, (const char*)content, 0, doc);
+            if (status != U1DB_OK)
+                goto finish;
             if (*doc != NULL) {
                 status = lookup_conflict(db, (*doc)->doc_id,
                                         &((*doc)->has_conflicts));
@@ -1096,7 +1105,10 @@ u1db_get_docs(u1database *db, int n_doc_ids, const char **doc_ids,
             revision = (char *)sqlite3_column_text(statement, 0);
             content = (char *)sqlite3_column_text(statement, 1);
             if (content != NULL || include_deleted) {
-                doc = u1db__allocate_document(doc_ids[i], revision, content, 0);
+                status = u1db__allocate_document(
+                    doc_ids[i], revision, content, 0, &doc);
+                if (status != U1DB_OK)
+                    goto finish;
                 if (check_for_conflicts) {
                     status = lookup_conflict(db, doc_ids[i], &(doc->has_conflicts));
                 }
@@ -1147,7 +1159,10 @@ u1db_get_all_docs(u1database *db, int include_deleted, int *generation,
         revision = (char *)sqlite3_column_text(statement, 1);
         content = (char *)sqlite3_column_text(statement, 2);
         if (content != NULL || include_deleted) {
-            doc = u1db__allocate_document(doc_id, revision, content, 0);
+            status = u1db__allocate_document(
+                doc_id, revision, content, 0, &doc);
+            if (status != U1DB_OK)
+                goto finish;
             cb(context, doc);
         }
         status = sqlite3_step(statement);
@@ -1757,7 +1772,7 @@ copy_str_and_len(char **dest, size_t *dest_len, const char *source)
     } else {
         source_len = strlen(source);
     }
-    *dest = (char *) calloc(1, source_len + 1);
+    *dest = (char *)calloc(1, source_len + 1);
     if (*dest == NULL) {
         return 0;
     }
@@ -1766,35 +1781,62 @@ copy_str_and_len(char **dest, size_t *dest_len, const char *source)
     return 1;
 }
 
-u1db_document *
+int
 u1db__allocate_document(const char *doc_id, const char *revision,
-                        const char *content, int has_conflicts)
+                        const char *content, int has_conflicts,
+                        u1db_document **doc)
 {
-    u1db_document *doc = (u1db_document *)(calloc(1, sizeof(u1db_document)));
-    if (doc == NULL) { goto cleanup; }
-    if (!copy_str_and_len(&doc->doc_id, &doc->doc_id_len, doc_id))
-        goto cleanup;
-    if (!copy_str_and_len(&doc->doc_rev, &doc->doc_rev_len, revision))
-        goto cleanup;
-    if (!copy_str_and_len(&doc->json, &doc->json_len, content))
-        goto cleanup;
-    doc->has_conflicts = has_conflicts;
-    return doc;
-cleanup:
+    int status = U1DB_OK;
+    json_object *parsed = NULL;
+
+    *doc = (u1db_document *)(calloc(1, sizeof(u1db_document)));
     if (doc == NULL) {
-        return NULL;
+        status = U1DB_NOMEM;
+        goto finish;
     }
-    if (doc->doc_id != NULL) {
-        free(doc->doc_id);
+    if (content != NULL) {
+        parsed = json_tokener_parse(content);
+        if (parsed == NULL) {
+            status = U1DB_INVALID_JSON;
+            goto finish;
+        }
+        // XXX REALLY?! This is how you signal errors?
+        if ((long)parsed < 0) {
+            status = U1DB_INVALID_JSON;
+            goto finish;
+        }
+        if (!json_object_is_type(parsed, json_type_object)) {
+            status = U1DB_INVALID_JSON;
+            goto finish;
+        }
+
     }
-    if (doc->doc_rev != NULL) {
-        free(doc->doc_id);
+    if (!copy_str_and_len(&(*doc)->doc_id, &(*doc)->doc_id_len, doc_id)) {
+        status = U1DB_NOMEM;
+        goto finish;
     }
-    if (doc->json != NULL) {
-        free(doc->json);
+    if (!copy_str_and_len(&(*doc)->doc_rev, &(*doc)->doc_rev_len, revision)) {
+        status = U1DB_NOMEM;
+        goto finish;
     }
-    free(doc);
-    return NULL;
+    if (!copy_str_and_len(&(*doc)->json, &(*doc)->json_len, content)) {
+        status = U1DB_NOMEM;
+        goto finish;
+    }
+    (*doc)->has_conflicts = has_conflicts;
+finish:
+    if ((long)parsed < 0) {
+        // XXX Parsed was not a json_object at all. haha.
+        u1db_free_doc(doc);
+        return status;
+    }
+    if (parsed != NULL) {
+        json_object_put(parsed);
+    }
+    if (status == U1DB_OK)
+        return status;
+    u1db_free_doc(doc);
+    return status;
 }
 
 void
@@ -1821,25 +1863,39 @@ int
 u1db_doc_set_json(u1db_document *doc, const char *json)
 {
     char *tmp;
+    json_object *parsed = NULL;
     int content_len;
+    int status = U1DB_OK;
     if (doc == NULL || json == NULL) {
-        // TODO: return an error code
-        return 0;
+        return U1DB_INVALID_JSON;
+    }
+    if (json != NULL) {
+        parsed = json_tokener_parse(json);
+        if (parsed == NULL) {
+            status = U1DB_INVALID_JSON;
+            goto finish;
+        }
+        if (!json_object_is_type(parsed, json_type_object)) {
+            status = U1DB_INVALID_JSON;
+            goto finish;
+        }
     }
     // What to do about 0 length content? Is it even valid? Not all platforms
     // support malloc(0)
     content_len = strlen(json);
     tmp = (char*)calloc(1, content_len + 1);
     if (tmp == NULL) {
-        // TODO: return ENOMEM
-        return 0;
+        status = U1DB_NOMEM;
+        goto finish;
     }
     memcpy(tmp, json, content_len);
     free(doc->json);
     doc->json = tmp;
     doc->json_len = content_len;
-    // TODO: Return success
-    return 1;
+finish:
+    if (parsed != NULL)
+        json_object_put(parsed);
+    return status;
 }
 
 int

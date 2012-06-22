@@ -16,7 +16,7 @@
 
 
 from u1db import Document
-from u1db import tests
+from u1db import errors, tests
 
 
 class TestDocument(tests.TestCase):
@@ -60,6 +60,16 @@ class TestDocument(tests.TestCase):
         self.assertTrue(doc_a == doc_b)
         doc_b = self.make_document('a', 'b', '{}', has_conflicts=True)
         self.assertFalse(doc_a == doc_b)
+
+    def test_non_json_dict(self):
+        self.assertRaises(
+            errors.InvalidJSON, self.make_document, 'id', 'uid:1',
+            '"not a json dictionary"')
+
+    def test_non_json(self):
+        self.assertRaises(
+            errors.InvalidJSON, self.make_document, 'id', 'uid:1',
+            'not a json dictionary')
 
 
 class TestPyDocument(tests.TestCase):
@@ -107,9 +117,16 @@ class TestPyDocument(tests.TestCase):
 
     def test_set_json(self):
         doc = self.make_document('id', 'rev', '{"content":""}')
-        self.assertEqual('{"content":""}', doc.get_json())
         doc.set_json('{"content": "new"}')
         self.assertEqual('{"content": "new"}', doc.get_json())
+
+    def test_set_json_non_dict(self):
+        doc = self.make_document('id', 'rev', '{"content":""}')
+        self.assertRaises(errors.InvalidJSON, doc.set_json, '"is not a dict"')
+
+    def test_set_json_error(self):
+        doc = self.make_document('id', 'rev', '{"content":""}')
+        self.assertRaises(errors.InvalidJSON, doc.set_json, 'is not json')
 
 
 load_tests = tests.load_with_scenarios

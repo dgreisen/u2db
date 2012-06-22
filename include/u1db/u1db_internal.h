@@ -358,8 +358,9 @@ void u1db__free_records(u1db_record **record);
 /**
  * Create a new u1db_document object. This should be freed
  */
-u1db_document *u1db__allocate_document(const char *doc_id, const char *revision,
-                                       const char *content, int has_conflicts);
+int u1db__allocate_document(const char *doc_id, const char *revision,
+                            const char *content, int has_conflicts,
+                            u1db_document **result);
 
 /**
  * Generate a unique id.

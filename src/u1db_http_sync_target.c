@@ -846,7 +846,9 @@ process_response(u1db_sync_target *st, void *context, u1db_doc_gen_callback cb,
         gen = json_object_get_int(attr);
         attr = json_object_object_get(obj, "trans_id");
         trans_id = json_object_get_string(attr);
-        doc = u1db__allocate_document(doc_id, rev, content, 0);
+        status = u1db__allocate_document(doc_id, rev, content, 0, &doc);
+        if (status != U1DB_OK)
+            goto finish;
         if (doc == NULL) {
             status = U1DB_NOMEM;
             goto finish;

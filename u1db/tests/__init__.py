@@ -134,8 +134,8 @@ def create_c_database(test, replica_uid):
 
 
 def create_c_document(doc_id, rev, content, has_conflicts=False):
-    return c_backend_wrapper.make_document(doc_id, rev, content,
-                                           has_conflicts=has_conflicts)
+    return c_backend_wrapper.make_document(
+        doc_id, rev, content, has_conflicts=has_conflicts)
 
 
 LOCAL_DATABASES_SCENARIOS = [

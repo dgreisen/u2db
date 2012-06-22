@@ -157,9 +157,8 @@ class DatabaseSyncTargetTests(tests.DatabaseBaseTests,
                          self.st.get_sync_info('replica'))
 
     def test_sync_exchange(self):
-        docs_by_gen = [
-            (self.make_document('doc-id', 'replica:1', simple_doc), 10,
-             'T-sid')]
+        doc = self.make_document('doc-id', 'replica:1', simple_doc)
+        docs_by_gen = [(doc, 10, 'T-sid')]
         new_gen, trans_id = self.st.sync_exchange(docs_by_gen, 'replica',
                                         last_known_generation=0,
                                         return_doc_cb=self.receive_doc)
@@ -623,7 +622,7 @@ class DatabaseSyncTests(tests.DatabaseBaseTests):
         rev1 = doc.rev
         self.assertFalse(doc.has_conflicts)
         self.assertEqual('{"hi": 42}', doc.get_json())
-        VCR=vectorclock.VectorClockRev
+        VCR = vectorclock.VectorClockRev
         self.assertTrue(VCR(rev1).is_newer(VCR(self.db2.get_doc('doc').rev)))
         # so sync it to db2
         self.sync(self.db1, self.db2)
