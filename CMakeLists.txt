@@ -1,7 +1,7 @@
 cmake_minimum_required (VERSION 2.6)
 project (u1db)
 
-SET(ENV{CFLAGS} "-Werror")
+SET(ENV{CFLAGS} "-Werror -fPIC")
 
 set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} "${CMAKE_SOURCE_DIR}/cmake/Modules/")
 include_directories(${CMAKE_SOURCE_DIR}/include)
@@ -61,6 +61,10 @@ add_custom_target(check-valgrind-leaks
 add_custom_target(check-verbose
     COMMAND python -c \"import unittest, sys\; from testtools import run\; run.TestProgram(argv=sys.argv, testRunner=unittest.TextTestRunner(verbosity=2), stdout=sys.stdout)\" discover
     DEPENDS build-inplace
+)
+
+add_custom_target(html-docs
+    COMMAND cd ${CMAKE_SOURCE_DIR}/html-docs; make html
 )
 
 add_subdirectory(src)
