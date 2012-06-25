@@ -70,6 +70,7 @@ typedef int (*u1db_trans_info_callback)(void *context, const char *doc_id,
 #define U1DB_DUPLICATE_INDEX_NAME -17
 #define U1DB_INDEX_DOES_NOT_EXIST -18
 #define U1DB_INVALID_GLOBBING -19
+#define U1DB_TARGET_UNAVAILABLE -22
 #define U1DB_INTERNAL_ERROR -999
 
 // Used by put_doc_if_newer

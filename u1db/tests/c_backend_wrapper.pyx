@@ -138,6 +138,7 @@ cdef extern from "u1db/u1db.h":
     int U1DB_INVALID_GENERATION
     int U1DB_INVALID_TRANSACTION_ID
     int U1DB_INTERNAL_ERROR
+    int U1DB_TARGET_UNAVAILABLE
 
     int U1DB_INSERTED
     int U1DB_SUPERSEDED
@@ -593,6 +594,8 @@ cdef handle_status(context, int status):
         raise errors.InvalidGeneration
     if status == U1DB_INVALID_TRANSACTION_ID:
         raise errors.InvalidTransactionId
+    if status == U1DB_TARGET_UNAVAILABLE:
+        raise errors.Unavailable
     raise RuntimeError('%s (status: %s)' % (context, status))
 
 

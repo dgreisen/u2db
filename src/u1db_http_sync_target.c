@@ -24,10 +24,18 @@
 #include <json/json.h>
 #include <curl/curl.h>
 #include <oauth.h>
+#include <sys/socket.h>
+#include <sys/time.h>
 
 #ifndef max
 #define max(a, b) ((a) > (b) ? (a) : (b))
 #endif // max
+#define TRIES 4
+#ifndef RETRY_DELAYS
+#define RETRY_DELAYS {1, 1, 2, 4}
+#endif
+
+int retry_delays[] = RETRY_DELAYS;
 
 struct _http_state;
 struct _http_request;
@@ -357,6 +365,35 @@ maybe_sign_url(u1db_sync_target *st, const char *http_method,
     return U1DB_OK;
 }
 
+static int
+retry_request(CURL *curl, long *http_code)
+{
+    int attempt = 0;
+    int status = U1DB_OK;
+    struct timeval timeout;
+    for (;;) {
+        status = curl_easy_perform(curl);
+        if (status != CURLE_OK) { goto finish; }
+        status = U1DB_OK;
+        status = curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, http_code);
+        if (status != CURLE_OK) { goto finish; }
+        status = U1DB_OK;
+        if (*http_code == 503) {
+            status = U1DB_TARGET_UNAVAILABLE;
+            if (attempt < TRIES) {
+                // TODO: sleep for RETRY_DELAYS[attempt]
+                timeout.tv_sec = retry_delays[attempt];
+                timeout.tv_usec = 0;
+                select(0, NULL, NULL, NULL, &timeout);
+                attempt++;
+                continue;
+            }
+        }
+        break;
+    }
+finish:
+    return status;
+}
 
 static int
 st_http_get_sync_info(u1db_sync_target *st,
@@ -406,10 +443,8 @@ st_http_get_sync_info(u1db_sync_target *st,
     status = curl_easy_setopt(state->curl, CURLOPT_HTTPHEADER, headers);
     if (status != CURLE_OK) { goto finish; }
     // Now do the GET
-    status = curl_easy_perform(state->curl);
-    if (status != CURLE_OK) { goto finish; }
-    status = curl_easy_getinfo(state->curl, CURLINFO_RESPONSE_CODE, &http_code);
-    if (status != CURLE_OK) { goto finish; }
+    status = retry_request(state->curl, &http_code);
+    if (status != U1DB_OK) { goto finish; }
     if (http_code != 200) { // 201 for created? shouldn't happen on GET
         status = http_code;
         goto finish;
@@ -589,10 +624,8 @@ st_http_record_sync_info(u1db_sync_target *st,
     if (status != U1DB_OK) { goto finish; }
 
     // Now actually send the data
-    status = curl_easy_perform(state->curl);
-    if (status != CURLE_OK) { goto finish; }
-    status = curl_easy_getinfo(state->curl, CURLINFO_RESPONSE_CODE, &http_code);
-    if (status != CURLE_OK) { goto finish; }
+    status = retry_request(state->curl, &http_code);
+    if (status != U1DB_OK) { goto finish; }
     if (http_code != 200 && http_code != 201) {
         status = http_code;
         goto finish;
@@ -768,10 +801,8 @@ finalize_and_send_temp_file(u1db_sync_target *st, FILE *temp_fd,
     status = maybe_sign_url(st, "POST", url, &headers);
     if (status != U1DB_OK) { goto finish; }
     // Now send off the messages, and handle the returned content.
-    status = curl_easy_perform(state->curl);
-    if (status != CURLE_OK) { goto finish; }
-    status = curl_easy_getinfo(state->curl, CURLINFO_RESPONSE_CODE, &http_code);
-    if (status != CURLE_OK) { goto finish; }
+    status = retry_request(state->curl, &http_code);
+    if (status != U1DB_OK) { goto finish; }
     if (http_code != 200 && http_code != 201) {
         status = U1DB_BROKEN_SYNC_STREAM;
         goto finish;
