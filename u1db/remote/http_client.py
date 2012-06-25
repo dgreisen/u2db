@@ -93,7 +93,7 @@ class HTTPClientBase(object):
 
     # Will use these delays to retry on 503 befor finally giving up. The final
     # 0 is there to not wait after the final try fails.
-    _delays = (0.5, 1, 2, 4, 0)
+    _delays = (1, 1, 2, 4, 0)
 
     def __init__(self, url):
         self._url = urlparse.urlsplit(url)
