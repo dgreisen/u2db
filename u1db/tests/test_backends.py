@@ -218,10 +218,9 @@ class AllDatabaseTests(tests.DatabaseBaseTests, tests.TestCaseWithServer):
             self.db, doc.doc_id, doc.rev, None, False)
         self.assertIs(None, self.db.get_doc(doc.doc_id))
 
-    def test_delete_doc_non_existant(self):
+    def test_delete_doc_non_existent(self):
         doc = self.make_document('non-existing', 'other:1', simple_doc)
-        self.assertRaises(errors.DocumentDoesNotExist,
-            self.db.delete_doc, doc)
+        self.assertRaises(errors.DocumentDoesNotExist, self.db.delete_doc, doc)
 
     def test_delete_doc_already_deleted(self):
         doc = self.db.create_doc(simple_doc)

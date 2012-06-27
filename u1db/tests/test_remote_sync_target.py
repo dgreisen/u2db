@@ -81,7 +81,7 @@ class TestParsingSyncStream(tests.TestCase):
         self.assertRaises(errors.BrokenSyncStream,
                           tgt._parse_sync_stream,
                           '[\r\n{},\r\n{"id": "i", "rev": "r", '
-                          '"content": "c", "gen": 3, "trans_id": "T-sid"}'
+                          '"content": "{}", "gen": 3, "trans_id": "T-sid"}'
                           ',\r\n]',
                           lambda doc, gen, trans_id: None)
 

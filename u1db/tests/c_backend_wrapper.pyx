@@ -216,8 +216,8 @@ cdef extern from "u1db/u1db_internal.h":
     u1db_record *u1db__create_record(char *doc_id, char *doc_rev, char *doc)
     void u1db__free_records(u1db_record **)
 
-    u1db_document *u1db__allocate_document(char *doc_id, char *revision,
-                                           char *content, int has_conflicts)
+    int u1db__allocate_document(char *doc_id, char *revision, char *content,
+                                int has_conflicts, u1db_document **result)
     int u1db__generate_hex_uuid(char *)
 
     int u1db__get_sync_gen_info(u1database *db, char *replica_uid,
@@ -419,7 +419,7 @@ def _format_query(fields):
 
 def make_document(doc_id, rev, content, has_conflicts=False):
     cdef u1db_document *doc
-    cdef char *c_content, *c_rev, *c_doc_id
+    cdef char *c_content = NULL, *c_rev = NULL, *c_doc_id = NULL
     cdef int conflict
 
     if has_conflicts:
@@ -438,7 +438,9 @@ def make_document(doc_id, rev, content, has_conflicts=False):
         c_rev = NULL
     else:
         c_rev = rev
-    doc = u1db__allocate_document(c_doc_id, c_rev, c_content, conflict)
+    handle_status(
+        "make_document",
+        u1db__allocate_document(c_doc_id, c_rev, c_content, conflict, &doc))
     pydoc = CDocument()
     pydoc._doc = doc
     return pydoc
@@ -446,7 +448,8 @@ def make_document(doc_id, rev, content, has_conflicts=False):
 
 def generate_hex_uuid():
     uuid = PyString_FromStringAndSize(NULL, 32)
-    handle_status("Failed to generate uuid",
+    handle_status(
+        "Failed to generate uuid",
         u1db__generate_hex_uuid(PyString_AS_STRING(uuid)))
     return uuid
 
@@ -596,6 +599,8 @@ cdef handle_status(context, int status):
         raise errors.InvalidTransactionId
     if status == U1DB_TARGET_UNAVAILABLE:
         raise errors.Unavailable
+    if status == U1DB_INVALID_JSON:
+        raise errors.InvalidJSON
     raise RuntimeError('%s (status: %s)' % (context, status))
 
 
@@ -1036,7 +1041,8 @@ cdef class CDatabase(object):
         return conflict_docs
 
     def delete_doc(self, CDocument doc):
-        handle_status("Failed to delete %s" % (doc,),
+        handle_status(
+            "Failed to delete %s" % (doc,),
             u1db_delete_doc(self._db, doc._doc))
 
     def whats_changed(self, generation=0):

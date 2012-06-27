@@ -17,6 +17,7 @@
 """U1DB"""
 
 import simplejson
+from u1db.errors import InvalidJSON
 
 __version_info__ = (0, 0, 1, 'dev', 0)
 __version__ = '.'.join(map(str, __version_info__))
@@ -359,6 +360,13 @@ class DocumentBase(object):
     def __init__(self, doc_id, rev, json, has_conflicts=False):
         self.doc_id = doc_id
         self.rev = rev
+        if json is not None:
+            try:
+                value = simplejson.loads(json)
+            except simplejson.JSONDecodeError:
+                raise InvalidJSON
+            if not isinstance(value, dict):
+                raise InvalidJSON
         self._json = json
         self.has_conflicts = has_conflicts
 
@@ -413,6 +421,13 @@ class DocumentBase(object):
 
     def set_json(self, json):
         """Set the json serialization of this document."""
+        if json is not None:
+            try:
+                self._content = simplejson.loads(json)
+            except simplejson.JSONDecodeError:
+                raise InvalidJSON
+            if not isinstance(self._content, dict):
+                raise InvalidJSON
         self._json = json
 
     def make_tombstone(self):
@@ -440,6 +455,9 @@ class Document(DocumentBase):
     # Documents a lot more user friendly.
 
     def __init__(self, doc_id, rev, json, has_conflicts=False):
+        # TODO: We convert the json in the superclass to check its validity so
+        # we might as well set _content here directly since the price is
+        # already being paid.
         super(Document, self).__init__(doc_id, rev, json, has_conflicts)
         self._content = None
 
@@ -466,6 +484,9 @@ class Document(DocumentBase):
 
     def set_json(self, json):
         """Set the json serialization of this document."""
+        # TODO: We convert the json in the superclass to check its validity so
+        # we might as well set _content here directly since the price is
+        # already being paid.
         self._content = None
         super(Document, self).set_json(json)
 
