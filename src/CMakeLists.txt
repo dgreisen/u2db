@@ -18,4 +18,7 @@ add_custom_command (
   )
 add_library (u1db ${LIB_TYPE} mkstemp_compat.c u1db.c u1db_http_sync_target.c u1db_query.c  u1db_sync_target.c  u1db_uuid.c  u1db_vectorclock.c u1db_schema.c)
 
-SET_TARGET_PROPERTIES(u1db PROPERTIES SOVERSION 1)
+SET_TARGET_PROPERTIES(u1db
+    PROPERTIES SOVERSION 1
+    COMPILE_FLAGS -fPIC
+)
