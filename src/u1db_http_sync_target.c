@@ -366,36 +366,6 @@ maybe_sign_url(u1db_sync_target *st, const char *http_method,
 }
 
 static int
-retry_request(CURL *curl, long *http_code)
-{
-    int attempt = 0;
-    int status = U1DB_OK;
-    struct timeval timeout;
-    for (;;) {
-        status = curl_easy_perform(curl);
-        if (status != CURLE_OK) { goto finish; }
-        status = U1DB_OK;
-        status = curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, http_code);
-        if (status != CURLE_OK) { goto finish; }
-        status = U1DB_OK;
-        if (*http_code == 503) {
-            status = U1DB_TARGET_UNAVAILABLE;
-            if (attempt < TRIES) {
-                // TODO: sleep for RETRY_DELAYS[attempt]
-                timeout.tv_sec = retry_delays[attempt];
-                timeout.tv_usec = 0;
-                select(0, NULL, NULL, NULL, &timeout);
-                attempt++;
-                continue;
-            }
-        }
-        break;
-    }
-finish:
-    return status;
-}
-
-static int
 st_http_get_sync_info(u1db_sync_target *st,
         const char *source_replica_uid,
         const char **st_replica_uid, int *st_gen, int *source_gen,
@@ -405,9 +375,11 @@ st_http_get_sync_info(u1db_sync_target *st,
     struct _http_request req = {0};
     char *url = NULL;
     const char *tmp = NULL;
-    int status;
+    int status = U1DB_OK;
     long http_code;
     struct curl_slist *headers = NULL;
+    int attempt = 0;
+    struct timeval timeout;
 
     json_object *json = NULL, *obj = NULL;
 
@@ -430,20 +402,41 @@ st_http_get_sync_info(u1db_sync_target *st,
     req.state = state;
     status = u1db__format_sync_url(st, source_replica_uid, &url);
     if (status != U1DB_OK) { goto finish; }
-    status = curl_easy_setopt(state->curl, CURLOPT_HTTPGET, 1L);
-    if (status != CURLE_OK) { goto finish; }
-    // status = curl_easy_setopt(state->curl, CURLOPT_USERAGENT, "...");
-    status = curl_easy_setopt(state->curl, CURLOPT_URL, url);
-    if (status != CURLE_OK) { goto finish; }
-    req.body_buffer = req.header_buffer = NULL;
-    status = simple_set_curl_data(state->curl, &req, &req, NULL);
-    if (status != CURLE_OK) { goto finish; }
-    status = maybe_sign_url(st, "GET", url, &headers);
-    if (status != U1DB_OK) { goto finish; }
-    status = curl_easy_setopt(state->curl, CURLOPT_HTTPHEADER, headers);
-    if (status != CURLE_OK) { goto finish; }
-    // Now do the GET
-    status = retry_request(state->curl, &http_code);
+    for (;;) {
+        status = curl_easy_setopt(state->curl, CURLOPT_HTTPGET, 1L);
+        if (status != CURLE_OK) { goto finish; }
+        // status = curl_easy_setopt(state->curl, CURLOPT_USERAGENT, "...");
+        status = curl_easy_setopt(state->curl, CURLOPT_URL, url);
+        if (status != CURLE_OK) { goto finish; }
+        req.body_buffer = req.header_buffer = NULL;
+        status = simple_set_curl_data(state->curl, &req, &req, NULL);
+        if (status != CURLE_OK) { goto finish; }
+        status = maybe_sign_url(st, "GET", url, &headers);
+        if (status != U1DB_OK) { goto finish; }
+        status = curl_easy_setopt(state->curl, CURLOPT_HTTPHEADER, headers);
+        if (status != CURLE_OK) { goto finish; }
+        // Now do the GET
+        status = curl_easy_perform(state->curl);
+        if (status != CURLE_OK) {
+            goto finish; }
+        status = curl_easy_getinfo(
+            state->curl, CURLINFO_RESPONSE_CODE, &http_code);
+        if (status != CURLE_OK) {
+            goto finish; }
+        status = U1DB_OK;
+        if (http_code == 503) {
+            status = U1DB_TARGET_UNAVAILABLE;
+            if (attempt < TRIES) {
+                timeout.tv_sec = retry_delays[attempt];
+                timeout.tv_usec = 0;
+                select(0, NULL, NULL, NULL, &timeout);
+                attempt++;
+                req.num_body_bytes = 0;
+                continue;
+            }
+        }
+        break;
+    }
     if (status != U1DB_OK) { goto finish; }
     if (http_code != 200) { // 201 for created? shouldn't happen on GET
         status = http_code;
@@ -576,6 +569,8 @@ st_http_record_sync_info(u1db_sync_target *st,
     const char *raw_body = NULL;
     int raw_len;
     struct curl_slist *headers = NULL;
+    int attempt = 0;
+    struct timeval timeout;
 
     if (st == NULL || source_replica_uid == NULL || st->implementation == NULL)
     {
@@ -607,24 +602,45 @@ st_http_record_sync_info(u1db_sync_target *st,
     // confirmation of the post.
     headers = curl_slist_append(headers, "Expect:");
 
-    status = curl_easy_setopt(state->curl, CURLOPT_URL, url);
-    if (status != CURLE_OK) { goto finish; }
-    status = curl_easy_setopt(state->curl, CURLOPT_HTTPHEADER, headers);
-    if (status != CURLE_OK) { goto finish; }
-    status = curl_easy_setopt(state->curl, CURLOPT_UPLOAD, 1L);
-    if (status != CURLE_OK) { goto finish; }
-    status = curl_easy_setopt(state->curl, CURLOPT_PUT, 1L);
-    if (status != CURLE_OK) { goto finish; }
-    status = simple_set_curl_data(state->curl, &req, &req, &req);
-    if (status != CURLE_OK) { goto finish; }
-    status = curl_easy_setopt(state->curl, CURLOPT_INFILESIZE_LARGE,
-                              (curl_off_t)req.num_put_bytes);
-    if (status != CURLE_OK) { goto finish; }
-    status = maybe_sign_url(st, "PUT", url, &headers);
-    if (status != U1DB_OK) { goto finish; }
+    for (;;) {
+        status = curl_easy_setopt(state->curl, CURLOPT_URL, url);
+        if (status != CURLE_OK) { goto finish; }
+        status = curl_easy_setopt(state->curl, CURLOPT_HTTPHEADER, headers);
+        if (status != CURLE_OK) { goto finish; }
+        status = curl_easy_setopt(state->curl, CURLOPT_UPLOAD, 1L);
+        if (status != CURLE_OK) { goto finish; }
+        status = curl_easy_setopt(state->curl, CURLOPT_PUT, 1L);
+        if (status != CURLE_OK) { goto finish; }
+        status = simple_set_curl_data(state->curl, &req, &req, &req);
+        if (status != CURLE_OK) { goto finish; }
+        status = curl_easy_setopt(state->curl, CURLOPT_INFILESIZE_LARGE,
+                                (curl_off_t)req.num_put_bytes);
+        if (status != CURLE_OK) { goto finish; }
+        status = maybe_sign_url(st, "PUT", url, &headers);
+        if (status != U1DB_OK) { goto finish; }
 
-    // Now actually send the data
-    status = retry_request(state->curl, &http_code);
+        // Now actually send the data
+        status = curl_easy_perform(state->curl);
+        if (status != CURLE_OK) {
+            goto finish; }
+        status = curl_easy_getinfo(
+            state->curl, CURLINFO_RESPONSE_CODE, &http_code);
+        if (status != CURLE_OK) {
+            goto finish; }
+        status = U1DB_OK;
+        if (http_code == 503) {
+            status = U1DB_TARGET_UNAVAILABLE;
+            if (attempt < TRIES) {
+                timeout.tv_sec = retry_delays[attempt];
+                timeout.tv_usec = 0;
+                select(0, NULL, NULL, NULL, &timeout);
+                attempt++;
+                req.num_body_bytes = 0;
+                continue;
+            }
+        }
+        break;
+    }
     if (status != U1DB_OK) { goto finish; }
     if (http_code != 200 && http_code != 201) {
         status = http_code;
@@ -786,6 +802,8 @@ finalize_and_send_temp_file(u1db_sync_target *st, FILE *temp_fd,
     char *url = NULL;
     struct _http_state *state;
     struct curl_slist *headers = NULL;
+    int attempt = 0;
+    struct timeval timeout;
 
     fputs("\r\n]", temp_fd);
     status = impl_as_http_state(st->implementation, &state);
@@ -794,16 +812,38 @@ finalize_and_send_temp_file(u1db_sync_target *st, FILE *temp_fd,
     }
     status = u1db__format_sync_url(st, source_replica_uid, &url);
     if (status != U1DB_OK) { goto finish; }
-    status = curl_easy_setopt(state->curl, CURLOPT_URL, url);
-    if (status != CURLE_OK) { goto finish; }
-    status = setup_curl_for_sync(state->curl, &headers, req, temp_fd);
-    if (status != CURLE_OK) { goto finish; }
-    status = maybe_sign_url(st, "POST", url, &headers);
-    if (status != U1DB_OK) { goto finish; }
-    // Now send off the messages, and handle the returned content.
-    status = retry_request(state->curl, &http_code);
+    for (;;) {
+        status = curl_easy_setopt(state->curl, CURLOPT_URL, url);
+        if (status != CURLE_OK) { goto finish; }
+        status = setup_curl_for_sync(state->curl, &headers, req, temp_fd);
+        if (status != CURLE_OK) { goto finish; }
+        status = maybe_sign_url(st, "POST", url, &headers);
+        if (status != U1DB_OK) { goto finish; }
+        // Now send off the messages, and handle the returned content.
+        status = curl_easy_perform(state->curl);
+        if (status != CURLE_OK) {
+            goto finish; }
+        status = curl_easy_getinfo(
+                state->curl, CURLINFO_RESPONSE_CODE, &http_code);
+        if (status != CURLE_OK) {
+            goto finish; }
+        status = U1DB_OK;
+        if (http_code == 503) {
+            status = U1DB_TARGET_UNAVAILABLE;
+            if (attempt < TRIES) {
+                timeout.tv_sec = retry_delays[attempt];
+                timeout.tv_usec = 0;
+                select(0, NULL, NULL, NULL, &timeout);
+                attempt++;
+                req->num_body_bytes = 0;
+                continue;
+            }
+        }
+        break;
+    }
     if (status != U1DB_OK) { goto finish; }
     if (http_code != 200 && http_code != 201) {
+        printf("broken 0\n");
         status = U1DB_BROKEN_SYNC_STREAM;
         goto finish;
     }
@@ -833,29 +873,34 @@ process_response(u1db_sync_target *st, void *context, u1db_doc_gen_callback cb,
 
     json = json_tokener_parse(response);
     if (json == NULL || !json_object_is_type(json, json_type_array)) {
+        printf("broken 1, response: %s\n", response);
         status = U1DB_BROKEN_SYNC_STREAM;
         goto finish;
     }
     doc_count = json_object_array_length(json);
     if (doc_count < 1) {
         // the first response is the new_generation info, so it must exist
+        printf("broken 2\n");
         status = U1DB_BROKEN_SYNC_STREAM;
         goto finish;
     }
     obj = json_object_array_get_idx(json, 0);
     attr = json_object_object_get(obj, "new_generation");
     if (attr == NULL) {
+        printf("broken 3\n");
         status = U1DB_BROKEN_SYNC_STREAM;
         goto finish;
     }
     *target_gen = json_object_get_int(attr);
     attr = json_object_object_get(obj, "new_transaction_id");
     if (attr == NULL) {
+        printf("broken 4\n");
         status = U1DB_BROKEN_SYNC_STREAM;
         goto finish;
     }
     tmp = json_object_get_string(attr);
     if (tmp == NULL) {
+        printf("broken 5\n");
         status = U1DB_BROKEN_SYNC_STREAM;
         goto finish;
     }

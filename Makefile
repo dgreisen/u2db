@@ -5,6 +5,8 @@ check: build-inplace
 	python -m testtools.run discover
 
 build-inplace: build-cmake
+	rm u1db/tests/c_backend_wrapper.so
+	rm u1db/tests/c_backend_wrapper.c
 	export CFLAGS='-Werror';\
 	python setup.py build_ext -i
 

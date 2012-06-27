@@ -429,6 +429,48 @@ class TestSyncCtoHTTPViaC(tests.TestCaseWithServer):
         self.assertGetDoc(db, mem_doc.doc_id, mem_doc.rev, mem_doc.get_json(),
                           False)
 
+    def test_unavailable(self):
+        mem_db = self.request_state._create_database('test.db')
+        mem_db.create_doc(tests.nested_doc)
+        tries = []
+
+        def wrapper(instance, *args, **kwargs):
+            tries.append(None)
+            raise errors.Unavailable
+
+        mem_db.whats_changed = wrapper
+        url = self.getURL('test.db')
+        target = c_backend_wrapper.create_http_sync_target(url)
+        db = c_backend_wrapper.CDatabase(':memory:')
+        db.create_doc(tests.simple_doc)
+        self.assertRaises(
+            errors.Unavailable, c_backend_wrapper.sync_db_to_target, db,
+            target)
+        self.assertEqual(5, len(tries))
+
+    def test_unavailable_then_available(self):
+        mem_db = self.request_state._create_database('test.db')
+        mem_doc = mem_db.create_doc(tests.nested_doc)
+        orig_whatschanged = mem_db.whats_changed
+        tries = []
+
+        def wrapper(instance, *args, **kwargs):
+            if len(tries) < 1:
+                tries.append(None)
+                raise errors.Unavailable
+            return orig_whatschanged(instance, *args, **kwargs)
+
+        mem_db.whats_changed = wrapper
+        url = self.getURL('test.db')
+        target = c_backend_wrapper.create_http_sync_target(url)
+        db = c_backend_wrapper.CDatabase(':memory:')
+        doc = db.create_doc(tests.simple_doc)
+        c_backend_wrapper.sync_db_to_target(db, target)
+        self.assertEqual(1, len(tries))
+        self.assertGetDoc(mem_db, doc.doc_id, doc.rev, doc.get_json(), False)
+        self.assertGetDoc(db, mem_doc.doc_id, mem_doc.rev, mem_doc.get_json(),
+                          False)
+
 
 class TestSyncCtoOAuthHTTPViaC(tests.TestCaseWithServer):
 
