@@ -66,7 +66,7 @@ add_custom_target(html-docs
 )
 
 add_custom_target(install-python
-    COMMAND python setup.py install -n --root=t --record instlog
+    COMMAND python setup.py install --prefix=${CMAKE_INSTALL_PREFIX}
     DEPENDS ReplicatePythonSourceTree
 )
 
