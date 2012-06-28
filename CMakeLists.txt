@@ -4,6 +4,13 @@ project (u1db)
 set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} "${CMAKE_SOURCE_DIR}/cmake/Modules/")
 include_directories(${CMAKE_SOURCE_DIR}/include)
 
+set(PROJECT_VERSION "0.0.1.dev.0")
+set(ARCHIVE_NAME ${CMAKE_PROJECT_NAME}-${PROJECT_VERSION})
+add_custom_target(dist
+    COMMAND bzr export --root=${ARCHIVE_NAME}
+        ${CMAKE_BINARY_DIR}/${ARCHIVE_NAME}.tar.bz2
+    WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
+
 find_package(Cython REQUIRED)
 
 find_package(CURL REQUIRED)
@@ -69,13 +76,14 @@ SET(CPACK_GENERATOR "TGZ")
 SET(CPACK_DEBIAN_PACKAGE_MAINTAINER "Noone")
 INCLUDE(CPack)
 
-add_custom_target(install-python
+add_custom_target(install-python ALL
     COMMAND python setup.py install --prefix=${CMAKE_INSTALL_PREFIX} --root=${CMAKE_CURRENT_BINARY_DIR}/temp
     DEPENDS ReplicatePythonSourceTree
 )
 
-install(DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/temp/${CMAKE_INSTALL_PREFIX}/ DESTINATION "."
+install(DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/temp/${CMAKE_INSTALL_PREFIX}/
+    DESTINATION "."
+    PATTERN "*.pyc" EXCLUDE
 )
-
 
 add_subdirectory(src)
