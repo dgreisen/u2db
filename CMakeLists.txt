@@ -65,4 +65,9 @@ add_custom_target(html-docs
     COMMAND cd ${CMAKE_SOURCE_DIR}/html-docs; make html
 )
 
+add_custom_target(install-python
+    COMMAND python setup.py install
+    DEPENDS ReplicatePythonSourceTree
+)
+
 add_subdirectory(src)
