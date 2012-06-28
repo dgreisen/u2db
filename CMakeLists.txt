@@ -37,12 +37,12 @@ add_custom_target(check
 )
 
 add_custom_target(build-inplace
-    COMMAND python setup.py build_ext -i
+    COMMAND python setup.py build_ext -i -I "${CMAKE_SOURCE_DIR}/include"
     DEPENDS ReplicatePythonSourceTree u1db
 )
 
 add_custom_target(build-debug
-    COMMAND python-dbg setup.py build_ext -i
+    COMMAND python-dbg setup.py build_ext -i -I "${CMAKE_SOURCE_DIR}/include"
     DEPENDS ReplicatePythonSourceTree u1db
 )
 
