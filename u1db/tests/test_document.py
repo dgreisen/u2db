@@ -21,7 +21,7 @@ from u1db import errors, tests
 
 class TestDocument(tests.TestCase):
 
-    scenarios = ([('py', {'make_document': Document})] +
+    scenarios = ([('py', {'do_make_document': tests.create_doc})] +
                  tests.C_DATABASE_SCENARIOS)
 
     def test_create_doc(self):
@@ -74,7 +74,7 @@ class TestDocument(tests.TestCase):
 
 class TestPyDocument(tests.TestCase):
 
-    scenarios = ([('py', {'make_document': Document})])
+    scenarios = ([('py', {'do_make_document': tests.create_doc})])
 
     def test_get_content(self):
         doc = self.make_document('id', 'rev', '{"content":""}')

@@ -62,8 +62,12 @@ class TestCase(testtools.TestCase):
         self.addCleanup(shutil.rmtree, tempdir)
         return tempdir
 
-    def make_document(self, doc_id, doc_rev, content, has_conflicts):
-        return Document(doc_id, doc_rev, content, has_conflicts)
+    def make_document(self, doc_id, doc_rev, content, has_conflicts=False):
+        return self.do_make_document(
+            self, doc_id, doc_rev, content, has_conflicts)
+
+    def do_make_document(self, test, doc_id, doc_rev, content, has_conflicts):
+        return create_doc(test, doc_id, doc_rev, content, has_conflicts)
 
     def assertGetDoc(self, db, doc_id, doc_rev, content, has_conflicts):
         """Assert that the document in the database looks correct."""
@@ -121,7 +125,7 @@ def create_sqlite_partial_expanded(test, replica_uid):
     return db
 
 
-def create_doc(doc_id, rev, content, has_conflicts=False):
+def create_doc(test, doc_id, rev, content, has_conflicts=False):
     return Document(doc_id, rev, content, has_conflicts=has_conflicts)
 
 
@@ -133,22 +137,24 @@ def create_c_database(test, replica_uid):
     return db
 
 
-def create_c_document(doc_id, rev, content, has_conflicts=False):
+def create_c_document(test, doc_id, rev, content, has_conflicts=False):
+    if c_backend_wrapper is None:
+        test.skipTest('c_backend_wrapper is not available')
     return c_backend_wrapper.make_document(
         doc_id, rev, content, has_conflicts=has_conflicts)
 
 
 LOCAL_DATABASES_SCENARIOS = [
         ('mem', {'do_create_database': create_memory_database,
-                 'make_document': create_doc}),
+                 'do_make_document': create_doc}),
         ('sql', {'do_create_database': create_sqlite_partial_expanded,
-                 'make_document': create_doc}),
+                 'do_make_document': create_doc}),
         ]
 
 
 C_DATABASE_SCENARIOS = [
         ('c', {'do_create_database': create_c_database,
-               'make_document': create_c_document})]
+               'do_make_document': create_c_document})]
 
 
 class DatabaseBaseTests(TestCase):

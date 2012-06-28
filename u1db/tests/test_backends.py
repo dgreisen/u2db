@@ -63,10 +63,10 @@ class AllDatabaseTests(tests.DatabaseBaseTests, tests.TestCaseWithServer):
 
     scenarios = tests.LOCAL_DATABASES_SCENARIOS + [
         ('http', {'do_create_database': http_create_database,
-                  'make_document': tests.create_doc,
+                  'do_make_document': tests.create_doc,
                   'server_def': http_server_def}),
         ('oauth_http', {'do_create_database': oauth_http_create_database,
-                        'make_document': tests.create_doc,
+                        'do_make_document': tests.create_doc,
                         'server_def': oauth_http_server_def})
         ] + tests.C_DATABASE_SCENARIOS
 
