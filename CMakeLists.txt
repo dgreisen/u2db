@@ -65,9 +65,17 @@ add_custom_target(html-docs
     COMMAND cd ${CMAKE_SOURCE_DIR}/html-docs; make html
 )
 
+SET(CPACK_GENERATOR "TGZ")
+SET(CPACK_DEBIAN_PACKAGE_MAINTAINER "Noone")
+INCLUDE(CPack)
+
 add_custom_target(install-python
-    COMMAND python setup.py install --prefix=${CMAKE_INSTALL_PREFIX}
+    COMMAND python setup.py install --prefix=${CMAKE_INSTALL_PREFIX} --root=${CMAKE_CURRENT_BINARY_DIR}/temp
     DEPENDS ReplicatePythonSourceTree
 )
+
+install(DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/temp/${CMAKE_INSTALL_PREFIX}/ DESTINATION "."
+)
+
 
 add_subdirectory(src)
