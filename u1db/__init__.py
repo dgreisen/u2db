@@ -32,6 +32,8 @@ def open(path, create, document_factory=None):
     :param path: The filesystem path for the database to open.
     :param create: True/False, should the database be created if it doesn't
         already exist?
+    :param document_factory: A function that will be called with the same
+        parameters as Document.__init__.
     :return: An instance of Database.
     """
     from u1db.backends import sqlite_backend

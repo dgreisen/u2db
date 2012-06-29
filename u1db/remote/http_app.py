@@ -514,8 +514,7 @@ class HTTPApp(object):
         except errors.U1DBError, e:
             self.request_u1db_error(environ, e)
             status = http_errors.wire_description_to_status.get(
-                                                            e.wire_description,
-                                                            500)
+                e.wire_description, 500)
             responder.send_response_json(status, error=e.wire_description)
         except BadRequest:
             self.request_bad_request(environ)
