@@ -62,8 +62,14 @@ class TestCase(testtools.TestCase):
         self.addCleanup(shutil.rmtree, tempdir)
         return tempdir
 
-    def make_document(self, doc_id, doc_rev, content, has_conflicts):
-        return Document(doc_id, doc_rev, content, has_conflicts)
+    def make_document(self, doc_id, doc_rev, content, has_conflicts=False):
+        return self.make_document_for_test(
+            self, doc_id, doc_rev, content, has_conflicts)
+
+    def make_document_for_test(self, test, doc_id, doc_rev, content,
+                               has_conflicts):
+        return make_document_for_test(
+            test, doc_id, doc_rev, content, has_conflicts)
 
     def assertGetDoc(self, db, doc_id, doc_rev, content, has_conflicts):
         """Assert that the document in the database looks correct."""
@@ -111,21 +117,21 @@ simple_doc = '{"key": "value"}'
 nested_doc = '{"key": "value", "sub": {"doc": "underneath"}}'
 
 
-def create_memory_database(test, replica_uid):
+def make_memory_database_for_test(test, replica_uid):
     return inmemory.InMemoryDatabase(replica_uid)
 
 
-def create_sqlite_partial_expanded(test, replica_uid):
+def make_sqlite_partial_expanded_for_test(test, replica_uid):
     db = sqlite_backend.SQLitePartialExpandDatabase(':memory:')
     db._set_replica_uid(replica_uid)
     return db
 
 
-def create_doc(doc_id, rev, content, has_conflicts=False):
+def make_document_for_test(test, doc_id, rev, content, has_conflicts=False):
     return Document(doc_id, rev, content, has_conflicts=has_conflicts)
 
 
-def create_c_database(test, replica_uid):
+def make_c_database_for_test(test, replica_uid):
     if c_backend_wrapper is None:
         test.skipTest('c_backend_wrapper is not available')
     db = c_backend_wrapper.CDatabase(':memory:')
@@ -133,22 +139,25 @@ def create_c_database(test, replica_uid):
     return db
 
 
-def create_c_document(doc_id, rev, content, has_conflicts=False):
+def make_c_document_for_test(test, doc_id, rev, content, has_conflicts=False):
+    if c_backend_wrapper is None:
+        test.skipTest('c_backend_wrapper is not available')
     return c_backend_wrapper.make_document(
         doc_id, rev, content, has_conflicts=has_conflicts)
 
 
 LOCAL_DATABASES_SCENARIOS = [
-        ('mem', {'do_create_database': create_memory_database,
-                 'make_document': create_doc}),
-        ('sql', {'do_create_database': create_sqlite_partial_expanded,
-                 'make_document': create_doc}),
+        ('mem', {'make_database_for_test': make_memory_database_for_test,
+                 'make_document_for_test': make_document_for_test}),
+        ('sql', {'make_database_for_test':
+                 make_sqlite_partial_expanded_for_test,
+                 'make_document_for_test': make_document_for_test}),
         ]
 
 
 C_DATABASE_SCENARIOS = [
-        ('c', {'do_create_database': create_c_database,
-               'make_document': create_c_document})]
+        ('c', {'make_database_for_test': make_c_database_for_test,
+               'make_document_for_test': make_c_document_for_test})]
 
 
 class DatabaseBaseTests(TestCase):
@@ -156,7 +165,7 @@ class DatabaseBaseTests(TestCase):
     scenarios = LOCAL_DATABASES_SCENARIOS
 
     def create_database(self, replica_uid):
-        return self.do_create_database(self, replica_uid)
+        return self.make_database_for_test(self, replica_uid)
 
     def setUp(self):
         super(DatabaseBaseTests, self).setUp()

@@ -38,9 +38,11 @@ def oauth_https_server_def():
                                         )
         # workaround apparent interface mismatch
         orig_shutdown_request = srv.shutdown_request
+
         def shutdown_request(req):
             req.shutdown()
             srv.close_request(req)
+
         srv.shutdown_request = shutdown_request
         application.base_url = "https://localhost:%s" % srv.server_address[1]
         return srv
@@ -59,7 +61,7 @@ class TestHttpSyncTargetHttpsSupport(tests.TestCaseWithServer):
 
     scenarios = [
         ('oauth_https', {'server_def': oauth_https_server_def,
-                        'make_document': tests.create_doc,
+                        'make_document_for_test': tests.make_document_for_test,
                         'sync_target': oauth_https_sync_target
                          }),
         ]

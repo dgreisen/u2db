@@ -15,6 +15,7 @@
 # You should have received a copy of the GNU Lesser General Public License
 # along with u1db.  If not, see <http://www.gnu.org/licenses/>.
 
+import os
 import sys
 
 
@@ -85,7 +86,7 @@ synchronize them with other stores.
         ext.append(Extension(
             "u1db.tests.c_backend_wrapper",
             ["u1db/tests/c_backend_wrapper.pyx"],
-            include_dirs=["include"],
+            include_dirs=['include'],
             library_dirs=["src"],
             libraries=['u1db', 'sqlite3', 'oauth'] + extra_libs,
             define_macros=[] + extra_defines,
