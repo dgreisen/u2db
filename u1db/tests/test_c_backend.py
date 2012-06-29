@@ -29,7 +29,7 @@ from u1db.tests.test_remote_sync_target import (
 
 class TestCDatabaseExists(tests.TestCase):
 
-    def test_exists(self):
+    def test_c_backend_compiled(self):
         if c_backend_wrapper is None:
             self.fail("Could not import the c_backend_wrapper module."
                       " Was it compiled properly?\n%s" % (c_backend_error,))

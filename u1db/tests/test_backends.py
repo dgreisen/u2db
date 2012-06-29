@@ -42,14 +42,14 @@ except ImportError:
     c_backend_wrapper = None
 
 
-def http_create_database(test, replica_uid, path='test'):
+def make_http_database_for_test(test, replica_uid, path='test'):
     test.startServer()
     test.request_state._create_database(replica_uid)
     return http_database.HTTPDatabase(test.getURL(path))
 
 
-def oauth_http_create_database(test, replica_uid):
-    http_db = http_create_database(test, replica_uid, '~/test')
+def make_oauth_http_database_for_test(test, replica_uid):
+    http_db = make_http_database_for_test(test, replica_uid, '~/test')
     http_db.set_oauth_credentials(tests.consumer1.key, tests.consumer1.secret,
                                   tests.token1.key, tests.token1.secret)
     return http_db
@@ -62,11 +62,12 @@ class TestAlternativeDocument(DocumentBase):
 class AllDatabaseTests(tests.DatabaseBaseTests, tests.TestCaseWithServer):
 
     scenarios = tests.LOCAL_DATABASES_SCENARIOS + [
-        ('http', {'do_create_database': http_create_database,
-                  'make_document': tests.create_doc,
+        ('http', {'make_database_for_test': make_http_database_for_test,
+                  'make_document_for_test': tests.make_document_for_test,
                   'server_def': http_server_def}),
-        ('oauth_http', {'do_create_database': oauth_http_create_database,
-                        'make_document': tests.create_doc,
+        ('oauth_http', {'make_database_for_test':
+                        make_oauth_http_database_for_test,
+                        'make_document_for_test': tests.make_document_for_test,
                         'server_def': oauth_http_server_def})
         ] + tests.C_DATABASE_SCENARIOS
 
