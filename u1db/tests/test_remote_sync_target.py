@@ -156,10 +156,10 @@ class TestRemoteSyncTargets(tests.TestCaseWithServer):
 
     scenarios = [
         ('http', {'server_def': http_server_def,
-                  'do_make_document': tests.create_doc,
+                  'make_document_for_test': tests.make_document_for_test,
                   'sync_target': http_sync_target}),
         ('oauth_http', {'server_def': oauth_http_server_def,
-                        'do_make_document': tests.create_doc,
+                        'make_document_for_test': tests.make_document_for_test,
                         'sync_target': oauth_http_sync_target}),
         ]
 

@@ -11,3 +11,7 @@ html-docs/_build/html
 u1db/tests/c_backend_wrapper.c
 ./src/u1db_schema.c
 .ropeproject
+src/CMakeCache.txt
+src/CMakeFiles
+src/Makefile
+src/cmake_install.cmake
