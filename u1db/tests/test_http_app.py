@@ -710,7 +710,7 @@ class TestHTTPApp(tests.TestCase):
         self.assertEqual('application/json', resp.header('content-type'))
         self.assertEqual({'ok': True}, simplejson.loads(resp.body))
         self.assertEqual((2, 'T-transid'),
-                         self.db0._get_sync_gen_info('other-id'))
+                         self.db0._get_sync_info('other-id'))
 
     def test_sync_exchange_send(self):
         entries = {
@@ -1012,5 +1012,6 @@ class TestPluggableSyncExchange(tests.TestCase):
             sync_exchange_class = MySyncExchange
 
         sync_res = MySyncResource('foo', 'src', self.state, None)
-        sync_res.post_args({'last_known_generation': 0}, '{}')
+        sync_res.post_args(
+            {'last_known_generation': 0, 'last_known_trans_id': None}, '{}')
         self.assertIsInstance(sync_res.sync_exch, MySyncExchange)

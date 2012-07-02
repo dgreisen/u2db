@@ -119,7 +119,7 @@ class CommonBackend(u1db.Database):
         replica, *or* it must be the same and the transaction_id must be the
         same as well.
         """
-        old_generation, old_transaction_id = self._get_sync_gen_info(
+        old_generation, old_transaction_id = self._get_sync_info(
             other_replica_uid)
         if other_generation < old_generation:
             if cur_vcr.is_newer(other_vcr):

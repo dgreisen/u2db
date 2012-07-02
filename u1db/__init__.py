@@ -275,7 +275,7 @@ class Database(object):
         from u1db.remote.http_target import HTTPSyncTarget
         return Synchronizer(self, HTTPSyncTarget(url)).sync()
 
-    def _get_sync_gen_info(self, other_replica_uid):
+    def _get_sync_info(self, other_replica_uid):
         """Return the last known information about the other db replica.
 
         When you do a synchronization with another replica, the Database keeps
@@ -289,14 +289,14 @@ class Database(object):
             encountered during synchronization. If we've never synchronized
             with the replica, this is (0, '').
         """
-        raise NotImplementedError(self._get_sync_gen_info)
+        raise NotImplementedError(self._get_sync_info)
 
     def _set_sync_info(self, other_replica_uid, other_generation,
                        other_transaction_id):
         """Set the last-known generation for the other database replica.
 
         We have just performed some synchronization, and we want to track what
-        generation the other replica was at. See also _get_sync_gen_info.
+        generation the other replica was at. See also _get_sync_info.
         :param other_replica_uid: The U1DB identifier for the other replica.
         :param other_generation: The generation number for the other replica.
         :param other_transaction_id: The transaction id associated with the
@@ -562,7 +562,8 @@ class SyncTarget(object):
         raise NotImplementedError(self.record_sync_info)
 
     def sync_exchange(self, docs_by_generation, source_replica_uid,
-                      last_known_generation, return_doc_cb):
+                      last_known_generation, last_known_trans_id,
+                      return_doc_cb):
         """Incorporate the documents sent from the source replica.
 
         This is not meant to be called by client code directly, but is used as
@@ -586,7 +587,9 @@ class SyncTarget(object):
             id of their latest change.
         :param source_replica_uid: The source replica's identifier
         :param last_known_generation: The last generation that the source
-            replica knows about this
+            replica knows about this target replica
+        :param last_known_trans_id: The last transaction id that the source
+            replica knows about this target replica
         :param: return_doc_cb(doc, gen): is a callback
                 used to return documents to the source replica, it will
                 be invoked in turn with Documents that have changed since

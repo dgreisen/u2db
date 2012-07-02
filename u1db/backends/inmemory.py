@@ -46,6 +46,10 @@ class InMemoryDatabase(CommonBackend):
         self._last_exchange_log = None
         self._factory = document_factory or Document
 
+    def _set_replica_uid(self, replica_uid):
+        """Force the replica_uid to be set."""
+        self._replica_uid = replica_uid
+
     def set_document_factory(self, factory):
         self._factory = factory
 
@@ -54,7 +58,7 @@ class InMemoryDatabase(CommonBackend):
         # may be closing it, while another wants to inspect the results.
         pass
 
-    def _get_sync_gen_info(self, other_replica_uid):
+    def _get_sync_info(self, other_replica_uid):
         return self._other_generations.get(other_replica_uid, (0, ''))
 
     def _set_sync_info(self, other_replica_uid, other_generation,
@@ -443,7 +447,7 @@ class InMemoryIndex(object):
 class InMemorySyncTarget(CommonSyncTarget):
 
     def get_sync_info(self, source_replica_uid):
-        source_gen, trans_id = self._db._get_sync_gen_info(source_replica_uid)
+        source_gen, trans_id = self._db._get_sync_info(source_replica_uid)
         return (self._db._replica_uid, len(self._db._transaction_log),
                 source_gen, trans_id)
 
