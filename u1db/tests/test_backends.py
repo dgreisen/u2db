@@ -543,7 +543,7 @@ class LocalDatabaseValidateGenNTransIdTests(tests.DatabaseBaseTests):
             errors.InvalidTransactionId,
             self.db.validate_gen_and_trans_id, gen, 'wrong')
 
-    def test_validate_gen_and_trans_id_invalid_txid(self):
+    def test_validate_gen_and_trans_id_invalid_gen(self):
         self.db.create_doc(simple_doc)
         gen, trans_id = self.db._get_generation_info()
         self.assertRaises(
