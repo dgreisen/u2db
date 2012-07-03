@@ -300,15 +300,15 @@ int u1db__get_transaction_log(u1database *db, void *context,
  * @param trans_id    (OUT) The transaction id associated with the generation.
  *                    Callers must free the data.
  */
-int u1db__get_sync_gen_info(u1database *db, const char *replica_uid,
-                            int *generation, char **trans_id);
+int u1db__get_replica_gen_and_trans_id(u1database *db, const char *replica_uid,
+                                       int *generation, char **trans_id);
 
 /**
  * Set the known sync generation for another replica.
  *
  */
-int u1db__set_sync_info(u1database *db, const char *replica_uid,
-                        int generation, const char *trans_id);
+int u1db__set_replica_gen_and_trans_id(u1database *db, const char *replica_uid,
+                                       int generation, const char *trans_id);
 
 /**
  * Internal sync api, get the stored information about another machine.
@@ -358,8 +358,9 @@ void u1db__free_records(u1db_record **record);
 /**
  * Create a new u1db_document object. This should be freed
  */
-u1db_document *u1db__allocate_document(const char *doc_id, const char *revision,
-                                       const char *content, int has_conflicts);
+int u1db__allocate_document(const char *doc_id, const char *revision,
+                            const char *content, int has_conflicts,
+                            u1db_document **result);
 
 /**
  * Generate a unique id.

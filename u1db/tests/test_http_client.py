@@ -43,6 +43,10 @@ class TestEncoder(tests.TestCase):
 
 class TestHTTPClientBase(tests.TestCaseWithServer):
 
+    def setUp(self):
+        super(TestHTTPClientBase, self).setUp()
+        self.errors = 0
+
     def app(self, environ, start_response):
         if environ['PATH_INFO'].endswith('echo'):
             start_response("200 OK", [('Content-Type', 'application/json')])
@@ -54,7 +58,37 @@ class TestHTTPClientBase(tests.TestCaseWithServer):
                 content_length = int(environ['CONTENT_LENGTH'])
                 ret['body'] = environ['wsgi.input'].read(content_length)
             return [simplejson.dumps(ret)]
+        elif environ['PATH_INFO'].endswith('error_then_accept'):
+            if self.errors >= 3:
+                start_response(
+                    "200 OK", [('Content-Type', 'application/json')])
+                ret = {}
+                for name in ('REQUEST_METHOD', 'PATH_INFO', 'QUERY_STRING'):
+                    ret[name] = environ[name]
+                if environ['REQUEST_METHOD'] in ('PUT', 'POST'):
+                    ret['CONTENT_TYPE'] = environ['CONTENT_TYPE']
+                    content_length = int(environ['CONTENT_LENGTH'])
+                    ret['body'] = '{"oki": "doki"}'
+                return [simplejson.dumps(ret)]
+            self.errors += 1
+            content_length = int(environ['CONTENT_LENGTH'])
+            error = simplejson.loads(
+                environ['wsgi.input'].read(content_length))
+            response = error['response']
+            # In debug mode, wsgiref has an assertion that the status parameter
+            # is a 'str' object. However error['status'] returns a unicode
+            # object.
+            status = str(error['status'])
+            if isinstance(response, unicode):
+                response = str(response)
+            if isinstance(response, str):
+                start_response(status, [('Content-Type', 'text/plain')])
+                return [str(response)]
+            else:
+                start_response(status, [('Content-Type', 'application/json')])
+                return [simplejson.dumps(response)]
         elif environ['PATH_INFO'].endswith('error'):
+            self.errors += 1
             content_length = int(environ['CONTENT_LENGTH'])
             error = simplejson.loads(
                 environ['wsgi.input'].read(content_length))
@@ -204,13 +238,31 @@ class TestHTTPClientBase(tests.TestCaseWithServer):
 
     def test_unavailable_proper(self):
         cli = self.getClient()
+        cli._delays = (0, 0, 0, 0, 0)
         self.assertRaises(errors.Unavailable,
                           cli._request_json, 'POST', ['error'], {},
                           {'status': "503 Service Unavailable",
                            'response': {"error": "unavailable"}})
+        self.assertEqual(5, self.errors)
+
+    def test_unavailable_then_available(self):
+        cli = self.getClient()
+        cli._delays = (0, 0, 0, 0, 0)
+        res, headers = cli._request_json(
+            'POST', ['error_then_accept'], {'b': 2},
+            {'status': "503 Service Unavailable",
+             'response': {"error": "unavailable"}})
+        self.assertEqual('application/json', headers['content-type'])
+        self.assertEqual({'CONTENT_TYPE': 'application/json',
+                          'PATH_INFO': '/dbase/error_then_accept',
+                          'QUERY_STRING': 'b=2',
+                          'body': '{"oki": "doki"}',
+                          'REQUEST_METHOD': 'POST'}, res)
+        self.assertEqual(3, self.errors)
 
     def test_unavailable_random_source(self):
         cli = self.getClient()
+        cli._delays = (0, 0, 0, 0, 0)
         try:
             cli._request_json('POST', ['error'], {},
                               {'status': "503 Service Unavailable",
@@ -221,6 +273,7 @@ class TestHTTPClientBase(tests.TestCaseWithServer):
         self.assertEqual(503, e.status)
         self.assertEqual("random unavailable.", e.message)
         self.assertTrue("content-type" in e.headers)
+        self.assertEqual(5, self.errors)
 
     def test_generic_u1db_error(self):
         cli = self.getClient()

@@ -81,7 +81,7 @@ class TestParsingSyncStream(tests.TestCase):
         self.assertRaises(errors.BrokenSyncStream,
                           tgt._parse_sync_stream,
                           '[\r\n{},\r\n{"id": "i", "rev": "r", '
-                          '"content": "c", "gen": 3, "trans_id": "T-sid"}'
+                          '"content": "{}", "gen": 3, "trans_id": "T-sid"}'
                           ',\r\n]',
                           lambda doc, gen, trans_id: None)
 
@@ -156,10 +156,10 @@ class TestRemoteSyncTargets(tests.TestCaseWithServer):
 
     scenarios = [
         ('http', {'server_def': http_server_def,
-                  'make_document': tests.create_doc,
+                  'make_document_for_test': tests.make_document_for_test,
                   'sync_target': http_sync_target}),
         ('oauth_http', {'server_def': oauth_http_server_def,
-                        'make_document': tests.create_doc,
+                        'make_document_for_test': tests.make_document_for_test,
                         'sync_target': oauth_http_sync_target}),
         ]
 
@@ -171,7 +171,7 @@ class TestRemoteSyncTargets(tests.TestCaseWithServer):
     def test_get_sync_info(self):
         self.startServer()
         db = self.request_state._create_database('test')
-        db._set_sync_info('other-id', 1, 'T-transid')
+        db._set_replica_gen_and_trans_id('other-id', 1, 'T-transid')
         remote_target = self.getSyncTarget('test')
         self.assertEqual(('test', 0, 1, 'T-transid'),
                          remote_target.get_sync_info('other-id'))
@@ -181,7 +181,8 @@ class TestRemoteSyncTargets(tests.TestCaseWithServer):
         db = self.request_state._create_database('test')
         remote_target = self.getSyncTarget('test')
         remote_target.record_sync_info('other-id', 2, 'T-transid')
-        self.assertEqual((2, 'T-transid'), db._get_sync_gen_info('other-id'))
+        self.assertEqual(
+            (2, 'T-transid'), db._get_replica_gen_and_trans_id('other-id'))
 
     def test_sync_exchange_send(self):
         self.startServer()
@@ -239,7 +240,8 @@ class TestRemoteSyncTargets(tests.TestCaseWithServer):
             return_doc_cb=receive_doc)
         self.assertGetDoc(db, 'doc-here', 'replica:1', '{"value": "here"}',
                           False)
-        self.assertEqual((10, 'T-sid'), db._get_sync_gen_info('replica'))
+        self.assertEqual(
+            (10, 'T-sid'), db._get_replica_gen_and_trans_id('replica'))
         self.assertEqual([], other_changes)
         # retry
         trigger_ids = []
@@ -248,7 +250,8 @@ class TestRemoteSyncTargets(tests.TestCaseWithServer):
             last_known_trans_id=None, return_doc_cb=receive_doc)
         self.assertGetDoc(db, 'doc-here2', 'replica:1', '{"value": "here2"}',
                           False)
-        self.assertEqual((11, 'T-sud'), db._get_sync_gen_info('replica'))
+        self.assertEqual(
+            (11, 'T-sud'), db._get_replica_gen_and_trans_id('replica'))
         self.assertEqual(2, new_gen)
         # bounced back to us
         self.assertEqual(

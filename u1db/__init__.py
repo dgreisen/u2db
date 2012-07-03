@@ -17,6 +17,7 @@
 """U1DB"""
 
 import simplejson
+from u1db.errors import InvalidJSON
 
 __version_info__ = (0, 0, 1, 'dev', 0)
 __version__ = '.'.join(map(str, __version_info__))
@@ -31,6 +32,8 @@ def open(path, create, document_factory=None):
     :param path: The filesystem path for the database to open.
     :param create: True/False, should the database be created if it doesn't
         already exist?
+    :param document_factory: A function that will be called with the same
+        parameters as Document.__init__.
     :return: An instance of Database.
     """
     from u1db.backends import sqlite_backend
@@ -272,8 +275,9 @@ class Database(object):
         from u1db.remote.http_target import HTTPSyncTarget
         return Synchronizer(self, HTTPSyncTarget(url)).sync()
 
-    def _get_sync_gen_info(self, other_replica_uid):
-        """Return the last known information about the other db replica.
+    def _get_replica_gen_and_trans_id(self, other_replica_uid):
+        """Return the last known generation and transaction id for the other db
+        replica.
 
         When you do a synchronization with another replica, the Database keeps
         track of what generation the other database replica was at, and what
@@ -286,21 +290,23 @@ class Database(object):
             encountered during synchronization. If we've never synchronized
             with the replica, this is (0, '').
         """
-        raise NotImplementedError(self._get_sync_gen_info)
+        raise NotImplementedError(self._replica_gen_and_trans_id)
 
-    def _set_sync_info(self, other_replica_uid, other_generation,
-                       other_transaction_id):
-        """Set the last-known generation for the other database replica.
+    def _set_replica_gen_and_trans_id(self, other_replica_uid,
+                                      other_generation, other_transaction_id):
+        """Set the last-known generation and transaction id for the other
+        database replica.
 
         We have just performed some synchronization, and we want to track what
-        generation the other replica was at. See also _get_sync_gen_info.
+        generation the other replica was at. See also
+        _get_replica_gen_and_trans_id.
         :param other_replica_uid: The U1DB identifier for the other replica.
         :param other_generation: The generation number for the other replica.
         :param other_transaction_id: The transaction id associated with the
             generation.
         :return: None
         """
-        raise NotImplementedError(self._set_sync_info)
+        raise NotImplementedError(self._set_replica_gen_and_trans_id)
 
     def _put_doc_if_newer(self, doc, save_conflict, replica_uid=None,
                           replica_gen=None, replica_trans_id=None):
@@ -357,6 +363,13 @@ class DocumentBase(object):
     def __init__(self, doc_id, rev, json, has_conflicts=False):
         self.doc_id = doc_id
         self.rev = rev
+        if json is not None:
+            try:
+                value = simplejson.loads(json)
+            except simplejson.JSONDecodeError:
+                raise InvalidJSON
+            if not isinstance(value, dict):
+                raise InvalidJSON
         self._json = json
         self.has_conflicts = has_conflicts
 
@@ -411,6 +424,13 @@ class DocumentBase(object):
 
     def set_json(self, json):
         """Set the json serialization of this document."""
+        if json is not None:
+            try:
+                self._content = simplejson.loads(json)
+            except simplejson.JSONDecodeError:
+                raise InvalidJSON
+            if not isinstance(self._content, dict):
+                raise InvalidJSON
         self._json = json
 
     def make_tombstone(self):
@@ -438,6 +458,9 @@ class Document(DocumentBase):
     # Documents a lot more user friendly.
 
     def __init__(self, doc_id, rev, json, has_conflicts=False):
+        # TODO: We convert the json in the superclass to check its validity so
+        # we might as well set _content here directly since the price is
+        # already being paid.
         super(Document, self).__init__(doc_id, rev, json, has_conflicts)
         self._content = None
 
@@ -464,6 +487,9 @@ class Document(DocumentBase):
 
     def set_json(self, json):
         """Set the json serialization of this document."""
+        # TODO: We convert the json in the superclass to check its validity so
+        # we might as well set _content here directly since the price is
+        # already being paid.
         self._content = None
         super(Document, self).set_json(json)
 

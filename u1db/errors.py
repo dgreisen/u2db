@@ -33,6 +33,10 @@ class RevisionConflict(U1DBError):
     wire_description = "revision conflict"
 
 
+class InvalidJSON(U1DBError):
+    """Content was not valid json."""
+
+
 class InvalidDocId(U1DBError):
     """A document was tried with an invalid document identifier."""
 
@@ -132,6 +136,7 @@ class BrokenSyncStream(U1DBError):
     """Unterminated or otherwise broken sync exchange stream."""
 
     wire_description = None
+
 
 # mapping wire (transimission) descriptions/tags for errors to the exceptions
 wire_description_to_exc = dict(
