@@ -119,8 +119,9 @@ class CommonBackend(u1db.Database):
         replica, *or* it must be the same and the transaction_id must be the
         same as well.
         """
-        old_generation, old_transaction_id = self._get_sync_gen_info(
-            other_replica_uid)
+        (old_generation,
+         old_transaction_id) = self._get_replica_gen_and_trans_id(
+             other_replica_uid)
         if other_generation < old_generation:
             if cur_vcr.is_newer(other_vcr):
                 return 'superseded'
@@ -174,7 +175,8 @@ class CommonBackend(u1db.Database):
             if save_conflict:
                 self._force_doc_sync_conflict(doc)
         if replica_uid is not None and replica_gen is not None:
-            self._do_set_sync_info(replica_uid, replica_gen, replica_trans_id)
+            self._do_set_replica_gen_and_trans_id(
+                replica_uid, replica_gen, replica_trans_id)
         return state, self._get_generation()
 
     def _ensure_maximal_rev(self, cur_rev, extra_revs):
