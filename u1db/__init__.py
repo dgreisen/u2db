@@ -299,7 +299,7 @@ class Database(object):
 
         We have just performed some synchronization, and we want to track what
         generation the other replica was at. See also
-        _replica_gen_and_trans_id.
+        _get_replica_gen_and_trans_id.
         :param other_replica_uid: The U1DB identifier for the other replica.
         :param other_generation: The generation number for the other replica.
         :param other_transaction_id: The transaction id associated with the
