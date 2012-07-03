@@ -4,7 +4,9 @@ project (u1db)
 set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} "${CMAKE_SOURCE_DIR}/cmake/Modules/")
 include_directories(${CMAKE_SOURCE_DIR}/include)
 
-set(PROJECT_VERSION "0.0.1.dev.0")
+execute_process(COMMAND python setup.py --version
+                OUTPUT_VARIABLE PROJECT_VERSION)
+
 set(ARCHIVE_NAME ${CMAKE_PROJECT_NAME}-${PROJECT_VERSION})
 add_custom_target(dist
     COMMAND bzr export --root=${ARCHIVE_NAME}
