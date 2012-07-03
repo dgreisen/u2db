@@ -20,6 +20,10 @@ import sys
 
 
 def config():
+    try:
+        from setuptools import setup, Extension, find_packages
+    except ImportError:
+        from distutils.core import setup, Extension, find_packages
     import u1db
     ext = []
     kwargs = {
@@ -31,8 +35,8 @@ def config():
         "author": "Ubuntu One team",
         "author_email": "u1db-discuss@lists.launchpad.net",
         "download_url": "https://launchpad.net/u1db/+download",
-        "packages": ["u1db", "u1db.backends", "u1db.remote",
-                     "u1db.commandline", "u1db.compat"],
+        "packages": find_packages(exclude=["u1db.tests",
+            "u1db.tests.commandline", "u1todo"]),
         "package_data": {'': ["*.sql"]},
         "scripts": ['u1db-client', 'u1db-serve'],
         "ext_modules": ext,
@@ -60,12 +64,6 @@ This allows you to get, retrieve, index, and update JSON documents, and
 synchronize them with other stores.
 """
     }
-
-    try:
-        from setuptools import setup, Extension
-    except ImportError:
-        from distutils.core import setup, Extension
-
     try:
         from Cython.Distutils import build_ext
     except ImportError, e:
@@ -91,8 +89,6 @@ synchronize them with other stores.
             libraries=['u1db', 'sqlite3', 'oauth'] + extra_libs,
             define_macros=[] + extra_defines,
             ))
-
-
     setup(**kwargs)
 
 if __name__ == "__main__":

@@ -4,6 +4,15 @@ project (u1db)
 set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} "${CMAKE_SOURCE_DIR}/cmake/Modules/")
 include_directories(${CMAKE_SOURCE_DIR}/include)
 
+execute_process(COMMAND python setup.py --version
+                OUTPUT_VARIABLE PROJECT_VERSION)
+
+set(ARCHIVE_NAME ${CMAKE_PROJECT_NAME}-${PROJECT_VERSION})
+add_custom_target(dist
+    COMMAND bzr export --root=${ARCHIVE_NAME}
+        ${CMAKE_BINARY_DIR}/${ARCHIVE_NAME}.tar.bz2
+    WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
+
 find_package(Cython REQUIRED)
 
 find_package(CURL REQUIRED)
@@ -37,12 +46,12 @@ add_custom_target(check
 )
 
 add_custom_target(build-inplace
-    COMMAND python setup.py build_ext -i -I "${CMAKE_SOURCE_DIR}/include"
+    COMMAND python setup.py clean build_ext -i -f
     DEPENDS ReplicatePythonSourceTree u1db
 )
 
 add_custom_target(build-debug
-    COMMAND python-dbg setup.py build_ext -i -I "${CMAKE_SOURCE_DIR}/include"
+    COMMAND python-dbg setup.py build_ext -i
     DEPENDS ReplicatePythonSourceTree u1db
 )
 
@@ -63,6 +72,25 @@ add_custom_target(check-verbose
 
 add_custom_target(html-docs
     COMMAND cd ${CMAKE_SOURCE_DIR}/html-docs; make html
+)
+
+SET(CPACK_GENERATOR "TGZ")
+SET(CPACK_DEBIAN_PACKAGE_MAINTAINER "Noone")
+INCLUDE(CPack)
+
+add_custom_target(install-python ALL
+    COMMAND python setup.py install --prefix=${CMAKE_INSTALL_PREFIX} --root=${CMAKE_CURRENT_BINARY_DIR}/temp
+    DEPENDS ReplicatePythonSourceTree
+)
+
+install(DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/temp/${CMAKE_INSTALL_PREFIX}/
+    DESTINATION "."
+    PATTERN "*.pyc" EXCLUDE
+    PATTERN "tests" EXCLUDE
+    PATTERN "u1db-client"
+    PERMISSIONS OWNER_EXECUTE OWNER_WRITE OWNER_READ GROUP_EXECUTE GROUP_READ WORLD_EXECUTE WORLD_READ
+    PATTERN "u1db-server"
+    PERMISSIONS OWNER_EXECUTE OWNER_WRITE OWNER_READ GROUP_EXECUTE GROUP_READ WORLD_EXECUTE WORLD_READ
 )
 
 add_subdirectory(src)
