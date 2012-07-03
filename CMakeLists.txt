@@ -46,7 +46,7 @@ add_custom_target(check
 )
 
 add_custom_target(build-inplace
-    COMMAND python setup.py build_ext -i
+    COMMAND python setup.py clean build_ext -i -f
     DEPENDS ReplicatePythonSourceTree u1db
 )
 
