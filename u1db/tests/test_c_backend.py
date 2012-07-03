@@ -298,8 +298,8 @@ class TestCSyncTarget(BackendTests):
         exc.insert_doc_from_source(doc, 10, 'T-sid')
         self.assertGetDoc(self.db, 'doc-id', 'replica:1', tests.simple_doc,
                           False)
-        self.assertEqual((10, 'T-sid'),
-                         self.db._get_sync_gen_info('source-uid'))
+        self.assertEqual(
+            (10, 'T-sid'), self.db._get_replica_gen_and_trans_id('source-uid'))
         self.assertEqual(['doc-id'], exc.get_seen_ids())
 
     def test_sync_exchange_conflicted_doc(self):

@@ -275,8 +275,9 @@ class Database(object):
         from u1db.remote.http_target import HTTPSyncTarget
         return Synchronizer(self, HTTPSyncTarget(url)).sync()
 
-    def _get_sync_gen_info(self, other_replica_uid):
-        """Return the last known information about the other db replica.
+    def _get_replica_gen_and_trans_id(self, other_replica_uid):
+        """Return the last known generation and transaction id for the other db
+        replica.
 
         When you do a synchronization with another replica, the Database keeps
         track of what generation the other database replica was at, and what
@@ -289,21 +290,23 @@ class Database(object):
             encountered during synchronization. If we've never synchronized
             with the replica, this is (0, '').
         """
-        raise NotImplementedError(self._get_sync_gen_info)
+        raise NotImplementedError(self._replica_gen_and_trans_id)
 
-    def _set_sync_info(self, other_replica_uid, other_generation,
-                       other_transaction_id):
-        """Set the last-known generation for the other database replica.
+    def _set_replica_gen_and_trans_id(self, other_replica_uid,
+                                      other_generation, other_transaction_id):
+        """Set the last-known generation and transaction id for the other
+        database replica.
 
         We have just performed some synchronization, and we want to track what
-        generation the other replica was at. See also _get_sync_gen_info.
+        generation the other replica was at. See also
+        _get_replica_gen_and_trans_id.
         :param other_replica_uid: The U1DB identifier for the other replica.
         :param other_generation: The generation number for the other replica.
         :param other_transaction_id: The transaction id associated with the
             generation.
         :return: None
         """
-        raise NotImplementedError(self._set_sync_info)
+        raise NotImplementedError(self._set_replica_gen_and_trans_id)
 
     def _put_doc_if_newer(self, doc, save_conflict, replica_uid=None,
                           replica_gen=None, replica_trans_id=None):
