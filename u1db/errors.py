@@ -46,7 +46,7 @@ class InvalidDocId(U1DBError):
 class InvalidTransactionId(U1DBError):
     """Invalid transaction for generation."""
 
-    wire_description = "invalid document id"
+    wire_description = "invalid transaction id"
 
 
 class InvalidGeneration(U1DBError):
