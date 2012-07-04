@@ -397,7 +397,7 @@ class DatabaseSyncTargetTests(tests.DatabaseBaseTests,
                          called)
 
 
-def sync_via_synchronizer(db_source, db_target, trace_hook=None):
+def sync_via_synchronizer(test, db_source, db_target, trace_hook=None):
     target = db_target.get_sync_target()
     if trace_hook:
         target._set_trace_hook(trace_hook)
@@ -407,13 +407,36 @@ def sync_via_synchronizer(db_source, db_target, trace_hook=None):
 sync_scenarios = []
 for name, scenario in tests.LOCAL_DATABASES_SCENARIOS:
     scenario = dict(scenario)
-    scenario['sync'] = sync_via_synchronizer
+    scenario['do_sync'] = sync_via_synchronizer
     sync_scenarios.append((name, scenario))
+    scenario = dict(scenario)
+
+
+def make_database_for_http_test(test, replica_uid):
+    if test.server is None:
+        test.startServer()
+    return test.request_state._create_database(replica_uid)
+
+
+def sync_via_synchronizer_and_http(test, db_source, db_target, trace_hook=None):
+    if trace_hook:
+        test.skipTest("trace_hook unsupported over http")
+    path = db_target._replica_uid
+    target = http_target.HTTPSyncTarget.connect(test.getURL(path))
+    return sync.Synchronizer(db_source, target).sync()
+
+
+sync_scenarios.append(('pyhttp', {
+    'make_database_for_test': make_database_for_http_test,
+    'make_document_for_test': tests.make_document_for_test,
+    'server_def': http_server_def,
+    'do_sync': sync_via_synchronizer_and_http
+    }))
 
 
 if tests.c_backend_wrapper is not None:
     # TODO: We should hook up sync tests with an HTTP target
-    def sync_via_c_sync(db_source, db_target, trace_hook=None):
+    def sync_via_c_sync(test, db_source, db_target, trace_hook=None):
         target = db_target.get_sync_target()
         if trace_hook:
             target._set_trace_hook(trace_hook)
@@ -421,17 +444,21 @@ if tests.c_backend_wrapper is not None:
 
     for name, scenario in tests.C_DATABASE_SCENARIOS:
         scenario = dict(scenario)
-        scenario['sync'] = sync_via_synchronizer
+        scenario['do_sync'] = sync_via_synchronizer
         sync_scenarios.append((name + ',pysync', scenario))
         scenario = dict(scenario)
-        scenario['sync'] = sync_via_c_sync
+        scenario['do_sync'] = sync_via_c_sync
         sync_scenarios.append((name + ',csync', scenario))
 
 
-class DatabaseSyncTests(tests.DatabaseBaseTests):
+class DatabaseSyncTests(tests.DatabaseBaseTests,
+                        tests.TestCaseWithServer):
 
     scenarios = sync_scenarios
-    sync = None                 # set by scenarios
+    do_sync = None                 # set by scenarios
+
+    def sync(self, db_source, db_target, trace_hook=None):
+        return self.do_sync(self, db_source, db_target, trace_hook)
 
     def setUp(self):
         super(DatabaseSyncTests, self).setUp()

@@ -437,67 +437,6 @@ class LocalDatabaseTests(tests.DatabaseBaseTests):
             self.db._put_doc_if_newer, doc, save_conflict=False,
             replica_uid='other', replica_gen=1, replica_trans_id='T-sad')
 
-    def test_validate_gen_and_trans_id(self):
-        self.db.create_doc(simple_doc)
-        gen, trans_id = self.db._get_generation_info()
-        self.db.validate_gen_and_trans_id(gen, trans_id)
-
-    def test_validate_gen_and_trans_id_invalid_txid(self):
-        self.db.create_doc(simple_doc)
-        gen, _ = self.db._get_generation_info()
-        self.assertRaises(
-            errors.InvalidTransactionId,
-            self.db.validate_gen_and_trans_id, gen, 'wrong')
-
-    def test_validate_gen_and_trans_id_invalid_txid2(self):
-        self.db.create_doc(simple_doc)
-        gen, trans_id = self.db._get_generation_info()
-        self.assertRaises(
-            errors.InvalidGeneration,
-            self.db.validate_gen_and_trans_id, gen + 1, trans_id)
-
-    def test_validate_source_gen_and_trans_id_same(self):
-        self.db._set_replica_gen_and_trans_id('other', 1, 'T-sid')
-        v1 = vectorclock.VectorClockRev('other:1|self:1')
-        v2 = vectorclock.VectorClockRev('other:1|self:1')
-        self.assertEqual(
-            'superseded',
-            self.db._validate_source('other', 1, 'T-sid', v1, v2))
-
-    def test_validate_source_gen_newer(self):
-        self.db._set_replica_gen_and_trans_id('other', 1, 'T-sid')
-        v1 = vectorclock.VectorClockRev('other:1|self:1')
-        v2 = vectorclock.VectorClockRev('other:2|self:2')
-        self.assertEqual(
-            'ok',
-            self.db._validate_source('other', 2, 'T-whatevs', v1, v2))
-
-    def test_validate_source_wrong_txid(self):
-        self.db._set_replica_gen_and_trans_id('other', 1, 'T-sid')
-        v1 = vectorclock.VectorClockRev('other:1|self:1')
-        v2 = vectorclock.VectorClockRev('other:2|self:2')
-        self.assertRaises(
-            errors.InvalidTransactionId,
-            self.db._validate_source, 'other', 1, 'T-sad', v1, v2)
-
-    def test_validate_source_gen_older_and_vcr_older(self):
-        self.db._set_replica_gen_and_trans_id('other', 1, 'T-sid')
-        self.db._set_replica_gen_and_trans_id('other', 2, 'T-sod')
-        v1 = vectorclock.VectorClockRev('other:1|self:1')
-        v2 = vectorclock.VectorClockRev('other:2|self:2')
-        self.assertEqual(
-            'superseded',
-            self.db._validate_source('other', 1, 'T-sid', v2, v1))
-
-    def test_validate_source_gen_older_vcr_newer(self):
-        self.db._set_replica_gen_and_trans_id('other', 1, 'T-sid')
-        self.db._set_replica_gen_and_trans_id('other', 2, 'T-sod')
-        v1 = vectorclock.VectorClockRev('other:1|self:1')
-        v2 = vectorclock.VectorClockRev('other:2|self:2')
-        self.assertRaises(
-            errors.InvalidGeneration,
-            self.db._validate_source, 'other', 1, 'T-sid', v1, v2)
-
     def test_put_doc_if_newer_replica_uid(self):
         doc1 = self.db.create_doc(simple_doc)
         self.db._set_replica_gen_and_trans_id('other', 1, 'T-sid')
@@ -586,6 +525,77 @@ class LocalDatabaseTests(tests.DatabaseBaseTests):
         last_trans_id = self.getLastTransId(self.db)
         self.assertEqual((3, last_trans_id, [(doc2.doc_id, 3, last_trans_id)]),
                          self.db.whats_changed(2))
+
+
+class LocalDatabaseValidateGenNTransIdTests(tests.DatabaseBaseTests):
+
+    scenarios = tests.LOCAL_DATABASES_SCENARIOS + tests.C_DATABASE_SCENARIOS
+
+    def test_validate_gen_and_trans_id(self):
+        self.db.create_doc(simple_doc)
+        gen, trans_id = self.db._get_generation_info()
+        self.db.validate_gen_and_trans_id(gen, trans_id)
+
+    def test_validate_gen_and_trans_id_invalid_txid(self):
+        self.db.create_doc(simple_doc)
+        gen, _ = self.db._get_generation_info()
+        self.assertRaises(
+            errors.InvalidTransactionId,
+            self.db.validate_gen_and_trans_id, gen, 'wrong')
+
+    def test_validate_gen_and_trans_id_invalid_gen(self):
+        self.db.create_doc(simple_doc)
+        gen, trans_id = self.db._get_generation_info()
+        self.assertRaises(
+            errors.InvalidGeneration,
+            self.db.validate_gen_and_trans_id, gen + 1, trans_id)
+
+
+class LocalDatabaseValidateSourceGenTests(tests.DatabaseBaseTests):
+
+    scenarios = tests.LOCAL_DATABASES_SCENARIOS + tests.C_DATABASE_SCENARIOS
+
+    def test_validate_source_gen_and_trans_id_same(self):
+        self.db._set_replica_gen_and_trans_id('other', 1, 'T-sid')
+        v1 = vectorclock.VectorClockRev('other:1|self:1')
+        v2 = vectorclock.VectorClockRev('other:1|self:1')
+        self.assertEqual(
+            'superseded',
+            self.db._validate_source('other', 1, 'T-sid', v1, v2))
+
+    def test_validate_source_gen_newer(self):
+        self.db._set_replica_gen_and_trans_id('other', 1, 'T-sid')
+        v1 = vectorclock.VectorClockRev('other:1|self:1')
+        v2 = vectorclock.VectorClockRev('other:2|self:2')
+        self.assertEqual(
+            'ok',
+            self.db._validate_source('other', 2, 'T-whatevs', v1, v2))
+
+    def test_validate_source_wrong_txid(self):
+        self.db._set_replica_gen_and_trans_id('other', 1, 'T-sid')
+        v1 = vectorclock.VectorClockRev('other:1|self:1')
+        v2 = vectorclock.VectorClockRev('other:2|self:2')
+        self.assertRaises(
+            errors.InvalidTransactionId,
+            self.db._validate_source, 'other', 1, 'T-sad', v1, v2)
+
+    def test_validate_source_gen_older_and_vcr_older(self):
+        self.db._set_replica_gen_and_trans_id('other', 1, 'T-sid')
+        self.db._set_replica_gen_and_trans_id('other', 2, 'T-sod')
+        v1 = vectorclock.VectorClockRev('other:1|self:1')
+        v2 = vectorclock.VectorClockRev('other:2|self:2')
+        self.assertEqual(
+            'superseded',
+            self.db._validate_source('other', 1, 'T-sid', v2, v1))
+
+    def test_validate_source_gen_older_vcr_newer(self):
+        self.db._set_replica_gen_and_trans_id('other', 1, 'T-sid')
+        self.db._set_replica_gen_and_trans_id('other', 2, 'T-sod')
+        v1 = vectorclock.VectorClockRev('other:1|self:1')
+        v2 = vectorclock.VectorClockRev('other:2|self:2')
+        self.assertRaises(
+            errors.InvalidGeneration,
+            self.db._validate_source, 'other', 1, 'T-sid', v1, v2)
 
 
 class LocalDatabaseWithConflictsTests(tests.DatabaseBaseTests):

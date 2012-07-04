@@ -162,6 +162,9 @@ C_DATABASE_SCENARIOS = [
 
 class DatabaseBaseTests(TestCase):
 
+    accept_fixed_trans_id = False  # set to True assertTransactionLog
+                                   # is happy with all trans ids = ''
+
     scenarios = LOCAL_DATABASES_SCENARIOS
 
     def create_database(self, replica_uid):
@@ -185,6 +188,8 @@ class DatabaseBaseTests(TestCase):
             just_ids.append(doc_id)
             self.assertIsNot(None, transaction_id,
                              "Transaction id should not be None")
+            if transaction_id == '' and self.accept_fixed_trans_id:
+                continue
             self.assertNotEqual('', transaction_id,
                                 "Transaction id should be a unique string")
             self.assertTrue(transaction_id.startswith('T-'))
