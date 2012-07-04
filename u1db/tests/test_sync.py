@@ -415,13 +415,19 @@ for name, scenario in tests.LOCAL_DATABASES_SCENARIOS:
 def make_database_for_http_test(test, replica_uid):
     if test.server is None:
         test.startServer()
-    return test.request_state._create_database(replica_uid)
+    db = test.request_state._create_database(replica_uid)
+    try:
+        http_at = test._http_at
+    except AttributeError:
+        http_at = test._http_at = {}
+    http_at[db] = replica_uid
+    return db
 
 
 def sync_via_synchronizer_and_http(test, db_source, db_target, trace_hook=None):
     if trace_hook:
         test.skipTest("trace_hook unsupported over http")
-    path = db_target._replica_uid
+    path = test._http_at[db_target]
     target = http_target.HTTPSyncTarget.connect(test.getURL(path))
     return sync.Synchronizer(db_source, target).sync()
 
