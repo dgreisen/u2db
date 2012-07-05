@@ -521,6 +521,7 @@ st_sync_exchange(u1db_sync_target *st, const char *source_replica_uid,
     status = u1db_validate_gen_and_trans_id(
         exchange->db, *target_gen, *target_trans_id);
     if (status == U1DB_INVALID_GENERATION) {
+        *target_gen = 0;
         exchange->target_gen = 0;
         status = U1DB_OK;
     }
@@ -568,6 +569,7 @@ st_sync_exchange_doc_ids(u1db_sync_target *st, u1database *source_db,
     status = u1db_validate_gen_and_trans_id(
         exchange->db, *target_gen, *target_trans_id);
     if (status == U1DB_INVALID_GENERATION) {
+        *target_gen = 0;
         exchange->target_gen = 0;
         status = U1DB_OK;
     }
@@ -624,7 +626,7 @@ u1db__sync_db_to_target(u1database *db, u1db_sync_target *target,
     if (status == U1DB_INVALID_GENERATION) {
         local_gen_known_by_target = 0;
         target->record_sync_info(target, local_uid, 0, "");
-        status == U1DB_OK;
+        status = U1DB_OK;
     }
     if (status != U1DB_OK) { goto finish; }
     status = u1db__get_replica_gen_and_trans_id(

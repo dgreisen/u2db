@@ -274,9 +274,9 @@ class SQLiteDatabase(CommonBackend):
             return(0, val[1])
         return val
 
-    def validate_gen_and_trans_id(self, generation, trans_id):
+    def _get_trans_id_for_gen(self, generation):
         if generation == 0:
-            return
+            return ''
         c = self._db_handle.cursor()
         c.execute(
             'SELECT transaction_id FROM transaction_log WHERE generation = ?',
@@ -284,8 +284,7 @@ class SQLiteDatabase(CommonBackend):
         val = c.fetchone()
         if val is None:
             raise errors.InvalidGeneration
-        if val[0] != trans_id:
-            raise errors.InvalidTransactionId
+        return val[0]
 
     def _get_transaction_log(self):
         c = self._db_handle.cursor()

@@ -239,6 +239,12 @@ int u1db__get_generation_info(u1database *db, int *generation,
                               char **trans_id);
 
 /**
+ * Internal API, Get the transaction id for the db generation.
+ */
+int u1db__get_trans_id_for_gen(u1database *db, int generation,
+                               char **trans_id);
+
+/**
  * Internal API, Validate generation and transaction id.
  */
 int u1db_validate_gen_and_trans_id(u1database *db, int generation,

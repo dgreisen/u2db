@@ -102,6 +102,14 @@ class CommonBackend(u1db.Database):
             result.append(doc)
         return result
 
+    def _get_trans_id_for_gen(self, generation):
+        """Get the transaction id corresponding to a particular generation.
+
+        Raises an InvalidGeneration when the generation does not exist.
+
+        """
+        raise NotImplementedError(self._get_trans_id_for_gen)
+
     def validate_gen_and_trans_id(self, generation, trans_id):
         """Validate the generation and transaction id.
 
@@ -109,7 +117,11 @@ class CommonBackend(u1db.Database):
         InvalidTransactionId when it does but with a different transaction id.
 
         """
-        raise NotImplementedError(self.validate_gen_and_trans_id)
+        if generation == 0:
+            return
+        known_trans_id = self._get_trans_id_for_gen(generation)
+        if known_trans_id != trans_id:
+            raise errors.InvalidTransactionId
 
     def _validate_source(self, other_replica_uid, other_generation,
                          other_transaction_id, cur_vcr, other_vcr):
@@ -123,13 +135,15 @@ class CommonBackend(u1db.Database):
          old_transaction_id) = self._get_replica_gen_and_trans_id(
              other_replica_uid)
         if other_generation < old_generation:
+            if other_vcr.is_newer(cur_vcr):
+                raise errors.InvalidGeneration
             if cur_vcr.is_newer(other_vcr):
                 return 'superseded'
-            raise errors.InvalidGeneration
+            return 'ok'
         if other_generation > old_generation:
             return 'ok'
         if other_transaction_id == old_transaction_id:
-            return 'superseded'
+            return 'ok'
         raise errors.InvalidTransactionId
 
     def _put_doc_if_newer(self, doc, save_conflict, replica_uid=None,

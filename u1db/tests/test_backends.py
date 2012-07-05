@@ -402,11 +402,12 @@ class LocalDatabaseTests(tests.DatabaseBaseTests):
 
     def test_put_doc_if_newer_same_generation_same_txid(self):
         self.db._set_replica_gen_and_trans_id('other', 1, 'T-sid')
-        doc = self.make_document('doc_id', 'other:2', simple_doc)
+        doc = self.db.create_doc(simple_doc)
+        doc2 = self.make_document(doc.doc_id, 'other:1', simple_doc)
         state, _ = self.db._put_doc_if_newer(
             doc, save_conflict=False, replica_uid='other', replica_gen=1,
             replica_trans_id='T-sid')
-        self.assertEqual('superseded', state)
+        self.assertEqual('converged', state)
 
     def test_put_doc_if_newer_wrong_transaction_id(self):
         self.db._set_replica_gen_and_trans_id('other', 1, 'T-sid')
@@ -560,16 +561,14 @@ class LocalDatabaseValidateSourceGenTests(tests.DatabaseBaseTests):
         v1 = vectorclock.VectorClockRev('other:1|self:1')
         v2 = vectorclock.VectorClockRev('other:1|self:1')
         self.assertEqual(
-            'superseded',
-            self.db._validate_source('other', 1, 'T-sid', v1, v2))
+            'ok', self.db._validate_source('other', 1, 'T-sid', v1, v2))
 
     def test_validate_source_gen_newer(self):
         self.db._set_replica_gen_and_trans_id('other', 1, 'T-sid')
         v1 = vectorclock.VectorClockRev('other:1|self:1')
         v2 = vectorclock.VectorClockRev('other:2|self:2')
         self.assertEqual(
-            'ok',
-            self.db._validate_source('other', 2, 'T-whatevs', v1, v2))
+            'ok', self.db._validate_source('other', 2, 'T-whatevs', v1, v2))
 
     def test_validate_source_wrong_txid(self):
         self.db._set_replica_gen_and_trans_id('other', 1, 'T-sid')

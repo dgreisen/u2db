@@ -206,6 +206,7 @@ cdef extern from "u1db/u1db_internal.h":
 
     int u1db__get_generation(u1database *, int *db_rev)
     int u1db__get_generation_info(u1database *, int *db_rev, char **trans_id)
+    int u1db__get_trans_id_for_gen(u1database *, int db_rev, char **trans_id)
     int u1db_validate_gen_and_trans_id(u1database *, int db_rev,
                                        const_char_ptr trans_id)
     char *u1db__allocate_doc_id(u1database *)
@@ -1099,6 +1100,18 @@ cdef class CDatabase(object):
         handle_status(
             "validate_gen_and_trans_id",
             u1db_validate_gen_and_trans_id(self._db, generation, trans_id))
+
+    def _get_trans_id_for_gen(self, generation):
+        cdef char *trans_id = NULL
+
+        handle_status(
+            "_get_trans_id_for_gen",
+            u1db__get_trans_id_for_gen(self._db, generation, &trans_id))
+        raw_trans_id = None
+        if trans_id != NULL:
+            raw_trans_id = trans_id
+            free(trans_id)
+        return raw_trans_id
 
     def _get_replica_gen_and_trans_id(self, replica_uid):
         cdef int generation, status
