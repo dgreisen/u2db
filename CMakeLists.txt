@@ -79,6 +79,8 @@ SET(CPACK_DEBIAN_PACKAGE_MAINTAINER "Noone")
 INCLUDE(CPack)
 
 add_custom_target(install-python ALL
+    # Do NOT build this one in-place
+    COMMAND python setup.py build_ext -f -I ${CMAKE_SOURCE_DIR}/include
     COMMAND python setup.py install --prefix=${CMAKE_INSTALL_PREFIX} --root=${CMAKE_CURRENT_BINARY_DIR}/temp
     DEPENDS ReplicatePythonSourceTree
 )
