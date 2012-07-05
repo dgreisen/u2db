@@ -460,7 +460,7 @@ class SQLiteDatabase(CommonBackend):
             this_doc.has_conflicts = True
             return [this_doc] + conflict_docs
 
-    def _get_sync_info(self, other_replica_uid):
+    def _get_replica_gen_and_trans_id(self, other_replica_uid):
         c = self._db_handle.cursor()
         c.execute("SELECT known_generation, known_transaction_id FROM sync_log"
                   " WHERE replica_uid = ?",
@@ -474,14 +474,15 @@ class SQLiteDatabase(CommonBackend):
             trans_id = val[1]
         return other_gen, trans_id
 
-    def _set_sync_info(self, other_replica_uid, other_generation,
-                       other_transaction_id):
+    def _set_replica_gen_and_trans_id(self, other_replica_uid,
+                                      other_generation, other_transaction_id):
         with self._db_handle:
-            self._do_set_sync_info(other_replica_uid, other_generation,
-                                   other_transaction_id)
+            self._do_set_replica_gen_and_trans_id(
+                other_replica_uid, other_generation, other_transaction_id)
 
-    def _do_set_sync_info(self, other_replica_uid, other_generation,
-                          other_transaction_id):
+    def _do_set_replica_gen_and_trans_id(self, other_replica_uid,
+                                         other_generation,
+                                         other_transaction_id):
             c = self._db_handle.cursor()
             c.execute("INSERT OR REPLACE INTO sync_log VALUES (?, ?, ?)",
                       (other_replica_uid, other_generation,
@@ -787,7 +788,8 @@ class SQLiteDatabase(CommonBackend):
 class SQLiteSyncTarget(CommonSyncTarget):
 
     def get_sync_info(self, source_replica_uid):
-        source_gen, trans_id = self._db._get_sync_info(source_replica_uid)
+        source_gen, trans_id = self._db._get_replica_gen_and_trans_id(
+            source_replica_uid)
         my_gen = self._db._get_generation()
         return self._db._replica_uid, my_gen, source_gen, trans_id
 
@@ -795,8 +797,9 @@ class SQLiteSyncTarget(CommonSyncTarget):
                          source_replica_transaction_id):
         if self._trace_hook:
             self._trace_hook('record_sync_info')
-        self._db._set_sync_info(source_replica_uid, source_replica_generation,
-                                source_replica_transaction_id)
+        self._db._set_replica_gen_and_trans_id(
+            source_replica_uid, source_replica_generation,
+            source_replica_transaction_id)
 
 
 class SQLitePartialExpandDatabase(SQLiteDatabase):

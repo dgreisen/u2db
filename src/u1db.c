@@ -764,7 +764,7 @@ u1db__validate_source(u1database *db, const char *replica_uid, int replica_gen,
     int status = U1DB_OK;
 
     *state = U1DB_OK;
-    status = u1db__get_sync_info(
+    status = u1db__get_replica_gen_and_trans_id(
         db, replica_uid, &old_generation, &old_trans_id);
     if (status != U1DB_OK)
         goto finish;
@@ -908,7 +908,7 @@ u1db__put_doc_if_newer(u1database *db, u1db_document *doc, int save_conflict,
                            (stored_doc_rev != NULL));
     }
     if (status == U1DB_OK && replica_uid != NULL) {
-        status = u1db__set_sync_info(
+        status = u1db__set_replica_gen_and_trans_id(
             db, replica_uid, replica_gen, replica_trans_id);
     }
     if (status == U1DB_OK && at_gen != NULL) {
@@ -1613,8 +1613,8 @@ u1db__free_table(u1db_table **table)
 
 
 int
-u1db__get_sync_info(u1database *db, const char *replica_uid,
-                        int *generation, char **trans_id)
+u1db__get_replica_gen_and_trans_id(u1database *db, const char *replica_uid,
+                                   int *generation, char **trans_id)
 {
     int status;
     sqlite3_stmt *statement;
@@ -1664,8 +1664,8 @@ finish:
 
 
 int
-u1db__set_sync_info(u1database *db, const char *replica_uid,
-                    int generation, const char *trans_id)
+u1db__set_replica_gen_and_trans_id(u1database *db, const char *replica_uid,
+                                   int generation, const char *trans_id)
 {
     int status;
     sqlite3_stmt *statement;

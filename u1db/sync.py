@@ -110,7 +110,8 @@ class Synchronizer(object):
         my_gen, _, changes = self.source.whats_changed(target_my_gen)
 
         # this source last-seen database generation for the target
-        (target_last_known_gen, target_trans_id) = self.source._get_sync_info(
+        (target_last_known_gen,
+         target_trans_id) = self.source._get_replica_gen_and_trans_id(
              self.target_replica_uid)
         if not changes and target_last_known_gen == target_gen:
             return my_gen
@@ -130,7 +131,7 @@ class Synchronizer(object):
             target_last_known_gen, target_trans_id,
             self._insert_doc_from_target)
         # record target synced-up-to generation including applying what we sent
-        self.source._set_sync_info(
+        self.source._set_replica_gen_and_trans_id(
             self.target_replica_uid, new_gen, new_trans_id)
 
         # if gapless record current reached generation with target
