@@ -911,20 +911,26 @@ class DatabaseSyncTests(tests.DatabaseBaseTests):
         self.sync(self.db1, self.db2, trace_hook=put_hook)
 
     def test_sync_detects_rollback_in_source(self):
-        self.db1.create_doc(tests.simple_doc, doc_id="divergent")
+        self.db1.create_doc(tests.simple_doc)
         self.sync(self.db1, self.db2)
         # make db2 think it's synced with a much later version of db1
         self.db2._set_sync_info(self.db1._replica_uid, 28, 'T-madeup')
         self.sync(self.db1, self.db2)
-        self.assertEqual(None, self.db2._get_sync_info(self.db1._replica_uid))
+        # after sync, target is up to date
+        self.assertEqual(
+            self.db1._get_generation_info(),
+            self.db2._get_sync_info(self.db1._replica_uid))
 
     def test_sync_detects_rollback_in_target(self):
-        self.db1.create_doc(tests.simple_doc, doc_id="divergent")
+        self.db1.create_doc(tests.simple_doc)
         self.sync(self.db1, self.db2)
         # make db1 think it's synced with a much later version of db2
         self.db1._set_sync_info(self.db2._replica_uid, 28, 'T-madeup')
         self.sync(self.db1, self.db2)
-        self.assertEqual(None, self.db1._get_sync_info(self.db2._replica_uid))
+        # after sync, source is up to date
+        self.assertEqual(
+            self.db2._get_generation_info(),
+            self.db1._get_sync_info(self.db2._replica_uid))
 
     def test_sync_detects_diverged_source(self):
         self.db1.create_doc(tests.simple_doc, doc_id="divergent")

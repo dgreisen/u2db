@@ -98,20 +98,19 @@ class Synchronizer(object):
         (self.target_replica_uid, target_gen, target_my_gen,
          target_my_trans_id) = sync_target.get_sync_info(
              self.source._replica_uid)
-        # validate that the generation and transaction id the target knows
-        # about us are valid.
+        # validate the generation and transaction id the target knows about us
         try:
             self.source.validate_gen_and_trans_id(
                 target_my_gen, target_my_trans_id)
-        except errors.InvalidGeneration, e:
-            # TODO: put logging/warning here?
-            pass
+        except errors.InvalidGeneration:
+            # Make target forget what it knows.
+            target_my_gen = 0
+            self.sync_target.record_sync_info(self.source._replica_uid, 0, '')
         # what's changed since that generation and this current gen
         my_gen, _, changes = self.source.whats_changed(target_my_gen)
 
         # this source last-seen database generation for the target
-        (target_last_known_gen,
-         target_trans_id) = self.source._get_sync_info(
+        (target_last_known_gen, target_trans_id) = self.source._get_sync_info(
              self.target_replica_uid)
         if not changes and target_last_known_gen == target_gen:
             return my_gen
@@ -275,9 +274,9 @@ class LocalSyncTarget(u1db.SyncTarget):
         try:
             self._db.validate_gen_and_trans_id(
                 last_known_generation, last_known_trans_id)
-        except errors.InvalidGeneration, e:
+        except errors.InvalidGeneration:
             # TODO: put logging/warning here?
-            pass
+            last_known_generation = 0
         sync_exch = SyncExchange(
             self._db, source_replica_uid, last_known_generation)
         if self._trace_hook:
