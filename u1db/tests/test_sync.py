@@ -415,14 +415,20 @@ for name, scenario in tests.LOCAL_DATABASES_SCENARIOS:
 def make_database_for_http_test(test, replica_uid):
     if test.server is None:
         test.startServer()
-    return test.request_state._create_database(replica_uid)
+    db = test.request_state._create_database(replica_uid)
+    try:
+        http_at = test._http_at
+    except AttributeError:
+        http_at = test._http_at = {}
+    http_at[db] = replica_uid
+    return db
 
 
 def sync_via_synchronizer_and_http(test, db_source, db_target,
                                    trace_hook=None):
     if trace_hook:
         test.skipTest("trace_hook unsupported over http")
-    path = db_target._replica_uid
+    path = test._http_at[db_target]
     target = http_target.HTTPSyncTarget.connect(test.getURL(path))
     return sync.Synchronizer(db_source, target).sync()
 
@@ -944,26 +950,28 @@ class DatabaseSyncTests(tests.DatabaseBaseTests,
         self.sync(self.db1, self.db2, trace_hook=put_hook)
 
     def test_sync_detects_rollback_in_source(self):
-        self.db1.create_doc(tests.simple_doc)
+        self.db1.create_doc(tests.simple_doc, doc_id="divergent")
         self.sync(self.db1, self.db2)
         # make db2 think it's synced with a much later version of db1
-        self.db2._set_sync_info(self.db1._replica_uid, 28, 'T-madeup')
+        self.db2._set_replica_gen_and_trans_id(
+            self.db1._replica_uid, 28, 'T-madeup')
         self.sync(self.db1, self.db2)
         # after sync, target is up to date
         self.assertEqual(
             self.db1._get_generation_info(),
-            self.db2._get_sync_info(self.db1._replica_uid))
+            self.db2._get_replica_gen_and_trans_id(self.db1._replica_uid))
 
     def test_sync_detects_rollback_in_target(self):
-        self.db1.create_doc(tests.simple_doc)
+        self.db1.create_doc(tests.simple_doc, doc_id="divergent")
         self.sync(self.db1, self.db2)
         # make db1 think it's synced with a much later version of db2
-        self.db1._set_sync_info(self.db2._replica_uid, 28, 'T-madeup')
+        self.db1._set_replica_gen_and_trans_id(
+            self.db2._replica_uid, 28, 'T-madeup')
         self.sync(self.db1, self.db2)
         # after sync, source is up to date
         self.assertEqual(
             self.db2._get_generation_info(),
-            self.db1._get_sync_info(self.db2._replica_uid))
+            self.db1._get_replica_gen_and_trans_id(self.db2._replica_uid))
 
     def test_sync_detects_diverged_source(self):
         self.db1.create_doc(tests.simple_doc, doc_id="divergent")

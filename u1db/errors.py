@@ -46,9 +46,13 @@ class InvalidDocId(U1DBError):
 class InvalidTransactionId(U1DBError):
     """Invalid transaction for generation."""
 
+    wire_description = "invalid transaction id"
+
 
 class InvalidGeneration(U1DBError):
     """Generation was previously synced with a different transaction id."""
+
+    wire_description = "invalid generation"
 
 
 class ConflictedDoc(U1DBError):

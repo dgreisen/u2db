@@ -1,22 +1,22 @@
-# copyright 2011-2012 canonical ltd.
+# Copyright 2011-2012 Canonical Ltd.
 #
-# this file is part of u1db.
+# This file is part of u1db.
 #
 # u1db is free software: you can redistribute it and/or modify
-# it under the terms of the gnu lesser general public license version 3
-# as published by the free software foundation.
+# it under the terms of the GNU Lesser General Public License version 3
+# as published by the Free Software Foundation.
 #
 # u1db is distributed in the hope that it will be useful,
-# but without any warranty; without even the implied warranty of
-# merchantability or fitness for a particular purpose.  see the
-# gnu lesser general public license for more details.
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU Lesser General Public License for more details.
 #
-# you should have received a copy of the gnu lesser general public license
-# along with u1db.  if not, see <http://www.gnu.org/licenses/>.
+# You should have received a copy of the GNU Lesser General Public License
+# along with u1db.  If not, see <http://www.gnu.org/licenses/>.
 
 import simplejson
 from u1db import (
-    document,
+    Document,
     errors,
     tests,
     )
@@ -27,279 +27,279 @@ from u1db.tests.test_remote_sync_target import (
     )
 
 
-class testcdatabaseexists(tests.testcase):
+class TestCDatabaseExists(tests.TestCase):
 
     def test_c_backend_compiled(self):
-        if c_backend_wrapper is none:
-            self.fail("could not import the c_backend_wrapper module."
-                      " was it compiled properly?\n%s" % (c_backend_error,))
+        if c_backend_wrapper is None:
+            self.fail("Could not import the c_backend_wrapper module."
+                      " Was it compiled properly?\n%s" % (c_backend_error,))
 
 
-# rather than lots of failing tests, we have the above check to test that the
+# Rather than lots of failing tests, we have the above check to test that the
 # module exists, and all these tests just get skipped
-class backendtests(tests.testcase):
+class BackendTests(tests.TestCase):
 
-    def setup(self):
-        super(backendtests, self).setup()
-        if c_backend_wrapper is none:
-            self.skiptest("the c_backend_wrapper could not be imported")
+    def setUp(self):
+        super(BackendTests, self).setUp()
+        if c_backend_wrapper is None:
+            self.skipTest("The c_backend_wrapper could not be imported")
 
 
-class testcdatabase(backendtests):
+class TestCDatabase(BackendTests):
 
     def test_exists(self):
-        if c_backend_wrapper is none:
-            self.fail("could not import the c_backend_wrapper module."
-                      " was it compiled properly?")
-        db = c_backend_wrapper.cdatabase(':memory:')
-        self.assertequal(':memory:', db._filename)
+        if c_backend_wrapper is None:
+            self.fail("Could not import the c_backend_wrapper module."
+                      " Was it compiled properly?")
+        db = c_backend_wrapper.CDatabase(':memory:')
+        self.assertEqual(':memory:', db._filename)
 
     def test__is_closed(self):
-        db = c_backend_wrapper.cdatabase(':memory:')
-        self.asserttrue(db._sql_is_open())
+        db = c_backend_wrapper.CDatabase(':memory:')
+        self.assertTrue(db._sql_is_open())
         db.close()
-        self.assertfalse(db._sql_is_open())
+        self.assertFalse(db._sql_is_open())
 
     def test__run_sql(self):
-        db = c_backend_wrapper.cdatabase(':memory:')
-        self.asserttrue(db._sql_is_open())
-        self.assertequal([], db._run_sql('create table test (id integer)'))
-        self.assertequal([], db._run_sql('insert into test values (1)'))
-        self.assertequal([('1',)], db._run_sql('select * from test'))
+        db = c_backend_wrapper.CDatabase(':memory:')
+        self.assertTrue(db._sql_is_open())
+        self.assertEqual([], db._run_sql('CREATE TABLE test (id INTEGER)'))
+        self.assertEqual([], db._run_sql('INSERT INTO test VALUES (1)'))
+        self.assertEqual([('1',)], db._run_sql('SELECT * FROM test'))
 
     def test__get_generation(self):
-        db = c_backend_wrapper.cdatabase(':memory:')
-        self.assertequal(0, db._get_generation())
+        db = c_backend_wrapper.CDatabase(':memory:')
+        self.assertEqual(0, db._get_generation())
         db.create_doc(tests.simple_doc)
-        self.assertequal(1, db._get_generation())
+        self.assertEqual(1, db._get_generation())
 
     def test__get_generation_info(self):
-        db = c_backend_wrapper.cdatabase(':memory:')
-        self.assertequal((0, none), db._get_generation_info())
+        db = c_backend_wrapper.CDatabase(':memory:')
+        self.assertEqual((0, None), db._get_generation_info())
         db.create_doc(tests.simple_doc)
         info = db._get_generation_info()
-        self.assertequal(1, info[0])
-        self.asserttrue(info[1].startswith('t-'))
+        self.assertEqual(1, info[0])
+        self.assertTrue(info[1].startswith('T-'))
 
     def test__set_replica_uid(self):
-        db = c_backend_wrapper.cdatabase(':memory:')
-        self.assertisnot(none, db._replica_uid)
+        db = c_backend_wrapper.CDatabase(':memory:')
+        self.assertIsNot(None, db._replica_uid)
         db._set_replica_uid('foo')
-        self.assertequal([('foo',)], db._run_sql(
-            "select value from u1db_config where name='replica_uid'"))
+        self.assertEqual([('foo',)], db._run_sql(
+            "SELECT value FROM u1db_config WHERE name='replica_uid'"))
 
     def test_default_replica_uid(self):
-        self.db = c_backend_wrapper.cdatabase(':memory:')
-        self.assertisnot(none, self.db._replica_uid)
-        self.assertequal(32, len(self.db._replica_uid))
+        self.db = c_backend_wrapper.CDatabase(':memory:')
+        self.assertIsNot(None, self.db._replica_uid)
+        self.assertEqual(32, len(self.db._replica_uid))
         # casting to an int from the uid *is* the check for correct behavior.
         int(self.db._replica_uid, 16)
 
     def test_get_conflicts_with_borked_data(self):
-        self.db = c_backend_wrapper.cdatabase(':memory:')
-        # we add an entry to conflicts, but not to documents, which is an
+        self.db = c_backend_wrapper.CDatabase(':memory:')
+        # We add an entry to conflicts, but not to documents, which is an
         # invalid situation
-        self.db._run_sql("insert into conflicts"
-                         " values ('doc-id', 'doc-rev', '{}')")
-        self.assertraises(exception, self.db.get_doc_conflicts, 'doc-id')
+        self.db._run_sql("INSERT INTO conflicts"
+                         " VALUES ('doc-id', 'doc-rev', '{}')")
+        self.assertRaises(Exception, self.db.get_doc_conflicts, 'doc-id')
 
     def test_create_index_list(self):
-        # we manually poke data into the db, so that we test just the "get_doc"
+        # We manually poke data into the DB, so that we test just the "get_doc"
         # code, rather than also testing the index management code.
-        self.db = c_backend_wrapper.cdatabase(':memory:')
+        self.db = c_backend_wrapper.CDatabase(':memory:')
         doc = self.db.create_doc(tests.simple_doc)
         self.db.create_index_list("key-idx", ["key"])
         docs = self.db.get_from_index('key-idx', 'value')
-        self.assertequal([doc], docs)
+        self.assertEqual([doc], docs)
 
     def test_create_index_list_on_non_ascii_field_name(self):
-        self.db = c_backend_wrapper.cdatabase(':memory:')
+        self.db = c_backend_wrapper.CDatabase(':memory:')
         doc = self.db.create_doc(simplejson.dumps({u'\xe5': 'value'}))
         self.db.create_index_list('test-idx', [u'\xe5'])
-        self.assertequal([doc], self.db.get_from_index('test-idx', 'value'))
+        self.assertEqual([doc], self.db.get_from_index('test-idx', 'value'))
 
     def test_list_indexes_with_non_ascii_field_names(self):
-        self.db = c_backend_wrapper.cdatabase(':memory:')
+        self.db = c_backend_wrapper.CDatabase(':memory:')
         self.db.create_index_list('test-idx', [u'\xe5'])
-        self.assertequal(
+        self.assertEqual(
             [('test-idx', [u'\xe5'])], self.db.list_indexes())
 
     def test_create_index_evaluates_it(self):
-        self.db = c_backend_wrapper.cdatabase(':memory:')
+        self.db = c_backend_wrapper.CDatabase(':memory:')
         doc = self.db.create_doc(tests.simple_doc)
         self.db.create_index_list('test-idx', ['key'])
-        self.assertequal([doc], self.db.get_from_index('test-idx', 'value'))
+        self.assertEqual([doc], self.db.get_from_index('test-idx', 'value'))
 
     def test_wildcard_matches_unicode_value(self):
-        self.db = c_backend_wrapper.cdatabase(':memory:')
+        self.db = c_backend_wrapper.CDatabase(':memory:')
         doc = self.db.create_doc(simplejson.dumps({"key": u"valu\xe5"}))
         self.db.create_index_list('test-idx', ['key'])
-        self.assertequal([doc], self.db.get_from_index('test-idx', '*'))
+        self.assertEqual([doc], self.db.get_from_index('test-idx', '*'))
 
     def test_create_index_fails_if_name_taken(self):
-        self.db = c_backend_wrapper.cdatabase(':memory:')
+        self.db = c_backend_wrapper.CDatabase(':memory:')
         self.db.create_index_list('test-idx', ['key'])
-        self.assertraises(errors.indexnametakenerror,
+        self.assertRaises(errors.IndexNameTakenError,
                           self.db.create_index_list,
                           'test-idx', ['stuff'])
 
     def test_create_index_does_not_fail_if_name_taken_with_same_index(self):
-        self.db = c_backend_wrapper.cdatabase(':memory:')
+        self.db = c_backend_wrapper.CDatabase(':memory:')
         self.db.create_index_list('test-idx', ['key'])
         self.db.create_index_list('test-idx', ['key'])
-        self.assertequal([('test-idx', ['key'])], self.db.list_indexes())
+        self.assertEqual([('test-idx', ['key'])], self.db.list_indexes())
 
     def test_create_index_after_deleting_document(self):
-        self.db = c_backend_wrapper.cdatabase(':memory:')
+        self.db = c_backend_wrapper.CDatabase(':memory:')
         doc = self.db.create_doc(tests.simple_doc)
         doc2 = self.db.create_doc(tests.simple_doc)
         self.db.delete_doc(doc2)
         self.db.create_index_list('test-idx', ['key'])
-        self.assertequal([doc], self.db.get_from_index('test-idx', 'value'))
+        self.assertEqual([doc], self.db.get_from_index('test-idx', 'value'))
 
     def test_get_from_index(self):
-        # we manually poke data into the db, so that we test just the "get_doc"
+        # We manually poke data into the DB, so that we test just the "get_doc"
         # code, rather than also testing the index management code.
-        self.db = c_backend_wrapper.cdatabase(':memory:')
+        self.db = c_backend_wrapper.CDatabase(':memory:')
         doc = self.db.create_doc(tests.simple_doc)
         self.db.create_index("key-idx", "key")
         docs = self.db.get_from_index('key-idx', 'value')
-        self.assertequal([doc], docs)
+        self.assertEqual([doc], docs)
 
     def test_get_from_index_list(self):
-        # we manually poke data into the db, so that we test just the "get_doc"
+        # We manually poke data into the DB, so that we test just the "get_doc"
         # code, rather than also testing the index management code.
-        self.db = c_backend_wrapper.cdatabase(':memory:')
+        self.db = c_backend_wrapper.CDatabase(':memory:')
         doc = self.db.create_doc(tests.simple_doc)
         self.db.create_index("key-idx", "key")
         docs = self.db.get_from_index_list('key-idx', ['value'])
-        self.assertequal([doc], docs)
+        self.assertEqual([doc], docs)
 
     def test_get_from_index_list_multi(self):
-        self.db = c_backend_wrapper.cdatabase(':memory:')
+        self.db = c_backend_wrapper.CDatabase(':memory:')
         content = '{"key": "value", "key2": "value2"}'
         doc = self.db.create_doc(content)
         self.db.create_index('test-idx', 'key', 'key2')
-        self.assertequal(
+        self.assertEqual(
             [doc],
             self.db.get_from_index_list('test-idx', ['value', 'value2']))
 
     def test_get_from_index_list_multi_ordered(self):
-        self.db = c_backend_wrapper.cdatabase(':memory:')
+        self.db = c_backend_wrapper.CDatabase(':memory:')
         doc1 = self.db.create_doc('{"key": "value3", "key2": "value4"}')
         doc2 = self.db.create_doc('{"key": "value2", "key2": "value3"}')
         doc3 = self.db.create_doc('{"key": "value2", "key2": "value2"}')
         doc4 = self.db.create_doc('{"key": "value1", "key2": "value1"}')
         self.db.create_index('test-idx', 'key', 'key2')
-        self.assertequal(
+        self.assertEqual(
             [doc4, doc3, doc2, doc1],
             self.db.get_from_index_list('test-idx', ['v*', '*']))
 
     def test_get_from_index_2(self):
-        self.db = c_backend_wrapper.cdatabase(':memory:')
+        self.db = c_backend_wrapper.CDatabase(':memory:')
         doc = self.db.create_doc(tests.nested_doc)
         self.db.create_index("multi-idx", "key", "sub.doc")
         docs = self.db.get_from_index('multi-idx', 'value', 'underneath')
-        self.assertequal([doc], docs)
+        self.assertEqual([doc], docs)
 
     def test_get_index_keys(self):
-        self.db = c_backend_wrapper.cdatabase(':memory:')
+        self.db = c_backend_wrapper.CDatabase(':memory:')
         self.db.create_doc(tests.simple_doc)
         self.db.create_index("key-idx", "key")
         keys = self.db.get_index_keys('key-idx')
-        self.assertequal([("value",)], keys)
+        self.assertEqual([("value",)], keys)
 
     def test__query_init_one_field(self):
-        self.db = c_backend_wrapper.cdatabase(':memory:')
+        self.db = c_backend_wrapper.CDatabase(':memory:')
         self.db.create_index("key-idx", "key")
         query = self.db._query_init("key-idx")
-        self.assertequal("key-idx", query.index_name)
-        self.assertequal(1, query.num_fields)
-        self.assertequal(["key"], query.fields)
+        self.assertEqual("key-idx", query.index_name)
+        self.assertEqual(1, query.num_fields)
+        self.assertEqual(["key"], query.fields)
 
     def test__query_init_two_fields(self):
-        self.db = c_backend_wrapper.cdatabase(':memory:')
+        self.db = c_backend_wrapper.CDatabase(':memory:')
         self.db.create_index("two-idx", "key", "key2")
         query = self.db._query_init("two-idx")
-        self.assertequal("two-idx", query.index_name)
-        self.assertequal(2, query.num_fields)
-        self.assertequal(["key", "key2"], query.fields)
+        self.assertEqual("two-idx", query.index_name)
+        self.assertEqual(2, query.num_fields)
+        self.assertEqual(["key", "key2"], query.fields)
 
-    def assertformatqueryequals(self, expected, wildcards, fields):
+    def assertFormatQueryEquals(self, expected, wildcards, fields):
         val, w = c_backend_wrapper._format_query(fields)
-        self.assertequal(expected, val)
-        self.assertequal(wildcards, w)
+        self.assertEqual(expected, val)
+        self.assertEqual(wildcards, w)
 
     def test__format_query(self):
-        self.assertformatqueryequals(
-            "select d0.doc_id from document_fields d0"
-            " where d0.field_name = ? and d0.value = ? order by d0.value",
+        self.assertFormatQueryEquals(
+            "SELECT d0.doc_id FROM document_fields d0"
+            " WHERE d0.field_name = ? AND d0.value = ? ORDER BY d0.value",
             [0], ["1"])
-        self.assertformatqueryequals(
-            "select d0.doc_id"
-            " from document_fields d0, document_fields d1"
-            " where d0.field_name = ? and d0.value = ?"
-            " and d0.doc_id = d1.doc_id"
-            " and d1.field_name = ? and d1.value = ?"
-            " order by d0.value, d1.value",
+        self.assertFormatQueryEquals(
+            "SELECT d0.doc_id"
+            " FROM document_fields d0, document_fields d1"
+            " WHERE d0.field_name = ? AND d0.value = ?"
+            " AND d0.doc_id = d1.doc_id"
+            " AND d1.field_name = ? AND d1.value = ?"
+            " ORDER BY d0.value, d1.value",
             [0, 0], ["1", "2"])
-        self.assertformatqueryequals(
-            "select d0.doc_id"
-            " from document_fields d0, document_fields d1, document_fields d2"
-            " where d0.field_name = ? and d0.value = ?"
-            " and d0.doc_id = d1.doc_id"
-            " and d1.field_name = ? and d1.value = ?"
-            " and d0.doc_id = d2.doc_id"
-            " and d2.field_name = ? and d2.value = ?"
-            " order by d0.value, d1.value, d2.value",
+        self.assertFormatQueryEquals(
+            "SELECT d0.doc_id"
+            " FROM document_fields d0, document_fields d1, document_fields d2"
+            " WHERE d0.field_name = ? AND d0.value = ?"
+            " AND d0.doc_id = d1.doc_id"
+            " AND d1.field_name = ? AND d1.value = ?"
+            " AND d0.doc_id = d2.doc_id"
+            " AND d2.field_name = ? AND d2.value = ?"
+            " ORDER BY d0.value, d1.value, d2.value",
             [0, 0, 0], ["1", "2", "3"])
 
     def test__format_query_wildcard(self):
-        self.assertformatqueryequals(
-            "select d0.doc_id from document_fields d0"
-            " where d0.field_name = ? and d0.value not null order by d0.value",
+        self.assertFormatQueryEquals(
+            "SELECT d0.doc_id FROM document_fields d0"
+            " WHERE d0.field_name = ? AND d0.value NOT NULL ORDER BY d0.value",
             [1], ["*"])
-        self.assertformatqueryequals(
-            "select d0.doc_id"
-            " from document_fields d0, document_fields d1"
-            " where d0.field_name = ? and d0.value = ?"
-            " and d0.doc_id = d1.doc_id"
-            " and d1.field_name = ? and d1.value not null"
-            " order by d0.value, d1.value",
+        self.assertFormatQueryEquals(
+            "SELECT d0.doc_id"
+            " FROM document_fields d0, document_fields d1"
+            " WHERE d0.field_name = ? AND d0.value = ?"
+            " AND d0.doc_id = d1.doc_id"
+            " AND d1.field_name = ? AND d1.value NOT NULL"
+            " ORDER BY d0.value, d1.value",
             [0, 1], ["1", "*"])
 
     def test__format_query_glob(self):
-        self.assertformatqueryequals(
-            "select d0.doc_id from document_fields d0"
-            " where d0.field_name = ? and d0.value glob ? order by d0.value",
+        self.assertFormatQueryEquals(
+            "SELECT d0.doc_id FROM document_fields d0"
+            " WHERE d0.field_name = ? AND d0.value GLOB ? ORDER BY d0.value",
             [2], ["1*"])
 
 
-class testcsynctarget(backendtests):
+class TestCSyncTarget(BackendTests):
 
-    def setup(self):
-        super(testcsynctarget, self).setup()
-        self.db = c_backend_wrapper.cdatabase(':memory:')
+    def setUp(self):
+        super(TestCSyncTarget, self).setUp()
+        self.db = c_backend_wrapper.CDatabase(':memory:')
         self.st = self.db.get_sync_target()
 
     def test_attached_to_db(self):
-        self.assertequal(
+        self.assertEqual(
             self.db._replica_uid, self.st.get_sync_info("misc")[0])
 
     def test_get_sync_exchange(self):
         exc = self.st._get_sync_exchange("source-uid", 10)
-        self.assertisnot(none, exc)
+        self.assertIsNot(None, exc)
 
     def test_sync_exchange_insert_doc_from_source(self):
         exc = self.st._get_sync_exchange("source-uid", 5)
         doc = c_backend_wrapper.make_document('doc-id', 'replica:1',
                 tests.simple_doc)
-        self.assertequal([], exc.get_seen_ids())
-        exc.insert_doc_from_source(doc, 10, 't-sid')
-        self.assertgetdoc(self.db, 'doc-id', 'replica:1', tests.simple_doc,
-                          false)
-        self.assertequal(
-            (10, 't-sid'), self.db._get_replica_gen_and_trans_id('source-uid'))
+        self.assertEqual([], exc.get_seen_ids())
+        exc.insert_doc_from_source(doc, 10, 'T-sid')
+        self.assertGetDoc(self.db, 'doc-id', 'replica:1', tests.simple_doc,
+                          False)
+        self.assertEqual(
+            (10, 'T-sid'), self.db._get_replica_gen_and_trans_id('source-uid'))
         self.assertEqual(['doc-id'], exc.get_seen_ids())
 
     def test_sync_exchange_conflicted_doc(self):
