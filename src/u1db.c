@@ -1618,7 +1618,7 @@ u1db__get_replica_gen_and_trans_id(u1database *db, const char *replica_uid,
 {
     int status;
     sqlite3_stmt *statement;
-    const char *tmp;
+    const char *tmp = NULL;
 
     if (db == NULL || replica_uid == NULL || generation == NULL
         || trans_id == NULL)

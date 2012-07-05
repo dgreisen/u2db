@@ -1016,5 +1016,6 @@ class TestPluggableSyncExchange(tests.TestCase):
             sync_exchange_class = MySyncExchange
 
         sync_res = MySyncResource('foo', 'src', self.state, None)
-        sync_res.post_args({'last_known_generation': 0}, '{}')
+        sync_res.post_args(
+            {'last_known_generation': 0, 'last_known_trans_id': None}, '{}')
         self.assertIsInstance(sync_res.sync_exch, MySyncExchange)

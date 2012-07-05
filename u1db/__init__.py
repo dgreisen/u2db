@@ -565,7 +565,8 @@ class SyncTarget(object):
         raise NotImplementedError(self.record_sync_info)
 
     def sync_exchange(self, docs_by_generation, source_replica_uid,
-                      last_known_generation, return_doc_cb):
+                      last_known_generation, last_known_trans_id,
+                      return_doc_cb):
         """Incorporate the documents sent from the source replica.
 
         This is not meant to be called by client code directly, but is used as
@@ -589,7 +590,9 @@ class SyncTarget(object):
             id of their latest change.
         :param source_replica_uid: The source replica's identifier
         :param last_known_generation: The last generation that the source
-            replica knows about this
+            replica knows about this target replica
+        :param last_known_trans_id: The last transaction id that the source
+            replica knows about this target replica
         :param: return_doc_cb(doc, gen): is a callback
                 used to return documents to the source replica, it will
                 be invoked in turn with Documents that have changed since

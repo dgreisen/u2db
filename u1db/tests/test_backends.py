@@ -1556,7 +1556,7 @@ class PythonBackendTests(tests.DatabaseBaseTests):
         docs_by_gen = [(doc_other, 10, 'T-sid')]
         st.sync_exchange(
             docs_by_gen, 'other-replica', last_known_generation=0,
-            return_doc_cb=ignore)
+            last_known_trans_id=None, return_doc_cb=ignore)
         self.assertGetDoc(self.db, doc.doc_id, other_rev, new_content, False)
         self.assertEqual(
             [doc_other], self.db.get_from_index('test-idx', 'altval'))

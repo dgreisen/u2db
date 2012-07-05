@@ -195,9 +195,8 @@ class TestRemoteSyncTargets(tests.TestCaseWithServer):
 
         doc = self.make_document('doc-here', 'replica:1', '{"value": "here"}')
         new_gen, trans_id = remote_target.sync_exchange(
-                [(doc, 10, 'T-sid')],
-                'replica', last_known_generation=0,
-                return_doc_cb=receive_doc)
+            [(doc, 10, 'T-sid')], 'replica', last_known_generation=0,
+            last_known_trans_id=None, return_doc_cb=receive_doc)
         self.assertEqual(1, new_gen)
         self.assertGetDoc(
             db, 'doc-here', 'replica:1', '{"value": "here"}', False)
@@ -233,11 +232,12 @@ class TestRemoteSyncTargets(tests.TestCaseWithServer):
         doc1 = self.make_document('doc-here', 'replica:1', '{"value": "here"}')
         doc2 = self.make_document('doc-here2', 'replica:1',
                                   '{"value": "here2"}')
-        self.assertRaises(errors.HTTPError, remote_target.sync_exchange,
-                [(doc1, 10, 'T-sid'),
-                 (doc2, 11, 'T-sud')
-                 ], 'replica', last_known_generation=0,
-                return_doc_cb=receive_doc)
+        self.assertRaises(
+            errors.HTTPError,
+            remote_target.sync_exchange,
+            [(doc1, 10, 'T-sid'), (doc2, 11, 'T-sud')],
+            'replica', last_known_generation=0, last_known_trans_id=None,
+            return_doc_cb=receive_doc)
         self.assertGetDoc(db, 'doc-here', 'replica:1', '{"value": "here"}',
                           False)
         self.assertEqual(
@@ -246,9 +246,8 @@ class TestRemoteSyncTargets(tests.TestCaseWithServer):
         # retry
         trigger_ids = []
         new_gen, trans_id = remote_target.sync_exchange(
-                [(doc2, 11, 'T-sud')
-                 ], 'replica', last_known_generation=0,
-                return_doc_cb=receive_doc)
+            [(doc2, 11, 'T-sud')], 'replica', last_known_generation=0,
+            last_known_trans_id=None, return_doc_cb=receive_doc)
         self.assertGetDoc(db, 'doc-here2', 'replica:1', '{"value": "here2"}',
                           False)
         self.assertEqual(
@@ -284,9 +283,10 @@ class TestRemoteSyncTargets(tests.TestCaseWithServer):
             other_changes.append(
                 (doc.doc_id, doc.rev, doc.get_json(), gen, trans_id))
 
-        self.assertRaises(errors.Unavailable, remote_target.sync_exchange,
-                          [], 'replica', last_known_generation=0,
-                          return_doc_cb=receive_doc)
+        self.assertRaises(
+            errors.Unavailable, remote_target.sync_exchange, [], 'replica',
+            last_known_generation=0, last_known_trans_id=None,
+            return_doc_cb=receive_doc)
         self.assertEqual(
             (doc.doc_id, doc.rev, '{"value": "there"}', 1),
             other_changes[0][:-1])
@@ -303,8 +303,8 @@ class TestRemoteSyncTargets(tests.TestCaseWithServer):
                 (doc.doc_id, doc.rev, doc.get_json(), gen, trans_id))
 
         new_gen, trans_id = remote_target.sync_exchange(
-                        [], 'replica', last_known_generation=0,
-                        return_doc_cb=receive_doc)
+            [], 'replica', last_known_generation=0, last_known_trans_id=None,
+            return_doc_cb=receive_doc)
         self.assertEqual(1, new_gen)
         self.assertEqual(
             (doc.doc_id, doc.rev, '{"value": "there"}', 1),

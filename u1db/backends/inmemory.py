@@ -46,6 +46,10 @@ class InMemoryDatabase(CommonBackend):
         self._last_exchange_log = None
         self._factory = document_factory or Document
 
+    def _set_replica_uid(self, replica_uid):
+        """Force the replica_uid to be set."""
+        self._replica_uid = replica_uid
+
     def set_document_factory(self, factory):
         self._factory = factory
 
