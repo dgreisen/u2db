@@ -143,18 +143,19 @@ class DatabaseSyncTargetTests(tests.DatabaseBaseTests,
         self.assertIsNot(None, self.st)
 
     def test_get_sync_info(self):
-        self.assertEqual(('test', 0, 0, ''), self.st.get_sync_info('other'))
+        self.assertEqual(
+            ('test', 0, '', 0, ''), self.st.get_sync_info('other'))
 
     def test_create_doc_updates_sync_info(self):
-        self.assertEqual(('test', 0, 0, ''), self.st.get_sync_info('other'))
+        self.assertEqual(
+            ('test', 0, '', 0, ''), self.st.get_sync_info('other'))
         self.db.create_doc(simple_doc)
-        self.assertEqual(('test', 1, 0, ''), self.st.get_sync_info('other'))
+        self.assertEqual(1, self.st.get_sync_info('other')[1])
 
     def test_record_sync_info(self):
-        self.assertEqual(('test', 0, 0, ''), self.st.get_sync_info('replica'))
         self.st.record_sync_info('replica', 10, 'T-transid')
-        self.assertEqual(('test', 0, 10, 'T-transid'),
-                         self.st.get_sync_info('replica'))
+        self.assertEqual(
+            ('test', 0, '', 10, 'T-transid'), self.st.get_sync_info('replica'))
 
     def test_sync_exchange(self):
         doc = self.make_document('doc-id', 'replica:1', simple_doc)
@@ -167,7 +168,7 @@ class DatabaseSyncTargetTests(tests.DatabaseBaseTests,
         last_trans_id = self.getLastTransId(self.db)
         self.assertEqual(([], 1, last_trans_id),
                          (self.other_changes, new_gen, last_trans_id))
-        self.assertEqual(10, self.st.get_sync_info('replica')[2])
+        self.assertEqual(10, self.st.get_sync_info('replica')[3])
 
     def test_sync_exchange_deleted(self):
         doc = self.db.create_doc('{}')
@@ -183,7 +184,7 @@ class DatabaseSyncTargetTests(tests.DatabaseBaseTests,
         last_trans_id = self.getLastTransId(self.db)
         self.assertEqual(([], 2, last_trans_id),
                          (self.other_changes, new_gen, trans_id))
-        self.assertEqual(10, self.st.get_sync_info('replica')[2])
+        self.assertEqual(10, self.st.get_sync_info('replica')[3])
 
     def test_sync_exchange_push_many(self):
         docs_by_gen = [
@@ -199,7 +200,7 @@ class DatabaseSyncTargetTests(tests.DatabaseBaseTests,
         last_trans_id = self.getLastTransId(self.db)
         self.assertEqual(([], 2, last_trans_id),
                          (self.other_changes, new_gen, trans_id))
-        self.assertEqual(11, self.st.get_sync_info('replica')[2])
+        self.assertEqual(11, self.st.get_sync_info('replica')[3])
 
     def test_sync_exchange_refuses_conflicts(self):
         doc = self.db.create_doc(simple_doc)
@@ -373,7 +374,7 @@ class DatabaseSyncTargetTests(tests.DatabaseBaseTests,
         last_trans_id = self.getLastTransId(self.db)
         self.assertEqual(([], 1, last_trans_id),
                          (self.other_changes, new_gen, trans_id))
-        self.assertEqual(10, self.st.get_sync_info(db2._replica_uid)[2])
+        self.assertEqual(10, self.st.get_sync_info(db2._replica_uid)[3])
 
     def test__set_trace_hook(self):
         called = []
@@ -413,7 +414,8 @@ def make_database_for_http_test(test, replica_uid):
     return test.request_state._create_database(replica_uid)
 
 
-def sync_via_synchronizer_and_http(test, db_source, db_target, trace_hook=None):
+def sync_via_synchronizer_and_http(test, db_source, db_target,
+                                   trace_hook=None):
     if trace_hook:
         test.skipTest("trace_hook unsupported over http")
     path = db_target._replica_uid
