@@ -290,7 +290,7 @@ class Database(object):
             encountered during synchronization. If we've never synchronized
             with the replica, this is (0, '').
         """
-        raise NotImplementedError(self._replica_gen_and_trans_id)
+        raise NotImplementedError(self._get_replica_gen_and_trans_id)
 
     def _set_replica_gen_and_trans_id(self, other_replica_uid,
                                       other_generation, other_transaction_id):
@@ -536,7 +536,7 @@ class SyncTarget(object):
         :param source_replica_uid: Another replica which we might have
             synchronized with in the past.
         :return: (target_replica_uid, target_replica_generation,
-                  source_replica_last_known_generation,
+                  target_trans_id, source_replica_last_known_generation,
                   source_replica_last_known_transaction_id)
         """
         raise NotImplementedError(self.get_sync_info)
@@ -565,7 +565,8 @@ class SyncTarget(object):
         raise NotImplementedError(self.record_sync_info)
 
     def sync_exchange(self, docs_by_generation, source_replica_uid,
-                      last_known_generation, return_doc_cb):
+                      last_known_generation, last_known_trans_id,
+                      return_doc_cb):
         """Incorporate the documents sent from the source replica.
 
         This is not meant to be called by client code directly, but is used as
@@ -589,7 +590,9 @@ class SyncTarget(object):
             id of their latest change.
         :param source_replica_uid: The source replica's identifier
         :param last_known_generation: The last generation that the source
-            replica knows about this
+            replica knows about this target replica
+        :param last_known_trans_id: The last transaction id that the source
+            replica knows about this target replica
         :param: return_doc_cb(doc, gen): is a callback
                 used to return documents to the source replica, it will
                 be invoked in turn with Documents that have changed since

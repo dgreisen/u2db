@@ -46,6 +46,10 @@ class InMemoryDatabase(CommonBackend):
         self._last_exchange_log = None
         self._factory = document_factory or Document
 
+    def _set_replica_uid(self, replica_uid):
+        """Force the replica_uid to be set."""
+        self._replica_uid = replica_uid
+
     def set_document_factory(self, factory):
         self._factory = factory
 
@@ -81,16 +85,16 @@ class InMemoryDatabase(CommonBackend):
         return len(self._transaction_log)
 
     def _get_generation_info(self):
+        if not self._transaction_log:
+            return 0, ''
         return len(self._transaction_log), self._transaction_log[-1][1]
 
-    def validate_gen_and_trans_id(self, generation, trans_id):
+    def _get_trans_id_for_gen(self, generation):
         if generation == 0:
-            return
+            return ''
         if generation > len(self._transaction_log):
             raise errors.InvalidGeneration
-        if self._transaction_log[generation - 1][1] == trans_id:
-            return
-        raise errors.InvalidTransactionId
+        return self._transaction_log[generation - 1][1]
 
     def put_doc(self, doc):
         if doc.doc_id is None:
@@ -444,10 +448,12 @@ class InMemoryIndex(object):
 class InMemorySyncTarget(CommonSyncTarget):
 
     def get_sync_info(self, source_replica_uid):
-        source_gen, trans_id = self._db._get_replica_gen_and_trans_id(
+        source_gen, source_trans_id = self._db._get_replica_gen_and_trans_id(
             source_replica_uid)
-        return (self._db._replica_uid, len(self._db._transaction_log),
-                source_gen, trans_id)
+        my_gen, my_trans_id = self._db._get_generation_info()
+        return (
+            self._db._replica_uid, my_gen, my_trans_id, source_gen,
+            source_trans_id)
 
     def record_sync_info(self, source_replica_uid, source_replica_generation,
                          source_transaction_id):

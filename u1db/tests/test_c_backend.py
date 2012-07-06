@@ -75,7 +75,7 @@ class TestCDatabase(BackendTests):
 
     def test__get_generation_info(self):
         db = c_backend_wrapper.CDatabase(':memory:')
-        self.assertEqual((0, None), db._get_generation_info())
+        self.assertEqual((0, ''), db._get_generation_info())
         db.create_doc(tests.simple_doc)
         info = db._get_generation_info()
         self.assertEqual(1, info[0])
@@ -359,7 +359,7 @@ class TestCSyncTarget(BackendTests):
             returned.append((doc, gen, trans_id))
 
         val = self.st.sync_exchange_doc_ids(
-            db2, [(doc2.doc_id, 1, 'T-sid')], 0, return_doc_cb)
+            db2, [(doc2.doc_id, 1, 'T-sid')], 0, None, return_doc_cb)
         last_trans_id = self.db._get_transaction_log()[-1][1]
         self.assertEqual(2, self.db._get_generation())
         self.assertEqual((2, last_trans_id), val)

@@ -45,6 +45,12 @@ def parse_bool(expression):
     return False
 
 
+def none_or_str(expression):
+    if expression is None:
+        return None
+    return str(expression)
+
+
 class BadRequest(Exception):
     """Bad request."""
 
@@ -303,9 +309,10 @@ class SyncResource(object):
         result = self.target.get_sync_info(self.source_replica_uid)
         self.responder.send_response_json(
             target_replica_uid=result[0], target_replica_generation=result[1],
+            target_replica_transaction_id=result[2],
             source_replica_uid=self.source_replica_uid,
-            source_replica_generation=result[2],
-            source_transaction_id=result[3])
+            source_replica_generation=result[3],
+            source_transaction_id=result[4])
 
     @http_method(generation=int,
                  content_as_args=True, no_query=True)
@@ -316,12 +323,13 @@ class SyncResource(object):
 
     # Implements the same logic as LocalSyncTarget.sync_exchange
 
-    @http_method(last_known_generation=int,
+    @http_method(last_known_generation=int, last_known_trans_id=none_or_str,
                  content_as_args=True)
-    def post_args(self, last_known_generation):
-        self.sync_exch = self.sync_exchange_class(self.db,
-                                                  self.source_replica_uid,
-                                                  last_known_generation)
+    def post_args(self, last_known_generation, last_known_trans_id=None):
+        self.db.validate_gen_and_trans_id(
+            last_known_generation, last_known_trans_id)
+        self.sync_exch = self.sync_exchange_class(
+            self.db, self.source_replica_uid, last_known_generation)
 
     @http_method(content_as_args=True)
     def post_stream_entry(self, id, rev, content, gen, trans_id):
@@ -329,17 +337,19 @@ class SyncResource(object):
         self.sync_exch.insert_doc_from_source(doc, gen, trans_id)
 
     def post_end(self):
+
         def send_doc(doc, gen, trans_id):
             entry = dict(id=doc.doc_id, rev=doc.rev, content=doc.get_json(),
                          gen=gen, trans_id=trans_id)
             self.responder.stream_entry(entry)
+
         new_gen = self.sync_exch.find_changes_to_return()
         self.responder.content_type = 'application/x-u1db-sync-stream'
         self.responder.start_response(200)
         self.responder.start_stream(),
         self.responder.stream_entry({"new_generation": new_gen,
                      "new_transaction_id": self.sync_exch.new_trans_id})
-        new_gen = self.sync_exch.return_docs(send_doc)
+        self.sync_exch.return_docs(send_doc)
         self.responder.end_stream()
         self.responder.finish_response()
 

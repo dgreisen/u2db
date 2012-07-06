@@ -697,6 +697,7 @@ class TestHTTPApp(tests.TestCase):
         self.assertEqual('application/json', resp.header('content-type'))
         self.assertEqual(dict(target_replica_uid='db0',
                               target_replica_generation=0,
+                              target_replica_transaction_id='',
                               source_replica_uid='other-id',
                               source_replica_generation=1,
                               source_transaction_id='T-transid'),
@@ -722,7 +723,8 @@ class TestHTTPApp(tests.TestCase):
             }
 
         gens = []
-        _do_set_replica_gen_and_trans_id = self.db0._do_set_replica_gen_and_trans_id
+        _do_set_replica_gen_and_trans_id = \
+            self.db0._do_set_replica_gen_and_trans_id
 
         def set_sync_generation_witness(other_uid, other_gen, other_trans_id):
             gens.append((other_uid, other_gen))
@@ -1016,5 +1018,6 @@ class TestPluggableSyncExchange(tests.TestCase):
             sync_exchange_class = MySyncExchange
 
         sync_res = MySyncResource('foo', 'src', self.state, None)
-        sync_res.post_args({'last_known_generation': 0}, '{}')
+        sync_res.post_args(
+            {'last_known_generation': 0, 'last_known_trans_id': None}, '{}')
         self.assertIsInstance(sync_res.sync_exch, MySyncExchange)

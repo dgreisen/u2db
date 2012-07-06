@@ -42,6 +42,7 @@ class HTTPSyncTarget(http_client.HTTPClientBase, SyncTarget):
         self._ensure_connection()
         res, _ = self._request_json('GET', ['sync-from', source_replica_uid])
         return (res['target_replica_uid'], res['target_replica_generation'],
+                res['target_replica_transaction_id'],
                 res['source_replica_generation'], res['source_transaction_id'])
 
     def record_sync_info(self, source_replica_uid, source_replica_generation,
@@ -80,7 +81,8 @@ class HTTPSyncTarget(http_client.HTTPClientBase, SyncTarget):
         return res
 
     def sync_exchange(self, docs_by_generations, source_replica_uid,
-                      last_known_generation, return_doc_cb):
+                      last_known_generation, last_known_trans_id,
+                      return_doc_cb):
         self._ensure_connection()
         url = '%s/sync-from/%s' % (self._url.path, source_replica_uid)
         self._conn.putrequest('POST', url)
@@ -96,7 +98,9 @@ class HTTPSyncTarget(http_client.HTTPClientBase, SyncTarget):
             return len(entry)
 
         comma = ''
-        size += prepare(last_known_generation=last_known_generation)
+        size += prepare(
+            last_known_generation=last_known_generation,
+            last_known_trans_id=last_known_trans_id)
         comma = ','
         for doc, gen, trans_id in docs_by_generations:
             size += prepare(id=doc.doc_id, rev=doc.rev, content=doc.get_json(),

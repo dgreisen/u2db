@@ -62,23 +62,25 @@ struct _u1db_sync_target {
      *                          Note that this is const char and memory will be
      *                          managed by the sync_target, so it should *not*
      *                          be freed.
-     * @param st_get            (OUT) The database generation for this sync
+     * @param st_gen            (OUT) The database generation for this sync
+     *                          target, matches st_replica_uid
+     * @param st_trans_id       (OUT) The database transaction id for this sync
      *                          target, matches st_replica_uid
      * @param source_gen        (OUT) The last generation of source_replica_uid
      *                          that st has synchronized with.
-     * @param trans_id          (OUT) The transaction id associated with the
+     * @param source_trans_id   (OUT) The transaction id associated with the
      *                          source generation, the memory must be freed by
      *                          the caller.
      */
     int (*get_sync_info)(u1db_sync_target *st,
         const char *source_replica_uid,
-        const char **st_replica_uid, int *st_gen, int *source_gen,
-        char **trans_id);
+        const char **st_replica_uid, int *st_gen, char **st_trans_id,
+        int *source_gen, char **source_trans_id);
     /**
      * Set the synchronization information about another replica.
      *
      * @param st    Pass this sync_target to the function,
-     *              eg st->get_sync_info(st, ...)
+     *              eg st->record_sync_info(st, ...)
      * @param source_replica_uid    The unique identifier for the source we
      *                              want to synchronize from.
      * @param source_gen        The last generation of source_replica_uid
@@ -127,8 +129,8 @@ struct _u1db_sync_target {
                          const char *source_replica_uid, int n_docs,
                          u1db_document **docs, int *generations,
                          const char **trans_ids, int *target_gen,
-                         char **target_trans_id,
-                         void *context, u1db_doc_gen_callback cb);
+                         char **target_trans_id, void *context,
+                         u1db_doc_gen_callback cb);
     /**
      * Create a sync_exchange state object.
      *
@@ -223,9 +225,7 @@ int u1db__put_doc_if_newer(u1database *db, u1db_document *doc,
  *     superseded.
  */
 int u1db__validate_source(u1database *db, const char *replica_uid,
-                          int replica_gen, const char *replica_trans_id,
-                          u1db_vectorclock *cur_vcr,
-                          u1db_vectorclock *other_vcr, int *state);
+                          int replica_gen, const char *replica_trans_id);
 
 /**
  * Internal API, Get the global database rev.
@@ -237,6 +237,12 @@ int u1db__get_generation(u1database *db, int *generation);
  */
 int u1db__get_generation_info(u1database *db, int *generation,
                               char **trans_id);
+
+/**
+ * Internal API, Get the transaction id for the db generation.
+ */
+int u1db__get_trans_id_for_gen(u1database *db, int generation,
+                               char **trans_id);
 
 /**
  * Internal API, Validate generation and transaction id.

@@ -22,19 +22,20 @@
 
 
 static int st_get_sync_info(u1db_sync_target *st,
-        const char *source_replica_uid,
-        const char **st_replica_uid, int *st_gen, int *source_gen,
-        char **source_trans_id);
+                            const char *source_replica_uid,
+                            const char **st_replica_uid, int *st_gen,
+                            char **st_trans_id, int *source_gen,
+                            char **source_trans_id);
 
 static int st_record_sync_info(u1db_sync_target *st,
         const char *source_replica_uid, int source_gen, const char *trans_id);
 
 static int st_sync_exchange(u1db_sync_target *st,
-                          const char *source_replica_uid, int n_docs,
-                          u1db_document **docs, int *generations,
-                          const char **trans_ids, int *target_gen,
-                          char **target_trans_id, void *context,
-                          u1db_doc_gen_callback cb);
+                            const char *source_replica_uid, int n_docs,
+                            u1db_document **docs, int *generations,
+                            const char **trans_ids, int *target_gen,
+                            char **target_trans_id, void *context,
+                            u1db_doc_gen_callback cb);
 static int st_sync_exchange_doc_ids(u1db_sync_target *st,
                                     u1database *source_db, int n_doc_ids,
                                     const char **doc_ids, int *generations,
@@ -105,8 +106,8 @@ u1db__free_sync_target(u1db_sync_target **sync_target)
 
 static int
 st_get_sync_info(u1db_sync_target *st, const char *source_replica_uid,
-        const char **st_replica_uid, int *st_gen, int *source_gen,
-        char **source_trans_id)
+                 const char **st_replica_uid, int *st_gen, char **st_trans_id,
+                 int *source_gen, char **source_trans_id)
 {
     int status = U1DB_OK;
     u1database *db;
@@ -128,7 +129,7 @@ st_get_sync_info(u1db_sync_target *st, const char *source_replica_uid,
     status = u1db__get_replica_gen_and_trans_id(
         db, source_replica_uid, source_gen, source_trans_id);
     if (status != U1DB_OK) { goto finish; }
-    status = u1db__get_generation(db, st_gen);
+    status = u1db__get_generation_info(db, st_gen, st_trans_id);
 finish:
     return status;
 }
@@ -370,7 +371,6 @@ u1db__sync_exchange_find_doc_ids_to_return(u1db_sync_exchange *se)
 {
     int status;
     struct _whats_changed_doc_ids_state state = {0};
-    char *target_trans_id = NULL;
     if (se == NULL) {
         return U1DB_INVALID_PARAMETER;
     }
@@ -396,9 +396,6 @@ u1db__sync_exchange_find_doc_ids_to_return(u1db_sync_exchange *se)
     se->gen_for_doc_ids = state.gen_for_doc_ids;
     se->trans_ids_for_doc_ids = state.trans_ids_for_doc_ids;
 finish:
-    if (target_trans_id != NULL) {
-        free(target_trans_id);
-    }
     return status;
 }
 
@@ -522,6 +519,9 @@ st_sync_exchange(u1db_sync_target *st, const char *source_replica_uid,
     status = st->get_sync_exchange(st, source_replica_uid,
                                    *target_gen, &exchange);
     if (status != U1DB_OK) { goto finish; }
+    status = u1db_validate_gen_and_trans_id(
+        exchange->db, *target_gen, *target_trans_id);
+    if (status != U1DB_OK) { goto finish; }
     for (i = 0; i < n_docs; ++i) {
         status = u1db__sync_exchange_insert_doc_from_source(
             exchange, docs[i], generations[i], trans_ids[i]);
@@ -530,14 +530,11 @@ st_sync_exchange(u1db_sync_target *st, const char *source_replica_uid,
     status = u1db__sync_exchange_find_doc_ids_to_return(exchange);
     if (status != U1DB_OK) { goto finish; }
     status = u1db__sync_exchange_return_docs(exchange, context, cb);
-    if (status != U1DB_OK) { goto finish; }
-    if (status == U1DB_OK) {
-        *target_gen = exchange->target_gen;
-        *target_trans_id = exchange->target_trans_id;
-        // We set this to NULL, because the caller is now responsible for it
-        exchange->target_trans_id = NULL;
-    }
 finish:
+    *target_gen = exchange->target_gen;
+    *target_trans_id = exchange->target_trans_id;
+    // We set this to NULL, because the caller is now responsible for it
+    exchange->target_trans_id = NULL;
     st->finalize_sync_exchange(st, &exchange);
     return status;
 }
@@ -565,6 +562,9 @@ st_sync_exchange_doc_ids(u1db_sync_target *st, u1database *source_db,
     status = st->get_sync_exchange(st, source_replica_uid,
                                    *target_gen, &exchange);
     if (status != U1DB_OK) { goto finish; }
+    status = u1db_validate_gen_and_trans_id(
+        exchange->db, *target_gen, *target_trans_id);
+    if (status != U1DB_OK) { goto finish; }
     if (n_doc_ids > 0) {
         status = get_and_insert_docs(source_db, exchange,
             n_doc_ids, doc_ids, generations, trans_ids);
@@ -573,15 +573,11 @@ st_sync_exchange_doc_ids(u1db_sync_target *st, u1database *source_db,
     status = u1db__sync_exchange_find_doc_ids_to_return(exchange);
     if (status != U1DB_OK) { goto finish; }
     status = u1db__sync_exchange_return_docs(exchange, context, cb);
-    if (status != U1DB_OK) { goto finish; }
-    *target_gen = exchange->target_gen;
-    if (status == U1DB_OK) {
-        *target_gen = exchange->target_gen;
-        *target_trans_id = exchange->target_trans_id;
-        // We set this to NULL, because the caller is now responsible for it
-        exchange->target_trans_id = NULL;
-    }
 finish:
+    *target_gen = exchange->target_gen;
+    *target_trans_id = exchange->target_trans_id;
+    // We set this to NULL, because the caller is now responsible for it
+    exchange->target_trans_id = NULL;
     st->finalize_sync_exchange(st, &exchange);
     return status;
 }
@@ -599,6 +595,7 @@ u1db__sync_db_to_target(u1database *db, u1db_sync_target *target,
     char *local_target_trans_id = NULL;
     char *target_trans_id_known_by_local = NULL;
     char *local_trans_id_known_by_target = NULL;
+    char *target_trans_id = NULL;
     int target_gen, local_gen;
     int local_gen_known_by_target, target_gen_known_by_local;
 
@@ -612,14 +609,16 @@ u1db__sync_db_to_target(u1database *db, u1db_sync_target *target,
     status = u1db_get_replica_uid(db, &local_uid);
     if (status != U1DB_OK) { goto finish; }
     // fprintf(stderr, "Local uid: %s\n", local_uid);
-    status = target->get_sync_info(target, local_uid, &target_uid, &target_gen,
-                   &local_gen_known_by_target, &local_trans_id_known_by_target);
+    status = target->get_sync_info(
+        target, local_uid, &target_uid, &target_gen, &target_trans_id,
+        &local_gen_known_by_target, &local_trans_id_known_by_target);
     if (status != U1DB_OK) { goto finish; }
     status = u1db_validate_gen_and_trans_id(
-            db, local_gen_known_by_target, local_trans_id_known_by_target);
+        db, local_gen_known_by_target, local_trans_id_known_by_target);
     if (status != U1DB_OK) { goto finish; }
-    status = u1db__get_replica_gen_and_trans_id(db, target_uid,
-        &target_gen_known_by_local, &target_trans_id_known_by_local);
+    status = u1db__get_replica_gen_and_trans_id(
+        db, target_uid, &target_gen_known_by_local,
+        &target_trans_id_known_by_local);
     if (status != U1DB_OK) { goto finish; }
     local_target_trans_id = target_trans_id_known_by_local;
     local_gen = local_gen_known_by_target;
@@ -634,6 +633,9 @@ u1db__sync_db_to_target(u1database *db, u1db_sync_target *target,
     if (local_gen == local_gen_known_by_target
         && target_gen == target_gen_known_by_local)
     {
+        if (strcmp(target_trans_id, target_trans_id_known_by_local) != 0) {
+            status = U1DB_INVALID_TRANSACTION_ID;
+        }
         // We know status == U1DB_OK, and we can shortcut the rest of the
         // logic, no need to look for more information.
         goto finish;
@@ -674,6 +676,9 @@ finish:
     }
     if (local_trans_id_known_by_target != NULL) {
         free(local_trans_id_known_by_target);
+    }
+    if (target_trans_id != NULL) {
+        free(target_trans_id);
     }
     if (local_target_trans_id != NULL) {
         if (target_trans_id_known_by_local == local_target_trans_id) {

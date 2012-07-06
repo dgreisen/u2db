@@ -41,9 +41,10 @@ struct _http_state;
 struct _http_request;
 
 static int st_http_get_sync_info(u1db_sync_target *st,
-        const char *source_replica_uid,
-        const char **st_replica_uid, int *st_gen, int *source_gen,
-        char **trans_id);
+                                 const char *source_replica_uid,
+                                 const char **st_replica_uid, int *st_gen,
+                                 char **st_trans_id, int *source_gen,
+                                 char **trans_id);
 
 static int st_http_record_sync_info(u1db_sync_target *st,
         const char *source_replica_uid, int source_gen, const char *trans_id);
@@ -366,15 +367,15 @@ maybe_sign_url(u1db_sync_target *st, const char *http_method,
 }
 
 static int
-st_http_get_sync_info(u1db_sync_target *st,
-        const char *source_replica_uid,
-        const char **st_replica_uid, int *st_gen, int *source_gen,
-        char **trans_id)
+st_http_get_sync_info(u1db_sync_target *st, const char *source_replica_uid,
+                      const char **st_replica_uid, int *st_gen,
+                      char **st_trans_id, int *source_gen, char **trans_id)
 {
     struct _http_state *state;
     struct _http_request req = {0};
     char *url = NULL;
     const char *tmp = NULL;
+    const char *tmp2 = NULL;
     int status = U1DB_OK;
     long http_code;
     struct curl_slist *headers = NULL;
@@ -481,6 +482,21 @@ st_http_get_sync_info(u1db_sync_target *st,
         goto finish;
     }
     *st_gen = json_object_get_int(obj);
+    obj = json_object_object_get(json, "target_replica_transaction_id");
+    if (obj == NULL) {
+        status = U1DB_INVALID_HTTP_RESPONSE;
+        goto finish;
+    }
+    tmp2 = json_object_get_string(obj);
+    if (tmp2 == NULL) {
+        *st_trans_id = NULL;
+    } else {
+        *st_trans_id = strdup(tmp2);
+        if (*st_trans_id == NULL) {
+            status = U1DB_NOMEM;
+            goto finish;
+        }
+    }
     obj = json_object_object_get(json, "source_replica_generation");
     if (obj == NULL) {
         status = U1DB_INVALID_HTTP_RESPONSE;
@@ -773,7 +789,8 @@ make_tempfile(char tmpname[1024])
 
 
 static int
-init_temp_file(char tmpname[], FILE **temp_fd, int target_gen)
+init_temp_file(char tmpname[], FILE **temp_fd, int target_gen,
+               char *target_trans_id)
 {
     int status = U1DB_OK;
     *temp_fd = make_tempfile(tmpname);
@@ -786,11 +803,13 @@ init_temp_file(char tmpname[], FILE **temp_fd, int target_gen)
     }
     // Spool all of the documents to a temporary file, so that it we can
     // determine Content-Length before we start uploading the data.
-    fprintf(*temp_fd, "[\r\n{\"last_known_generation\": %d}", target_gen);
+    fprintf(
+        *temp_fd,
+        "[\r\n{\"last_known_generation\": %d, \"last_known_trans_id\": \"%s\"}",
+        target_gen, target_trans_id);
 finish:
     return status;
 }
-
 
 static int
 finalize_and_send_temp_file(u1db_sync_target *st, FILE *temp_fd,
@@ -981,7 +1000,7 @@ st_http_sync_exchange(u1db_sync_target *st, const char *source_replica_uid,
     if (n_docs > 0 && (docs == NULL || generations == NULL)) {
         return U1DB_INVALID_PARAMETER;
     }
-    status = init_temp_file(tmpname, &temp_fd, *target_gen);
+    status = init_temp_file(tmpname, &temp_fd, *target_gen, *target_trans_id);
     if (status != U1DB_OK) { goto finish; }
     for (i = 0; i < n_docs; ++i) {
         status = doc_to_tempfile(
@@ -1054,7 +1073,7 @@ st_http_sync_exchange_doc_ids(u1db_sync_target *st, u1database *source_db,
     }
     status = u1db_get_replica_uid(source_db, &source_replica_uid);
     if (status != U1DB_OK) { goto finish; }
-    status = init_temp_file(tmpname, &temp_fd, *target_gen);
+    status = init_temp_file(tmpname, &temp_fd, *target_gen, *target_trans_id);
     if (status != U1DB_OK) { goto finish; }
     state.num = n_doc_ids;
     state.generations = generations;

@@ -42,7 +42,6 @@ static int increment_doc_rev(u1database *db, const char *cur_rev,
                              char **doc_rev);
 static int generate_transaction_id(char buf[35]);
 
-
 static int
 initialize(u1database *db)
 {
@@ -756,23 +755,17 @@ finish:
 
 int
 u1db__validate_source(u1database *db, const char *replica_uid, int replica_gen,
-                      const char *replica_trans_id, u1db_vectorclock *cur,
-                      u1db_vectorclock *other, int *state)
+                      const char *replica_trans_id)
 {
     int old_generation;
     char *old_trans_id = NULL;
     int status = U1DB_OK;
 
-    *state = U1DB_OK;
     status = u1db__get_replica_gen_and_trans_id(
         db, replica_uid, &old_generation, &old_trans_id);
     if (status != U1DB_OK)
         goto finish;
     if (replica_gen < old_generation) {
-        if (u1db__vectorclock_is_newer(cur, other)) {
-            *state = U1DB_SUPERSEDED;
-            goto finish;
-        }
         status = U1DB_INVALID_GENERATION;
         goto finish;
     }
@@ -782,7 +775,6 @@ u1db__validate_source(u1database *db, const char *replica_uid, int replica_gen,
         status = U1DB_INVALID_TRANSACTION_ID;
         goto finish;
     }
-    *state = U1DB_SUPERSEDED;
 finish:
     if (old_trans_id != NULL)
         free(old_trans_id);
@@ -830,13 +822,8 @@ u1db__put_doc_if_newer(u1database *db, u1db_document *doc, int save_conflict,
     }
     if (replica_uid != NULL && replica_trans_id != NULL) {
         status = u1db__validate_source(
-            db, replica_uid, replica_gen, replica_trans_id, stored_vc, new_vc,
-            state);
+            db, replica_uid, replica_gen, replica_trans_id);
         if (status != U1DB_OK) {
-            goto finish;
-        }
-        if (*state != U1DB_OK) {
-            status = u1db__get_generation(db, at_gen);
             goto finish;
         }
     }
@@ -1464,27 +1451,33 @@ u1db__get_generation_info(u1database *db, int *generation, char **trans_id)
         *generation = sqlite3_column_int(statement, 0);
         tmp = (const char *)sqlite3_column_text(statement, 1);
         if (tmp == NULL) {
-            *trans_id = NULL;
+            *trans_id = strdup("");
+            if (*trans_id == NULL) {
+                status = U1DB_NOMEM;
+                goto finish;
+            }
         } else {
             *trans_id = strdup(tmp);
             if (*trans_id == NULL) {
                 status = U1DB_NOMEM;
+                goto finish;
             }
         }
+        status = U1DB_OK;
     }
+finish:
     sqlite3_finalize(statement);
     return status;
 }
 
 int
-u1db_validate_gen_and_trans_id(u1database *db, int generation,
-                               const char *trans_id)
+u1db__get_trans_id_for_gen(u1database *db, int generation,
+                           char **trans_id)
 {
     int status = U1DB_OK;
     sqlite3_stmt *statement;
+    const char *tmp;
 
-    if (generation == 0)
-        return status;
     if (db == NULL) {
         return U1DB_INVALID_PARAMETER;
     }
@@ -1499,16 +1492,43 @@ u1db_validate_gen_and_trans_id(u1database *db, int generation,
         status = U1DB_INVALID_GENERATION;
         goto finish;
     } else if (status == SQLITE_ROW) {
-        // Note: We may want to handle the column containing NULL
-        if (strcmp(trans_id,
-                   (const char *)sqlite3_column_text(statement, 0)) == 0) {
-            status = U1DB_OK;
-            goto finish;
+        tmp = (const char *)sqlite3_column_text(statement, 0);
+        if (tmp == NULL) {
+            *trans_id = NULL;
+        } else {
+            *trans_id = strdup(tmp);
+            if (*trans_id == NULL) {
+                status = U1DB_NOMEM;
+                goto finish;
+            }
         }
-        status = U1DB_INVALID_TRANSACTION_ID;
+        status = U1DB_OK;
     }
 finish:
     sqlite3_finalize(statement);
+    return status;
+}
+
+int
+u1db_validate_gen_and_trans_id(u1database *db, int generation,
+                               const char *trans_id)
+{
+    int status = U1DB_OK;
+    char *known_trans_id = NULL;
+
+    if (generation == 0)
+        return status;
+    status = u1db__get_trans_id_for_gen(db, generation, &known_trans_id);
+    if (status != U1DB_OK)
+        goto finish;
+    if (strcmp(trans_id, known_trans_id) == 0) {
+            status = U1DB_OK;
+            goto finish;
+        }
+    status = U1DB_INVALID_TRANSACTION_ID;
+finish:
+    if (known_trans_id != NULL)
+        free(known_trans_id);
     return status;
 }
 
@@ -1618,7 +1638,7 @@ u1db__get_replica_gen_and_trans_id(u1database *db, const char *replica_uid,
 {
     int status;
     sqlite3_stmt *statement;
-    const char *tmp;
+    const char *tmp = NULL;
 
     if (db == NULL || replica_uid == NULL || generation == NULL
         || trans_id == NULL)
