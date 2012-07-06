@@ -137,13 +137,11 @@ class CommonBackend(u1db.Database):
         if other_generation < old_generation:
             if other_vcr.is_newer(cur_vcr):
                 raise errors.InvalidGeneration
-            if cur_vcr.is_newer(other_vcr):
-                return 'superseded'
-            return 'ok'
+            return
         if other_generation > old_generation:
-            return 'ok'
+            return
         if other_transaction_id == old_transaction_id:
-            return 'ok'
+            return
         raise errors.InvalidTransactionId
 
     def _put_doc_if_newer(self, doc, save_conflict, replica_uid=None,
@@ -157,8 +155,6 @@ class CommonBackend(u1db.Database):
         if replica_uid is not None and replica_gen is not None:
             state = self._validate_source(
                 replica_uid, replica_gen, replica_trans_id, cur_vcr, doc_vcr)
-            if state != 'ok':
-                return state, self._get_generation()
         if doc_vcr.is_newer(cur_vcr):
             rev = doc.rev
             self._prune_conflicts(doc, doc_vcr)

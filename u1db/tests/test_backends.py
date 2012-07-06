@@ -560,15 +560,13 @@ class LocalDatabaseValidateSourceGenTests(tests.DatabaseBaseTests):
         self.db._set_replica_gen_and_trans_id('other', 1, 'T-sid')
         v1 = vectorclock.VectorClockRev('other:1|self:1')
         v2 = vectorclock.VectorClockRev('other:1|self:1')
-        self.assertEqual(
-            'ok', self.db._validate_source('other', 1, 'T-sid', v1, v2))
+        self.db._validate_source('other', 1, 'T-sid', v1, v2)
 
     def test_validate_source_gen_newer(self):
         self.db._set_replica_gen_and_trans_id('other', 1, 'T-sid')
         v1 = vectorclock.VectorClockRev('other:1|self:1')
         v2 = vectorclock.VectorClockRev('other:2|self:2')
-        self.assertEqual(
-            'ok', self.db._validate_source('other', 2, 'T-whatevs', v1, v2))
+        self.db._validate_source('other', 2, 'T-whatevs', v1, v2)
 
     def test_validate_source_wrong_txid(self):
         self.db._set_replica_gen_and_trans_id('other', 1, 'T-sid')
@@ -583,9 +581,7 @@ class LocalDatabaseValidateSourceGenTests(tests.DatabaseBaseTests):
         self.db._set_replica_gen_and_trans_id('other', 2, 'T-sod')
         v1 = vectorclock.VectorClockRev('other:1|self:1')
         v2 = vectorclock.VectorClockRev('other:2|self:2')
-        self.assertEqual(
-            'superseded',
-            self.db._validate_source('other', 1, 'T-sid', v2, v1))
+        self.db._validate_source('other', 1, 'T-sid', v2, v1)
 
     def test_validate_source_gen_older_vcr_newer(self):
         self.db._set_replica_gen_and_trans_id('other', 1, 'T-sid')

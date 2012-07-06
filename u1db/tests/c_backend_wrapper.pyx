@@ -83,7 +83,7 @@ cdef extern from "u1db/u1db.h":
     int u1db__validate_source(u1database *db, const_char_ptr replica_uid,
                               int replica_gen, const_char_ptr replica_trans_id,
                               u1db_vectorclock *cur_vcr,
-                              u1db_vectorclock *other_vcr, int *state)
+                              u1db_vectorclock *other_vcr)
     int u1db__put_doc_if_newer(u1database *db, u1db_document *doc,
                                int save_conflict, char *replica_uid,
                                int replica_gen, char *replica_trans_id,
@@ -957,11 +957,7 @@ cdef class CDatabase(object):
         handle_status(
             "invalid generation or transaction id",
             u1db__validate_source(
-                self._db, c_uid, c_gen, c_trans_id, cur._clock, other._clock,
-                &state))
-        if state == U1DB_SUPERSEDED:
-            return 'superseded'
-        return 'ok'
+                self._db, c_uid, c_gen, c_trans_id, cur._clock, other._clock))
 
     def _put_doc_if_newer(self, CDocument doc, save_conflict, replica_uid=None,
                           replica_gen=None, replica_trans_id=None):

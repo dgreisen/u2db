@@ -225,7 +225,7 @@ int u1db__put_doc_if_newer(u1database *db, u1db_document *doc,
 int u1db__validate_source(u1database *db, const char *replica_uid,
                           int replica_gen, const char *replica_trans_id,
                           u1db_vectorclock *cur_vcr,
-                          u1db_vectorclock *other_vcr, int *state);
+                          u1db_vectorclock *other_vcr);
 
 /**
  * Internal API, Get the global database rev.

@@ -42,7 +42,6 @@ static int increment_doc_rev(u1database *db, const char *cur_rev,
                              char **doc_rev);
 static int generate_transaction_id(char buf[35]);
 
-
 static int
 initialize(u1database *db)
 {
@@ -757,13 +756,12 @@ finish:
 int
 u1db__validate_source(u1database *db, const char *replica_uid, int replica_gen,
                       const char *replica_trans_id, u1db_vectorclock *cur,
-                      u1db_vectorclock *other, int *state)
+                      u1db_vectorclock *other)
 {
     int old_generation;
     char *old_trans_id = NULL;
     int status = U1DB_OK;
 
-    *state = U1DB_OK;
     status = u1db__get_replica_gen_and_trans_id(
         db, replica_uid, &old_generation, &old_trans_id);
     if (status != U1DB_OK)
@@ -771,11 +769,6 @@ u1db__validate_source(u1database *db, const char *replica_uid, int replica_gen,
     if (replica_gen < old_generation) {
         if (u1db__vectorclock_is_newer(other, cur)) {
             status = U1DB_INVALID_GENERATION;
-            goto finish;
-        }
-        if (u1db__vectorclock_is_newer(cur, other)) {
-            *state = U1DB_SUPERSEDED;
-            goto finish;
         }
         goto finish;
     }
@@ -785,7 +778,6 @@ u1db__validate_source(u1database *db, const char *replica_uid, int replica_gen,
         status = U1DB_INVALID_TRANSACTION_ID;
         goto finish;
     }
-    *state = U1DB_OK;
 finish:
     if (old_trans_id != NULL)
         free(old_trans_id);
@@ -833,13 +825,8 @@ u1db__put_doc_if_newer(u1database *db, u1db_document *doc, int save_conflict,
     }
     if (replica_uid != NULL && replica_trans_id != NULL) {
         status = u1db__validate_source(
-            db, replica_uid, replica_gen, replica_trans_id, stored_vc, new_vc,
-            state);
+            db, replica_uid, replica_gen, replica_trans_id, stored_vc, new_vc);
         if (status != U1DB_OK) {
-            goto finish;
-        }
-        if (*state != U1DB_OK) {
-            status = u1db__get_generation(db, at_gen);
             goto finish;
         }
     }
