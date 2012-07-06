@@ -85,6 +85,8 @@ class InMemoryDatabase(CommonBackend):
         return len(self._transaction_log)
 
     def _get_generation_info(self):
+        if not self._transaction_log:
+            return 0, ''
         return len(self._transaction_log), self._transaction_log[-1][1]
 
     def _get_trans_id_for_gen(self, generation):
@@ -446,10 +448,10 @@ class InMemoryIndex(object):
 class InMemorySyncTarget(CommonSyncTarget):
 
     def get_sync_info(self, source_replica_uid):
-        source_gen, trans_id = self._db._get_replica_gen_and_trans_id(
+        source_gen, source_trans_id = self._db._get_replica_gen_and_trans_id(
             source_replica_uid)
-        return (self._db._replica_uid, len(self._db._transaction_log),
-                source_gen, trans_id)
+        my_gen = self._db._get_generation()
+        return self._db._replica_uid, my_gen, source_gen, source_trans_id
 
     def record_sync_info(self, source_replica_uid, source_replica_generation,
                          source_transaction_id):

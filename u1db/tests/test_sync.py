@@ -955,11 +955,8 @@ class DatabaseSyncTests(tests.DatabaseBaseTests,
         # make db2 think it's synced with a much later version of db1
         self.db2._set_replica_gen_and_trans_id(
             self.db1._replica_uid, 28, 'T-madeup')
-        self.sync(self.db1, self.db2)
-        # after sync, target is up to date
-        self.assertEqual(
-            self.db1._get_generation_info(),
-            self.db2._get_replica_gen_and_trans_id(self.db1._replica_uid))
+        self.assertRaises(
+            errors.InvalidGeneration, self.sync, self.db1, self.db2)
 
     def test_sync_detects_rollback_in_target(self):
         self.db1.create_doc(tests.simple_doc, doc_id="divergent")
@@ -967,11 +964,8 @@ class DatabaseSyncTests(tests.DatabaseBaseTests,
         # make db1 think it's synced with a much later version of db2
         self.db1._set_replica_gen_and_trans_id(
             self.db2._replica_uid, 28, 'T-madeup')
-        self.sync(self.db1, self.db2)
-        # after sync, source is up to date
-        self.assertEqual(
-            self.db2._get_generation_info(),
-            self.db1._get_replica_gen_and_trans_id(self.db2._replica_uid))
+        self.assertRaises(
+            errors.InvalidGeneration, self.sync, self.db1, self.db2)
 
     def test_sync_detects_diverged_source(self):
         self.db1.create_doc(tests.simple_doc, doc_id="divergent")
@@ -994,6 +988,27 @@ class DatabaseSyncTests(tests.DatabaseBaseTests,
         db3._set_replica_uid(self.db2._replica_uid)
         self.assertRaises(
             errors.InvalidTransactionId, self.sync, self.db1, db3)
+
+    def test_sync_detects_rollback_and_divergence_in_source(self):
+        self.db1.create_doc(tests.simple_doc, doc_id="divergent")
+        self.sync(self.db1, self.db2)
+        self.db1.create_doc(tests.simple_doc)
+        self.db2._set_replica_gen_and_trans_id(
+            self.db1._replica_uid, 2, 'T-madeup')
+        self.assertRaises(
+            errors.InvalidTransactionId, self.sync, self.db1, self.db2)
+
+    def test_sync_detects_rollback_and_divergence_in_target(self):
+        # TODO: reenable this once we check the trans_id in Synchronizer.sync
+        self.skip("TODO: check target_trans_id")
+        self.db1.create_doc(tests.simple_doc, doc_id="divergent")
+        self.sync(self.db1, self.db2)
+        self.db2.create_doc(tests.simple_doc)
+        self.db1._set_replica_gen_and_trans_id(
+            self.db2._replica_uid, 2, 'T-madeup')
+        self.sync(self.db1, self.db2)
+        self.assertRaises(
+            errors.InvalidTransactionId, self.sync, self.db1, self.db2)
 
 
 class TestDbSync(tests.TestCaseWithServer):
@@ -1039,7 +1054,8 @@ class TestRemoteSyncIntegration(tests.TestCaseWithServer):
         self.assertEqual(2, len(self.db2._get_transaction_log()))
         progress1 = []
         progress2 = []
-        _do_set_replica_gen_and_trans_id = self.db1._do_set_replica_gen_and_trans_id
+        _do_set_replica_gen_and_trans_id = \
+            self.db1._do_set_replica_gen_and_trans_id
 
         def set_sync_generation_witness1(other_uid, other_gen, trans_id):
             progress1.append((other_uid, other_gen,
@@ -1047,8 +1063,8 @@ class TestRemoteSyncIntegration(tests.TestCaseWithServer):
             _do_set_replica_gen_and_trans_id(other_uid, other_gen, trans_id)
         self.patch(self.db1, '_do_set_replica_gen_and_trans_id',
                    set_sync_generation_witness1)
-
-        _do_set_replica_gen_and_trans_id2 = self.db2._do_set_replica_gen_and_trans_id
+        _do_set_replica_gen_and_trans_id2 = \
+            self.db2._do_set_replica_gen_and_trans_id
 
         def set_sync_generation_witness2(other_uid, other_gen, trans_id):
             progress2.append((other_uid, other_gen,

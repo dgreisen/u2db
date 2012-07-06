@@ -105,8 +105,8 @@ u1db__free_sync_target(u1db_sync_target **sync_target)
 
 static int
 st_get_sync_info(u1db_sync_target *st, const char *source_replica_uid,
-        const char **st_replica_uid, int *st_gen, int *source_gen,
-        char **source_trans_id)
+                 const char **st_replica_uid, int *st_gen, int *source_gen,
+                 char **source_trans_id)
 {
     int status = U1DB_OK;
     u1database *db;
@@ -520,11 +520,6 @@ st_sync_exchange(u1db_sync_target *st, const char *source_replica_uid,
     if (status != U1DB_OK) { goto finish; }
     status = u1db_validate_gen_and_trans_id(
         exchange->db, *target_gen, *target_trans_id);
-    if (status == U1DB_INVALID_GENERATION) {
-        *target_gen = 0;
-        exchange->target_gen = 0;
-        status = U1DB_OK;
-    }
     if (status != U1DB_OK) { goto finish; }
     for (i = 0; i < n_docs; ++i) {
         status = u1db__sync_exchange_insert_doc_from_source(
@@ -568,11 +563,6 @@ st_sync_exchange_doc_ids(u1db_sync_target *st, u1database *source_db,
     if (status != U1DB_OK) { goto finish; }
     status = u1db_validate_gen_and_trans_id(
         exchange->db, *target_gen, *target_trans_id);
-    if (status == U1DB_INVALID_GENERATION) {
-        *target_gen = 0;
-        exchange->target_gen = 0;
-        status = U1DB_OK;
-    }
     if (status != U1DB_OK) { goto finish; }
     if (n_doc_ids > 0) {
         status = get_and_insert_docs(source_db, exchange,
@@ -623,11 +613,6 @@ u1db__sync_db_to_target(u1database *db, u1db_sync_target *target,
     if (status != U1DB_OK) { goto finish; }
     status = u1db_validate_gen_and_trans_id(
         db, local_gen_known_by_target, local_trans_id_known_by_target);
-    if (status == U1DB_INVALID_GENERATION) {
-        local_gen_known_by_target = 0;
-        target->record_sync_info(target, local_uid, 0, "");
-        status = U1DB_OK;
-    }
     if (status != U1DB_OK) { goto finish; }
     status = u1db__get_replica_gen_and_trans_id(
         db, target_uid, &target_gen_known_by_local,

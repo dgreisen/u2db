@@ -755,8 +755,7 @@ finish:
 
 int
 u1db__validate_source(u1database *db, const char *replica_uid, int replica_gen,
-                      const char *replica_trans_id, u1db_vectorclock *cur,
-                      u1db_vectorclock *other)
+                      const char *replica_trans_id)
 {
     int old_generation;
     char *old_trans_id = NULL;
@@ -767,9 +766,7 @@ u1db__validate_source(u1database *db, const char *replica_uid, int replica_gen,
     if (status != U1DB_OK)
         goto finish;
     if (replica_gen < old_generation) {
-        if (u1db__vectorclock_is_newer(other, cur)) {
-            status = U1DB_INVALID_GENERATION;
-        }
+        status = U1DB_INVALID_GENERATION;
         goto finish;
     }
     if (replica_gen > old_generation)
@@ -825,7 +822,7 @@ u1db__put_doc_if_newer(u1database *db, u1db_document *doc, int save_conflict,
     }
     if (replica_uid != NULL && replica_trans_id != NULL) {
         status = u1db__validate_source(
-            db, replica_uid, replica_gen, replica_trans_id, stored_vc, new_vc);
+            db, replica_uid, replica_gen, replica_trans_id);
         if (status != U1DB_OK) {
             goto finish;
         }

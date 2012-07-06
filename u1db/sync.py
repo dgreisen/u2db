@@ -18,7 +18,6 @@
 from itertools import izip
 
 import u1db
-from u1db import errors
 
 
 class Synchronizer(object):
@@ -99,21 +98,16 @@ class Synchronizer(object):
          target_my_trans_id) = sync_target.get_sync_info(
              self.source._replica_uid)
         # validate the generation and transaction id the target knows about us
-        try:
-            self.source.validate_gen_and_trans_id(
-                target_my_gen, target_my_trans_id)
-        except errors.InvalidGeneration:
-            # Make target forget what it knows.
-            target_my_gen = 0
-            self.sync_target.record_sync_info(self.source._replica_uid, 0, '')
+        self.source.validate_gen_and_trans_id(
+            target_my_gen, target_my_trans_id)
         # what's changed since that generation and this current gen
         my_gen, _, changes = self.source.whats_changed(target_my_gen)
 
         # this source last-seen database generation for the target
-        (target_last_known_gen,
-         target_trans_id) = self.source._get_replica_gen_and_trans_id(
-             self.target_replica_uid)
+        target_last_known_gen, target_last_known_trans_id = \
+            self.source._get_replica_gen_and_trans_id(self.target_replica_uid)
         if not changes and target_last_known_gen == target_gen:
+            # TODO: we'll need to check the target's transaction id as well.
             return my_gen
         changed_doc_ids = [doc_id for doc_id, _, _ in changes]
         # prepare to send all the changed docs
@@ -128,7 +122,7 @@ class Synchronizer(object):
         # the target, return target synced-up-to gen
         new_gen, new_trans_id = sync_target.sync_exchange(
             docs_by_generation, self.source._replica_uid,
-            target_last_known_gen, target_trans_id,
+            target_last_known_gen, target_last_known_trans_id,
             self._insert_doc_from_target)
         # record target synced-up-to generation including applying what we sent
         self.source._set_replica_gen_and_trans_id(
@@ -272,12 +266,8 @@ class LocalSyncTarget(u1db.SyncTarget):
     def sync_exchange(self, docs_by_generations, source_replica_uid,
                       last_known_generation, last_known_trans_id,
                       return_doc_cb):
-        try:
-            self._db.validate_gen_and_trans_id(
-                last_known_generation, last_known_trans_id)
-        except errors.InvalidGeneration:
-            # TODO: put logging/warning here?
-            last_known_generation = 0
+        self._db.validate_gen_and_trans_id(
+            last_known_generation, last_known_trans_id)
         sync_exch = SyncExchange(
             self._db, source_replica_uid, last_known_generation)
         if self._trace_hook:

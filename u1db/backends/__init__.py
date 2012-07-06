@@ -124,7 +124,7 @@ class CommonBackend(u1db.Database):
             raise errors.InvalidTransactionId
 
     def _validate_source(self, other_replica_uid, other_generation,
-                         other_transaction_id, cur_vcr, other_vcr):
+                         other_transaction_id):
         """Validate the new generation and transaction id.
 
         other_generation must be greater than what we have stored for this
@@ -135,9 +135,7 @@ class CommonBackend(u1db.Database):
          old_transaction_id) = self._get_replica_gen_and_trans_id(
              other_replica_uid)
         if other_generation < old_generation:
-            if other_vcr.is_newer(cur_vcr):
-                raise errors.InvalidGeneration
-            return
+            raise errors.InvalidGeneration
         if other_generation > old_generation:
             return
         if other_transaction_id == old_transaction_id:
@@ -153,8 +151,8 @@ class CommonBackend(u1db.Database):
         else:
             cur_vcr = VectorClockRev(cur_doc.rev)
         if replica_uid is not None and replica_gen is not None:
-            state = self._validate_source(
-                replica_uid, replica_gen, replica_trans_id, cur_vcr, doc_vcr)
+            self._validate_source(
+                replica_uid, replica_gen, replica_trans_id)
         if doc_vcr.is_newer(cur_vcr):
             rev = doc.rev
             self._prune_conflicts(doc, doc_vcr)

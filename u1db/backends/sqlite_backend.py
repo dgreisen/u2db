@@ -787,10 +787,10 @@ class SQLiteDatabase(CommonBackend):
 class SQLiteSyncTarget(CommonSyncTarget):
 
     def get_sync_info(self, source_replica_uid):
-        source_gen, trans_id = self._db._get_replica_gen_and_trans_id(
+        source_gen, source_trans_id = self._db._get_replica_gen_and_trans_id(
             source_replica_uid)
         my_gen = self._db._get_generation()
-        return self._db._replica_uid, my_gen, source_gen, trans_id
+        return self._db._replica_uid, my_gen, source_gen, source_trans_id
 
     def record_sync_info(self, source_replica_uid, source_replica_generation,
                          source_replica_transaction_id):
