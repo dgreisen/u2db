@@ -1902,7 +1902,11 @@ finish:
 int
 u1db_doc_get_size(u1db_document *doc)
 {
-    return strlen(doc->json) + strlen(doc->doc_id) + strlen(doc->doc_rev);
+    int json_size = 0;
+    if (doc->json != NULL) {
+        json_size = strlen(doc->json);
+    }
+    return strlen(doc->doc_id) + strlen(doc->doc_rev) + json_size;
 }
 
 

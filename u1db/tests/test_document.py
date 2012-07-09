@@ -76,6 +76,10 @@ class TestDocument(tests.TestCase):
         self.assertEqual(
             len('a' + 'b' + '{"some": "content"}'), doc_a.get_size())
 
+    def test_get_size_empty_document(self):
+        doc_a = self.make_document('a', 'b', None)
+        self.assertEqual(len('a' + 'b'), doc_a.get_size())
+
 
 class TestPyDocument(tests.TestCase):
 
