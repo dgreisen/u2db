@@ -41,9 +41,13 @@ class HTTPDatabase(http_client.HTTPClientBase, Database):
     def __init__(self, url, document_factory=None):
         super(HTTPDatabase, self).__init__(url)
         self._factory = document_factory or Document
+        self.document_size_limit = 0
 
     def set_document_factory(self, factory):
         self._factory = factory
+
+    def set_document_size_limit(self, limit):
+        self.document_size_limit = limit
 
     @staticmethod
     def open_database(url, create):

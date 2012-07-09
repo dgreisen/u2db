@@ -74,6 +74,7 @@ typedef int (*u1db_trans_info_callback)(void *context, const char *doc_id,
 #define U1DB_INVALID_TRANSACTION_ID -20
 #define U1DB_INVALID_GENERATION -21
 #define U1DB_TARGET_UNAVAILABLE -22
+#define U1DB_DOCUMENT_TOO_BIG -23
 #define U1DB_INTERNAL_ERROR -999
 
 // Used by put_doc_if_newer
@@ -98,6 +99,11 @@ void u1db_free(u1database **db);
  * Set the replica_uid defined for this database.
  */
 int u1db_set_replica_uid(u1database *db, const char *replica_uid);
+
+/**
+ * Set the replica_uid defined for this database.
+ */
+int u1db_set_document_size_limit(u1database *db, int limit);
 
 /**
  * Get the replica_uid defined for this database.

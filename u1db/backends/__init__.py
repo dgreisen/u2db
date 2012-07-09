@@ -36,6 +36,8 @@ class CommonSyncTarget(u1db.sync.LocalSyncTarget):
 
 class CommonBackend(u1db.Database):
 
+    document_size_limit = 0
+
     def _allocate_doc_id(self):
         """Generate a unique identifier for this document."""
         return 'D-' + uuid.uuid4().hex  # 'D-' stands for document
@@ -185,3 +187,6 @@ class CommonBackend(u1db.Database):
             vcr.maximize(VectorClockRev(rev))
         vcr.increment(self._replica_uid)
         return vcr.as_str()
+
+    def set_document_size_limit(self, limit):
+        self.document_size_limit = limit

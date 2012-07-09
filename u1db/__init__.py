@@ -65,6 +65,13 @@ class Database(object):
         """
         raise NotImplementedError(self.set_document_factory)
 
+    def set_document_size_limit(self, limit):
+        """Set the maximum allowed document size for this database.
+
+        :param limit: Maximum allowed document size in bytes.
+        """
+        raise NotImplementedError(self.set_document_size_limit)
+
     def whats_changed(self, old_generation):
         """Return a list of documents that have changed since old_generation.
         This allows APPS to only store a db generation before going
@@ -125,6 +132,9 @@ class Database(object):
         You can optionally specify the document identifier, but the document
         must not already exist. See 'put_doc' if you want to override an
         existing document.
+        If the database specifies a maximum document size and the document
+        exceeds it, create will fail and raise a DocumentTooBig exception.
+
         :param content: The JSON document string
         :param doc_id: An optional identifier specifying the document id.
         :return: Document
@@ -134,6 +144,8 @@ class Database(object):
     def put_doc(self, doc):
         """Update a document.
         If the document currently has conflicts, put will fail.
+        If the database specifies a maximum document size and the document
+        exceeds it, put will fail and raise a DocumentTooBig exception.
 
         :param doc: A Document with new content.
         :return: new_doc_rev - The new revision identifier for the document.

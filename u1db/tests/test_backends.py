@@ -265,6 +265,14 @@ class AllDatabaseTests(tests.DatabaseBaseTests, tests.TestCaseWithServer):
         self.db.put_doc(doc)
         self.assertGetDoc(self.db, doc.doc_id, doc.rev, nested_doc, False)
 
+    def test_set_document_size_limit_zero(self):
+        self.db.set_document_size_limit(0)
+        self.assertEqual(0, self.db.document_size_limit)
+
+    def test_set_document_size_limit(self):
+        self.db.set_document_size_limit(1000000)
+        self.assertEqual(1000000, self.db.document_size_limit)
+
 
 class LocalDatabaseTests(tests.DatabaseBaseTests):
 
