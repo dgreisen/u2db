@@ -147,6 +147,7 @@ cdef extern from "u1db/u1db.h":
 
     void u1db_free_doc(u1db_document **doc)
     int u1db_doc_set_json(u1db_document *doc, char *json)
+    int u1db_doc_get_size(u1db_document *doc)
 
 
 cdef extern from "u1db/u1db_internal.h":
@@ -488,6 +489,8 @@ cdef class CDocument(object):
     def set_json(self, val):
         u1db_doc_set_json(self._doc, val)
 
+    def get_size(self):
+        return u1db_doc_get_size(self._doc)
 
     property has_conflicts:
         def __get__(self):

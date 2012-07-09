@@ -1898,6 +1898,14 @@ finish:
     return status;
 }
 
+
+int
+u1db_doc_get_size(u1db_document *doc)
+{
+    return strlen(doc->json) + strlen(doc->doc_id) + strlen(doc->doc_rev);
+}
+
+
 int
 u1db__is_doc_id_valid(const char *doc_id)
 {
