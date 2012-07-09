@@ -72,7 +72,7 @@ initialize(u1database *db)
     u1db__generate_hex_uuid(default_replica_uid);
     u1db_set_replica_uid(db, default_replica_uid);
     u1db_set_document_size_limit(db, 0);
-    return SQLITE_OK;
+    return U1DB_OK;
 }
 
 u1database *
@@ -179,12 +179,12 @@ u1db_set_document_size_limit(u1database *db, int limit)
         return status;
     }
     status = sqlite3_step(statement);
-    final_status = sqlite3_finalize(statement);
     if (status != SQLITE_DONE) {
         return status;
     }
-    if (final_status != SQLITE_OK) {
-        return final_status;
+    status = sqlite3_finalize(statement);
+    if (status != SQLITE_OK) {
+        return status;
     }
     // If we got this far, then document_size_limit has been properly set.
     // Copy it
