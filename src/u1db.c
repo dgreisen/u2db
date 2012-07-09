@@ -86,6 +86,8 @@ u1db_open(const char *fname)
         free(db);
         return NULL;
     }
+    // TODO: surely this is not right? We should get the db sqlite, and only if
+    // that fails because it's not there, should we initialize?!?
     initialize(db);
     return db;
 }
@@ -515,6 +517,20 @@ finish:
     return status;
 }
 
+static int
+u1db__check_doc_size(u1database *db, u1db_document *doc)
+{
+    int status = U1DB_OK;
+    int limit = 0;
+    status = u1db__get_document_size_limit(db, &limit);
+    if (status != U1DB_OK)
+        return status;
+    if (limit == 0)
+        return U1DB_OK;
+    if (u1db_doc_get_size(doc) <= limit)
+        return U1DB_OK;
+    return U1DB_DOCUMENT_TOO_BIG;
+}
 
 int
 u1db_put_doc(u1database *db, u1db_document *doc)
@@ -526,10 +542,13 @@ u1db_put_doc(u1database *db, u1db_document *doc)
     sqlite3_stmt *statement = NULL;
 
     if (db == NULL || doc == NULL) {
-        // Bad parameter
-        return -1;
+        return U1DB_INVALID_PARAMETER;
     }
     status = u1db__is_doc_id_valid(doc->doc_id);
+    if (status != U1DB_OK) {
+        return status;
+    }
+    status = u1db__check_doc_size(db, doc);
     if (status != U1DB_OK) {
         return status;
     }
@@ -1975,11 +1994,17 @@ finish:
 int
 u1db_doc_get_size(u1db_document *doc)
 {
-    int json_size = 0;
+    int size = 0;
     if (doc->json != NULL) {
-        json_size = strlen(doc->json);
+        size += strlen(doc->json);
     }
-    return strlen(doc->doc_id) + strlen(doc->doc_rev) + json_size;
+    if (doc->doc_id != NULL) {
+        size += strlen(doc->doc_id);
+    }
+    if (doc->doc_rev != NULL) {
+        size += strlen(doc->doc_rev);
+    }
+    return size;
 }
 
 

@@ -424,7 +424,8 @@ def make_database_for_http_test(test, replica_uid):
     return db
 
 
-def sync_via_synchronizer_and_http(test, db_source, db_target, trace_hook=None):
+def sync_via_synchronizer_and_http(test, db_source, db_target,
+                                   trace_hook=None):
     if trace_hook:
         test.skipTest("trace_hook unsupported over http")
     path = test._http_at[db_target]
@@ -1032,7 +1033,8 @@ class TestRemoteSyncIntegration(tests.TestCaseWithServer):
         self.assertEqual(2, len(self.db2._get_transaction_log()))
         progress1 = []
         progress2 = []
-        _do_set_replica_gen_and_trans_id = self.db1._do_set_replica_gen_and_trans_id
+        _do_set_replica_gen_and_trans_id = \
+            self.db1._do_set_replica_gen_and_trans_id
 
         def set_sync_generation_witness1(other_uid, other_gen, trans_id):
             progress1.append((other_uid, other_gen,
@@ -1041,7 +1043,8 @@ class TestRemoteSyncIntegration(tests.TestCaseWithServer):
         self.patch(self.db1, '_do_set_replica_gen_and_trans_id',
                    set_sync_generation_witness1)
 
-        _do_set_replica_gen_and_trans_id2 = self.db2._do_set_replica_gen_and_trans_id
+        _do_set_replica_gen_and_trans_id2 = \
+            self.db2._do_set_replica_gen_and_trans_id
 
         def set_sync_generation_witness2(other_uid, other_gen, trans_id):
             progress2.append((other_uid, other_gen,

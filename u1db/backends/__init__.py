@@ -54,6 +54,12 @@ class CommonBackend(u1db.Database):
         if not check_doc_id_re.match(doc_id):
             raise errors.InvalidDocId()
 
+    def _check_doc_size(self, doc):
+        if not self.document_size_limit:
+            return
+        if doc.get_size() > self.document_size_limit:
+            raise errors.DocumentTooBig
+
     def _get_generation(self):
         """Return the current generation.
 

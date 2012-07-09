@@ -436,11 +436,15 @@ class DocumentBase(object):
 
     def get_size(self):
         """Calculate the total size of the document."""
-        json_len = 0
+        size = 0
         json = self.get_json()
         if json:
-            json_len = len(json)
-        return len(self.doc_id + self.rev) + json_len
+            size += len(json)
+        if self.rev:
+            size += len(self.rev)
+        if self.doc_id:
+            size += len(self.doc_id)
+        return size
 
     def set_json(self, json):
         """Set the json serialization of this document."""
