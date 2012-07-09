@@ -180,6 +180,7 @@ u1db_set_document_size_limit(u1database *db, int limit)
     }
     status = sqlite3_step(statement);
     if (status != SQLITE_DONE) {
+        sqlite3_finalize(statement);
         return status;
     }
     status = sqlite3_finalize(statement);
@@ -1517,15 +1518,16 @@ u1db__get_document_size_limit(u1database *db, int *limit)
         if (status == SQLITE_DONE) {
             // No document_size_limit set yet
             *limit = 0;
+            db->document_size_limit = *limit;
             return U1DB_OK;
         }
         return status;
     }
-    if(sqlite3_column_count(statement) != 1) {
-        sqlite3_finalize(statement);
+    *limit = sqlite3_column_int(statement, 0);
+    status = sqlite3_finalize(statement);
+    if (status != SQLITE_OK) {
         return status;
     }
-    *limit = sqlite3_column_int(statement, 0);
     db->document_size_limit = *limit;
     return U1DB_OK;
 }
