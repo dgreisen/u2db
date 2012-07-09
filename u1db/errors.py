@@ -46,9 +46,13 @@ class InvalidDocId(U1DBError):
 class InvalidTransactionId(U1DBError):
     """Invalid transaction for generation."""
 
+    wire_description = "invalid transaction id"
+
 
 class InvalidGeneration(U1DBError):
     """Generation was previously synced with a different transaction id."""
+
+    wire_description = "invalid generation"
 
 
 class ConflictedDoc(U1DBError):
@@ -136,6 +140,7 @@ class BrokenSyncStream(U1DBError):
     """Unterminated or otherwise broken sync exchange stream."""
 
     wire_description = None
+
 
 # mapping wire (transimission) descriptions/tags for errors to the exceptions
 wire_description_to_exc = dict(

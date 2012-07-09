@@ -19,8 +19,9 @@
 import json
 import os
 import re
-import xdg.BaseDirectory
 import u1db
+
+from dirspec.basedir import save_data_path
 
 EMPTY_TASK = json.dumps({"title": "", "done": False, "tags": []})
 
@@ -37,8 +38,8 @@ TAGS = re.compile('#(\w+)|\[(.+)\]')
 def get_database():
     """Get the path that the database is stored in."""
     return u1db.open(
-        os.path.join(xdg.BaseDirectory.save_data_path("u1todo"),
-        "u1todo.u1db"), create=True)
+        os.path.join(save_data_path("u1todo"),
+                     "u1todo.u1db"), create=True)
 
 
 def extract_tags(text):

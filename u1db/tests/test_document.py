@@ -15,14 +15,14 @@
 # along with u1db.  If not, see <http://www.gnu.org/licenses/>.
 
 
-from u1db import Document
 from u1db import errors, tests
 
 
 class TestDocument(tests.TestCase):
 
-    scenarios = ([('py', {'make_document': Document})] +
-                 tests.C_DATABASE_SCENARIOS)
+    scenarios = ([(
+        'py', {'make_document_for_test': tests.make_document_for_test})] +
+        tests.C_DATABASE_SCENARIOS)
 
     def test_create_doc(self):
         doc = self.make_document('doc-id', 'uid:1', tests.simple_doc)
@@ -79,7 +79,8 @@ class TestDocument(tests.TestCase):
 
 class TestPyDocument(tests.TestCase):
 
-    scenarios = ([('py', {'make_document': Document})])
+    scenarios = ([(
+        'py', {'make_document_for_test': tests.make_document_for_test})])
 
     def test_get_content(self):
         doc = self.make_document('id', 'rev', '{"content":""}')

@@ -127,8 +127,8 @@ struct _u1db_sync_target {
                          const char *source_replica_uid, int n_docs,
                          u1db_document **docs, int *generations,
                          const char **trans_ids, int *target_gen,
-                         char **target_trans_id,
-                         void *context, u1db_doc_gen_callback cb);
+                         char **target_trans_id, void *context,
+                         u1db_doc_gen_callback cb);
     /**
      * Create a sync_exchange state object.
      *
@@ -300,15 +300,15 @@ int u1db__get_transaction_log(u1database *db, void *context,
  * @param trans_id    (OUT) The transaction id associated with the generation.
  *                    Callers must free the data.
  */
-int u1db__get_sync_gen_info(u1database *db, const char *replica_uid,
-                            int *generation, char **trans_id);
+int u1db__get_replica_gen_and_trans_id(u1database *db, const char *replica_uid,
+                                       int *generation, char **trans_id);
 
 /**
  * Set the known sync generation for another replica.
  *
  */
-int u1db__set_sync_info(u1database *db, const char *replica_uid,
-                        int generation, const char *trans_id);
+int u1db__set_replica_gen_and_trans_id(u1database *db, const char *replica_uid,
+                                       int generation, const char *trans_id);
 
 /**
  * Internal sync api, get the stored information about another machine.

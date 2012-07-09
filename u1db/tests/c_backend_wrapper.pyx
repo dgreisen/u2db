@@ -138,6 +138,7 @@ cdef extern from "u1db/u1db.h":
     int U1DB_INVALID_GENERATION
     int U1DB_INVALID_TRANSACTION_ID
     int U1DB_INTERNAL_ERROR
+    int U1DB_TARGET_UNAVAILABLE
 
     int U1DB_INSERTED
     int U1DB_SUPERSEDED
@@ -183,9 +184,9 @@ cdef extern from "u1db/u1db_internal.h":
         int (*sync_exchange)(u1db_sync_target *st,
                              char *source_replica_uid, int n_docs,
                              u1db_document **docs, int *generations,
-                             const_char_ptr *trans_ids, int *target_gen,
-                             char **target_trans_id, void *context,
-                             u1db_doc_gen_callback cb) nogil
+                             const_char_ptr *trans_ids,
+                             int *target_gen, char **target_trans_id,
+                             void *context, u1db_doc_gen_callback cb) nogil
         int (*sync_exchange_doc_ids)(u1db_sync_target *st,
                                      u1database *source_db, int n_doc_ids,
                                      const_char_ptr *doc_ids, int *generations,
@@ -219,10 +220,10 @@ cdef extern from "u1db/u1db_internal.h":
                                 int has_conflicts, u1db_document **result)
     int u1db__generate_hex_uuid(char *)
 
-    int u1db__get_sync_gen_info(u1database *db, char *replica_uid,
-                                int *generation, char **trans_id)
-    int u1db__set_sync_info(u1database *db, char *replica_uid, int generation,
-                            char *trans_id)
+    int u1db__get_replica_gen_and_trans_id(u1database *db, char *replica_uid,
+                                           int *generation, char **trans_id)
+    int u1db__set_replica_gen_and_trans_id(u1database *db, char *replica_uid,
+                                           int generation, char *trans_id)
     int u1db__sync_get_machine_info(u1database *db, char *other_replica_uid,
                                     int *other_db_rev, char **my_replica_uid,
                                     int *my_db_rev)
@@ -596,6 +597,8 @@ cdef handle_status(context, int status):
         raise errors.InvalidGeneration
     if status == U1DB_INVALID_TRANSACTION_ID:
         raise errors.InvalidTransactionId
+    if status == U1DB_TARGET_UNAVAILABLE:
+        raise errors.Unavailable
     if status == U1DB_INVALID_JSON:
         raise errors.InvalidJSON
     raise RuntimeError('%s (status: %s)' % (context, status))
@@ -710,6 +713,7 @@ cdef class CSyncTarget(object):
 
     def record_sync_info(self, source_replica_uid, source_gen, source_trans_id):
         cdef int status
+
         self._check()
         assert self._st.record_sync_info != NULL, "record_sync_info is NULL?"
         with nogil:
@@ -722,12 +726,13 @@ cdef class CSyncTarget(object):
         return CSyncExchange(self, source_replica_uid, source_gen)
 
     def sync_exchange_doc_ids(self, source_db, doc_id_generations,
-                              last_known_generation, return_doc_cb):
+                              last_known_generation, last_known_trans_id,
+                              return_doc_cb):
         cdef const_char_ptr *doc_ids
         cdef int *generations
         cdef int num_doc_ids
         cdef int target_gen
-        cdef char *target_trans_id
+        cdef char *target_trans_id = NULL
         cdef int status
         cdef CDatabase sdb
 
@@ -752,31 +757,35 @@ cdef class CSyncTarget(object):
                 generations[i] = gen
                 trans_ids[i] = trans_id
             target_gen = last_known_generation
+            if last_known_trans_id is not None:
+                target_trans_id = last_known_trans_id
             with nogil:
                 status = self._st.sync_exchange_doc_ids(self._st, sdb._db,
                     num_doc_ids, doc_ids, generations, trans_ids,
                     &target_gen, &target_trans_id,
                     <void*>return_doc_cb, return_doc_cb_wrapper)
             handle_status("sync_exchange_doc_ids", status)
+            if target_trans_id != NULL:
+                res_trans_id = target_trans_id
         finally:
+            if target_trans_id != NULL:
+                free(target_trans_id)
             if doc_ids != NULL:
                 free(<void *>doc_ids)
             if generations != NULL:
                 free(generations)
             if trans_ids != NULL:
                 free(trans_ids)
-            if target_trans_id != NULL:
-                res_trans_id = target_trans_id
-                free(target_trans_id)
         return target_gen, res_trans_id
 
     def sync_exchange(self, docs_by_generations, source_replica_uid,
-                      last_known_generation, return_doc_cb):
+                      last_known_generation, last_known_trans_id,
+                      return_doc_cb):
         cdef CDocument cur_doc
         cdef u1db_document **docs = NULL
         cdef int *generations = NULL
         cdef const_char_ptr *trans_ids = NULL
-        cdef char *trans_id = NULL
+        cdef char *target_trans_id = NULL
         cdef int i, count, status, target_gen
 
         self._check()
@@ -799,11 +808,13 @@ cdef class CSyncTarget(object):
                 trans_ids[i] = docs_by_generations[i][2]
                 docs[i] = cur_doc._doc
             target_gen = last_known_generation
+            if last_known_trans_id is not None:
+                target_trans_id = last_known_trans_id
             with nogil:
-                status = self._st.sync_exchange(self._st,
-                        source_replica_uid, count,
-                        docs, generations, trans_ids, &target_gen, &trans_id,
-                        <void *>return_doc_cb, return_doc_cb_wrapper)
+                status = self._st.sync_exchange(
+                    self._st, source_replica_uid, count, docs, generations,
+                    trans_ids, &target_gen, &target_trans_id,
+                    <void *>return_doc_cb, return_doc_cb_wrapper)
             handle_status("sync_exchange", status)
         finally:
             if docs != NULL:
@@ -812,9 +823,9 @@ cdef class CSyncTarget(object):
                 free(generations)
             if trans_ids != NULL:
                 free(trans_ids)
-            if trans_id != NULL:
-                res_trans_id = trans_id
-                free(trans_id)
+            if target_trans_id != NULL:
+                res_trans_id = target_trans_id
+                free(target_trans_id)
         return target_gen, res_trans_id
 
     def _set_trace_hook(self, cb):
@@ -1089,22 +1100,23 @@ cdef class CDatabase(object):
             "validate_gen_and_trans_id",
             u1db_validate_gen_and_trans_id(self._db, generation, trans_id))
 
-    def _get_sync_gen_info(self, replica_uid):
+    def _get_replica_gen_and_trans_id(self, replica_uid):
         cdef int generation, status
         cdef char *trans_id = NULL
 
-        status = u1db__get_sync_gen_info(self._db, replica_uid, &generation,
-                                         &trans_id)
-        handle_status("_get_sync_gen_info", status)
+        status = u1db__get_replica_gen_and_trans_id(
+            self._db, replica_uid, &generation, &trans_id)
+        handle_status("_get_replica_gen_and_trans_id", status)
         raw_trans_id = None
         if trans_id != NULL:
             raw_trans_id = trans_id
             free(trans_id)
         return generation, raw_trans_id
 
-    def _set_sync_info(self, replica_uid, generation, trans_id):
-        handle_status("_set_sync_info",
-            u1db__set_sync_info(self._db, replica_uid, generation, trans_id))
+    def _set_replica_gen_and_trans_id(self, replica_uid, generation, trans_id):
+        handle_status("_set_replica_gen_and_trans_id",
+            u1db__set_replica_gen_and_trans_id(
+                self._db, replica_uid, generation, trans_id))
 
     def _sync_exchange(self, docs_info, from_replica_uid, from_machine_rev,
                        last_known_rev):
