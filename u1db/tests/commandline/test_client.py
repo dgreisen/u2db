@@ -264,7 +264,9 @@ class TestCmdGet(TestCaseWithDB):
 
     def test_get_conflict(self):
         doc = self.make_document('my-test-doc', 'other:1', '{}', False)
-        self.db._put_doc_if_newer(doc, save_conflict=True)
+        self.db._put_doc_if_newer(
+            doc, save_conflict=True, replica_uid='r', replica_gen=1,
+            replica_trans_id='foo')
         cmd = self.make_command(client.CmdGet)
         cmd.run(self.db_path, 'my-test-doc', None)
         self.assertEqual('{}\n', cmd.stdout.getvalue())
@@ -292,7 +294,9 @@ class TestCmdGetDocConflicts(TestCaseWithDB):
         super(TestCmdGetDocConflicts, self).setUp()
         self.doc1 = self.db.create_doc(tests.simple_doc, doc_id='my-doc')
         self.doc2 = self.make_document('my-doc', 'other:1', '{}', False)
-        self.db._put_doc_if_newer(self.doc2, save_conflict=True)
+        self.db._put_doc_if_newer(
+            self.doc2, save_conflict=True, replica_uid='r', replica_gen=1,
+            replica_trans_id='foo')
 
     def test_get_doc_conflicts_none(self):
         self.db.create_doc(tests.simple_doc, doc_id='a-doc')
@@ -395,7 +399,9 @@ class TestCmdPut(TestCaseWithDB):
 
     def test_put_doc_w_conflicts(self):
         doc = self.make_document('my-test-doc', 'other:1', '{}', False)
-        self.db._put_doc_if_newer(doc, save_conflict=True)
+        self.db._put_doc_if_newer(
+            doc, save_conflict=True, replica_uid='r', replica_gen=1,
+            replica_trans_id='foo')
         cmd = self.make_command(client.CmdPut)
         inf = cStringIO.StringIO(tests.nested_doc)
         retval = cmd.run(self.db_path, 'my-test-doc', 'other:1', inf)
@@ -412,7 +418,9 @@ class TestCmdResolve(TestCaseWithDB):
         super(TestCmdResolve, self).setUp()
         self.doc1 = self.db.create_doc(tests.simple_doc, doc_id='my-doc')
         self.doc2 = self.make_document('my-doc', 'other:1', '{}', False)
-        self.db._put_doc_if_newer(self.doc2, save_conflict=True)
+        self.db._put_doc_if_newer(
+            self.doc2, save_conflict=True, replica_uid='r', replica_gen=1,
+            replica_trans_id='foo')
 
     def test_resolve_simple(self):
         self.assertTrue(self.db.get_doc('my-doc').has_conflicts)
@@ -433,7 +441,9 @@ class TestCmdResolve(TestCaseWithDB):
     def test_resolve_double(self):
         moar = '{"x": 42}'
         doc3 = self.make_document('my-doc', 'third:1', moar, False)
-        self.db._put_doc_if_newer(doc3, save_conflict=True)
+        self.db._put_doc_if_newer(
+            doc3, save_conflict=True, replica_uid='r', replica_gen=1,
+            replica_trans_id='foo')
         cmd = self.make_command(client.CmdResolve)
         inf = cStringIO.StringIO(tests.nested_doc)
         cmd.run(self.db_path, 'my-doc', [self.doc1.rev, self.doc2.rev], inf)

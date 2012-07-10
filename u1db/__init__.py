@@ -320,8 +320,8 @@ class Database(object):
         """
         raise NotImplementedError(self._set_replica_gen_and_trans_id)
 
-    def _put_doc_if_newer(self, doc, save_conflict, replica_uid=None,
-                          replica_gen=None, replica_trans_id=None):
+    def _put_doc_if_newer(self, doc, save_conflict, replica_uid, replica_gen,
+                          replica_trans_id=''):
         """Insert/update document into the database with a given revision.
 
         This api is used during synchronization operations.
