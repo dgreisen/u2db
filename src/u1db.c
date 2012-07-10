@@ -70,7 +70,8 @@ initialize(u1database *db)
     }
     u1db__generate_hex_uuid(default_replica_uid);
     u1db_set_replica_uid(db, default_replica_uid);
-    return SQLITE_OK;
+    u1db_set_document_size_limit(db, 0);
+    return U1DB_OK;
 }
 
 u1database *
@@ -84,6 +85,8 @@ u1db_open(const char *fname)
         free(db);
         return NULL;
     }
+    // TODO: surely this is not right? We should get the db sqlite, and only if
+    // that fails because it's not there, should we initialize?!?
     initialize(db);
     return db;
 }
@@ -154,7 +157,39 @@ u1db_set_replica_uid(u1database *db, const char *replica_uid)
     num_bytes = strlen(replica_uid);
     db->replica_uid = (char *)calloc(1, num_bytes + 1);
     memcpy(db->replica_uid, replica_uid, num_bytes + 1);
-    return 0;
+    return U1DB_OK;
+}
+
+int
+u1db_set_document_size_limit(u1database *db, int limit)
+{
+    sqlite3_stmt *statement;
+    int status, final_status;
+
+    status = sqlite3_prepare_v2(db->sql_handle,
+        "INSERT OR REPLACE INTO u1db_config VALUES ('document_size_limit', ?)",
+        -1, &statement, NULL);
+    if (status != SQLITE_OK) {
+        return status;
+    }
+    status = sqlite3_bind_int(statement, 1, limit);
+    if (status != SQLITE_OK) {
+        sqlite3_finalize(statement);
+        return status;
+    }
+    status = sqlite3_step(statement);
+    if (status != SQLITE_DONE) {
+        sqlite3_finalize(statement);
+        return status;
+    }
+    status = sqlite3_finalize(statement);
+    if (status != SQLITE_OK) {
+        return status;
+    }
+    // If we got this far, then document_size_limit has been properly set.
+    // Copy it
+    db->document_size_limit = limit;
+    return U1DB_OK;
 }
 
 int
@@ -165,7 +200,7 @@ u1db_get_replica_uid(u1database *db, const char **replica_uid)
     const unsigned char *text;
     if (db->replica_uid != NULL) {
         *replica_uid = db->replica_uid;
-        return SQLITE_OK;
+        return U1DB_OK;
     }
     status = sqlite3_prepare_v2(db->sql_handle,
         "SELECT value FROM u1db_config WHERE name = 'replica_uid'", -1,
@@ -181,7 +216,7 @@ u1db_get_replica_uid(u1database *db, const char **replica_uid)
         if (status == SQLITE_DONE) {
             // No replica_uid set yet
             *replica_uid = NULL;
-            return SQLITE_OK;
+            return U1DB_OK;
         }
         *replica_uid = "Failed to step prepared statement";
         return status;
@@ -196,7 +231,7 @@ u1db_get_replica_uid(u1database *db, const char **replica_uid)
     db->replica_uid = (char *)calloc(1, num_bytes + 1);
     memcpy(db->replica_uid, text, num_bytes+1);
     *replica_uid = db->replica_uid;
-    return SQLITE_OK;
+    return U1DB_OK;
 }
 
 static int
@@ -482,6 +517,20 @@ finish:
     return status;
 }
 
+static int
+u1db__check_doc_size(u1database *db, u1db_document *doc)
+{
+    int status = U1DB_OK;
+    int limit = 0;
+    status = u1db__get_document_size_limit(db, &limit);
+    if (status != U1DB_OK)
+        return status;
+    if (limit == 0)
+        return U1DB_OK;
+    if (u1db_doc_get_size(doc) <= limit)
+        return U1DB_OK;
+    return U1DB_DOCUMENT_TOO_BIG;
+}
 
 int
 u1db_put_doc(u1database *db, u1db_document *doc)
@@ -493,10 +542,13 @@ u1db_put_doc(u1database *db, u1db_document *doc)
     sqlite3_stmt *statement = NULL;
 
     if (db == NULL || doc == NULL) {
-        // Bad parameter
-        return -1;
+        return U1DB_INVALID_PARAMETER;
     }
     status = u1db__is_doc_id_valid(doc->doc_id);
+    if (status != U1DB_OK) {
+        return status;
+    }
+    status = u1db__check_doc_size(db, doc);
     if (status != U1DB_OK) {
         return status;
     }
@@ -1426,6 +1478,48 @@ u1db__get_generation(u1database *db, int *generation)
 }
 
 int
+u1db__get_document_size_limit(u1database *db, int *limit)
+{
+    int status = U1DB_OK;
+    sqlite3_stmt *statement;
+
+    if (db == NULL || limit == NULL) {
+        return U1DB_INVALID_PARAMETER;
+    }
+    // TODO: make sure we don't do this lookup every time in case the limit
+    // really is 0.
+    if (db->document_size_limit != 0) {
+        *limit = db->document_size_limit;
+        return U1DB_OK;
+    }
+    status = sqlite3_prepare_v2(db->sql_handle,
+        "SELECT value FROM u1db_config WHERE name = 'document_size_limit'", -1,
+        &statement, NULL);
+    if(status != SQLITE_OK) {
+        return status;
+    }
+    status = sqlite3_step(statement);
+    if(status != SQLITE_ROW) {
+        // TODO: Check return for failures
+        sqlite3_finalize(statement);
+        if (status == SQLITE_DONE) {
+            // No document_size_limit set yet
+            *limit = 0;
+            db->document_size_limit = *limit;
+            return U1DB_OK;
+        }
+        return status;
+    }
+    *limit = sqlite3_column_int(statement, 0);
+    status = sqlite3_finalize(statement);
+    if (status != SQLITE_OK) {
+        return status;
+    }
+    db->document_size_limit = *limit;
+    return U1DB_OK;
+}
+
+int
 u1db__get_generation_info(u1database *db, int *generation, char **trans_id)
 {
     int status;
@@ -1913,6 +2007,24 @@ finish:
         json_object_put(parsed);
     return status;
 }
+
+
+int
+u1db_doc_get_size(u1db_document *doc)
+{
+    int size = 0;
+    if (doc->json != NULL) {
+        size += strlen(doc->json);
+    }
+    if (doc->doc_id != NULL) {
+        size += strlen(doc->doc_id);
+    }
+    if (doc->doc_rev != NULL) {
+        size += strlen(doc->doc_rev);
+    }
+    return size;
+}
+
 
 int
 u1db__is_doc_id_valid(const char *doc_id)

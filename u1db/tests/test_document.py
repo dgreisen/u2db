@@ -71,6 +71,15 @@ class TestDocument(tests.TestCase):
             errors.InvalidJSON, self.make_document, 'id', 'uid:1',
             'not a json dictionary')
 
+    def test_get_size(self):
+        doc_a = self.make_document('a', 'b', '{"some": "content"}')
+        self.assertEqual(
+            len('a' + 'b' + '{"some": "content"}'), doc_a.get_size())
+
+    def test_get_size_empty_document(self):
+        doc_a = self.make_document('a', 'b', None)
+        self.assertEqual(len('a' + 'b'), doc_a.get_size())
+
 
 class TestPyDocument(tests.TestCase):
 

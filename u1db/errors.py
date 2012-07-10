@@ -43,6 +43,12 @@ class InvalidDocId(U1DBError):
     wire_description = "invalid document id"
 
 
+class DocumentTooBig(U1DBError):
+    """Document exceeds the maximum document size for this database."""
+
+    wire_description = "document too big"
+
+
 class InvalidTransactionId(U1DBError):
     """Invalid transaction for generation."""
 

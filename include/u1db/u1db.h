@@ -44,7 +44,8 @@ typedef int (*u1db_key_callback)(void *context, int num_fields,
                                  const char **key);
 typedef int (*u1db_doc_gen_callback)(void *context, u1db_document *doc,
                                      int gen, const char *trans_id);
-typedef int (*u1db_doc_id_gen_callback)(void *context, const char *doc_id, int gen);
+typedef int (*u1db_doc_id_gen_callback)(void *context, const char *doc_id,
+                                        int gen);
 typedef int (*u1db_trans_info_callback)(void *context, const char *doc_id,
                                         int gen, const char *trans_id);
 
@@ -73,6 +74,7 @@ typedef int (*u1db_trans_info_callback)(void *context, const char *doc_id,
 #define U1DB_INVALID_TRANSACTION_ID -20
 #define U1DB_INVALID_GENERATION -21
 #define U1DB_TARGET_UNAVAILABLE -22
+#define U1DB_DOCUMENT_TOO_BIG -23
 #define U1DB_INTERNAL_ERROR -999
 
 // Used by put_doc_if_newer
@@ -97,6 +99,11 @@ void u1db_free(u1database **db);
  * Set the replica_uid defined for this database.
  */
 int u1db_set_replica_uid(u1database *db, const char *replica_uid);
+
+/**
+ * Set the replica_uid defined for this database.
+ */
+int u1db_set_document_size_limit(u1database *db, int limit);
 
 /**
  * Get the replica_uid defined for this database.
@@ -256,14 +263,20 @@ int u1db_doc_set_json(u1db_document *doc, const char *json);
 
 
 /**
+ * Get the size of the document in bytes.
+ */
+int u1db_doc_get_size(u1db_document *doc);
+
+
+/**
  * Create an index that you can query for matching documents.
  *
  * @param index_name    An identifier for this index.
  * @param n_expressions The number of index expressions.
  * @param exp0... The values to match in the index, all of these should be char*
  */
-int u1db_create_index(u1database *db, const char *index_name, int n_expressions,
-                      ...);
+int u1db_create_index(u1database *db, const char *index_name,
+                      int n_expressions, ...);
 
 
 /**

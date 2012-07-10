@@ -150,6 +150,17 @@ class AllDatabaseTests(tests.DatabaseBaseTests, tests.TestCaseWithServer):
         doc = self.make_document('d\xc3\xa5c-id', None, simple_doc)
         self.assertRaises(errors.InvalidDocId, self.db.put_doc, doc)
 
+    def test_put_doc_refuses_oversized_documents(self):
+        self.db.set_document_size_limit(1)
+        doc = self.make_document('doc-id', None, simple_doc)
+        self.assertRaises(errors.DocumentTooBig, self.db.put_doc, doc)
+
+    def test_create_doc_refuses_oversized_documents(self):
+        self.db.set_document_size_limit(1)
+        self.assertRaises(
+            errors.DocumentTooBig, self.db.create_doc, simple_doc,
+            doc_id='my_doc_id')
+
     def test_put_fails_with_bad_old_rev(self):
         doc = self.db.create_doc(simple_doc, doc_id='my_doc_id')
         old_rev = doc.rev
@@ -264,6 +275,14 @@ class AllDatabaseTests(tests.DatabaseBaseTests, tests.TestCaseWithServer):
         doc.set_json(nested_doc)
         self.db.put_doc(doc)
         self.assertGetDoc(self.db, doc.doc_id, doc.rev, nested_doc, False)
+
+    def test_set_document_size_limit_zero(self):
+        self.db.set_document_size_limit(0)
+        self.assertEqual(0, self.db.document_size_limit)
+
+    def test_set_document_size_limit(self):
+        self.db.set_document_size_limit(1000000)
+        self.assertEqual(1000000, self.db.document_size_limit)
 
 
 class LocalDatabaseTests(tests.DatabaseBaseTests):
