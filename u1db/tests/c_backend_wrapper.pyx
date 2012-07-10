@@ -68,6 +68,7 @@ cdef extern from "u1db/u1db.h":
     u1database * u1db_open(char *fname)
     void u1db_free(u1database **)
     int u1db_set_replica_uid(u1database *, char *replica_uid)
+    int u1db_set_document_size_limit(u1database *, int limit)
     int u1db_get_replica_uid(u1database *, const_char_ptr *replica_uid)
     int u1db_create_doc(u1database *db, char *json, char *doc_id,
                         u1db_document **doc)
@@ -130,6 +131,7 @@ cdef extern from "u1db/u1db.h":
     int U1DB_DOCUMENT_DOES_NOT_EXIST
     int U1DB_NOT_IMPLEMENTED
     int U1DB_INVALID_JSON
+    int U1DB_DOCUMENT_TOO_BIG
     int U1DB_INVALID_VALUE_FOR_INDEX
     int U1DB_INVALID_GLOBBING
     int U1DB_BROKEN_SYNC_STREAM
@@ -147,6 +149,7 @@ cdef extern from "u1db/u1db.h":
 
     void u1db_free_doc(u1db_document **doc)
     int u1db_doc_set_json(u1db_document *doc, char *json)
+    int u1db_doc_get_size(u1db_document *doc)
 
 
 cdef extern from "u1db/u1db_internal.h":
@@ -205,6 +208,7 @@ cdef extern from "u1db/u1db_internal.h":
 
 
     int u1db__get_generation(u1database *, int *db_rev)
+    int u1db__get_document_size_limit(u1database *, int *limit)
     int u1db__get_generation_info(u1database *, int *db_rev, char **trans_id)
     int u1db_validate_gen_and_trans_id(u1database *, int db_rev,
                                        const_char_ptr trans_id)
@@ -488,6 +492,8 @@ cdef class CDocument(object):
     def set_json(self, val):
         u1db_doc_set_json(self._doc, val)
 
+    def get_size(self):
+        return u1db_doc_get_size(self._doc)
 
     property has_conflicts:
         def __get__(self):
@@ -601,6 +607,8 @@ cdef handle_status(context, int status):
         raise errors.Unavailable
     if status == U1DB_INVALID_JSON:
         raise errors.InvalidJSON
+    if status == U1DB_DOCUMENT_TOO_BIG:
+        raise errors.DocumentTooBig
     raise RuntimeError('%s (status: %s)' % (context, status))
 
 
@@ -882,8 +890,23 @@ cdef class CDatabase(object):
         cdef int status
         status = u1db_set_replica_uid(self._db, replica_uid)
         if status != 0:
-            raise RuntimeError('Machine_id could not be set to %s, error: %d'
+            raise RuntimeError('replica_uid could not be set to %s, error: %d'
                                % (replica_uid, status))
+
+    property document_size_limit:
+        def __get__(self):
+            cdef int limit
+            handle_status("document_size_limit",
+                u1db__get_document_size_limit(self._db, &limit))
+            return limit
+
+    def set_document_size_limit(self, limit):
+        cdef int status
+        status = u1db_set_document_size_limit(self._db, limit)
+        if status != 0:
+            raise RuntimeError(
+                "document_size_limit could not be set to %d, error: %d",
+                (limit, status))
 
     def _allocate_doc_id(self):
         cdef char *val

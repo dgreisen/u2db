@@ -41,9 +41,19 @@ class HTTPDatabase(http_client.HTTPClientBase, Database):
     def __init__(self, url, document_factory=None):
         super(HTTPDatabase, self).__init__(url)
         self._factory = document_factory or Document
+        self.document_size_limit = 0
 
     def set_document_factory(self, factory):
         self._factory = factory
+
+    def set_document_size_limit(self, limit):
+        self.document_size_limit = limit
+
+    def _check_doc_size(self, doc):
+        if not self.document_size_limit:
+            return
+        if doc.get_size() > self.document_size_limit:
+            raise errors.DocumentTooBig
 
     @staticmethod
     def open_database(url, create):
@@ -75,6 +85,7 @@ class HTTPDatabase(http_client.HTTPClientBase, Database):
     def put_doc(self, doc):
         if doc.doc_id is None:
             raise errors.InvalidDocId()
+        self._check_doc_size(doc)
         params = {}
         if doc.rev is not None:
             params['old_rev'] = doc.rev
@@ -105,6 +116,7 @@ class HTTPDatabase(http_client.HTTPClientBase, Database):
     def create_doc(self, content, doc_id=None):
         if doc_id is None:
             doc_id = 'D-%s' % (uuid.uuid4().hex,)
+        self._check_doc_size(self._factory(doc_id, None, content))
         res, headers = self._request_json('PUT', ['doc', doc_id], {},
                                           content, 'application/json')
         new_doc = self._factory(doc_id, res['rev'], content)

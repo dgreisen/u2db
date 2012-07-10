@@ -31,6 +31,7 @@ struct _u1database
 {
     sqlite3 *sql_handle;
     char *replica_uid;
+    int document_size_limit;
 };
 
 struct _u1query {
@@ -231,6 +232,11 @@ int u1db__validate_source(u1database *db, const char *replica_uid,
  * Internal API, Get the global database rev.
  */
 int u1db__get_generation(u1database *db, int *generation);
+
+/**
+ * Internal API, Get the document size limit.
+ */
+int u1db__get_document_size_limit(u1database *db, int *limit);
 
 /**
  * Internal API, Get the global database rev and transaction id.

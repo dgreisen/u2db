@@ -100,6 +100,7 @@ class InMemoryDatabase(CommonBackend):
         if doc.doc_id is None:
             raise errors.InvalidDocId()
         self._check_doc_id(doc.doc_id)
+        self._check_doc_size(doc)
         if self._has_conflicts(doc.doc_id):
             raise errors.ConflictedDoc()
         old_doc = self._get_doc(doc.doc_id)
