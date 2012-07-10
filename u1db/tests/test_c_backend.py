@@ -75,7 +75,7 @@ class TestCDatabase(BackendTests):
 
     def test__get_generation_info(self):
         db = c_backend_wrapper.CDatabase(':memory:')
-        self.assertEqual((0, None), db._get_generation_info())
+        self.assertEqual((0, ''), db._get_generation_info())
         db.create_doc(tests.simple_doc)
         info = db._get_generation_info()
         self.assertEqual(1, info[0])

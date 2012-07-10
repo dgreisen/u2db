@@ -18,6 +18,7 @@
 from itertools import izip
 
 import u1db
+from u1db import errors
 
 
 class Synchronizer(object):
@@ -94,7 +95,7 @@ class Synchronizer(object):
         sync_target = self.sync_target
         # get target identifier, its current generation,
         # and its last-seen database generation for this source
-        (self.target_replica_uid, target_gen, target_my_gen,
+        (self.target_replica_uid, target_gen, target_trans_id, target_my_gen,
          target_my_trans_id) = sync_target.get_sync_info(
              self.source._replica_uid)
         # validate the generation and transaction id the target knows about us
@@ -107,7 +108,8 @@ class Synchronizer(object):
         target_last_known_gen, target_last_known_trans_id = \
             self.source._get_replica_gen_and_trans_id(self.target_replica_uid)
         if not changes and target_last_known_gen == target_gen:
-            # TODO: we'll need to check the target's transaction id as well.
+            if target_trans_id != target_last_known_trans_id:
+                raise errors.InvalidTransactionId
             return my_gen
         changed_doc_ids = [doc_id for doc_id, _, _ in changes]
         # prepare to send all the changed docs

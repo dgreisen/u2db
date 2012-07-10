@@ -271,7 +271,7 @@ class SQLiteDatabase(CommonBackend):
             'SELECT max(generation), transaction_id FROM transaction_log ')
         val = c.fetchone()
         if val[0] is None:
-            return(0, val[1])
+            return(0, '')
         return val
 
     def _get_trans_id_for_gen(self, generation):
@@ -790,8 +790,10 @@ class SQLiteSyncTarget(CommonSyncTarget):
     def get_sync_info(self, source_replica_uid):
         source_gen, source_trans_id = self._db._get_replica_gen_and_trans_id(
             source_replica_uid)
-        my_gen = self._db._get_generation()
-        return self._db._replica_uid, my_gen, source_gen, source_trans_id
+        my_gen, my_trans_id = self._db._get_generation_info()
+        return (
+            self._db._replica_uid, my_gen, my_trans_id, source_gen,
+            source_trans_id)
 
     def record_sync_info(self, source_replica_uid, source_replica_generation,
                          source_replica_transaction_id):

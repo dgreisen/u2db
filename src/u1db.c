@@ -1545,7 +1545,11 @@ u1db__get_generation_info(u1database *db, int *generation, char **trans_id)
         *generation = sqlite3_column_int(statement, 0);
         tmp = (const char *)sqlite3_column_text(statement, 1);
         if (tmp == NULL) {
-            *trans_id = NULL;
+            *trans_id = strdup("");
+            if (*trans_id == NULL) {
+                status = U1DB_NOMEM;
+                goto finish;
+            }
         } else {
             *trans_id = strdup(tmp);
             if (*trans_id == NULL) {

@@ -22,9 +22,10 @@
 
 
 static int st_get_sync_info(u1db_sync_target *st,
-        const char *source_replica_uid,
-        const char **st_replica_uid, int *st_gen, int *source_gen,
-        char **source_trans_id);
+                            const char *source_replica_uid,
+                            const char **st_replica_uid, int *st_gen,
+                            char **st_trans_id, int *source_gen,
+                            char **source_trans_id);
 
 static int st_record_sync_info(u1db_sync_target *st,
         const char *source_replica_uid, int source_gen, const char *trans_id);
@@ -105,8 +106,8 @@ u1db__free_sync_target(u1db_sync_target **sync_target)
 
 static int
 st_get_sync_info(u1db_sync_target *st, const char *source_replica_uid,
-                 const char **st_replica_uid, int *st_gen, int *source_gen,
-                 char **source_trans_id)
+                 const char **st_replica_uid, int *st_gen, char **st_trans_id,
+                 int *source_gen, char **source_trans_id)
 {
     int status = U1DB_OK;
     u1database *db;
@@ -128,7 +129,7 @@ st_get_sync_info(u1db_sync_target *st, const char *source_replica_uid,
     status = u1db__get_replica_gen_and_trans_id(
         db, source_replica_uid, source_gen, source_trans_id);
     if (status != U1DB_OK) { goto finish; }
-    status = u1db__get_generation(db, st_gen);
+    status = u1db__get_generation_info(db, st_gen, st_trans_id);
 finish:
     return status;
 }
@@ -594,6 +595,7 @@ u1db__sync_db_to_target(u1database *db, u1db_sync_target *target,
     char *local_target_trans_id = NULL;
     char *target_trans_id_known_by_local = NULL;
     char *local_trans_id_known_by_target = NULL;
+    char *target_trans_id = NULL;
     int target_gen, local_gen;
     int local_gen_known_by_target, target_gen_known_by_local;
 
@@ -608,7 +610,7 @@ u1db__sync_db_to_target(u1database *db, u1db_sync_target *target,
     if (status != U1DB_OK) { goto finish; }
     // fprintf(stderr, "Local uid: %s\n", local_uid);
     status = target->get_sync_info(
-        target, local_uid, &target_uid, &target_gen,
+        target, local_uid, &target_uid, &target_gen, &target_trans_id,
         &local_gen_known_by_target, &local_trans_id_known_by_target);
     if (status != U1DB_OK) { goto finish; }
     status = u1db_validate_gen_and_trans_id(
@@ -631,6 +633,9 @@ u1db__sync_db_to_target(u1database *db, u1db_sync_target *target,
     if (local_gen == local_gen_known_by_target
         && target_gen == target_gen_known_by_local)
     {
+        if (strcmp(target_trans_id, target_trans_id_known_by_local) != 0) {
+            status = U1DB_INVALID_TRANSACTION_ID;
+        }
         // We know status == U1DB_OK, and we can shortcut the rest of the
         // logic, no need to look for more information.
         goto finish;
@@ -671,6 +676,9 @@ finish:
     }
     if (local_trans_id_known_by_target != NULL) {
         free(local_trans_id_known_by_target);
+    }
+    if (target_trans_id != NULL) {
+        free(target_trans_id);
     }
     if (local_target_trans_id != NULL) {
         if (target_trans_id_known_by_local == local_target_trans_id) {
