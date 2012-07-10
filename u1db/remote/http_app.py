@@ -309,9 +309,10 @@ class SyncResource(object):
         result = self.target.get_sync_info(self.source_replica_uid)
         self.responder.send_response_json(
             target_replica_uid=result[0], target_replica_generation=result[1],
+            target_replica_transaction_id=result[2],
             source_replica_uid=self.source_replica_uid,
-            source_replica_generation=result[2],
-            source_transaction_id=result[3])
+            source_replica_generation=result[3],
+            source_transaction_id=result[4])
 
     @http_method(generation=int,
                  content_as_args=True, no_query=True)

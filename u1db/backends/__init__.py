@@ -110,6 +110,14 @@ class CommonBackend(u1db.Database):
             result.append(doc)
         return result
 
+    def _get_trans_id_for_gen(self, generation):
+        """Get the transaction id corresponding to a particular generation.
+
+        Raises an InvalidGeneration when the generation does not exist.
+
+        """
+        raise NotImplementedError(self._get_trans_id_for_gen)
+
     def validate_gen_and_trans_id(self, generation, trans_id):
         """Validate the generation and transaction id.
 
@@ -117,10 +125,14 @@ class CommonBackend(u1db.Database):
         InvalidTransactionId when it does but with a different transaction id.
 
         """
-        raise NotImplementedError(self.validate_gen_and_trans_id)
+        if generation == 0:
+            return
+        known_trans_id = self._get_trans_id_for_gen(generation)
+        if known_trans_id != trans_id:
+            raise errors.InvalidTransactionId
 
     def _validate_source(self, other_replica_uid, other_generation,
-                         other_transaction_id, cur_vcr, other_vcr):
+                         other_transaction_id):
         """Validate the new generation and transaction id.
 
         other_generation must be greater than what we have stored for this
@@ -131,13 +143,11 @@ class CommonBackend(u1db.Database):
          old_transaction_id) = self._get_replica_gen_and_trans_id(
              other_replica_uid)
         if other_generation < old_generation:
-            if cur_vcr.is_newer(other_vcr):
-                return 'superseded'
             raise errors.InvalidGeneration
         if other_generation > old_generation:
-            return 'ok'
+            return
         if other_transaction_id == old_transaction_id:
-            return 'superseded'
+            return
         raise errors.InvalidTransactionId
 
     def _put_doc_if_newer(self, doc, save_conflict, replica_uid=None,
@@ -149,11 +159,8 @@ class CommonBackend(u1db.Database):
         else:
             cur_vcr = VectorClockRev(cur_doc.rev)
         if replica_uid is not None and replica_gen is not None:
-            state = self._validate_source(
-                replica_uid, replica_gen, replica_trans_id, cur_vcr,
-                doc_vcr)
-            if state != 'ok':
-                return state, self._get_generation()
+            self._validate_source(
+                replica_uid, replica_gen, replica_trans_id)
         if doc_vcr.is_newer(cur_vcr):
             rev = doc.rev
             self._prune_conflicts(doc, doc_vcr)

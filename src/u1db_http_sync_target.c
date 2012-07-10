@@ -41,9 +41,10 @@ struct _http_state;
 struct _http_request;
 
 static int st_http_get_sync_info(u1db_sync_target *st,
-        const char *source_replica_uid,
-        const char **st_replica_uid, int *st_gen, int *source_gen,
-        char **trans_id);
+                                 const char *source_replica_uid,
+                                 const char **st_replica_uid, int *st_gen,
+                                 char **st_trans_id, int *source_gen,
+                                 char **trans_id);
 
 static int st_http_record_sync_info(u1db_sync_target *st,
         const char *source_replica_uid, int source_gen, const char *trans_id);
@@ -366,15 +367,15 @@ maybe_sign_url(u1db_sync_target *st, const char *http_method,
 }
 
 static int
-st_http_get_sync_info(u1db_sync_target *st,
-        const char *source_replica_uid,
-        const char **st_replica_uid, int *st_gen, int *source_gen,
-        char **trans_id)
+st_http_get_sync_info(u1db_sync_target *st, const char *source_replica_uid,
+                      const char **st_replica_uid, int *st_gen,
+                      char **st_trans_id, int *source_gen, char **trans_id)
 {
     struct _http_state *state;
     struct _http_request req = {0};
     char *url = NULL;
     const char *tmp = NULL;
+    const char *tmp2 = NULL;
     int status = U1DB_OK;
     long http_code;
     struct curl_slist *headers = NULL;
@@ -481,6 +482,21 @@ st_http_get_sync_info(u1db_sync_target *st,
         goto finish;
     }
     *st_gen = json_object_get_int(obj);
+    obj = json_object_object_get(json, "target_replica_transaction_id");
+    if (obj == NULL) {
+        status = U1DB_INVALID_HTTP_RESPONSE;
+        goto finish;
+    }
+    tmp2 = json_object_get_string(obj);
+    if (tmp2 == NULL) {
+        *st_trans_id = NULL;
+    } else {
+        *st_trans_id = strdup(tmp2);
+        if (*st_trans_id == NULL) {
+            status = U1DB_NOMEM;
+            goto finish;
+        }
+    }
     obj = json_object_object_get(json, "source_replica_generation");
     if (obj == NULL) {
         status = U1DB_INVALID_HTTP_RESPONSE;

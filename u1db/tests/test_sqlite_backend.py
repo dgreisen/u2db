@@ -153,7 +153,7 @@ class TestSQLitePartialExpandDatabase(tests.TestCase):
         self.assertEqual(0, self.db._get_generation())
 
     def test__get_generation_info(self):
-        self.assertEqual((0, None), self.db._get_generation_info())
+        self.assertEqual((0, ''), self.db._get_generation_info())
 
     def test_create_index(self):
         self.db.create_index('test-idx', "key")

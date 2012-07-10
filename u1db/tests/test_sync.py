@@ -143,18 +143,19 @@ class DatabaseSyncTargetTests(tests.DatabaseBaseTests,
         self.assertIsNot(None, self.st)
 
     def test_get_sync_info(self):
-        self.assertEqual(('test', 0, 0, ''), self.st.get_sync_info('other'))
+        self.assertEqual(
+            ('test', 0, '', 0, ''), self.st.get_sync_info('other'))
 
     def test_create_doc_updates_sync_info(self):
-        self.assertEqual(('test', 0, 0, ''), self.st.get_sync_info('other'))
+        self.assertEqual(
+            ('test', 0, '', 0, ''), self.st.get_sync_info('other'))
         self.db.create_doc(simple_doc)
-        self.assertEqual(('test', 1, 0, ''), self.st.get_sync_info('other'))
+        self.assertEqual(1, self.st.get_sync_info('other')[1])
 
     def test_record_sync_info(self):
-        self.assertEqual(('test', 0, 0, ''), self.st.get_sync_info('replica'))
         self.st.record_sync_info('replica', 10, 'T-transid')
-        self.assertEqual(('test', 0, 10, 'T-transid'),
-                         self.st.get_sync_info('replica'))
+        self.assertEqual(
+            ('test', 0, '', 10, 'T-transid'), self.st.get_sync_info('replica'))
 
     def test_sync_exchange(self):
         docs_by_gen = [
@@ -168,7 +169,7 @@ class DatabaseSyncTargetTests(tests.DatabaseBaseTests,
         last_trans_id = self.getLastTransId(self.db)
         self.assertEqual(([], 1, last_trans_id),
                          (self.other_changes, new_gen, last_trans_id))
-        self.assertEqual(10, self.st.get_sync_info('replica')[2])
+        self.assertEqual(10, self.st.get_sync_info('replica')[3])
 
     def test_sync_exchange_deleted(self):
         doc = self.db.create_doc('{}')
@@ -184,7 +185,7 @@ class DatabaseSyncTargetTests(tests.DatabaseBaseTests,
         last_trans_id = self.getLastTransId(self.db)
         self.assertEqual(([], 2, last_trans_id),
                          (self.other_changes, new_gen, trans_id))
-        self.assertEqual(10, self.st.get_sync_info('replica')[2])
+        self.assertEqual(10, self.st.get_sync_info('replica')[3])
 
     def test_sync_exchange_push_many(self):
         docs_by_gen = [
@@ -200,7 +201,7 @@ class DatabaseSyncTargetTests(tests.DatabaseBaseTests,
         last_trans_id = self.getLastTransId(self.db)
         self.assertEqual(([], 2, last_trans_id),
                          (self.other_changes, new_gen, trans_id))
-        self.assertEqual(11, self.st.get_sync_info('replica')[2])
+        self.assertEqual(11, self.st.get_sync_info('replica')[3])
 
     def test_sync_exchange_refuses_conflicts(self):
         doc = self.db.create_doc(simple_doc)
@@ -378,7 +379,7 @@ class DatabaseSyncTargetTests(tests.DatabaseBaseTests,
         last_trans_id = self.getLastTransId(self.db)
         self.assertEqual(([], 1, last_trans_id),
                          (self.other_changes, new_gen, trans_id))
-        self.assertEqual(10, self.st.get_sync_info(db2._replica_uid)[2])
+        self.assertEqual(10, self.st.get_sync_info(db2._replica_uid)[3])
 
     def test__set_trace_hook(self):
         called = []
@@ -989,6 +990,24 @@ class DatabaseSyncTests(tests.DatabaseBaseTests,
         self.assertRaises(
             errors.InvalidTransactionId, self.sync, self.db1, db3)
 
+    def test_sync_detects_rollback_and_divergence_in_source(self):
+        self.db1.create_doc(tests.simple_doc, doc_id="divergent")
+        self.sync(self.db1, self.db2)
+        self.db1.create_doc(tests.simple_doc)
+        self.db2._set_replica_gen_and_trans_id(
+            self.db1._replica_uid, 2, 'T-madeup')
+        self.assertRaises(
+            errors.InvalidTransactionId, self.sync, self.db1, self.db2)
+
+    def test_sync_detects_rollback_and_divergence_in_target(self):
+        self.db1.create_doc(tests.simple_doc, doc_id="divergent")
+        self.sync(self.db1, self.db2)
+        self.db2.create_doc(tests.simple_doc)
+        self.db1._set_replica_gen_and_trans_id(
+            self.db2._replica_uid, 2, 'T-madeup')
+        self.assertRaises(
+            errors.InvalidTransactionId, self.sync, self.db1, self.db2)
+
 
 class TestDbSync(tests.TestCaseWithServer):
     """Test db.sync remote sync shortcut"""
@@ -1042,7 +1061,6 @@ class TestRemoteSyncIntegration(tests.TestCaseWithServer):
             _do_set_replica_gen_and_trans_id(other_uid, other_gen, trans_id)
         self.patch(self.db1, '_do_set_replica_gen_and_trans_id',
                    set_sync_generation_witness1)
-
         _do_set_replica_gen_and_trans_id2 = \
             self.db2._do_set_replica_gen_and_trans_id
 
