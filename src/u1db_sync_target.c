@@ -105,8 +105,8 @@ u1db__free_sync_target(u1db_sync_target **sync_target)
 
 static int
 st_get_sync_info(u1db_sync_target *st, const char *source_replica_uid,
-        const char **st_replica_uid, int *st_gen, int *source_gen,
-        char **source_trans_id)
+                 const char **st_replica_uid, int *st_gen, int *source_gen,
+                 char **source_trans_id)
 {
     int status = U1DB_OK;
     u1database *db;
@@ -614,8 +614,9 @@ u1db__sync_db_to_target(u1database *db, u1db_sync_target *target,
     status = u1db_validate_gen_and_trans_id(
         db, local_gen_known_by_target, local_trans_id_known_by_target);
     if (status != U1DB_OK) { goto finish; }
-    status = u1db__get_replica_gen_and_trans_id(db, target_uid,
-        &target_gen_known_by_local, &target_trans_id_known_by_local);
+    status = u1db__get_replica_gen_and_trans_id(
+        db, target_uid, &target_gen_known_by_local,
+        &target_trans_id_known_by_local);
     if (status != U1DB_OK) { goto finish; }
     local_target_trans_id = target_trans_id_known_by_local;
     local_gen = local_gen_known_by_target;

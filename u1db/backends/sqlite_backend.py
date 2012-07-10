@@ -274,9 +274,9 @@ class SQLiteDatabase(CommonBackend):
             return(0, val[1])
         return val
 
-    def validate_gen_and_trans_id(self, generation, trans_id):
+    def _get_trans_id_for_gen(self, generation):
         if generation == 0:
-            return
+            return ''
         c = self._db_handle.cursor()
         c.execute(
             'SELECT transaction_id FROM transaction_log WHERE generation = ?',
@@ -284,8 +284,7 @@ class SQLiteDatabase(CommonBackend):
         val = c.fetchone()
         if val is None:
             raise errors.InvalidGeneration
-        if val[0] != trans_id:
-            raise errors.InvalidTransactionId
+        return val[0]
 
     def _get_transaction_log(self):
         c = self._db_handle.cursor()
@@ -788,10 +787,10 @@ class SQLiteDatabase(CommonBackend):
 class SQLiteSyncTarget(CommonSyncTarget):
 
     def get_sync_info(self, source_replica_uid):
-        source_gen, trans_id = self._db._get_replica_gen_and_trans_id(
+        source_gen, source_trans_id = self._db._get_replica_gen_and_trans_id(
             source_replica_uid)
         my_gen = self._db._get_generation()
-        return self._db._replica_uid, my_gen, source_gen, trans_id
+        return self._db._replica_uid, my_gen, source_gen, source_trans_id
 
     def record_sync_info(self, source_replica_uid, source_replica_generation,
                          source_replica_transaction_id):
