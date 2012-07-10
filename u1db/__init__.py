@@ -302,7 +302,7 @@ class Database(object):
             encountered during synchronization. If we've never synchronized
             with the replica, this is (0, '').
         """
-        raise NotImplementedError(self._replica_gen_and_trans_id)
+        raise NotImplementedError(self._get_replica_gen_and_trans_id)
 
     def _set_replica_gen_and_trans_id(self, other_replica_uid,
                                       other_generation, other_transaction_id):

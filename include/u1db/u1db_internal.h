@@ -224,9 +224,7 @@ int u1db__put_doc_if_newer(u1database *db, u1db_document *doc,
  *     superseded.
  */
 int u1db__validate_source(u1database *db, const char *replica_uid,
-                          int replica_gen, const char *replica_trans_id,
-                          u1db_vectorclock *cur_vcr,
-                          u1db_vectorclock *other_vcr, int *state);
+                          int replica_gen, const char *replica_trans_id);
 
 /**
  * Internal API, Get the global database rev.
@@ -243,6 +241,12 @@ int u1db__get_document_size_limit(u1database *db, int *limit);
  */
 int u1db__get_generation_info(u1database *db, int *generation,
                               char **trans_id);
+
+/**
+ * Internal API, Get the transaction id for the db generation.
+ */
+int u1db__get_trans_id_for_gen(u1database *db, int generation,
+                               char **trans_id);
 
 /**
  * Internal API, Validate generation and transaction id.
