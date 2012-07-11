@@ -150,17 +150,15 @@ class CommonBackend(u1db.Database):
             return
         raise errors.InvalidTransactionId
 
-    def _put_doc_if_newer(self, doc, save_conflict, replica_uid=None,
-                          replica_gen=None, replica_trans_id=None):
+    def _put_doc_if_newer(self, doc, save_conflict, replica_uid, replica_gen,
+                          replica_trans_id=''):
         cur_doc = self._get_doc(doc.doc_id)
         doc_vcr = VectorClockRev(doc.rev)
         if cur_doc is None:
             cur_vcr = VectorClockRev(None)
         else:
             cur_vcr = VectorClockRev(cur_doc.rev)
-        if replica_uid is not None and replica_gen is not None:
-            self._validate_source(
-                replica_uid, replica_gen, replica_trans_id)
+        self._validate_source(replica_uid, replica_gen, replica_trans_id)
         if doc_vcr.is_newer(cur_vcr):
             rev = doc.rev
             self._prune_conflicts(doc, doc_vcr)
