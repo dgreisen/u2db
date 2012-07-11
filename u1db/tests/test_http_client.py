@@ -275,6 +275,20 @@ class TestHTTPClientBase(tests.TestCaseWithServer):
         self.assertTrue("content-type" in e.headers)
         self.assertEqual(5, self.errors)
 
+    def test_document_too_big(self):
+        cli = self.getClient()
+        self.assertRaises(errors.DocumentTooBig,
+                          cli._request_json, 'POST', ['error'], {},
+                          {'status': "403 Forbidden",
+                           'response': {"error": "document too big"}})
+
+    def test_user_quota_exceeded(self):
+        cli = self.getClient()
+        self.assertRaises(errors.UserQuotaExceeded,
+                          cli._request_json, 'POST', ['error'], {},
+                          {'status': "403 Forbidden",
+                           'response': {"error": "user quota exceeded"}})
+
     def test_generic_u1db_error(self):
         cli = self.getClient()
         self.assertRaises(errors.U1DBError,

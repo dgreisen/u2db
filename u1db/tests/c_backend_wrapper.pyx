@@ -130,6 +130,7 @@ cdef extern from "u1db/u1db.h":
     int U1DB_NOT_IMPLEMENTED
     int U1DB_INVALID_JSON
     int U1DB_DOCUMENT_TOO_BIG
+    int U1DB_USER_QUOTA_EXCEEDED
     int U1DB_INVALID_VALUE_FOR_INDEX
     int U1DB_INVALID_GLOBBING
     int U1DB_BROKEN_SYNC_STREAM
@@ -608,6 +609,8 @@ cdef handle_status(context, int status):
         raise errors.InvalidJSON
     if status == U1DB_DOCUMENT_TOO_BIG:
         raise errors.DocumentTooBig
+    if status == U1DB_USER_QUOTA_EXCEEDED:
+        raise errors.UserQuotaExceeded
     raise RuntimeError('%s (status: %s)' % (context, status))
 
 

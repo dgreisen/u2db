@@ -26,6 +26,7 @@ wire_description_to_status = dict([
     (errors.InvalidDocId.wire_description, 400),
     (errors.Unauthorized.wire_description, 401),
     (errors.DocumentTooBig.wire_description, 403),
+    (errors.UserQuotaExceeded.wire_description, 403),
     (errors.DatabaseDoesNotExist.wire_description, 404),
     (errors.DocumentDoesNotExist.wire_description, 404),
     (errors.DocumentAlreadyDeleted.wire_description, 404),

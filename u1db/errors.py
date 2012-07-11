@@ -49,6 +49,12 @@ class DocumentTooBig(U1DBError):
     wire_description = "document too big"
 
 
+class UserQuotaExceeded(U1DBError):
+    """Document exceeds the maximum document size for this database."""
+
+    wire_description = "user quota exceeded"
+
+
 class InvalidTransactionId(U1DBError):
     """Invalid transaction for generation."""
 
