@@ -1,6 +1,10 @@
 cmake_minimum_required (VERSION 2.6)
 project (u1db)
 
+# Allow specifying the libdir to use for the C library
+SET (LIB_SUFFIX "" CACHE STRING "Define suffix of library directory name.")
+SET (LIB_INSTALL_DIR "lib${LIB_SUFFIX}")
+
 # Allow the developer to select if Dynamic or Static libraries are built
 OPTION (BUILD_SHARED_LIBS "Build Shared Libraries" OFF)
 
@@ -25,8 +29,8 @@ SET_TARGET_PROPERTIES(u1db
 
 INSTALL (
     TARGETS u1db
-    ARCHIVE DESTINATION lib
-    LIBRARY DESTINATION lib
+    ARCHIVE DESTINATION ${LIB_INSTALL_DIR}
+    LIBRARY DESTINATION ${LIB_INSTALL_DIR}
 )
 
 install(DIRECTORY ${CMAKE_SOURCE_DIR}/include/u1db DESTINATION include
