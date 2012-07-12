@@ -22,7 +22,6 @@ import inspect
 import simplejson
 import sys
 import urlparse
-import urllib
 
 import routes.mapper
 
@@ -46,10 +45,10 @@ def parse_bool(expression):
     return False
 
 
-def parse_encoded_json_list(expression):
+def parse_list(expression):
     if expression is None:
         return []
-    return simplejson.loads(urllib.unquote_plus(expression))
+    return [t.strip() for t in expression.split(',')]
 
 
 def none_or_str(expression):
@@ -245,13 +244,13 @@ class DatabaseResource(object):
 class DocsResource(object):
     """Documents resource."""
 
-    url_pattern = "/{dbname}/docs/"
+    url_pattern = "/{dbname}/docs"
 
     def __init__(self, dbname, state, responder):
         self.responder = responder
         self.db = state.open_database(dbname)
 
-    @http_method(doc_ids=parse_encoded_json_list, check_for_conflicts=True,
+    @http_method(doc_ids=parse_list, check_for_conflicts=parse_bool,
                  include_deleted=parse_bool)
     def get(self, doc_ids=None, check_for_conflicts=True,
             include_deleted=False):
@@ -261,7 +260,7 @@ class DocsResource(object):
         self.responder.start_stream(),
         for doc in docs:
             entry = dict(
-                id=doc.doc_id, rev=doc.rev, content=doc.get_json(),
+                doc_id=doc.doc_id, doc_rev=doc.rev, content=doc.get_json(),
                 has_conflicts=doc.has_conflicts)
             self.responder.stream_entry(entry)
         self.responder.end_stream()
