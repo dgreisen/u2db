@@ -20,6 +20,7 @@ import paste.fixture
 import sys
 import simplejson
 import StringIO
+import urllib
 
 from u1db import (
     __version__ as _u1db_version,
@@ -692,16 +693,17 @@ class TestHTTPApp(tests.TestCase):
 
     def test_get_docs(self):
         doc1 = self.db0.create_doc('{"x": 1}', doc_id='doc1')
-        doc2 = self.db0.create_doc('{"x": 1}', doc_id='doc2')
-        resp = self.app.get(
-            '/db0/docs/?doc_ids=%s' % ','.join([doc1.doc_id, doc2.doc_id]))
+        doc2 = self.db0.create_doc('{"x": 1}', doc_id='doc,2')
+        ids = [doc1.doc_id, doc2.doc_id]
+        ids = urllib.quote_plus(simplejson.dumps(ids))
+        resp = self.app.get('/db0/docs/?doc_ids=%s' % ids)
         self.assertEqual(200, resp.status)
         self.assertEqual(
-            'application/x-u1db-doc-stream', resp.header('content-type'))
+            'application/json', resp.header('content-type'))
         expected = [
             {"content": '{"x": 1}', "rev": "db0:1", "id": "doc1",
              "has_conflicts": False},
-            {"content": '{"x": 1}', "rev": "db0:1", "id": "doc2",
+            {"content": '{"x": 1}', "rev": "db0:1", "id": "doc,2",
              "has_conflicts": False}]
         self.assertEqual(expected, simplejson.loads(resp.body))
 
@@ -709,11 +711,12 @@ class TestHTTPApp(tests.TestCase):
         doc1 = self.db0.create_doc('{"x": 1}', doc_id='doc1')
         doc2 = self.db0.create_doc('{"x": 1}', doc_id='doc2')
         self.db0.delete_doc(doc2)
-        resp = self.app.get(
-            '/db0/docs/?doc_ids=%s' % ','.join([doc1.doc_id, doc2.doc_id]))
+        ids = [doc1.doc_id, doc2.doc_id]
+        ids = urllib.quote_plus(simplejson.dumps(ids))
+        resp = self.app.get('/db0/docs/?doc_ids=%s' % ids)
         self.assertEqual(200, resp.status)
         self.assertEqual(
-            'application/x-u1db-doc-stream', resp.header('content-type'))
+            'application/json', resp.header('content-type'))
         expected = [
             {"content": '{"x": 1}', "rev": "db0:1", "id": "doc1",
              "has_conflicts": False}]
@@ -723,12 +726,12 @@ class TestHTTPApp(tests.TestCase):
         doc1 = self.db0.create_doc('{"x": 1}', doc_id='doc1')
         doc2 = self.db0.create_doc('{"x": 1}', doc_id='doc2')
         self.db0.delete_doc(doc2)
-        resp = self.app.get(
-            '/db0/docs/?doc_ids=%s&include_deleted=true' %
-            ','.join([doc1.doc_id, doc2.doc_id]))
+        ids = [doc1.doc_id, doc2.doc_id]
+        ids = urllib.quote_plus(simplejson.dumps(ids))
+        resp = self.app.get('/db0/docs/?doc_ids=%s&include_deleted=true' % ids)
         self.assertEqual(200, resp.status)
         self.assertEqual(
-            'application/x-u1db-doc-stream', resp.header('content-type'))
+            'application/json', resp.header('content-type'))
         expected = [
             {"content": '{"x": 1}', "rev": "db0:1", "id": "doc1",
              "has_conflicts": False},
