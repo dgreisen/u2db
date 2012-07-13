@@ -690,6 +690,66 @@ class TestHTTPApp(tests.TestCase):
         self.assertEqual({"error": "database does not exist"},
                          simplejson.loads(resp.body))
 
+    def test_get_docs(self):
+        doc1 = self.db0.create_doc('{"x": 1}', doc_id='doc1')
+        doc2 = self.db0.create_doc('{"x": 1}', doc_id='doc2')
+        ids = ','.join([doc1.doc_id, doc2.doc_id])
+        resp = self.app.get('/db0/docs?doc_ids=%s' % ids)
+        self.assertEqual(200, resp.status)
+        self.assertEqual(
+            'application/json', resp.header('content-type'))
+        expected = [
+            {"content": '{"x": 1}', "doc_rev": "db0:1", "doc_id": "doc1",
+             "has_conflicts": False},
+            {"content": '{"x": 1}', "doc_rev": "db0:1", "doc_id": "doc2",
+             "has_conflicts": False}]
+        self.assertEqual(expected, simplejson.loads(resp.body))
+
+    def test_get_docs_percent(self):
+        doc1 = self.db0.create_doc('{"x": 1}', doc_id='doc%1')
+        doc2 = self.db0.create_doc('{"x": 1}', doc_id='doc2')
+        ids = ','.join([doc1.doc_id, doc2.doc_id])
+        resp = self.app.get('/db0/docs?doc_ids=%s' % ids)
+        self.assertEqual(200, resp.status)
+        self.assertEqual(
+            'application/json', resp.header('content-type'))
+        expected = [
+            {"content": '{"x": 1}', "doc_rev": "db0:1", "doc_id": "doc%1",
+             "has_conflicts": False},
+            {"content": '{"x": 1}', "doc_rev": "db0:1", "doc_id": "doc2",
+             "has_conflicts": False}]
+        self.assertEqual(expected, simplejson.loads(resp.body))
+
+    def test_get_docs_deleted(self):
+        doc1 = self.db0.create_doc('{"x": 1}', doc_id='doc1')
+        doc2 = self.db0.create_doc('{"x": 1}', doc_id='doc2')
+        self.db0.delete_doc(doc2)
+        ids = ','.join([doc1.doc_id, doc2.doc_id])
+        resp = self.app.get('/db0/docs?doc_ids=%s' % ids)
+        self.assertEqual(200, resp.status)
+        self.assertEqual(
+            'application/json', resp.header('content-type'))
+        expected = [
+            {"content": '{"x": 1}', "doc_rev": "db0:1", "doc_id": "doc1",
+             "has_conflicts": False}]
+        self.assertEqual(expected, simplejson.loads(resp.body))
+
+    def test_get_docs_include_deleted(self):
+        doc1 = self.db0.create_doc('{"x": 1}', doc_id='doc1')
+        doc2 = self.db0.create_doc('{"x": 1}', doc_id='doc2')
+        self.db0.delete_doc(doc2)
+        ids = ','.join([doc1.doc_id, doc2.doc_id])
+        resp = self.app.get('/db0/docs?doc_ids=%s&include_deleted=true' % ids)
+        self.assertEqual(200, resp.status)
+        self.assertEqual(
+            'application/json', resp.header('content-type'))
+        expected = [
+            {"content": '{"x": 1}', "doc_rev": "db0:1", "doc_id": "doc1",
+             "has_conflicts": False},
+            {"content": None, "doc_rev": "db0:2", "doc_id": "doc2",
+             "has_conflicts": False}]
+        self.assertEqual(expected, simplejson.loads(resp.body))
+
     def test_get_sync_info(self):
         self.db0._set_replica_gen_and_trans_id('other-id', 1, 'T-transid')
         resp = self.app.get('/db0/sync-from/other-id')

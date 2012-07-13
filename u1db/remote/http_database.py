@@ -102,6 +102,23 @@ class HTTPDatabase(http_client.HTTPClientBase, Database):
         doc.has_conflicts = has_conflicts
         return doc
 
+    def get_docs(self, doc_ids, check_for_conflicts=True,
+                 include_deleted=False):
+        docs = []
+        if not doc_ids:
+            return docs
+        doc_ids = ','.join(doc_ids)
+        res, headers = self._request(
+            'GET', ['docs'], {
+                "doc_ids": doc_ids, "include_deleted": include_deleted,
+                "check_for_conflicts": check_for_conflicts})
+        for doc_dict in simplejson.loads(res):
+            doc = self._factory(
+                doc_dict['doc_id'], doc_dict['doc_rev'], doc_dict['content'])
+            doc.has_conflicts = doc_dict['has_conflicts']
+            docs.append(doc)
+        return docs
+
     def create_doc(self, content, doc_id=None):
         if doc_id is None:
             doc_id = 'D-%s' % (uuid.uuid4().hex,)

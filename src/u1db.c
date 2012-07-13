@@ -19,6 +19,7 @@
 #include "u1db/compat.h"
 
 #include <string.h>
+#include <ctype.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <sqlite3.h>
@@ -2075,7 +2076,7 @@ u1db__is_doc_id_valid(const char *doc_id)
     for (i = 0; i < len; ++i) {
         c = (unsigned char)(doc_id[i]);
         // doc_id cannot contain slashes or characters outside the ascii range
-        if (c == '\\' || c == '/' || c < ' ' || c > '~') {
+        if (!isalnum(c) && c != '.' && c != '%' && c != '-' && c != '_') {
             return U1DB_INVALID_DOC_ID;
         }
     }

@@ -45,6 +45,12 @@ def parse_bool(expression):
     return False
 
 
+def parse_list(expression):
+    if expression is None:
+        return []
+    return [t.strip() for t in expression.split(',')]
+
+
 def none_or_str(expression):
     if expression is None:
         return None
@@ -232,6 +238,33 @@ class DatabaseResource(object):
     def delete(self):
         self.state.delete_database(self.dbname)
         self.responder.send_response_json(200, ok=True)
+
+
+@url_to_resource.register
+class DocsResource(object):
+    """Documents resource."""
+
+    url_pattern = "/{dbname}/docs"
+
+    def __init__(self, dbname, state, responder):
+        self.responder = responder
+        self.db = state.open_database(dbname)
+
+    @http_method(doc_ids=parse_list, check_for_conflicts=parse_bool,
+                 include_deleted=parse_bool)
+    def get(self, doc_ids=None, check_for_conflicts=True,
+            include_deleted=False):
+        docs = self.db.get_docs(doc_ids, include_deleted=include_deleted)
+        self.responder.content_type = 'application/json'
+        self.responder.start_response(200)
+        self.responder.start_stream(),
+        for doc in docs:
+            entry = dict(
+                doc_id=doc.doc_id, doc_rev=doc.rev, content=doc.get_json(),
+                has_conflicts=doc.has_conflicts)
+            self.responder.stream_entry(entry)
+        self.responder.end_stream()
+        self.responder.finish_response()
 
 
 @url_to_resource.register
