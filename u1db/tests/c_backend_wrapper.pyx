@@ -876,6 +876,11 @@ cdef class CDatabase(object):
         return u1db__sql_close(self._db)
 
     def copy(self, db):
+        # DO NOT COPY OR REUSE THIS CODE OUTSIDE TESTS: COPYING U1DB DATABASES IS
+        # THE WRONG THING TO DO, THE ONLY REASON WE DO SO HERE IS TO TEST THAT WE
+        # CORRECTLY DETECT IT HAPPENING SO THAT WE CAN RAISE ERRORS RATHER THAN
+        # CORRUPT USER DATA. USE SYNC INSTEAD, OR WE WILL SEND NINJA TO YOUR
+        # HOUSE.
         new_db = CDatabase(':memory:')
         u1db_free(&new_db._db)
         new_db._db = u1db__copy(self._db)
