@@ -91,11 +91,41 @@ u1db_open(const char *fname)
     return db;
 }
 
+u1database *
+u1db__copy(u1database *db)
+{
+    // DO NOT COPY OR REUSE THIS CODE OUTSIDE TESTS: COPYING U1DB DATABASES IS
+    // THE WRONG THING TO DO, THE ONLY REASON WE DO SO HERE IS TO TEST THAT WE
+    // CORRECTLY DETECT IT HAPPENING SO THAT WE CAN RAISE ERRORS RATHER THAN
+    // CORRUPT USER DATA. USE SYNC INSTEAD, OR WE WILL SEND NINJA TO YOUR
+    // HOUSE.
+    u1database *new_db = (u1database *)(calloc(1, sizeof(u1database)));
+    sqlite3_backup *backup = NULL;
+    int status;
+    status = sqlite3_open(":memory:", &new_db->sql_handle);
+    if (status != SQLITE_OK) {
+        free(new_db);
+        return NULL;
+    }
+    backup = sqlite3_backup_init(
+        new_db->sql_handle, "main", db->sql_handle, "main");
+    status = sqlite3_backup_step(backup, -1);
+    if (status != SQLITE_DONE) {
+        free(new_db);
+        return NULL;
+    }
+    sqlite3_backup_finish(backup);
+    u1db_set_replica_uid(new_db, db->replica_uid);
+    u1db_set_document_size_limit(db, 0);
+    return new_db;
+}
+
 int
 u1db__sql_close(u1database *db)
 {
     if (db->sql_handle != NULL) {
-        // sqlite says closing a NULL handle is ok, but we don't want to trust that
+        // sqlite says closing a NULL handle is ok, but we don't want to trust
+        // that
         int status;
         status = sqlite3_close(db->sql_handle);
         db->sql_handle = NULL;

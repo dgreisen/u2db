@@ -214,6 +214,7 @@ cdef extern from "u1db/u1db_internal.h":
                                        const_char_ptr trans_id)
     char *u1db__allocate_doc_id(u1database *)
     int u1db__sql_close(u1database *)
+    u1database *u1db__copy(u1database *)
     int u1db__sql_is_open(u1database *)
     u1db_table *u1db__sql_run(u1database *, char *sql, size_t n)
     void u1db__free_table(u1db_table **table)
@@ -873,6 +874,12 @@ cdef class CDatabase(object):
 
     def close(self):
         return u1db__sql_close(self._db)
+
+    def copy(self, db):
+        new_db = CDatabase(':memory:')
+        u1db_free(&new_db._db)
+        new_db._db = u1db__copy(self._db)
+        return new_db
 
     def _sql_is_open(self):
         if self._db == NULL:

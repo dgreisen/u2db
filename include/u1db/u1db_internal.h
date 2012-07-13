@@ -262,6 +262,11 @@ int u1db_validate_gen_and_trans_id(u1database *db, int generation,
 char *u1db__allocate_doc_id(u1database *db);
 
 /**
+ * Internal api, copy db. NEVER USE THIS OUTSIDE TESTS.
+ */
+u1database *u1db__copy(u1database *db);
+
+/**
  * Internal api, close the underlying sql instance.
  */
 int u1db__sql_close(u1database *db);

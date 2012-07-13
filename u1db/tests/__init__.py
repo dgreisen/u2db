@@ -16,12 +16,15 @@
 
 """Test infrastructure for U1DB"""
 
+import copy
 import shutil
 import socket
 import tempfile
 import threading
 
 from oauth import oauth
+from sqlite3 import dbapi2
+from StringIO import StringIO
 
 import testscenarios
 import testtools
@@ -42,7 +45,7 @@ try:
     from u1db.tests import c_backend_wrapper
     c_backend_error = None
 except ImportError, e:
-    c_backend_wrapper = None
+    c_backend_wrapper = None  # noqa
     c_backend_error = e
 
 # Setting this means that failing assertions will not include this module in
@@ -121,10 +124,45 @@ def make_memory_database_for_test(test, replica_uid):
     return inmemory.InMemoryDatabase(replica_uid)
 
 
+def copy_memory_database_for_test(test, db):
+    # DO NOT COPY OR REUSE THIS CODE OUTSIDE TESTS: COPYING U1DB DATABASES IS
+    # THE WRONG THING TO DO, THE ONLY REASON WE DO SO HERE IS TO TEST THAT WE
+    # CORRECTLY DETECT IT HAPPENING SO THAT WE CAN RAISE ERRORS RATHER THAN
+    # CORRUPT USER DATA. USE SYNC INSTEAD, OR WE WILL SEND NINJA TO YOUR
+    # HOUSE.
+    new_db = inmemory.InMemoryDatabase(db._replica_uid)
+    new_db._transaction_log = db._transaction_log[:]
+    new_db._docs = copy.deepcopy(db._docs)
+    new_db._conflicts = copy.deepcopy(db._conflicts)
+    new_db._indexes = copy.deepcopy(db._indexes)
+    new_db._factory = db._factory
+    return new_db
+
+
 def make_sqlite_partial_expanded_for_test(test, replica_uid):
     db = sqlite_backend.SQLitePartialExpandDatabase(':memory:')
     db._set_replica_uid(replica_uid)
     return db
+
+
+def copy_sqlite_partial_expanded_for_test(test, db):
+    # DO NOT COPY OR REUSE THIS CODE OUTSIDE TESTS: COPYING U1DB DATABASES IS
+    # THE WRONG THING TO DO, THE ONLY REASON WE DO SO HERE IS TO TEST THAT WE
+    # CORRECTLY DETECT IT HAPPENING SO THAT WE CAN RAISE ERRORS RATHER THAN
+    # CORRUPT USER DATA. USE SYNC INSTEAD, OR WE WILL SEND NINJA TO YOUR
+    # HOUSE.
+    new_db = sqlite_backend.SQLitePartialExpandDatabase(':memory:')
+    tmpfile = StringIO()
+    for line in db._db_handle.iterdump():
+        if not 'sqlite_sequence' in line:  # work around bug in iterdump
+            tmpfile.write('%s\n' % line)
+    tmpfile.seek(0)
+    new_db._db_handle = dbapi2.connect(':memory:')
+    new_db._db_handle.cursor().executescript(tmpfile.read())
+    new_db._db_handle.commit()
+    new_db._set_replica_uid(db._replica_uid)
+    new_db._factory = db._factory
+    return new_db
 
 
 def make_document_for_test(test, doc_id, rev, content, has_conflicts=False):
@@ -139,6 +177,18 @@ def make_c_database_for_test(test, replica_uid):
     return db
 
 
+def copy_c_database_for_test(test, db):
+    # DO NOT COPY OR REUSE THIS CODE OUTSIDE TESTS: COPYING U1DB DATABASES IS
+    # THE WRONG THING TO DO, THE ONLY REASON WE DO SO HERE IS TO TEST THAT WE
+    # CORRECTLY DETECT IT HAPPENING SO THAT WE CAN RAISE ERRORS RATHER THAN
+    # CORRUPT USER DATA. USE SYNC INSTEAD, OR WE WILL SEND NINJA TO YOUR
+    # HOUSE.
+    if c_backend_wrapper is None:
+        test.skipTest('c_backend_wrapper is not available')
+    new_db = db.copy(db)
+    return new_db
+
+
 def make_c_document_for_test(test, doc_id, rev, content, has_conflicts=False):
     if c_backend_wrapper is None:
         test.skipTest('c_backend_wrapper is not available')
@@ -148,15 +198,19 @@ def make_c_document_for_test(test, doc_id, rev, content, has_conflicts=False):
 
 LOCAL_DATABASES_SCENARIOS = [
         ('mem', {'make_database_for_test': make_memory_database_for_test,
+                 'copy_database_for_test': copy_memory_database_for_test,
                  'make_document_for_test': make_document_for_test}),
         ('sql', {'make_database_for_test':
                  make_sqlite_partial_expanded_for_test,
+                 'copy_database_for_test':
+                 copy_sqlite_partial_expanded_for_test,
                  'make_document_for_test': make_document_for_test}),
         ]
 
 
 C_DATABASE_SCENARIOS = [
         ('c', {'make_database_for_test': make_c_database_for_test,
+               'copy_database_for_test': copy_c_database_for_test,
                'make_document_for_test': make_c_document_for_test})]
 
 
@@ -169,6 +223,14 @@ class DatabaseBaseTests(TestCase):
 
     def create_database(self, replica_uid):
         return self.make_database_for_test(self, replica_uid)
+
+    def copy_database(self, db):
+        # DO NOT COPY OR REUSE THIS CODE OUTSIDE TESTS: COPYING U1DB DATABASES
+        # IS THE WRONG THING TO DO, THE ONLY REASON WE DO SO HERE IS TO TEST
+        # THAT WE CORRECTLY DETECT IT HAPPENING SO THAT WE CAN RAISE ERRORS
+        # RATHER THAN CORRUPT USER DATA. USE SYNC INSTEAD, OR WE WILL SEND
+        # NINJA TO YOUR HOUSE.
+        return self.copy_database_for_test(self, db)
 
     def setUp(self):
         super(DatabaseBaseTests, self).setUp()
@@ -224,6 +286,19 @@ class ServerStateForTests(server_state.ServerState):
             return self.open_database(path)
         except errors.DatabaseDoesNotExist:
             return self._create_database(path)
+
+    def _copy_database(self, db):
+        # DO NOT COPY OR REUSE THIS CODE OUTSIDE TESTS: COPYING U1DB DATABASES
+        # IS THE WRONG THING TO DO, THE ONLY REASON WE DO SO HERE IS TO TEST
+        # THAT WE CORRECTLY DETECT IT HAPPENING SO THAT WE CAN RAISE ERRORS
+        # RATHER THAN CORRUPT USER DATA. USE SYNC INSTEAD, OR WE WILL SEND
+        # NINJA TO YOUR HOUSE.
+        new_db = copy_memory_database_for_test(None, db)
+        path = db._replica_uid
+        while path in self._dbs:
+            path += 'copy'
+        self._dbs[path] = new_db
+        return new_db
 
     def _create_database(self, path):
         db = inmemory.InMemoryDatabase(path)
