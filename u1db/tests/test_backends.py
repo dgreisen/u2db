@@ -106,9 +106,7 @@ class AllDatabaseTests(tests.DatabaseBaseTests, tests.TestCaseWithServer):
 
     def test_put_doc_space_in_id(self):
         doc = self.make_document('my doc id', None, simple_doc)
-        new_rev = self.db.put_doc(doc)
-        self.assertIsNot(None, new_rev)
-        self.assertGetDoc(self.db, 'my doc id', new_rev, simple_doc, False)
+        self.assertRaises(errors.InvalidDocId, self.db.put_doc, doc)
 
     def test_put_doc_update(self):
         doc = self.db.create_doc(simple_doc, doc_id='my_doc_id')
@@ -200,6 +198,37 @@ class AllDatabaseTests(tests.DatabaseBaseTests, tests.TestCaseWithServer):
         self.db.delete_doc(doc)
         self.assertGetDocIncludeDeleted(
             self.db, doc.doc_id, doc.rev, None, False)
+
+    def test_get_docs(self):
+        doc1 = self.db.create_doc(simple_doc)
+        doc2 = self.db.create_doc(nested_doc)
+        self.assertEqual([doc1, doc2],
+                         self.db.get_docs([doc1.doc_id, doc2.doc_id]))
+
+    def test_get_docs_deleted(self):
+        doc1 = self.db.create_doc(simple_doc)
+        doc2 = self.db.create_doc(nested_doc)
+        self.db.delete_doc(doc1)
+        self.assertEqual([doc2], self.db.get_docs([doc1.doc_id, doc2.doc_id]))
+
+    def test_get_docs_include_deleted(self):
+        doc1 = self.db.create_doc(simple_doc)
+        doc2 = self.db.create_doc(nested_doc)
+        self.db.delete_doc(doc1)
+        self.assertEqual(
+            [doc1, doc2],
+            self.db.get_docs([doc1.doc_id, doc2.doc_id], include_deleted=True))
+
+    def test_get_docs_request_ordered(self):
+        doc1 = self.db.create_doc(simple_doc)
+        doc2 = self.db.create_doc(nested_doc)
+        self.assertEqual([doc1, doc2],
+                         self.db.get_docs([doc1.doc_id, doc2.doc_id]))
+        self.assertEqual([doc2, doc1],
+                         self.db.get_docs([doc2.doc_id, doc1.doc_id]))
+
+    def test_get_docs_empty_list(self):
+        self.assertEqual([], self.db.get_docs([]))
 
     def test_handles_nested_content(self):
         doc = self.db.create_doc(nested_doc)
@@ -303,37 +332,6 @@ class LocalDatabaseTests(tests.DatabaseBaseTests):
     def test_put_doc_refuses_slashes_picky(self):
         doc = self.make_document('/a', None, simple_doc)
         self.assertRaises(errors.InvalidDocId, self.db.put_doc, doc)
-
-    def test_get_docs(self):
-        doc1 = self.db.create_doc(simple_doc)
-        doc2 = self.db.create_doc(nested_doc)
-        self.assertEqual([doc1, doc2],
-                         self.db.get_docs([doc1.doc_id, doc2.doc_id]))
-
-    def test_get_docs_deleted(self):
-        doc1 = self.db.create_doc(simple_doc)
-        doc2 = self.db.create_doc(nested_doc)
-        self.db.delete_doc(doc1)
-        self.assertEqual([doc2], self.db.get_docs([doc1.doc_id, doc2.doc_id]))
-
-    def test_get_docs_include_deleted(self):
-        doc1 = self.db.create_doc(simple_doc)
-        doc2 = self.db.create_doc(nested_doc)
-        self.db.delete_doc(doc1)
-        self.assertEqual(
-            [doc1, doc2],
-            self.db.get_docs([doc1.doc_id, doc2.doc_id], include_deleted=True))
-
-    def test_get_docs_request_ordered(self):
-        doc1 = self.db.create_doc(simple_doc)
-        doc2 = self.db.create_doc(nested_doc)
-        self.assertEqual([doc1, doc2],
-                         self.db.get_docs([doc1.doc_id, doc2.doc_id]))
-        self.assertEqual([doc2, doc1],
-                         self.db.get_docs([doc2.doc_id, doc1.doc_id]))
-
-    def test_get_docs_empty_list(self):
-        self.assertEqual([], self.db.get_docs([]))
 
     def test_get_all_docs_empty(self):
         self.assertEqual([], self.db.get_all_docs()[1])
