@@ -243,7 +243,7 @@ class Database(object):
         raise NotImplementedError(self.get_index_keys)
 
     def get_doc_conflicts(self, doc_id):
-        """Get the list of conflict texts for the given document.
+        """Get the list of conflicts for the given document.
 
         The order of the conflicts is such that the first entry is the value
         that would be returned by "get_doc".

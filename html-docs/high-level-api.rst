@@ -4,23 +4,22 @@ The high-level API
 ##################
 
 The U1DB API has three separate sections: document storage and retrieval,
-querying, and sync. Here we describe the high-level API. Remember that you
-will need to choose an implementation, and exactly how this API is defined
-is implementation-specific, in order that it fits with the language's 
-conventions.
+querying, and sync. Here we describe the high-level API. Remember that you will
+need to choose an implementation, and exactly how this API is defined is
+implementation-specific, in order that it fits with the language's conventions.
 
 Document storage and retrieval
 ##############################
 
 U1DB stores documents. A document is a set of nested key-values; basically,
-anything you can express with JSON. Implementations are likely to provide a 
-Document object "wrapper" for these documents; exactly how the wrapper works
+anything you can express with JSON. Implementations are likely to provide
+a Document object "wrapper" for these documents; exactly how the wrapper works
 is implementation-defined.
 
 Creating and editing documents
 ------------------------------
 
-To create a document, use ``create_doc()``. Code examples below are from 
+To create a document, use ``create_doc()``. Code examples below are from
 :ref:`reference-implementation` in Python.
 
 .. testcode ::
@@ -33,12 +32,12 @@ To create a document, use ``create_doc()``. Code examples below are from
 
 .. testoutput ::
 
-    {"key": "value"}
+    {'key': 'value'}
     testdoc
 
-Editing an *existing* document is done with ``put_doc()``. This is separate from
-``create_doc()`` so as to avoid accidental overwrites. ``put_doc()`` takes a
-``Document`` object, because the object encapsulates revision information for
+Editing an *existing* document is done with ``put_doc()``. This is separate
+from ``create_doc()`` so as to avoid accidental overwrites. ``put_doc()`` takes
+a ``Document`` object, because the object encapsulates revision information for
 a particular document.
 
 .. testcode ::
@@ -52,15 +51,16 @@ a particular document.
     except u1db.errors.RevisionConflict:
         print "There was a conflict when creating the doc!"
     print "Now editing the doc with the doc object we got back..."
-    data = json.loads(doc1.content)
-    data["key1"] = "edited"
-    doc1.content = json.dumps(data)
+    doc1.content["key1"] = "edited"
     db.put_doc(doc1)
+    doc2 = db.get_doc(doc1.doc_id)
+    print doc2.content
 
 .. testoutput ::
 
     There was a conflict when creating the doc!
     Now editing the doc with the doc object we got back...
+    {u'key1': u'edited'}
 
 Finally, deleting a document is done with ``delete_doc()``.
 
@@ -70,9 +70,14 @@ Finally, deleting a document is done with ``delete_doc()``.
     db = u1db.open(":memory:", create=True)
     doc = db.create_doc(json.dumps({"key": "value"}))
     db.delete_doc(doc)
+    print db.get_doc(doc.doc_id)
+    doc = db.get_doc(doc.doc_id, include_deleted=True)
+    print doc.content
 
 .. testoutput ::
 
+    None
+    None
 
 Retrieving documents
 --------------------
@@ -90,7 +95,7 @@ The simplest way to retrieve documents from a u1db is by ``doc_id``.
 
 .. testoutput ::
 
-    {"key": "value"}
+    {u'key': u'value'}
     testdoc
 
 And it's also possible to retrieve many documents by ``doc_id``.
@@ -140,7 +145,7 @@ Given a database with the following documents::
     {"firstname": "Alan", "surname", "Hansen", "position": "defence"} ID ah
     {"firstname": "John", "surname", "Wayne", "position": "filmstar"} ID jw
 
-an index expression of ``["firstname"]`` will create an index that looks 
+an index expression of ``["firstname"]`` will create an index that looks
 (conceptually) like this
 
  ====================== ===========
@@ -152,25 +157,25 @@ an index expression of ``["firstname"]`` will create an index that looks
  John                   jw
  ====================== ===========
 
-and that index is created with ``create_index("by-firstname", ["firstname"])`` - that is,
-create an index with a name and a list of index expressions. (Exactly how to
-pass the name and the list of index expressions is something specific to
-each implementation.)
+and that index is created with ``create_index("by-firstname", ["firstname"])``
+-- that is, create an index with a name and a list of index expressions.
+(Exactly how to pass the name and the list of index expressions is something
+specific to each implementation.)
 
 Index expressions
 ^^^^^^^^^^^^^^^^^
 
-An index expression describes how to get data from a document; you can think
-of it as describing a function which, when given a document, returns a value,
+An index expression describes how to get data from a document; you can think of
+it as describing a function which, when given a document, returns a value,
 which is then used as the index key.
 
 **Name a field.** A basic index expression is a dot-delimited list of nesting
-fieldnames, so the index expression ``field.sub1.sub2`` applied to a document 
+fieldnames, so the index expression ``field.sub1.sub2`` applied to a document
 with ID ``doc1`` and content::
 
   {
-      "field": { 
-          "sub1": { 
+      "field": {
+          "sub1": {
               "sub2": "hello"
               "sub3": "not selected"
           }
@@ -187,11 +192,11 @@ gives the index key "hello", and therefore an entry in the index of
 
 **Name a list.** If an index expression names a field whose contents is a list
 of strings, the doc will have multiple entries in the index, one per entry in
-the list. So, the index expression ``field.tags`` applied to a document with 
-ID "doc2" and content::
+the list. So, the index expression ``field.tags`` applied to a document with ID
+"doc2" and content::
 
   {
-      "field": { 
+      "field": {
           "tags": [ "tag1", "tag2", "tag3" ]
       }
   }
@@ -206,25 +211,25 @@ gives index entries
  tag3      doc2
  ========= ======
 
-**Transformation functions.** An index expression may be wrapped in any number of
-transformation functions. A function transforms the result of the contained
-index expression: for example, if an expression ``name.firstname`` generates 
-"John" when applied to a document, then ``lower(name.firstname)`` generates 
+**Transformation functions.** An index expression may be wrapped in any number
+of transformation functions. A function transforms the result of the contained
+index expression: for example, if an expression ``name.firstname`` generates
+"John" when applied to a document, then ``lower(name.firstname)`` generates
 "john".
 
 Available transformation functions are:
 
  * ``lower(index_expression)`` - lowercase the value
- * ``splitwords(index_expression)`` - split the value on whitespace; will act like a 
-   list and add multiple entries to the index
- * ``is_null(index_expression)`` - True if value is null or not a string or the field 
-   is absent, otherwise false
+ * ``splitwords(index_expression)`` - split the value on whitespace; will act
+   like a list and add multiple entries to the index
+ * ``is_null(index_expression)`` - True if value is null or not a string or the
+   field is absent, otherwise false
 
-So, the index expression ``splitwords(lower(field.name))`` applied to a document with 
-ID "doc3" and content::
+So, the index expression ``splitwords(lower(field.name))`` applied to
+a document with ID "doc3" and content::
 
   {
-      "field": { 
+      "field": {
           "name": "Bruce David Grobbelaar"
       }
   }
@@ -243,8 +248,8 @@ gives index entries
 Querying an index
 -----------------
 
-Pass a list of tuples of index keys to ``get_from_index``; the last index key in
-each tuple (and *only* the last one) can end with an asterisk, which matches 
+Pass a list of tuples of index keys to ``get_from_index``; the last index key
+in each tuple (and *only* the last one) can end with an asterisk, which matches
 initial substrings. So, querying our ``by-firstname`` index from above::
 
     get_from_index(
@@ -257,8 +262,8 @@ initial substrings. So, querying our ``by-firstname`` index from above::
 
 will return ``[ 'jw', 'jb' ]`` - that is, a list of document IDs.
 
-``get_from_index("by_firstname", [("J*")])`` will match all index keys beginning
-with "J", and so will return ``[ 'jw', 'jb', 'jm' ]``.
+``get_from_index("by_firstname", [("J*")])`` will match all index keys
+beginning with "J", and so will return ``[ 'jw', 'jb', 'jm' ]``.
 
 ``get_from_index("by_firstname", [("Jan"), ("Alan")])`` will match both the
 queried index keys, and so will return ``[ 'jm', 'ah' ]``.
@@ -277,30 +282,30 @@ Syncing
 #######
 
 U1DB is a syncable database. Any U1DB can be synced with any U1DB server; most
-U1DB implementations are capable of being run as a server. Syncing brings
-both the server and the client up to date with one another; save data into a
-local U1DB whether online or offline, and then sync when online.
+U1DB implementations are capable of being run as a server. Syncing brings both
+the server and the client up to date with one another; save data into a local
+U1DB whether online or offline, and then sync when online.
 
 Pass an HTTP URL to sync with that server.
 
 Syncing databases which have been independently changed may produce conflicts.
 Read about the U1DB conflict policy and more about syncing at :ref:`conflicts`.
 
-Running your own U1DB server is implementation-specific. :ref:`reference-implementation` 
-is able to be run as a server.
+Running your own U1DB server is implementation-specific.
+:ref:`reference-implementation` is able to be run as a server.
 
 Dealing with conflicts
 ----------------------
 
-Syncing a database can result in conflicts; if your user changes the same 
+Syncing a database can result in conflicts; if your user changes the same
 document in two different places and then syncs again, that document will be
 ''in conflict'', meaning that it has incompatible changes. If this is the case,
-``doc.has_conflicts`` will be true, and put_doc to a conflicted doc will give a
-``ConflictedDoc`` error. To get a list of conflicted versions of the
-document, do ``get_doc_conflicts(doc_id)``. Deciding what the final unconflicted
-document should look like is obviously specific to the user's application; once
-decided, call ``resolve_doc(doc, list_of_conflicted_revisions)`` to resolve and
-set the final resolved content.
+``doc.has_conflicts`` will be true, and put_doc to a conflicted doc will give
+a ``ConflictedDoc`` error. To get a list of conflicted versions of the
+document, do ``get_doc_conflicts(doc_id)``. Deciding what the final
+unconflicted document should look like is obviously specific to the user's
+application; once decided, call ``resolve_doc(doc,
+list_of_conflicted_revisions)`` to resolve and set the final resolved content.
 
 Syncing functions
 ^^^^^^^^^^^^^^^^^

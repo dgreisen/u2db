@@ -40,9 +40,13 @@ add_custom_target( ReplicatePythonSourceTree ALL ${CMAKE_COMMAND} -P
   ${CMAKE_CURRENT_BINARY_DIR}
   WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR} )
 
+add_custom_target(doctests
+    COMMAND cd html-docs && make doctest && cd ..
+)
+
 add_custom_target(check
     COMMAND python -m testtools.run discover
-    DEPENDS build-inplace
+    DEPENDS build-inplace doctests
 )
 
 add_custom_target(build-inplace
