@@ -157,7 +157,7 @@ an index expression of ``["firstname"]`` will create an index that looks
  John                   jw
  ====================== ===========
 
-and that index is created with ``create_index("by-firstname", ["firstname"])``
+and that index is created with ``create_index("by-firstname", "firstname")``
 -- that is, create an index with a name and a list of index expressions.
 (Exactly how to pass the name and the list of index expressions is something
 specific to each implementation.)
@@ -222,6 +222,11 @@ Available transformation functions are:
  * ``lower(index_expression)`` - lowercase the value
  * ``splitwords(index_expression)`` - split the value on whitespace; will act
    like a list and add multiple entries to the index
+ * ``number(index_expression, width)`` - takes an integer value, and turns it
+   into a string, left padded with zeroes, to make it at least as wide as
+   width.
+ * ``bool(index_expression)`` - takes a boolean value and turns it into '0' if
+   false and '1' if true.
  * ``is_null(index_expression)`` - True if value is null or not a string or the
    field is absent, otherwise false
 
@@ -248,25 +253,18 @@ gives index entries
 Querying an index
 -----------------
 
-Pass a list of tuples of index keys to ``get_from_index``; the last index key
-in each tuple (and *only* the last one) can end with an asterisk, which matches
-initial substrings. So, querying our ``by-firstname`` index from above::
+Pass an index key or a tuple of index keys (if the index is on multiple fields)
+to ``get_from_index``; the last index key in each tuple (and *only* the last
+one) can end with an asterisk, which matches initial substrings. So, querying
+our ``by-firstname`` index from above::
 
-    get_from_index(
-        "by-firstname",                     # name of index
-            [                               # begin the list of index keys
-                ("John", )                  # an index key
-            ]                               # end the list
-    )
+    get_from_index("by-firstname", "John")
 
 
-will return ``[ 'jw', 'jb' ]`` - that is, a list of document IDs.
+will return the documents with ids: 'jw', 'jb'.
 
-``get_from_index("by_firstname", [("J*")])`` will match all index keys
-beginning with "J", and so will return ``[ 'jw', 'jb', 'jm' ]``.
-
-``get_from_index("by_firstname", [("Jan"), ("Alan")])`` will match both the
-queried index keys, and so will return ``[ 'jm', 'ah' ]``.
+``get_from_index("by_firstname", "J*")`` will match all index keys beginning
+with "J", and so will return the documents with ids: 'jw', 'jb', 'jm'.
 
 
 Index functions
@@ -304,8 +302,8 @@ document in two different places and then syncs again, that document will be
 a ``ConflictedDoc`` error. To get a list of conflicted versions of the
 document, do ``get_doc_conflicts(doc_id)``. Deciding what the final
 unconflicted document should look like is obviously specific to the user's
-application; once decided, call ``resolve_doc(doc,
-list_of_conflicted_revisions)`` to resolve and set the final resolved content.
+application; once decided, call ``resolve_doc(doc, list_of_conflicted_revisions)``
+to resolve and set the final resolved content.
 
 Syncing functions
 ^^^^^^^^^^^^^^^^^
