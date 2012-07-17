@@ -18,8 +18,8 @@ Download the latest release from `the U1DB download page <http://launchpad.net/u
 Use from source control
 ^^^^^^^^^^^^^^^^^^^^^^^
 
-u1db is `maintained in bazaar in Launchpad <http://launchpad.net/u1db/>`_. To fetch the latest version,
-`bzr branch lp:u1db`.
+u1db is `maintained in bazaar in Launchpad <http://launchpad.net/u1db/>`_. To
+fetch the latest version, `bzr branch lp:u1db`.
 
 Starting u1db
 -------------
@@ -28,29 +28,29 @@ Starting u1db
 
     >>> import u1db, json, tempfile
     >>> db = u1db.open(":memory:", create=True)
-    
+
     >>> content = json.dumps({"name": "Alan Hansen"}) # create a document
     >>> doc = db.create_doc(content)
-    >>> print doc.content
-    {"name": "Alan Hansen"}
+    >>> doc.content
+    {'name': 'Alan Hansen'}
     >>> doc.content = json.dumps({"name": "Alan Hansen", "position": "defence"}) # update the document's content
     >>> rev = db.put_doc(doc)
-    
+
     >>> content = json.dumps({"name": "John Barnes", "position": "forward"}) # create more documents
     >>> doc2 = db.create_doc(content)
     >>> content = json.dumps({"name": "Ian Rush", "position": "forward"})
     >>> doc2 = db.create_doc(content)
-    
-    >>> db.create_index("by-position", ("position",)) # create an index by passing an index expression
-    
-    >>> results = db.get_from_index("by-position", [("forward",)]) # query that index by passing a list of tuples of queries
+
+    >>> db.create_index("by-position", "position") # create an index by passing a field name
+
+    >>> results = db.get_from_index("by-position", "forward") # query that index by passing a value
     >>> len(results)
     2
-    >>> data = [json.loads(result.content) for result in results]
+    >>> data = [result.content for result in results]
     >>> names = [item["name"] for item in data]
     >>> sorted(names)
     [u'Ian Rush', u'John Barnes']
-    
+
 Running a server
 ----------------
 
@@ -80,7 +80,7 @@ Syncing to other databases
     >>> import u1db
     >>> db = u1db.open(":memory:", create=True)
     >>> generation = db.sync("http://127.0.0.1:43632/example.u1db")
-    
+
 or from the command line
 
 .. code-block:: bash
@@ -88,4 +88,4 @@ or from the command line
     ~/u1db/trunk$ ./u1db-client init-db someother.u1db
     ~/u1db/trunk$ ./u1db-client sync someother.u1db http://127.0.0.1:43632/example.u1db
 
-    
+

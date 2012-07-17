@@ -25,7 +25,7 @@ query off of a specific index name). The expressions are the interesting part.
 It is intended to be a list of fields, and possibly mappings on those fields.
 Something like::
 
-    CREATE_INDEX(mydb, "myindex", ["field", "other.subfield", "number(third)"]) 
+    CREATE_INDEX(mydb, "myindex", ["field", "other.subfield", "number(third)"])
 
 
 Recommended Implementation
@@ -83,7 +83,7 @@ request. This is because you could have the document::
 
     {"lastname": "pedroni", "firstname": "john"}
 
-Which should not match the above query. 
+Which should not match the above query.
 
 We also want an SQL index on this table, something like [#]_::
 
@@ -134,7 +134,7 @@ Discussion
 3) It isn't hard to map nested fields into this structure. And you have
    the nice property that you don't have to change the data to add/remove an
    index.
-   
+
 4) It isn't 100% clear how we handle mapped fields in this structure. Something
    like ``lower(lastname)``. It is possible that we could only support the set
    of mappings that we can do with SQL on the live data. However, that will
@@ -147,7 +147,7 @@ Discussion
    seem to support turning "SELECT * FROM table WHERE value LIKE 'p%'" into an
    index query. Even though value is in a btree, it doesn't use it. However,
    you could use >= and < to get a range query. Something like::
-   
+
         SELECT * FROM table WHERE value >= 'p' AND value < 'q'
 
    Since sqlite supports closed and open ended ranges, we don't have to play
@@ -168,7 +168,7 @@ Expand All Fields
 -----------------
 
 The same schema as defined above, except you always put every field into the
-document_fields table. 
+document_fields table.
 
 Discussion
 ~~~~~~~~~~

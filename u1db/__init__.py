@@ -60,8 +60,9 @@ class Database(object):
         returned as documents by the database.
 
         :param factory: A function that returns an object which at minimum must
-        satisfy the same interface as does the class DocumentBase. Subclassing
-        that class is the easiest way to create such a function.
+            satisfy the same interface as does the class DocumentBase.
+            Subclassing that class is the easiest way to create such
+            a function.
         """
         raise NotImplementedError(self.set_document_factory)
 
@@ -169,11 +170,11 @@ class Database(object):
         and the index generated.
 
         :name: A unique name which can be used as a key prefix
-        :index_expressions: index expressions defining the index
-            information. Examples:
-                "fieldname" to index alphabetically sorted on field.
-                "number(fieldname, width)", "lower(fieldname)",
-                "fieldname.subfieldname"
+        :index_expressions: index expressions defining the index information.
+            Examples:
+            "fieldname" to index alphabetically sorted on field.
+            "number(fieldname, width)", "lower(fieldname)",
+            "fieldname.subfieldname"
         """
         raise NotImplementedError(self.create_index)
 
@@ -243,7 +244,7 @@ class Database(object):
         raise NotImplementedError(self.get_index_keys)
 
     def get_doc_conflicts(self, doc_id):
-        """Get the list of conflict texts for the given document.
+        """Get the list of conflicts for the given document.
 
         The order of the conflicts is such that the first entry is the value
         that would be returned by "get_doc".
