@@ -185,7 +185,7 @@ def copy_c_database_for_test(test, db):
     # HOUSE.
     if c_backend_wrapper is None:
         test.skipTest('c_backend_wrapper is not available')
-    new_db = db.copy(db)
+    new_db = db._copy(db)
     return new_db
 
 

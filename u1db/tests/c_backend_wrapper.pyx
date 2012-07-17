@@ -875,7 +875,7 @@ cdef class CDatabase(object):
     def close(self):
         return u1db__sql_close(self._db)
 
-    def copy(self, db):
+    def _copy(self, db):
         # DO NOT COPY OR REUSE THIS CODE OUTSIDE TESTS: COPYING U1DB DATABASES IS
         # THE WRONG THING TO DO, THE ONLY REASON WE DO SO HERE IS TO TEST THAT WE
         # CORRECTLY DETECT IT HAPPENING SO THAT WE CAN RAISE ERRORS RATHER THAN
