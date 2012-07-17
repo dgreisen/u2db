@@ -21,8 +21,66 @@ from u1db import (
     )
 
 
+def make_subtree(expression, start, idx, open_parens):
+    tree = []
+    while idx < len(expression):
+        char = expression[idx]
+        if char == '(':
+            open_parens.append(1)
+            term = expression[start:idx].strip()
+            if term:
+                tree.append(term)
+            else:
+                msg = "Missing operator name in: '"
+                raise errors.IndexDefinitionParseError(
+                    "%s%s'\n%s^" % (msg, expression, " " * (idx + len(msg))))
+            idx += 1
+            start = idx
+            idx, start, subtree = make_subtree(
+                expression, start, idx, open_parens)
+            tree.append(subtree)
+        elif char == ')':
+            try:
+                open_parens.pop()
+            except IndexError:
+                msg = "Encountered ')' before '(' when parsing '"
+                raise errors.IndexDefinitionParseError(
+                    "%s%s'.\n%s^" %
+                    (msg, expression, " " * (len(msg) + idx)))
+            term = expression[start:idx].strip()
+            if term:
+                tree.append(term)
+            idx += 1
+            start = idx
+            return idx, start, tree
+        elif char == ',':
+            term = expression[start:idx].strip()
+            if term:
+                tree.append(term)
+            idx += 1
+            start = idx
+        else:
+            idx += 1
+    if start < len(expression):
+        tree.append(expression[start:])
+    return idx, start, tree
+
+
+def make_tree(expression):
+    open_parens = []
+    tree = make_subtree(expression, 0, 0, open_parens)[2]
+    if open_parens:
+        raise errors.IndexDefinitionParseError(
+            "%d missing ')'s when parsing '%s'." %
+            (len(open_parens), expression))
+    return tree
+
+
 class Getter(object):
     """Get values from a document based on a specification."""
+
+    arity = 1
+    args = ['expr']
 
     def get(self, raw_doc):
         """Get a value from the document.
@@ -93,12 +151,11 @@ class Transformation(Getter):
     """A transformation on a value from another Getter."""
 
     name = None
-    """The name that the transform has in a query string."""
 
     def __init__(self, inner):
         """Create a transformation.
 
-        :param inner: the Getter to transform the value for.
+        :param args: the arguments to the transformation.
         """
         self.inner = inner
 
@@ -148,6 +205,8 @@ class Number(Transformation):
     """
 
     name = 'number'
+    arity = 2
+    args = ['expr', int]
 
     def __init__(self, inner, number):
         super(Number, self).__init__(inner)
@@ -230,44 +289,46 @@ class Parser(object):
         return partial, ''
 
     def parse(self, field):
-        inner = self._inner_parse(field)
+        tree = make_tree(field)
+        inner = self._inner_parse(tree)
         return inner
 
-    def _inner_parse(self, field):
-        word, field = self._take_word(field)
-        if field.startswith("("):
+    def _inner_parse(self, tree):
+        if len(tree) > 1:
             # We have an operation
-            if not field.endswith(")"):
-                raise errors.IndexDefinitionParseError(
-                    "Invalid transformation function: %s" % field)
-            op = self._transformations.get(word, None)
+            op_name = tree[0]
+            args = tree[1]
+            op = self._transformations.get(op_name, None)
             if op is None:
                 raise errors.IndexDefinitionParseError(
-                    "Unknown operation: %s" % word)
-            if ',' in field:
-                # XXX: The arguments should probably be cast to whatever types
-                # they represent, but short of evaling them, I don't see an
-                # easy way to do that without adding a lot of complexity.
-                # Since there is only one operation with an extra argument, I'm
-                # punting on this until we grow some more.
-                args = [a.strip() for a in field[1:-1].split(',')]
-                extracted = args[0]
-            else:
-                args = []
-                extracted = field[1:-1]
-            inner = self._inner_parse(extracted)
-            return op(inner, *args[1:])
+                    "Unknown operation: %s" % op_name)
+            if op.arity >= 0 and len(args) != op.arity:
+                raise errors.IndexDefinitionParseError(
+                    "Invalid number of arguments for transformation function:"
+                    " %s, %r" % (op_name, args))
+            parsed = []
+            for i, arg in enumerate(args):
+                arg_type = op.args[i % len(op.args)]
+                if arg_type == 'expr':
+                    inner = self._inner_parse([arg])
+                else:
+                    try:
+                        inner = arg_type(arg)
+                    except ValueError, e:
+                        raise errors.IndexDefinitionParseError(
+                            "Invalid value %r for argument type %r (%r)." %
+                            (arg, arg_type, e))
+                parsed.append(inner)
+            return op(*parsed)
         else:
-            if len(field) != 0:
+            if len(tree) == 0:
                 raise errors.IndexDefinitionParseError(
-                    "Unhandled characters: %s" % (field,))
-            if len(word) == 0:
+                    "Expected fieldname or expression.")
+            fieldname = tree[0]
+            if fieldname.endswith("."):
                 raise errors.IndexDefinitionParseError(
-                    "Missing field specifier")
-            if word.endswith("."):
-                raise errors.IndexDefinitionParseError(
-                    "Invalid field specifier: %s" % word)
-            return ExtractField(word)
+                    "Invalid field specifier: %s" % fieldname)
+            return ExtractField(fieldname)
 
     def parse_all(self, fields):
         return [self.parse(field) for field in fields]
