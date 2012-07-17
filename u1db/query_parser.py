@@ -31,9 +31,9 @@ def make_subtree(expression, start, idx, open_parens):
             if term:
                 tree.append(term)
             else:
-                msg = "Missing operator name in: '"
                 raise errors.IndexDefinitionParseError(
-                    "%s%s'\n%s^" % (msg, expression, " " * (idx + len(msg))))
+                    "Missing operator name in: \n%s\n%s^" %
+                    (expression, " " * idx))
             idx += 1
             start = idx
             idx, start, subtree = make_subtree(
@@ -43,10 +43,9 @@ def make_subtree(expression, start, idx, open_parens):
             try:
                 open_parens.pop()
             except IndexError:
-                msg = "Encountered ')' before '(' when parsing '"
                 raise errors.IndexDefinitionParseError(
-                    "%s%s'.\n%s^" %
-                    (msg, expression, " " * (len(msg) + idx)))
+                    "Encountered ')' before '(' when parsing:\n%s\n%s^" %
+                    (expression, " " * idx))
             term = expression[start:idx].strip()
             if term:
                 tree.append(term)
@@ -155,7 +154,7 @@ class Transformation(Getter):
     def __init__(self, inner):
         """Create a transformation.
 
-        :param args: the arguments to the transformation.
+        :param inner: the argument(s) to the transformation.
         """
         self.inner = inner
 
