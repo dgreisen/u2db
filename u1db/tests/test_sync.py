@@ -91,15 +91,18 @@ target_scenarios = [
 c_db_scenarios = [
     ('local,c', {'create_db_and_target': _make_local_db_and_target,
                  'make_database_for_test': tests.make_c_database_for_test,
+                 'copy_database_for_test': tests.copy_c_database_for_test,
                  'make_document_for_test': tests.make_c_document_for_test,
                  'whitebox': False}),
     ('http,c', {'create_db_and_target': _make_c_db_and_c_http_target,
                 'make_database_for_test': tests.make_c_database_for_test,
+                'copy_database_for_test': tests.copy_c_database_for_test,
                 'make_document_for_test': tests.make_c_document_for_test,
                 'server_def': http_server_def,
                 'whitebox': False}),
     ('oauth_http,c', {'create_db_and_target': _make_c_db_and_oauth_http_target,
                       'make_database_for_test': tests.make_c_database_for_test,
+                      'copy_database_for_test': tests.copy_c_database_for_test,
                       'make_document_for_test': tests.make_c_document_for_test,
                       'server_def': oauth_http_server_def,
                       'whitebox': False}),
@@ -425,6 +428,25 @@ def make_database_for_http_test(test, replica_uid):
     return db
 
 
+def copy_database_for_http_test(test, db):
+    # DO NOT COPY OR REUSE THIS CODE OUTSIDE TESTS: COPYING U1DB DATABASES IS
+    # THE WRONG THING TO DO, THE ONLY REASON WE DO SO HERE IS TO TEST THAT WE
+    # CORRECTLY DETECT IT HAPPENING SO THAT WE CAN RAISE ERRORS RATHER THAN
+    # CORRUPT USER DATA. USE SYNC INSTEAD, OR WE WILL SEND NINJA TO YOUR HOUSE.
+    if test.server is None:
+        test.startServer()
+    new_db = test.request_state._copy_database(db)
+    try:
+        http_at = test._http_at
+    except AttributeError:
+        http_at = test._http_at = {}
+    path = db._replica_uid
+    while path in http_at.values():
+        path += 'copy'
+    http_at[new_db] = path
+    return new_db
+
+
 def sync_via_synchronizer_and_http(test, db_source, db_target,
                                    trace_hook=None):
     if trace_hook:
@@ -436,6 +458,7 @@ def sync_via_synchronizer_and_http(test, db_source, db_target,
 
 sync_scenarios.append(('pyhttp', {
     'make_database_for_test': make_database_for_http_test,
+    'copy_database_for_test': copy_database_for_http_test,
     'make_document_for_test': tests.make_document_for_test,
     'server_def': http_server_def,
     'do_sync': sync_via_synchronizer_and_http
@@ -951,62 +974,62 @@ class DatabaseSyncTests(tests.DatabaseBaseTests,
         self.sync(self.db1, self.db2, trace_hook=put_hook)
 
     def test_sync_detects_rollback_in_source(self):
-        self.db1.create_doc(tests.simple_doc, doc_id="divergent")
+        self.db1.create_doc(tests.simple_doc, doc_id='doc1')
         self.sync(self.db1, self.db2)
-        # make db2 think it's synced with a much later version of db1
-        self.db2._set_replica_gen_and_trans_id(
-            self.db1._replica_uid, 28, 'T-madeup')
+        db1_copy = self.copy_database(self.db1)
+        self.db1.create_doc(tests.simple_doc, doc_id='doc2')
+        self.sync(self.db1, self.db2)
         self.assertRaises(
-            errors.InvalidGeneration, self.sync, self.db1, self.db2)
+            errors.InvalidGeneration, self.sync, db1_copy, self.db2)
 
     def test_sync_detects_rollback_in_target(self):
         self.db1.create_doc(tests.simple_doc, doc_id="divergent")
         self.sync(self.db1, self.db2)
-        # make db1 think it's synced with a much later version of db2
-        self.db1._set_replica_gen_and_trans_id(
-            self.db2._replica_uid, 28, 'T-madeup')
+        db2_copy = self.copy_database(self.db2)
+        self.db2.create_doc(tests.simple_doc, doc_id='doc2')
+        self.sync(self.db1, self.db2)
         self.assertRaises(
-            errors.InvalidGeneration, self.sync, self.db1, self.db2)
+            errors.InvalidGeneration, self.sync, self.db1, db2_copy)
 
     def test_sync_detects_diverged_source(self):
+        db3 = self.copy_database(self.db1)
         self.db1.create_doc(tests.simple_doc, doc_id="divergent")
+        db3.create_doc(tests.simple_doc, doc_id="divergent")
         self.sync(self.db1, self.db2)
-        # create a new db with the same replica as the source, and add
-        # a document, so it will have a different txid for the same generation.
-        db3 = self.create_database('test3')
-        db3.create_doc(tests.nested_doc, doc_id="divergent")
-        db3._set_replica_uid(self.db1._replica_uid)
         self.assertRaises(
             errors.InvalidTransactionId, self.sync, db3, self.db2)
 
     def test_sync_detects_diverged_target(self):
+        db3 = self.copy_database(self.db2)
+        db3.create_doc(tests.nested_doc, doc_id="divergent")
         self.db1.create_doc(tests.simple_doc, doc_id="divergent")
         self.sync(self.db1, self.db2)
-        # create a new db with the same replica as the target, and add
-        # a document, so it will have a different txid for the same generation.
-        db3 = self.create_database('test3')
-        db3.create_doc(tests.nested_doc, doc_id="divergent")
-        db3._set_replica_uid(self.db2._replica_uid)
         self.assertRaises(
             errors.InvalidTransactionId, self.sync, self.db1, db3)
 
     def test_sync_detects_rollback_and_divergence_in_source(self):
-        self.db1.create_doc(tests.simple_doc, doc_id="divergent")
+        self.db1.create_doc(tests.simple_doc, doc_id='doc1')
         self.sync(self.db1, self.db2)
-        self.db1.create_doc(tests.simple_doc)
-        self.db2._set_replica_gen_and_trans_id(
-            self.db1._replica_uid, 2, 'T-madeup')
+        db1_copy = self.copy_database(self.db1)
+        self.db1.create_doc(tests.simple_doc, doc_id='doc2')
+        self.db1.create_doc(tests.simple_doc, doc_id='doc3')
+        self.sync(self.db1, self.db2)
+        db1_copy.create_doc(tests.simple_doc, doc_id='doc2')
+        db1_copy.create_doc(tests.simple_doc, doc_id='doc3')
         self.assertRaises(
-            errors.InvalidTransactionId, self.sync, self.db1, self.db2)
+            errors.InvalidTransactionId, self.sync, db1_copy, self.db2)
 
     def test_sync_detects_rollback_and_divergence_in_target(self):
         self.db1.create_doc(tests.simple_doc, doc_id="divergent")
         self.sync(self.db1, self.db2)
-        self.db2.create_doc(tests.simple_doc)
-        self.db1._set_replica_gen_and_trans_id(
-            self.db2._replica_uid, 2, 'T-madeup')
+        db2_copy = self.copy_database(self.db2)
+        self.db2.create_doc(tests.simple_doc, doc_id='doc2')
+        self.db2.create_doc(tests.simple_doc, doc_id='doc3')
+        self.sync(self.db1, self.db2)
+        db2_copy.create_doc(tests.simple_doc, doc_id='doc2')
+        db2_copy.create_doc(tests.simple_doc, doc_id='doc3')
         self.assertRaises(
-            errors.InvalidTransactionId, self.sync, self.db1, self.db2)
+            errors.InvalidTransactionId, self.sync, self.db1, db2_copy)
 
 
 class TestDbSync(tests.TestCaseWithServer):

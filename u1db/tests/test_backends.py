@@ -48,8 +48,29 @@ def make_http_database_for_test(test, replica_uid, path='test'):
     return http_database.HTTPDatabase(test.getURL(path))
 
 
+def copy_http_database_for_test(test, db):
+    # DO NOT COPY OR REUSE THIS CODE OUTSIDE TESTS: COPYING U1DB DATABASES IS
+    # THE WRONG THING TO DO, THE ONLY REASON WE DO SO HERE IS TO TEST THAT WE
+    # CORRECTLY DETECT IT HAPPENING SO THAT WE CAN RAISE ERRORS RATHER THAN
+    # CORRUPT USER DATA. USE SYNC INSTEAD, OR WE WILL SEND NINJA TO YOUR
+    # HOUSE.
+    return test.request_state._copy_database(db)
+
+
 def make_oauth_http_database_for_test(test, replica_uid):
     http_db = make_http_database_for_test(test, replica_uid, '~/test')
+    http_db.set_oauth_credentials(tests.consumer1.key, tests.consumer1.secret,
+                                  tests.token1.key, tests.token1.secret)
+    return http_db
+
+
+def copy_oauth_http_database_for_test(test, db):
+    # DO NOT COPY OR REUSE THIS CODE OUTSIDE TESTS: COPYING U1DB DATABASES IS
+    # THE WRONG THING TO DO, THE ONLY REASON WE DO SO HERE IS TO TEST THAT WE
+    # CORRECTLY DETECT IT HAPPENING SO THAT WE CAN RAISE ERRORS RATHER THAN
+    # CORRUPT USER DATA. USE SYNC INSTEAD, OR WE WILL SEND NINJA TO YOUR
+    # HOUSE.
+    http_db = test.request_state._copy_database(db)
     http_db.set_oauth_credentials(tests.consumer1.key, tests.consumer1.secret,
                                   tests.token1.key, tests.token1.secret)
     return http_db
@@ -63,10 +84,13 @@ class AllDatabaseTests(tests.DatabaseBaseTests, tests.TestCaseWithServer):
 
     scenarios = tests.LOCAL_DATABASES_SCENARIOS + [
         ('http', {'make_database_for_test': make_http_database_for_test,
+                  'copy_database_for_test': copy_http_database_for_test,
                   'make_document_for_test': tests.make_document_for_test,
                   'server_def': http_server_def}),
         ('oauth_http', {'make_database_for_test':
                         make_oauth_http_database_for_test,
+                        'copy_database_for_test':
+                        copy_oauth_http_database_for_test,
                         'make_document_for_test': tests.make_document_for_test,
                         'server_def': oauth_http_server_def})
         ] + tests.C_DATABASE_SCENARIOS
