@@ -24,6 +24,44 @@ from u1db import (
 trivial_raw_doc = {}
 
 
+class TestMakeTree(tests.TestCase):
+
+    def assertParseError(self, definition):
+        self.assertRaises(
+            errors.IndexDefinitionParseError, query_parser.make_tree,
+            definition)
+
+    def test_single_field(self):
+        self.assertEqual(['f'], query_parser.make_tree('f'))
+
+    def test_single_mapping(self):
+        query_parser.make_tree('mapping(field1)')
+        self.assertEqual(
+            ['mapping', ['field1']], query_parser.make_tree('mapping(field1)'))
+
+    def test_single_mapping_multiple_fields(self):
+        self.assertEqual(
+            ['mapping', ['field1', 'field2', 'field3']],
+            query_parser.make_tree('mapping(field1, field2, field3)'))
+
+    def test_nested_mapping(self):
+        self.assertEqual(
+            ['mapping1', ['mapping2', ['field1', 'field2'],
+                          'mapping3', ['field3', 'field4']]],
+            query_parser.make_tree(
+                'mapping1(mapping2(field1, field2), '
+                'mapping3(field3, field4))'))
+
+    def test_parse_missing_close_paren(self):
+        self.assertParseError("lower(a")
+
+    def test_parse_trailing_chars(self):
+        self.assertParseError("lower(ab))")
+
+    def test_parse_empty_op(self):
+        self.assertParseError("(ab)")
+
+
 class TestStaticGetter(tests.TestCase):
 
     def test_returns_string(self):
@@ -97,7 +135,7 @@ class TestLower(tests.TestCase):
     def assertLowerGets(self, expected, input_val):
         getter = query_parser.Lower(query_parser.StaticGetter(input_val))
         out_val = getter.get(trivial_raw_doc)
-        self.assertEqual(expected, out_val)
+        self.assertEqual(sorted(expected), sorted(out_val))
 
     def test_inner_returns_None(self):
         self.assertLowerGets([], None)
@@ -138,7 +176,7 @@ class TestSplitWords(tests.TestCase):
 
     def assertSplitWords(self, expected, value):
         getter = query_parser.SplitWords(query_parser.StaticGetter(value))
-        self.assertEqual(expected, getter.get(trivial_raw_doc))
+        self.assertEqual(sorted(expected), sorted(getter.get(trivial_raw_doc)))
 
     def test_inner_returns_None(self):
         self.assertSplitWords([], None)
@@ -321,6 +359,9 @@ class TestParser(tests.TestCase):
 
     def test_parse_unknown_op(self):
         self.assertParseError("no_such_operation(field)")
+
+    def test_parse_wrong_arg_type(self):
+        self.assertParseError("number(field, fnord)")
 
     def test_parse_transformation(self):
         getter = self.parse("lower(a)")

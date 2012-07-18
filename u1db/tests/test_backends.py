@@ -1076,6 +1076,34 @@ class DatabaseIndexTests(tests.DatabaseBaseTests):
         self.assertEqual(
             [doc], self.db.get_from_index('test-idx', 'value', 'value2'))
 
+    def test_get_from_index_multi_list(self):
+        doc = self.db.create_doc(
+            '{"key": "value", "key2": ["value2-1", "value2-2", "value2-3"]}')
+        self.db.create_index('test-idx', 'key', 'key2')
+        self.assertEqual(
+            [doc], self.db.get_from_index('test-idx', 'value', 'value2-1'))
+        self.assertEqual(
+            [doc], self.db.get_from_index('test-idx', 'value', 'value2-2'))
+        self.assertEqual(
+            [doc], self.db.get_from_index('test-idx', 'value', 'value2-3'))
+        self.assertEqual(
+            [('value', 'value2-1'), ('value', 'value2-2'),
+             ('value', 'value2-3')],
+            sorted(self.db.get_index_keys('test-idx')))
+
+    def test_get_index_keys_multi_list_list(self):
+        self.db.create_doc(
+            '{"key": "value1-1 value1-2 value1-3", '
+            '"key2": ["value2-1", "value2-2", "value2-3"]}')
+        self.db.create_index('test-idx', 'split_words(key)', 'key2')
+        self.assertEqual(
+            [(u'value1-1', u'value2-1'), (u'value1-1', u'value2-2'),
+             (u'value1-1', u'value2-3'), (u'value1-2', u'value2-1'),
+             (u'value1-2', u'value2-2'), (u'value1-2', u'value2-3'),
+             (u'value1-3', u'value2-1'), (u'value1-3', u'value2-2'),
+             (u'value1-3', u'value2-3')],
+            sorted(self.db.get_index_keys('test-idx')))
+
     def test_get_from_index_multi_ordered(self):
         doc1 = self.db.create_doc('{"key": "value3", "key2": "value4"}')
         doc2 = self.db.create_doc('{"key": "value2", "key2": "value3"}')

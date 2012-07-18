@@ -52,6 +52,14 @@ typedef struct string_list_
     string_list_item *tail;
 } string_list;
 
+typedef struct parse_tree_
+{
+    char *data;
+    struct parse_tree_ *first_child;
+    struct parse_tree_ *last_child;
+    struct parse_tree_ *next_sibling;
+} parse_tree;
+
 static int op_lower(string_list *result, const string_list *value,
                     const string_list *args);
 static int op_number(string_list *result, const string_list *value,
@@ -90,6 +98,53 @@ init_list(string_list **list)
 }
 
 static int
+init_parse_tree(parse_tree **result)
+{
+    *result = (parse_tree *)calloc(1, sizeof(parse_tree));
+    if (*result == NULL)
+        return U1DB_NOMEM;
+    return U1DB_OK;
+}
+
+static int
+append_child(parse_tree *t, const char *data)
+{
+    int status = U1DB_OK;
+    parse_tree *subtree = NULL;
+    status = init_parse_tree(&subtree);
+    if (status != U1DB_OK)
+        return status;
+    subtree->data = strdup(data);
+    if (subtree->data == NULL)
+        return U1DB_NOMEM;
+    if (t->first_child == NULL)
+        t->first_child = subtree;
+    if (t->last_child != NULL)
+        t->last_child->next_sibling = subtree;
+    t->last_child = subtree;
+    return status;
+}
+
+static void
+destroy_parse_tree(parse_tree *t)
+{
+    parse_tree *subtree = NULL;
+    parse_tree *previous = NULL;
+    if (t == NULL)
+        return;
+    if (t->data != NULL)
+        free(t->data);
+    subtree = t->first_child;
+    while (subtree != NULL)
+    {
+        previous = subtree;
+        subtree = subtree->next_sibling;
+        destroy_parse_tree(previous);
+    }
+    free(t);
+}
+
+static int
 append(string_list *list, const char *data)
 {
     string_list_item *new_item = NULL;
@@ -114,7 +169,8 @@ append(string_list *list, const char *data)
 static void
 destroy_list(string_list *list)
 {
-    string_list_item *item, *previous = NULL;
+    string_list_item *item = NULL;
+    string_list_item *previous = NULL;
     if (list == NULL)
         return;
     item = list->head;
@@ -122,7 +178,8 @@ destroy_list(string_list *list)
     {
         previous = item;
         item = item->next;
-        free(previous->data);
+        if (previous->data != NULL)
+            free(previous->data);
         free(previous);
     }
     list->head = NULL;
@@ -142,6 +199,70 @@ print_list(string_list *list)
     printf("]\n");
 }
 */
+static int
+make_subtree(char *start, char *idx, int *open_parens, parse_tree *result)
+{
+    int status = U1DB_OK;
+    if (status != U1DB_OK)
+        return status;
+    while (*idx != '\0')
+    {
+        if (*idx == '(') {
+            *open_parens++;
+            *idx = '\0';
+            status = append_child(result, start);
+            if (status != U1DB_OK)
+                return status;
+            idx++;
+            start = idx;
+            status = make_subtree(start, idx, open_parens, result->last_child);
+            if (status != U1DB_OK)
+                return status;
+        } else if (*idx == ')') {
+            *open_parens--;
+            if (open_parens < 0) {
+                return U1DB_INVALID_TRANSFORMATION_FUNCTION;
+            }
+            *idx = '\0';
+            status = append_child(result, start);
+            if (status != U1DB_OK)
+                return status;
+            idx++;
+            start = idx;
+            return status;
+        } else if (*idx == ',') {
+            *idx = '\0';
+            status = append_child(result, start);
+            if (status != U1DB_OK)
+                return status;
+            idx++;
+            start = idx;
+        } else {
+            idx++;
+        }
+        if (start != '\0')
+            status = append_child(result, start);
+    }
+    return status;
+}
+
+static int
+make_tree(char *expression, parse_tree *result)
+{
+    int status = U1DB_OK;
+    int open_parens = 0;
+    char *start = NULL;
+    char *idx = NULL;
+
+    start = expression;
+    idx = expression;
+    status = make_subtree(start, idx, &open_parens, result);
+    if (status != U1DB_OK)
+        return status;
+    if (open_parens != 0)
+        return U1DB_INVALID_TRANSFORMATION_FUNCTION;
+    return status;
+}
 
 static int
 init_transformation(transformation **tr)
@@ -1103,60 +1224,18 @@ struct sqlcb_to_field_cb {
 };
 
 static int
-parse(const char *field, transformation *result, int value_type)
+inner_parse(parse_tree *tree, transformation *result, int value_type)
 {
+    parse_tree *subtree = NULL;
     transformation *inner = NULL;
-    char *new_field = NULL, *new_ptr, *argptr, *argend;
-    char *word = NULL, *first_comma;
     int status = U1DB_OK;
     int i, size;
     int new_value_type = json_type_string;
-    char *field_copy, *end = NULL;
-    field_copy = strdup(field);
-    if (field_copy == NULL) {
-        status = U1DB_NOMEM;
-        goto finish;
-    }
-    end = field_copy;
-    while (*end != '(' && *end != ')' && *end != '\0')
-    {
-        end++;
-    }
-    if (*end == '\0')
-    {
-        word = strdup(field_copy);
-        if (word == NULL)
-        {
-            status = U1DB_NOMEM;
-            goto finish;
-        }
-    }
-    else {
-        size = (end - field_copy);
-        word = (char *)calloc(size + 1, 1);
-        strncpy(word, field_copy, size);
-    }
-    new_field = strdup(end);
-    if (new_field == NULL) {
-        status = U1DB_NOMEM;
-        goto finish;
-    }
-    new_ptr = new_field;
-    if (status != U1DB_OK)
-        goto finish;
-    if (*new_ptr == '(')
-    {
-        if (new_field[strlen(new_field) - 1] != ')')
-        {
-            status = U1DB_INVALID_TRANSFORMATION_FUNCTION;
-            goto finish;
-        }
-        // step into parens
-        new_ptr++;
-        new_field[strlen(new_field) - 1] = '\0';
-        for (i = 0; i < OPS; i++)
-        {
-            if (strcmp(OPERATIONS[i].name, word) == 0)
+
+    subtree = tree->first_child;
+    if (subtree->first_child != NULL) {
+        for (i = 0; i < OPS; i++) {
+            if (strcmp(OPERATIONS[i].name, subtree->data) == 0)
             {
                 result->op = OPERATIONS[i].function;
                 result->value_type = value_type;
@@ -1164,74 +1243,65 @@ parse(const char *field, transformation *result, int value_type)
                 break;
             }
         }
-        if (result->op == NULL)
-        {
-            status = U1DB_UNKNOWN_OPERATION;
-            goto finish;
+        if (result->op == NULL) {
+            return U1DB_UNKNOWN_OPERATION;
         }
-        first_comma = strchr(new_field, ',');
-        if (first_comma != NULL)
-        {
-            argptr = first_comma + 1;
-            argend = argptr;
-            *first_comma = '\0';
-            while (*argend != '\0')
+        subtree = subtree->first_child;
+        while (subtree != NULL) {
+            status = init_transformation(&inner);
+            if (status != U1DB_OK)
+                return status;
+            status = inner_parse(subtree, inner, new_value_type);
+            if (status != U1DB_OK)
             {
-                if (*argend == ',')
-                {
-                    *argend = '\0';
-                    while (*argptr == ' ')
-                        argptr++;
-                    status = append(result->args, argptr);
-                    if (status != U1DB_OK)
-                        goto finish;
-                    argptr = argend + 1;
-                }
-                argend++;
+                // free the memory if the parsing fails. Otherwise, inner will
+                // be cleaned up when the outer transformation (result) is
+                // destroyed.
+                destroy_transformation(inner);
+                return status;
             }
-            if ((argend - argptr) > 0)
-            {
-                while (*argptr == ' ')
-                    argptr++;
-                status = append(result->args, argptr);
-                if (status != U1DB_OK)
-                    goto finish;
-            }
+            result->next = inner;
+            subtree = subtree->next_sibling;
         }
-        status = init_transformation(&inner);
-        if (status != U1DB_OK)
-            goto finish;
-        status = parse(new_ptr, inner, new_value_type);
-        if (status != U1DB_OK)
-        {
-            // free the memory if the parsing fails. Otherwise, inner will be
-            // cleaned up when the outer transformation (result) is destroyed.
-            destroy_transformation(inner);
-            goto finish;
-        }
-        result->next = inner;
     } else {
-        if (*new_ptr != '\0')
-        {
-            status = U1DB_UNHANDLED_CHARACTERS;
-            goto finish;
+        if (subtree->data == NULL || strlen(subtree->data) == 0) {
+            return U1DB_MISSING_FIELD_SPECIFIER;
         }
-        if (strlen(word) == 0)
-        {
-            status = U1DB_MISSING_FIELD_SPECIFIER;
-            goto finish;
+        if (subtree->data[strlen(subtree->data) - 1] == '.') {
+            return U1DB_INVALID_FIELD_SPECIFIER;
         }
-        if (word[strlen(word) - 1] == '.')
-        {
-            status = U1DB_INVALID_FIELD_SPECIFIER;
-            goto finish;
-        }
-        status = split(result->args, word, '.');
         result->value_type = value_type;
+        status = split(result->args, subtree->data, '.');
     }
+    return status;
+}
+
+static int
+parse(const char *field, transformation *result, int value_type)
+{
+    transformation *inner = NULL;
+    char *new_field = NULL, *new_ptr, *argptr, *argend;
+    int status = U1DB_OK;
+    int i, size;
+    int new_value_type = json_type_string;
+    char *field_copy, *end = NULL;
+    parse_tree *tree = NULL;
+
+    field_copy = strdup(field);
+    if (field_copy == NULL) {
+        status = U1DB_NOMEM;
+        goto finish;
+    }
+    status = init_parse_tree(&tree);
+    if (status != U1DB_OK)
+        goto finish;
+    status = make_tree(field_copy, tree);
+    if (status != U1DB_OK)
+        goto finish;
+    status = inner_parse(tree, result, value_type);
 finish:
-    if (word != NULL)
-        free(word);
+    if (tree != NULL)
+        destroy_parse_tree(tree);
     if (field_copy != NULL)
         free(field_copy);
     if (new_field != NULL)
