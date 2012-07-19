@@ -19,14 +19,14 @@ is implementation-defined.
 Creating and editing documents
 ------------------------------
 
-To create a document, use ``create_doc()``. Code examples below are from
-:ref:`reference-implementation` in Python.
+To create a document, use ``create_doc_from_json()``. Code examples below are
+from :ref:`reference-implementation` in Python.
 
 .. testcode ::
 
     import json, u1db
     db = u1db.open(":memory:", create=True)
-    doc = db.create_doc(json.dumps({"key": "value"}), doc_id="testdoc")
+    doc = db.create_doc_from_json(json.dumps({"key": "value"}), doc_id="testdoc")
     print doc.content
     print doc.doc_id
 
@@ -36,7 +36,7 @@ To create a document, use ``create_doc()``. Code examples below are from
     testdoc
 
 Editing an *existing* document is done with ``put_doc()``. This is separate
-from ``create_doc()`` so as to avoid accidental overwrites. ``put_doc()`` takes
+from ``create_doc_from_json()`` so as to avoid accidental overwrites. ``put_doc()`` takes
 a ``Document`` object, because the object encapsulates revision information for
 a particular document.
 
@@ -44,10 +44,10 @@ a particular document.
 
     import json, u1db
     db = u1db.open(":memory:", create=True)
-    doc1 = db.create_doc(json.dumps({"key1": "value1"}), doc_id="doc1")
+    doc1 = db.create_doc_from_json(json.dumps({"key1": "value1"}), doc_id="doc1")
     # the next line should fail because it's creating a doc that already exists
     try:
-        doc1fail = db.create_doc(json.dumps({"key1fail": "value1fail"}), doc_id="doc1")
+        doc1fail = db.create_doc_from_json(json.dumps({"key1fail": "value1fail"}), doc_id="doc1")
     except u1db.errors.RevisionConflict:
         print "There was a conflict when creating the doc!"
     print "Now editing the doc with the doc object we got back..."
@@ -68,7 +68,7 @@ Finally, deleting a document is done with ``delete_doc()``.
 
     import json, u1db
     db = u1db.open(":memory:", create=True)
-    doc = db.create_doc(json.dumps({"key": "value"}))
+    doc = db.create_doc_from_json(json.dumps({"key": "value"}))
     db.delete_doc(doc)
     print db.get_doc(doc.doc_id)
     doc = db.get_doc(doc.doc_id, include_deleted=True)
@@ -88,7 +88,7 @@ The simplest way to retrieve documents from a u1db is by ``doc_id``.
 
     import json, u1db
     db = u1db.open(":memory:", create=True)
-    doc = db.create_doc(json.dumps({"key": "value"}), doc_id="testdoc")
+    doc = db.create_doc_from_json(json.dumps({"key": "value"}), doc_id="testdoc")
     doc1 = db.get_doc("testdoc")
     print doc1.content
     print doc1.doc_id
@@ -104,8 +104,8 @@ And it's also possible to retrieve many documents by ``doc_id``.
 
     import json, u1db
     db = u1db.open(":memory:", create=True)
-    doc1 = db.create_doc(json.dumps({"key": "value"}), doc_id="testdoc1")
-    doc2 = db.create_doc(json.dumps({"key": "value"}), doc_id="testdoc2")
+    doc1 = db.create_doc_from_json(json.dumps({"key": "value"}), doc_id="testdoc1")
+    doc2 = db.create_doc_from_json(json.dumps({"key": "value"}), doc_id="testdoc2")
     for doc in db.get_docs(["testdoc2","testdoc1"]):
         print doc.doc_id
 
@@ -119,7 +119,7 @@ Note that ``get_docs()`` returns the documents in the order specified.
 Document functions
 ^^^^^^^^^^^^^^^^^^
 
- * create_doc(JSON string, optional_doc_id)
+ * create_doc_from_json(JSON string, optional_doc_id)
  * put_doc(Document)
  * get_doc(doc_id)
  * get_docs(list_of_doc_ids)

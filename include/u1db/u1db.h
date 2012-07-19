@@ -126,8 +126,8 @@ int u1db_get_replica_uid(u1database *db, const char **replica_uid);
  *            freed with u1db_free_doc
  * @return a status code indicating success or failure.
  */
-int u1db_create_doc(u1database *db, const char *json, const char *doc_id,
-                    u1db_document **doc);
+int u1db_create_doc_from_json(u1database *db, const char *json,
+                              const char *doc_id, u1db_document **doc);
 
 /**
  * Put new document content for the given document identifier.

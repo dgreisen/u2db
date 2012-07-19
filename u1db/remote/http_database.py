@@ -119,7 +119,7 @@ class HTTPDatabase(http_client.HTTPClientBase, Database):
             docs.append(doc)
         return docs
 
-    def create_doc(self, content, doc_id=None):
+    def create_doc_from_json(self, content, doc_id=None):
         if doc_id is None:
             doc_id = 'D-%s' % (uuid.uuid4().hex,)
         res, headers = self._request_json('PUT', ['doc', doc_id], {},

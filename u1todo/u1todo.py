@@ -144,7 +144,7 @@ class TodoStore(object):
         # Store the document in the database. Since we did not set a document
         # id, the database will store it as a new document, and generate
         # a valid id.
-        document = self.db.create_doc(content=content)
+        document = self.db.create_doc_from_json(content)
         # Wrap the document in a Task object.
         return Task(document)
 

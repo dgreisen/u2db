@@ -183,7 +183,7 @@ class TaskTestCase(TestCase):
     def setUp(self):
         super(TaskTestCase, self).setUp()
         self.db = inmemory.InMemoryDatabase("u1todo")
-        self.document = self.db.create_doc(EMPTY_TASK)
+        self.document = self.db.create_doc_from_json(EMPTY_TASK)
 
     def test_task(self):
         """Initializing a task."""
