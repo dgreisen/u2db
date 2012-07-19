@@ -152,7 +152,7 @@ class DatabaseSyncTargetTests(tests.DatabaseBaseTests,
     def test_create_doc_updates_sync_info(self):
         self.assertEqual(
             ('test', 0, '', 0, ''), self.st.get_sync_info('other'))
-        self.db.create_doc(simple_doc)
+        self.db.create_doc_from_json(simple_doc)
         self.assertEqual(1, self.st.get_sync_info('other')[1])
 
     def test_record_sync_info(self):
@@ -175,7 +175,7 @@ class DatabaseSyncTargetTests(tests.DatabaseBaseTests,
         self.assertEqual(10, self.st.get_sync_info('replica')[3])
 
     def test_sync_exchange_deleted(self):
-        doc = self.db.create_doc('{}')
+        doc = self.db.create_doc_from_json('{}')
         edit_rev = 'replica:1|' + doc.rev
         docs_by_gen = [
             (self.make_document(doc.doc_id, edit_rev, None), 10, 'T-sid')]
@@ -207,7 +207,7 @@ class DatabaseSyncTargetTests(tests.DatabaseBaseTests,
         self.assertEqual(11, self.st.get_sync_info('replica')[3])
 
     def test_sync_exchange_refuses_conflicts(self):
-        doc = self.db.create_doc(simple_doc)
+        doc = self.db.create_doc_from_json(simple_doc)
         self.assertTransactionLog([doc.doc_id], self.db)
         new_doc = '{"key": "altval"}'
         docs_by_gen = [
@@ -225,7 +225,7 @@ class DatabaseSyncTargetTests(tests.DatabaseBaseTests,
                              {'last_gen': 1, 'docs': [(doc.doc_id, doc.rev)]})
 
     def test_sync_exchange_ignores_convergence(self):
-        doc = self.db.create_doc(simple_doc)
+        doc = self.db.create_doc_from_json(simple_doc)
         self.assertTransactionLog([doc.doc_id], self.db)
         gen, txid = self.db._get_generation_info()
         docs_by_gen = [
@@ -237,7 +237,7 @@ class DatabaseSyncTargetTests(tests.DatabaseBaseTests,
         self.assertEqual(([], 1), (self.other_changes, new_gen))
 
     def test_sync_exchange_returns_new_docs(self):
-        doc = self.db.create_doc(simple_doc)
+        doc = self.db.create_doc_from_json(simple_doc)
         self.assertTransactionLog([doc.doc_id], self.db)
         new_gen, _ = self.st.sync_exchange(
             [], 'other-replica', last_known_generation=0,
@@ -251,7 +251,7 @@ class DatabaseSyncTargetTests(tests.DatabaseBaseTests,
                              {'last_gen': 1, 'docs': [(doc.doc_id, doc.rev)]})
 
     def test_sync_exchange_returns_deleted_docs(self):
-        doc = self.db.create_doc(simple_doc)
+        doc = self.db.create_doc_from_json(simple_doc)
         self.db.delete_doc(doc)
         self.assertTransactionLog([doc.doc_id, doc.doc_id], self.db)
         new_gen, _ = self.st.sync_exchange(
@@ -266,8 +266,8 @@ class DatabaseSyncTargetTests(tests.DatabaseBaseTests,
                              {'last_gen': 2, 'docs': [(doc.doc_id, doc.rev)]})
 
     def test_sync_exchange_returns_many_new_docs(self):
-        doc = self.db.create_doc(simple_doc)
-        doc2 = self.db.create_doc(nested_doc)
+        doc = self.db.create_doc_from_json(simple_doc)
+        doc2 = self.db.create_doc_from_json(nested_doc)
         self.assertTransactionLog([doc.doc_id, doc2.doc_id], self.db)
         new_gen, _ = self.st.sync_exchange(
             [], 'other-replica', last_known_generation=0,
@@ -285,7 +285,7 @@ class DatabaseSyncTargetTests(tests.DatabaseBaseTests,
                  [(doc.doc_id, doc.rev), (doc2.doc_id, doc2.rev)]})
 
     def test_sync_exchange_getting_newer_docs(self):
-        doc = self.db.create_doc(simple_doc)
+        doc = self.db.create_doc_from_json(simple_doc)
         self.assertTransactionLog([doc.doc_id], self.db)
         new_doc = '{"key": "altval"}'
         docs_by_gen = [
@@ -309,7 +309,7 @@ class DatabaseSyncTargetTests(tests.DatabaseBaseTests,
             expected.append((doc.doc_id, conc_rev, cont, 3))
 
         self.set_trace_hook(before_whatschanged_cb)
-        doc = self.db.create_doc(simple_doc)
+        doc = self.db.create_doc_from_json(simple_doc)
         self.assertTransactionLog([doc.doc_id], self.db)
         new_doc = '{"key": "altval"}'
         docs_by_gen = [
@@ -326,10 +326,10 @@ class DatabaseSyncTargetTests(tests.DatabaseBaseTests,
         def after_whatschanged_cb(state):
             if state != 'after whats_changed':
                 return
-            self.db.create_doc('{"new": "doc"}')
+            self.db.create_doc_from_json('{"new": "doc"}')
 
         self.set_trace_hook(after_whatschanged_cb)
-        doc = self.db.create_doc(simple_doc)
+        doc = self.db.create_doc_from_json(simple_doc)
         self.assertTransactionLog([doc.doc_id], self.db)
         new_doc = '{"key": "altval"}'
         docs_by_gen = [
@@ -341,7 +341,7 @@ class DatabaseSyncTargetTests(tests.DatabaseBaseTests,
         self.assertEqual(([], 2), (self.other_changes, new_gen))
 
     def test_sync_exchange_converged_handling(self):
-        doc = self.db.create_doc(simple_doc)
+        doc = self.db.create_doc_from_json(simple_doc)
         docs_by_gen = [
             (self.make_document('new', 'other:1', '{}'), 4, 'T-foo'),
             (self.make_document(doc.doc_id, doc.rev, doc.get_json()), 5,
@@ -360,7 +360,7 @@ class DatabaseSyncTargetTests(tests.DatabaseBaseTests,
         # suppress traceback printing in the wsgiref server
         self.patch(simple_server.ServerHandler,
                    'log_exception', lambda h, exc_info: None)
-        doc = self.db.create_doc(simple_doc)
+        doc = self.db.create_doc_from_json(simple_doc)
         self.assertTransactionLog([doc.doc_id], self.db)
         self.assertRaises(
             (errors.U1DBError, errors.BrokenSyncStream),
@@ -373,7 +373,7 @@ class DatabaseSyncTargetTests(tests.DatabaseBaseTests,
         if sync_exchange_doc_ids is None:
             self.skipTest("sync_exchange_doc_ids not implemented")
         db2 = self.create_database('test2')
-        doc = db2.create_doc(simple_doc)
+        doc = db2.create_doc_from_json(simple_doc)
         new_gen, trans_id = sync_exchange_doc_ids(
             db2, [(doc.doc_id, 10, 'T-sid')], 0, None,
             return_doc_cb=self.receive_doc)
@@ -513,9 +513,9 @@ class DatabaseSyncTests(tests.DatabaseBaseTests,
              'return': {'docs': [], 'last_gen': 0}})
 
     def test_sync_autoresolves(self):
-        doc1 = self.db1.create_doc(simple_doc, doc_id='doc')
+        doc1 = self.db1.create_doc_from_json(simple_doc, doc_id='doc')
         rev1 = doc1.rev
-        doc2 = self.db2.create_doc(simple_doc, doc_id='doc')
+        doc2 = self.db2.create_doc_from_json(simple_doc, doc_id='doc')
         rev2 = doc2.rev
         self.sync(self.db1, self.db2)
         doc = self.db1.get_doc('doc')
@@ -548,7 +548,7 @@ class DatabaseSyncTests(tests.DatabaseBaseTests,
         # a3b2       a1b2 (autoresolved)
         #   `------->
         # a3b2       a3b2
-        self.db1.create_doc(simple_doc, doc_id='doc')
+        self.db1.create_doc_from_json(simple_doc, doc_id='doc')
         self.sync(self.db1, self.db2)
         for db, content in [(self.db1, '{}'), (self.db2, '{"hi": 42}')]:
             doc = db.get_doc('doc')
@@ -600,7 +600,7 @@ class DatabaseSyncTests(tests.DatabaseBaseTests,
         # a1b1+a2    a1b2 (a1b2 has same content as a2)
         #   <-------'
         # a3b2       a3b2 (autoresolved and propagated)
-        self.db1.create_doc(simple_doc, doc_id='doc')
+        self.db1.create_doc_from_json(simple_doc, doc_id='doc')
         self.sync(self.db1, self.db2)
         for db, content in [(self.db1, '{}'), (self.db2, '{"hi": 42}')]:
             doc = db.get_doc('doc')
@@ -656,7 +656,7 @@ class DatabaseSyncTests(tests.DatabaseBaseTests,
         #   `------->
         # a2b2c1     a2b2c1     a2c1
         self.db3 = self.create_database('test3')
-        self.db1.create_doc(simple_doc, doc_id='doc')
+        self.db1.create_doc_from_json(simple_doc, doc_id='doc')
         self.sync(self.db1, self.db2)
         self.sync(self.db2, self.db3)
         for db, content in [(self.db2, '{"hi": 42}'),
@@ -703,7 +703,7 @@ class DatabaseSyncTests(tests.DatabaseBaseTests,
         self.assertEqual(self.db1.get_doc('doc'), self.db2.get_doc('doc'))
 
     def test_sync_puts_changes(self):
-        doc = self.db1.create_doc(simple_doc)
+        doc = self.db1.create_doc_from_json(simple_doc)
         self.assertEqual(1, self.sync(self.db1, self.db2))
         self.assertGetDoc(self.db2, doc.doc_id, doc.rev, simple_doc, False)
         self.assertEqual(1, self.db1._get_replica_gen_and_trans_id('test2')[0])
@@ -715,7 +715,7 @@ class DatabaseSyncTests(tests.DatabaseBaseTests,
              'return': {'docs': [], 'last_gen': 1}})
 
     def test_sync_pulls_changes(self):
-        doc = self.db2.create_doc(simple_doc)
+        doc = self.db2.create_doc_from_json(simple_doc)
         self.db1.create_index('test-idx', 'key')
         self.assertEqual(0, self.sync(self.db1, self.db2))
         self.assertGetDoc(self.db1, doc.doc_id, doc.rev, simple_doc, False)
@@ -728,7 +728,7 @@ class DatabaseSyncTests(tests.DatabaseBaseTests,
         self.assertEqual([doc], self.db1.get_from_index('test-idx', 'value'))
 
     def test_sync_pulling_doesnt_update_other_if_changed(self):
-        doc = self.db2.create_doc(simple_doc)
+        doc = self.db2.create_doc_from_json(simple_doc)
         # After the local side has sent its list of docs, before we start
         # receiving the "targets" response, we update the local database with a
         # new record.
@@ -738,7 +738,7 @@ class DatabaseSyncTests(tests.DatabaseBaseTests,
         def before_get_docs(state):
             if state != 'before get_docs':
                 return
-            self.db1.create_doc(simple_doc)
+            self.db1.create_doc_from_json(simple_doc)
 
         self.assertEqual(0, self.sync(self.db1, self.db2,
                                       trace_hook=before_get_docs))
@@ -754,7 +754,7 @@ class DatabaseSyncTests(tests.DatabaseBaseTests,
             (0, ''), self.db2._get_replica_gen_and_trans_id('test1'))
 
     def test_sync_doesnt_update_other_if_nothing_pulled(self):
-        self.db1.create_doc(simple_doc)
+        self.db1.create_doc_from_json(simple_doc)
 
         def no_record_sync_info(state):
             if state != 'record_sync_info':
@@ -767,7 +767,7 @@ class DatabaseSyncTests(tests.DatabaseBaseTests,
             self.db2._get_replica_gen_and_trans_id(self.db1._replica_uid)[0])
 
     def test_sync_ignores_convergence(self):
-        doc = self.db1.create_doc(simple_doc)
+        doc = self.db1.create_doc_from_json(simple_doc)
         self.db3 = self.create_database('test3')
         self.assertEqual(1, self.sync(self.db1, self.db3))
         self.assertEqual(0, self.sync(self.db2, self.db3))
@@ -779,7 +779,7 @@ class DatabaseSyncTests(tests.DatabaseBaseTests,
              'return': {'docs': [], 'last_gen': 1}})
 
     def test_sync_ignores_superseded(self):
-        doc = self.db1.create_doc(simple_doc)
+        doc = self.db1.create_doc_from_json(simple_doc)
         doc_rev1 = doc.rev
         self.db3 = self.create_database('test3')
         self.sync(self.db1, self.db3)
@@ -798,12 +798,12 @@ class DatabaseSyncTests(tests.DatabaseBaseTests,
         self.assertGetDoc(self.db1, doc.doc_id, doc_rev2, new_content, False)
 
     def test_sync_sees_remote_conflicted(self):
-        doc1 = self.db1.create_doc(simple_doc)
+        doc1 = self.db1.create_doc_from_json(simple_doc)
         doc_id = doc1.doc_id
         doc1_rev = doc1.rev
         self.db1.create_index('test-idx', 'key')
         new_doc = '{"key": "altval"}'
-        doc2 = self.db2.create_doc(new_doc, doc_id=doc_id)
+        doc2 = self.db2.create_doc_from_json(new_doc, doc_id=doc_id)
         doc2_rev = doc2.rev
         self.assertTransactionLog([doc1.doc_id], self.db1)
         self.sync(self.db1, self.db2)
@@ -820,7 +820,7 @@ class DatabaseSyncTests(tests.DatabaseBaseTests,
         self.assertEqual([], self.db1.get_from_index('test-idx', 'value'))
 
     def test_sync_sees_remote_delete_conflicted(self):
-        doc1 = self.db1.create_doc(simple_doc)
+        doc1 = self.db1.create_doc_from_json(simple_doc)
         doc_id = doc1.doc_id
         self.db1.create_index('test-idx', 'key')
         self.sync(self.db1, self.db2)
@@ -844,7 +844,7 @@ class DatabaseSyncTests(tests.DatabaseBaseTests,
         self.assertEqual([], self.db1.get_from_index('test-idx', 'value'))
 
     def test_sync_local_race_conflicted(self):
-        doc = self.db1.create_doc(simple_doc)
+        doc = self.db1.create_doc_from_json(simple_doc)
         doc_id = doc.doc_id
         doc1_rev = doc.rev
         self.db1.create_index('test-idx', 'key')
@@ -871,7 +871,7 @@ class DatabaseSyncTests(tests.DatabaseBaseTests,
         self.assertEqual([], self.db1.get_from_index('test-idx', 'localval'))
 
     def test_sync_propagates_deletes(self):
-        doc1 = self.db1.create_doc(simple_doc)
+        doc1 = self.db1.create_doc_from_json(simple_doc)
         doc_id = doc1.doc_id
         self.db1.create_index('test-idx', 'key')
         self.sync(self.db1, self.db2)
@@ -902,7 +902,7 @@ class DatabaseSyncTests(tests.DatabaseBaseTests,
             self.db3, doc_id, deleted_rev, None, False)
 
     def test_sync_propagates_resolution(self):
-        doc1 = self.db1.create_doc('{"a": 1}', doc_id='the-doc')
+        doc1 = self.db1.create_doc_from_json('{"a": 1}', doc_id='the-doc')
         db3 = self.create_database('test3')
         self.sync(self.db2, self.db1)
         self.assertEqual(
@@ -940,9 +940,9 @@ class DatabaseSyncTests(tests.DatabaseBaseTests,
 
     def test_sync_supersedes_conflicts(self):
         db3 = self.create_database('test3')
-        doc1 = self.db1.create_doc('{"a": 1}', doc_id='the-doc')
-        self.db2.create_doc('{"b": 1}', doc_id='the-doc')
-        db3.create_doc('{"c": 1}', doc_id='the-doc')
+        doc1 = self.db1.create_doc_from_json('{"a": 1}', doc_id='the-doc')
+        self.db2.create_doc_from_json('{"b": 1}', doc_id='the-doc')
+        db3.create_doc_from_json('{"c": 1}', doc_id='the-doc')
         self.sync(db3, self.db1)
         self.assertEqual(
             self.db1._get_generation_info(),
@@ -965,7 +965,7 @@ class DatabaseSyncTests(tests.DatabaseBaseTests,
         self.assertEqual(3, len(db3.get_doc_conflicts('the-doc')))
 
     def test_sync_stops_after_get_sync_info(self):
-        self.db1.create_doc(tests.simple_doc)
+        self.db1.create_doc_from_json(tests.simple_doc)
         self.sync(self.db1, self.db2)
 
         def put_hook(state):
@@ -974,60 +974,60 @@ class DatabaseSyncTests(tests.DatabaseBaseTests,
         self.sync(self.db1, self.db2, trace_hook=put_hook)
 
     def test_sync_detects_rollback_in_source(self):
-        self.db1.create_doc(tests.simple_doc, doc_id='doc1')
+        self.db1.create_doc_from_json(tests.simple_doc, doc_id='doc1')
         self.sync(self.db1, self.db2)
         db1_copy = self.copy_database(self.db1)
-        self.db1.create_doc(tests.simple_doc, doc_id='doc2')
+        self.db1.create_doc_from_json(tests.simple_doc, doc_id='doc2')
         self.sync(self.db1, self.db2)
         self.assertRaises(
             errors.InvalidGeneration, self.sync, db1_copy, self.db2)
 
     def test_sync_detects_rollback_in_target(self):
-        self.db1.create_doc(tests.simple_doc, doc_id="divergent")
+        self.db1.create_doc_from_json(tests.simple_doc, doc_id="divergent")
         self.sync(self.db1, self.db2)
         db2_copy = self.copy_database(self.db2)
-        self.db2.create_doc(tests.simple_doc, doc_id='doc2')
+        self.db2.create_doc_from_json(tests.simple_doc, doc_id='doc2')
         self.sync(self.db1, self.db2)
         self.assertRaises(
             errors.InvalidGeneration, self.sync, self.db1, db2_copy)
 
     def test_sync_detects_diverged_source(self):
         db3 = self.copy_database(self.db1)
-        self.db1.create_doc(tests.simple_doc, doc_id="divergent")
-        db3.create_doc(tests.simple_doc, doc_id="divergent")
+        self.db1.create_doc_from_json(tests.simple_doc, doc_id="divergent")
+        db3.create_doc_from_json(tests.simple_doc, doc_id="divergent")
         self.sync(self.db1, self.db2)
         self.assertRaises(
             errors.InvalidTransactionId, self.sync, db3, self.db2)
 
     def test_sync_detects_diverged_target(self):
         db3 = self.copy_database(self.db2)
-        db3.create_doc(tests.nested_doc, doc_id="divergent")
-        self.db1.create_doc(tests.simple_doc, doc_id="divergent")
+        db3.create_doc_from_json(tests.nested_doc, doc_id="divergent")
+        self.db1.create_doc_from_json(tests.simple_doc, doc_id="divergent")
         self.sync(self.db1, self.db2)
         self.assertRaises(
             errors.InvalidTransactionId, self.sync, self.db1, db3)
 
     def test_sync_detects_rollback_and_divergence_in_source(self):
-        self.db1.create_doc(tests.simple_doc, doc_id='doc1')
+        self.db1.create_doc_from_json(tests.simple_doc, doc_id='doc1')
         self.sync(self.db1, self.db2)
         db1_copy = self.copy_database(self.db1)
-        self.db1.create_doc(tests.simple_doc, doc_id='doc2')
-        self.db1.create_doc(tests.simple_doc, doc_id='doc3')
+        self.db1.create_doc_from_json(tests.simple_doc, doc_id='doc2')
+        self.db1.create_doc_from_json(tests.simple_doc, doc_id='doc3')
         self.sync(self.db1, self.db2)
-        db1_copy.create_doc(tests.simple_doc, doc_id='doc2')
-        db1_copy.create_doc(tests.simple_doc, doc_id='doc3')
+        db1_copy.create_doc_from_json(tests.simple_doc, doc_id='doc2')
+        db1_copy.create_doc_from_json(tests.simple_doc, doc_id='doc3')
         self.assertRaises(
             errors.InvalidTransactionId, self.sync, db1_copy, self.db2)
 
     def test_sync_detects_rollback_and_divergence_in_target(self):
-        self.db1.create_doc(tests.simple_doc, doc_id="divergent")
+        self.db1.create_doc_from_json(tests.simple_doc, doc_id="divergent")
         self.sync(self.db1, self.db2)
         db2_copy = self.copy_database(self.db2)
-        self.db2.create_doc(tests.simple_doc, doc_id='doc2')
-        self.db2.create_doc(tests.simple_doc, doc_id='doc3')
+        self.db2.create_doc_from_json(tests.simple_doc, doc_id='doc2')
+        self.db2.create_doc_from_json(tests.simple_doc, doc_id='doc3')
         self.sync(self.db1, self.db2)
-        db2_copy.create_doc(tests.simple_doc, doc_id='doc2')
-        db2_copy.create_doc(tests.simple_doc, doc_id='doc3')
+        db2_copy.create_doc_from_json(tests.simple_doc, doc_id='doc2')
+        db2_copy.create_doc_from_json(tests.simple_doc, doc_id='doc3')
         self.assertRaises(
             errors.InvalidTransactionId, self.sync, self.db1, db2_copy)
 
@@ -1044,8 +1044,8 @@ class TestDbSync(tests.TestCaseWithServer):
         self.db2 = self.request_state._create_database('test2.db')
 
     def test_db_sync(self):
-        doc1 = self.db.create_doc(tests.simple_doc)
-        doc2 = self.db2.create_doc(tests.nested_doc)
+        doc1 = self.db.create_doc_from_json(tests.simple_doc)
+        doc2 = self.db2.create_doc_from_json(tests.nested_doc)
         db2_url = self.getURL('test2.db')
         self.db.sync(db2_url)
         self.assertGetDoc(self.db2, doc1.doc_id, doc1.rev, tests.simple_doc,
@@ -1066,10 +1066,10 @@ class TestRemoteSyncIntegration(tests.TestCaseWithServer):
         self.db2 = self.request_state._create_database('test2')
 
     def test_sync_tracks_generations_incrementally(self):
-        doc11 = self.db1.create_doc('{"a": 1}')
-        doc12 = self.db1.create_doc('{"a": 2}')
-        doc21 = self.db2.create_doc('{"b": 1}')
-        doc22 = self.db2.create_doc('{"b": 2}')
+        doc11 = self.db1.create_doc_from_json('{"a": 1}')
+        doc12 = self.db1.create_doc_from_json('{"a": 2}')
+        doc21 = self.db2.create_doc_from_json('{"b": 1}')
+        doc22 = self.db2.create_doc_from_json('{"b": 2}')
         #sanity
         self.assertEqual(2, len(self.db1._get_transaction_log()))
         self.assertEqual(2, len(self.db2._get_transaction_log()))

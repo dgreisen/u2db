@@ -70,8 +70,8 @@ cdef extern from "u1db/u1db.h":
     int u1db_set_replica_uid(u1database *, char *replica_uid)
     int u1db_set_document_size_limit(u1database *, int limit)
     int u1db_get_replica_uid(u1database *, const_char_ptr *replica_uid)
-    int u1db_create_doc(u1database *db, char *json, char *doc_id,
-                        u1db_document **doc)
+    int u1db_create_doc_from_json(u1database *db, char *json, char *doc_id,
+                                  u1db_document **doc)
     int u1db_delete_doc(u1database *db, u1db_document *doc)
     int u1db_get_doc(u1database *db, char *doc_id, int include_deleted,
                      u1db_document **doc)
@@ -966,7 +966,7 @@ cdef class CDatabase(object):
         finally:
             u1db__free_table(&tbl)
 
-    def create_doc(self, content, doc_id=None):
+    def create_doc_from_json(self, json, doc_id=None):
         cdef u1db_document *doc = NULL
         cdef char *c_doc_id
 
@@ -975,7 +975,7 @@ cdef class CDatabase(object):
         else:
             c_doc_id = doc_id
         handle_status('Failed to create_doc',
-            u1db_create_doc(self._db, content, c_doc_id, &doc))
+            u1db_create_doc_from_json(self._db, json, c_doc_id, &doc))
         pydoc = CDocument()
         pydoc._doc = doc
         return pydoc

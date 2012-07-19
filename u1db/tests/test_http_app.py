@@ -604,7 +604,7 @@ class TestHTTPApp(tests.TestCase):
         self.assertEqual({'rev': doc.rev}, simplejson.loads(resp.body))
 
     def test_put_doc(self):
-        doc = self.db0.create_doc('{"x": 1}', doc_id='doc1')
+        doc = self.db0.create_doc_from_json('{"x": 1}', doc_id='doc1')
         resp = self.app.put('/db0/doc/doc1?old_rev=%s' % doc.rev,
                             params='{"x": 2}',
                             headers={'content-type': 'application/json'})
@@ -616,7 +616,7 @@ class TestHTTPApp(tests.TestCase):
 
     def test_put_doc_too_large(self):
         self.http_app.max_request_size = 15000
-        doc = self.db0.create_doc('{"x": 1}', doc_id='doc1')
+        doc = self.db0.create_doc_from_json('{"x": 1}', doc_id='doc1')
         resp = self.app.put('/db0/doc/doc1?old_rev=%s' % doc.rev,
                             params='{"%s": 2}' % ('z' * 16000),
                             headers={'content-type': 'application/json'},
@@ -624,7 +624,7 @@ class TestHTTPApp(tests.TestCase):
         self.assertEqual(400, resp.status)
 
     def test_delete_doc(self):
-        doc = self.db0.create_doc('{"x": 1}', doc_id='doc1')
+        doc = self.db0.create_doc_from_json('{"x": 1}', doc_id='doc1')
         resp = self.app.delete('/db0/doc/doc1?old_rev=%s' % doc.rev)
         doc = self.db0.get_doc('doc1', include_deleted=True)
         self.assertEqual(None, doc.content)
@@ -633,7 +633,7 @@ class TestHTTPApp(tests.TestCase):
         self.assertEqual({'rev': doc.rev}, simplejson.loads(resp.body))
 
     def test_get_doc(self):
-        doc = self.db0.create_doc('{"x": 1}', doc_id='doc1')
+        doc = self.db0.create_doc_from_json('{"x": 1}', doc_id='doc1')
         resp = self.app.get('/db0/doc/%s' % doc.doc_id)
         self.assertEqual(200, resp.status)
         self.assertEqual('application/json', resp.header('content-type'))
@@ -651,7 +651,7 @@ class TestHTTPApp(tests.TestCase):
         self.assertEqual('false', resp.header('x-u1db-has-conflicts'))
 
     def test_get_doc_deleted(self):
-        doc = self.db0.create_doc('{"x": 1}', doc_id='doc1')
+        doc = self.db0.create_doc_from_json('{"x": 1}', doc_id='doc1')
         self.db0.delete_doc(doc)
         resp = self.app.get('/db0/doc/doc1', expect_errors=True)
         self.assertEqual(404, resp.status)
@@ -661,7 +661,7 @@ class TestHTTPApp(tests.TestCase):
             simplejson.loads(resp.body))
 
     def test_get_doc_deleted_explicit_exclude(self):
-        doc = self.db0.create_doc('{"x": 1}', doc_id='doc1')
+        doc = self.db0.create_doc_from_json('{"x": 1}', doc_id='doc1')
         self.db0.delete_doc(doc)
         resp = self.app.get(
             '/db0/doc/doc1?include_deleted=false', expect_errors=True)
@@ -672,7 +672,7 @@ class TestHTTPApp(tests.TestCase):
             simplejson.loads(resp.body))
 
     def test_get_deleted_doc(self):
-        doc = self.db0.create_doc('{"x": 1}', doc_id='doc1')
+        doc = self.db0.create_doc_from_json('{"x": 1}', doc_id='doc1')
         self.db0.delete_doc(doc)
         resp = self.app.get(
             '/db0/doc/doc1?include_deleted=true', expect_errors=True)
@@ -691,8 +691,8 @@ class TestHTTPApp(tests.TestCase):
                          simplejson.loads(resp.body))
 
     def test_get_docs(self):
-        doc1 = self.db0.create_doc('{"x": 1}', doc_id='doc1')
-        doc2 = self.db0.create_doc('{"x": 1}', doc_id='doc2')
+        doc1 = self.db0.create_doc_from_json('{"x": 1}', doc_id='doc1')
+        doc2 = self.db0.create_doc_from_json('{"x": 1}', doc_id='doc2')
         ids = ','.join([doc1.doc_id, doc2.doc_id])
         resp = self.app.get('/db0/docs?doc_ids=%s' % ids)
         self.assertEqual(200, resp.status)
@@ -706,8 +706,8 @@ class TestHTTPApp(tests.TestCase):
         self.assertEqual(expected, simplejson.loads(resp.body))
 
     def test_get_docs_percent(self):
-        doc1 = self.db0.create_doc('{"x": 1}', doc_id='doc%1')
-        doc2 = self.db0.create_doc('{"x": 1}', doc_id='doc2')
+        doc1 = self.db0.create_doc_from_json('{"x": 1}', doc_id='doc%1')
+        doc2 = self.db0.create_doc_from_json('{"x": 1}', doc_id='doc2')
         ids = ','.join([doc1.doc_id, doc2.doc_id])
         resp = self.app.get('/db0/docs?doc_ids=%s' % ids)
         self.assertEqual(200, resp.status)
@@ -721,8 +721,8 @@ class TestHTTPApp(tests.TestCase):
         self.assertEqual(expected, simplejson.loads(resp.body))
 
     def test_get_docs_deleted(self):
-        doc1 = self.db0.create_doc('{"x": 1}', doc_id='doc1')
-        doc2 = self.db0.create_doc('{"x": 1}', doc_id='doc2')
+        doc1 = self.db0.create_doc_from_json('{"x": 1}', doc_id='doc1')
+        doc2 = self.db0.create_doc_from_json('{"x": 1}', doc_id='doc2')
         self.db0.delete_doc(doc2)
         ids = ','.join([doc1.doc_id, doc2.doc_id])
         resp = self.app.get('/db0/docs?doc_ids=%s' % ids)
@@ -735,8 +735,8 @@ class TestHTTPApp(tests.TestCase):
         self.assertEqual(expected, simplejson.loads(resp.body))
 
     def test_get_docs_include_deleted(self):
-        doc1 = self.db0.create_doc('{"x": 1}', doc_id='doc1')
-        doc2 = self.db0.create_doc('{"x": 1}', doc_id='doc2')
+        doc1 = self.db0.create_doc_from_json('{"x": 1}', doc_id='doc1')
+        doc2 = self.db0.create_doc_from_json('{"x": 1}', doc_id='doc2')
         self.db0.delete_doc(doc2)
         ids = ','.join([doc1.doc_id, doc2.doc_id])
         resp = self.app.get('/db0/docs?doc_ids=%s&include_deleted=true' % ids)
@@ -841,8 +841,8 @@ class TestHTTPApp(tests.TestCase):
         self.assertEqual(400, resp.status)
 
     def test_sync_exchange_receive(self):
-        doc = self.db0.create_doc('{"value": "there"}')
-        doc2 = self.db0.create_doc('{"value": "there2"}')
+        doc = self.db0.create_doc_from_json('{"value": "there"}')
+        doc2 = self.db0.create_doc_from_json('{"value": "there2"}')
         args = dict(last_known_generation=0)
         body = "[\r\n%s\r\n]" % simplejson.dumps(args)
         resp = self.app.post('/db0/sync-from/replica',
@@ -920,7 +920,7 @@ class TestRequestHooks(tests.TestCase):
         self.http_app.request_begin = begin
         self.http_app.request_done = done
 
-        doc = self.db0.create_doc('{"x": 1}', doc_id='doc1')
+        doc = self.db0.create_doc_from_json('{"x": 1}', doc_id='doc1')
         self.app.get('/db0/doc/%s' % doc.doc_id)
 
         self.assertEqual(['begin', 'done'], calls)

@@ -136,11 +136,26 @@ class Database(object):
         If the database specifies a maximum document size and the document
         exceeds it, create will fail and raise a DocumentTooBig exception.
 
-        :param content: The JSON document string
+        :param content: A Python dictionary.
         :param doc_id: An optional identifier specifying the document id.
         :return: Document
         """
         raise NotImplementedError(self.create_doc)
+
+    def create_doc_from_json(self, json, doc_id=None):
+        """Create a new document.
+
+        You can optionally specify the document identifier, but the document
+        must not already exist. See 'put_doc' if you want to override an
+        existing document.
+        If the database specifies a maximum document size and the document
+        exceeds it, create will fail and raise a DocumentTooBig exception.
+
+        :param json: The JSON document string
+        :param doc_id: An optional identifier specifying the document id.
+        :return: Document
+        """
+        raise NotImplementedError(self.create_doc_from_json)
 
     def put_doc(self, doc):
         """Update a document.

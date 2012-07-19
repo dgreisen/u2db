@@ -309,8 +309,8 @@ handle_row(sqlite3_stmt *statement, u1db_row **row)
 }
 
 int
-u1db_create_doc(u1database *db, const char *json, const char *doc_id,
-                u1db_document **doc)
+u1db_create_doc_from_json(u1database *db, const char *json, const char *doc_id,
+                          u1db_document **doc)
 {
     char *local_doc_id = NULL;
     int status;

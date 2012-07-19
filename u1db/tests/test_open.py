@@ -54,7 +54,7 @@ class TestU1DBOpen(tests.TestCase):
     def test_open_existing(self):
         db = sqlite_backend.SQLitePartialExpandDatabase(self.db_path)
         self.addCleanup(db.close)
-        doc = db.create_doc(tests.simple_doc)
+        doc = db.create_doc_from_json(tests.simple_doc)
         # Even though create=True, we shouldn't wipe the db
         db2 = u1db_open(self.db_path, create=True)
         self.addCleanup(db2.close)
