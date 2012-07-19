@@ -17,7 +17,7 @@
 """U1DB"""
 
 import simplejson
-from u1db.errors import InvalidJSON
+from u1db.errors import InvalidJSON, InvalidContent
 
 __version_info__ = (0, 0, 2)
 __version__ = '.'.join(map(str, __version_info__))
@@ -556,6 +556,9 @@ class Document(DocumentBase):
     def _set_content(self, content):
         """Set the dictionary representing this document."""
         self._json = None
+        # XXX: this is too strict.
+        if not isinstance(content, dict):
+            raise InvalidContent("Must be a dictionary.")
         self._content = content
 
     content = property(
