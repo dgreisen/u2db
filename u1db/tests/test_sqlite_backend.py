@@ -187,7 +187,7 @@ class TestSQLitePartialExpandDatabase(tests.TestCase):
                          self.db.list_indexes())
 
     def test_no_indexes_no_document_fields(self):
-        self.db.create_doc(
+        self.db.create_doc_from_json(
             '{"key1": "val1", "key2": "val2"}')
         c = self.db._get_sqlite_handle().cursor()
         c.execute("SELECT doc_id, field_name, value FROM document_fields"
@@ -195,8 +195,8 @@ class TestSQLitePartialExpandDatabase(tests.TestCase):
         self.assertEqual([], c.fetchall())
 
     def test_create_extracts_fields(self):
-        doc1 = self.db.create_doc('{"key1": "val1", "key2": "val2"}')
-        doc2 = self.db.create_doc('{"key1": "valx", "key2": "valy"}')
+        doc1 = self.db.create_doc_from_json('{"key1": "val1", "key2": "val2"}')
+        doc2 = self.db.create_doc_from_json('{"key1": "valx", "key2": "valy"}')
         c = self.db._get_sqlite_handle().cursor()
         c.execute("SELECT doc_id, field_name, value FROM document_fields"
                   " ORDER BY doc_id, field_name, value")
@@ -213,7 +213,7 @@ class TestSQLitePartialExpandDatabase(tests.TestCase):
 
     def test_put_updates_fields(self):
         self.db.create_index('test', 'key1', 'key2')
-        doc1 = self.db.create_doc(
+        doc1 = self.db.create_doc_from_json(
             '{"key1": "val1", "key2": "val2"}')
         doc1.content = {"key1": "val1", "key2": "valy"}
         self.db.put_doc(doc1)
@@ -226,7 +226,7 @@ class TestSQLitePartialExpandDatabase(tests.TestCase):
 
     def test_put_updates_nested_fields(self):
         self.db.create_index('test', 'key', 'sub.doc')
-        doc1 = self.db.create_doc(nested_doc)
+        doc1 = self.db.create_doc_from_json(nested_doc)
         c = self.db._get_sqlite_handle().cursor()
         c.execute("SELECT doc_id, field_name, value FROM document_fields"
                   " ORDER BY doc_id, field_name, value")
@@ -380,7 +380,7 @@ class TestSQLitePartialExpandDatabase(tests.TestCase):
 
     def test_indexed_fields_expanded(self):
         self.db.create_index('idx1', 'key1')
-        doc1 = self.db.create_doc('{"key1": "val1", "key2": "val2"}')
+        doc1 = self.db.create_doc_from_json('{"key1": "val1", "key2": "val2"}')
         self.assertEqual(set(['key1']), self.db._get_indexed_fields())
         c = self.db._get_sqlite_handle().cursor()
         c.execute("SELECT doc_id, field_name, value FROM document_fields"
@@ -388,7 +388,7 @@ class TestSQLitePartialExpandDatabase(tests.TestCase):
         self.assertEqual([(doc1.doc_id, 'key1', 'val1')], c.fetchall())
 
     def test_create_index_updates_fields(self):
-        doc1 = self.db.create_doc('{"key1": "val1", "key2": "val2"}')
+        doc1 = self.db.create_doc_from_json('{"key1": "val1", "key2": "val2"}')
         self.db.create_index('idx1', 'key1')
         self.assertEqual(set(['key1']), self.db._get_indexed_fields())
         c = self.db._get_sqlite_handle().cursor()
