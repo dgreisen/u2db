@@ -35,6 +35,8 @@ Starting u1db
     {'name': 'Alan Hansen'}
     >>> doc.content = json.dumps({"name": "Alan Hansen", "position": "defence"}) # update the document's content
     >>> rev = db.put_doc(doc)
+    >>> doc_check = db.get_doc(doc.doc_id)
+    >>> doc_check.content
 
     >>> content = json.dumps({"name": "John Barnes", "position": "forward"}) # create more documents
     >>> doc2 = db.create_doc(content)
