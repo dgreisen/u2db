@@ -19,7 +19,7 @@
 import simplejson
 from u1db.errors import InvalidJSON
 
-__version_info__ = (0, 0, 1, 'dev', 0)
+__version_info__ = (0, 0, 2)
 __version__ = '.'.join(map(str, __version_info__))
 
 
