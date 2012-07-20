@@ -555,11 +555,18 @@ class Document(DocumentBase):
 
     def _set_content(self, content):
         """Set the dictionary representing this document."""
-        self._json = None
-        # XXX: this is too strict.
-        if not isinstance(content, dict):
-            raise InvalidContent("Must be a dictionary.")
-        self._content = content
+        try:
+            tmp = simplejson.dumps(content)
+        except TypeError:
+            raise InvalidContent(
+                "Can not be converted to JSON: %r" % (content,))
+        if not tmp.startswith('{'):
+            raise InvalidContent(
+                "Can not be converted to a JSON object: %r." % (content,))
+        # We might as well store the JSON at this point since we did the work
+        # of encoding it, and it doesn't lose any information.
+        self._json = tmp
+        self._content = None
 
     content = property(
         _get_content, _set_content, doc="Content of the Document.")
