@@ -78,9 +78,6 @@ def make_tree(expression):
 class Getter(object):
     """Get values from a document based on a specification."""
 
-    arity = 1
-    args = ['expr']
-
     def get(self, raw_doc):
         """Get a value from the document.
 
@@ -150,6 +147,8 @@ class Transformation(Getter):
     """A transformation on a value from another Getter."""
 
     name = None
+    arity = 1
+    args = ['expression']
 
     def __init__(self, inner):
         """Create a transformation.
@@ -205,7 +204,7 @@ class Number(Transformation):
 
     name = 'number'
     arity = 2
-    args = ['expr', int]
+    args = ['fieldname', int]
 
     def __init__(self, inner, number):
         super(Number, self).__init__(inner)
@@ -225,6 +224,7 @@ class Bool(Transformation):
     """Convert bool to string."""
 
     name = "bool"
+    args = ['fieldname']
 
     def _can_transform(self, val):
         return isinstance(val, bool)
@@ -305,8 +305,10 @@ class Parser(object):
             parsed = []
             for i, arg in enumerate(args):
                 arg_type = op.args[i % len(op.args)]
-                if arg_type == 'expr':
+                if arg_type == 'expression':
                     inner = self._inner_parse([arg])
+                elif arg_type == 'fieldname':
+                    inner = ExtractField(arg)
                 else:
                     try:
                         inner = arg_type(arg)
