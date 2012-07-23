@@ -24,33 +24,47 @@ from u1db import (
 trivial_raw_doc = {}
 
 
+class TestFieldName(tests.TestCase):
+
+    def test_check_fieldname_valid(self):
+        self.assertIsNone(query_parser.check_fieldname("foo", "expr", 0))
+
+    def test_check_fieldname_invalid(self):
+        self.assertRaises(
+            errors.IndexDefinitionParseError, query_parser.check_fieldname,
+            "foo.", "expr", 0)
+
+
 class TestMakeTree(tests.TestCase):
+
+    def setUp(self):
+        super(TestMakeTree, self).setUp()
+        self.parser = query_parser.Parser()
 
     def assertParseError(self, definition):
         self.assertRaises(
-            errors.IndexDefinitionParseError, query_parser.make_tree,
+            errors.IndexDefinitionParseError, self.parser.parse,
             definition)
 
     def test_single_field(self):
-        self.assertEqual(['f'], query_parser.make_tree('f'))
+        self.assertIsInstance(
+            self.parser.parse('f'), query_parser.ExtractField)
 
     def test_single_mapping(self):
-        query_parser.make_tree('mapping(field1)')
-        self.assertEqual(
-            ['mapping', ['field1']], query_parser.make_tree('mapping(field1)'))
-
-    def test_single_mapping_multiple_fields(self):
-        self.assertEqual(
-            ['mapping', ['field1', 'field2', 'field3']],
-            query_parser.make_tree('mapping(field1, field2, field3)'))
+        self.assertIsInstance(
+            self.parser.parse('bool(field1)'), query_parser.Bool)
 
     def test_nested_mapping(self):
-        self.assertEqual(
-            ['mapping1', ['mapping2', ['field1', 'field2'],
-                          'mapping3', ['field3', 'field4']]],
-            query_parser.make_tree(
-                'mapping1(mapping2(field1, field2), '
-                'mapping3(field3, field4))'))
+        self.assertIsInstance(
+            self.parser.parse('lower(split_words(field1))'),
+            query_parser.Lower)
+
+    def test_single_mapping_multiple_fields(self):
+        self.assertIsInstance(
+            self.parser.parse('number(field1, 5)'), query_parser.Number)
+
+    def test_unknown_mapping(self):
+        self.assertParseError('mapping(whatever)')
 
     def test_parse_missing_close_paren(self):
         self.assertParseError("lower(a")
@@ -60,6 +74,15 @@ class TestMakeTree(tests.TestCase):
 
     def test_parse_empty_op(self):
         self.assertParseError("(ab)")
+
+    def test_parse_top_level_commas(self):
+        self.assertParseError("a, b")
+
+    def test_invalid_field_name(self):
+        self.assertParseError("a.")
+
+    def test_invalid_inner_field_name(self):
+        self.assertParseError("lower(a.)")
 
 
 class TestStaticGetter(tests.TestCase):

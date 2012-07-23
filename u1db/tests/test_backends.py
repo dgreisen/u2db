@@ -1549,9 +1549,12 @@ class DatabaseIndexTests(tests.DatabaseBaseTests):
 
     def test_get_from_index_with_number(self):
         self.db.create_index("index", "number(foo, 5)")
+        print "index created"
         content = '{"foo": 12}'
         doc = self.db.create_doc(content)
+        print "document created"
         rows = self.db.get_from_index("index", "00012")
+        print "document retrieved"
         self.assertEqual([doc], rows)
 
     def test_get_from_index_with_number_bigger_than_padding(self):
