@@ -27,6 +27,9 @@
 #define IS_GLOB 1
 #define ENDS_IN_GLOB 2
 
+#define EXPRESSION 1
+#define INTEGER 2
+
 #define OPS (sizeof(OPERATIONS) / sizeof (struct operation))
 #define MAX_INT_STR_LEN 21
 #ifndef max
@@ -49,25 +52,18 @@ typedef struct string_list_
 typedef struct parse_tree_
 {
     char *data;
+    string_list *field_path;
+    int arg_type;
     void *op;
     int arity;
+    int number_of_children;
     struct parse_tree_ *first_child;
     struct parse_tree_ *last_child;
     struct parse_tree_ *next_sibling;
-    const char **value_types;
+    const int *value_types;
 } parse_tree;
 
-typedef struct transformation_
-{
-    void *op;
-    struct transformation_ *next;
-    string_list *args;
-    int value_type;
-} transformation;
-
-typedef int(*op_function)(string_list *, const string_list *,
-                          const string_list *);
-
+typedef int(*op_function)(parse_tree *, json_object *, string_list *);
 
 static int
 init_list(string_list **list)
@@ -78,31 +74,54 @@ init_list(string_list **list)
     return U1DB_OK;
 }
 
-static int
-init_parse_tree(parse_tree **result)
+static void
+destroy_list(string_list *list)
 {
-    *result = (parse_tree *)calloc(1, sizeof(parse_tree));
-    if (*result == NULL)
-        return U1DB_NOMEM;
-    return U1DB_OK;
+    string_list_item *item = NULL;
+    string_list_item *previous = NULL;
+    if (list == NULL)
+        return;
+    item = list->head;
+    while (item != NULL)
+    {
+        previous = item;
+        item = item->next;
+        if (previous->data != NULL)
+            free(previous->data);
+        free(previous);
+    }
+    list->head = NULL;
+    list->tail = NULL;
+    free(list);
+    list = NULL;
 }
 
 static int
-append_child(parse_tree *t, const char *data)
+init_parse_tree(parse_tree **result)
+{
+    int status = U1DB_OK;
+    *result = (parse_tree *)calloc(1, sizeof(parse_tree));
+    if (*result == NULL)
+        return U1DB_NOMEM;
+    (*result)->number_of_children = 0;
+    status = init_list(&(*result)->field_path);
+    return status;
+}
+
+static int
+append_child(parse_tree *t)
 {
     int status = U1DB_OK;
     parse_tree *subtree = NULL;
     status = init_parse_tree(&subtree);
     if (status != U1DB_OK)
         return status;
-    subtree->data = strdup(data);
-    if (subtree->data == NULL)
-        return U1DB_NOMEM;
     if (t->first_child == NULL)
         t->first_child = subtree;
     if (t->last_child != NULL)
         t->last_child->next_sibling = subtree;
     t->last_child = subtree;
+    (t->number_of_children)++;
     return status;
 }
 
@@ -111,6 +130,9 @@ destroy_parse_tree(parse_tree *t)
 {
     parse_tree *subtree = NULL;
     parse_tree *previous = NULL;
+
+    if (t->field_path != NULL)
+        destroy_list(t->field_path);
     if (t == NULL)
         return;
     if (t->data != NULL)
@@ -148,28 +170,6 @@ append(string_list *list, const char *data)
 }
 
 static void
-destroy_list(string_list *list)
-{
-    string_list_item *item = NULL;
-    string_list_item *previous = NULL;
-    if (list == NULL)
-        return;
-    item = list->head;
-    while (item != NULL)
-    {
-        previous = item;
-        item = item->next;
-        if (previous->data != NULL)
-            free(previous->data);
-        free(previous);
-    }
-    list->head = NULL;
-    list->tail = NULL;
-    free(list);
-    list = NULL;
-}
-
-static void
 print_list(string_list *list)
 {
     string_list_item *item = NULL;
@@ -179,17 +179,14 @@ print_list(string_list *list)
     printf("]\n");
 }
 
-static int op_lower(string_list *result, const string_list *value,
-                    const string_list *args);
-static int op_number(string_list *result, const string_list *value,
-                     const string_list *args);
-static int op_split_words(string_list *result, const string_list *value,
-                          const string_list *args);
-static int op_bool(string_list *result, const string_list *value,
-                   const string_list *args);
+static int op_lower(parse_tree *tree, json_object *obj, string_list *result);
+static int op_number(parse_tree *tree, json_object *obj, string_list *result);
+static int op_split_words(
+    parse_tree *tree, json_object *obj, string_list *result);
+static int op_bool(parse_tree *tree, json_object *obj, string_list *result);
 
-static const char *EXPRESSION[1] = {"expression"};
-static const char *EXPRESSION_INT[2] = {"expression", "int"};
+static const int JUST_EXPRESSION[1] = {EXPRESSION};
+static const int EXPRESSION_INTEGER[2] = {EXPRESSION, INTEGER};
 
 struct operation
 {
@@ -197,12 +194,12 @@ struct operation
     char *name;
     int value_type;
     int arity;
-    const char **value_types;
+    const int *value_types;
 } OPERATIONS[] = {
-    op_lower, "lower", json_type_string, 1, EXPRESSION,
-    op_number, "number", json_type_int, 2, EXPRESSION_INT,
-    op_split_words, "split_words", json_type_string, 1, EXPRESSION,
-    op_bool, "bool", json_type_boolean, 1, EXPRESSION};
+    op_lower, "lower", json_type_string, 1, JUST_EXPRESSION,
+    op_number, "number", json_type_int, 2, EXPRESSION_INTEGER,
+    op_split_words, "split_words", json_type_string, 1, JUST_EXPRESSION,
+    op_bool, "bool", json_type_boolean, 1, JUST_EXPRESSION};
 
 static void
 print_tree(parse_tree *tree)
@@ -216,32 +213,8 @@ print_tree(parse_tree *tree)
 }
 
 static int
-init_transformation(transformation **tr)
-{
-    int status = U1DB_OK;
-    *tr = (transformation *)calloc(1, sizeof(transformation));
-    if (*tr == NULL)
-        return U1DB_NOMEM;
-    status = init_list(&((*tr)->args));
-    if (status != U1DB_OK)
-        return status;
-    return status;
-}
-
-static void
-destroy_transformation(transformation *tr)
-{
-    if (tr == NULL)
-        return;
-    if (tr->next != NULL)
-        destroy_transformation(tr->next);
-    destroy_list(tr->args);
-    free(tr);
-}
-
-static int
-extract_field_values(string_list *values, json_object *obj,
-                     const string_list *field_path, int value_type)
+extract_field_values(json_object *obj, const string_list *field_path,
+                     int value_type, string_list *values)
 {
     string_list_item *item = NULL;
     char string_value[MAX_INT_STR_LEN];
@@ -297,32 +270,6 @@ finish:
     return status;
 }
 
-
-static int
-apply_transformation(transformation *tr, json_object *obj, string_list *result)
-{
-    int status = U1DB_OK;
-    string_list *tmp_values = NULL;
-    if (tr->next != NULL)
-    {
-        init_list(&tmp_values);
-        status = apply_transformation(tr->next, obj, tmp_values);
-        if (status != U1DB_OK)
-            goto finish;
-        if (tr->args->head != NULL)
-        {
-            status = ((op_function)tr->op)(result, tmp_values, tr->args);
-        } else {
-            status = ((op_function)tr->op)(result, tmp_values, NULL);
-        }
-    } else {
-        status = extract_field_values(result, obj, tr->args, tr->value_type);
-    }
-finish:
-    destroy_list(tmp_values);
-    return status;
-}
-
 static int
 split(string_list *result, char *string, char splitter)
 {
@@ -360,14 +307,35 @@ list_index(string_list *list, char *data)
 }
 
 static int
-op_lower(string_list *result, const string_list *values,
-         const string_list *args)
+get_values(parse_tree *tree, json_object *obj, string_list *values)
 {
+    int status = U1DB_OK;
+    if (tree->op) {
+        status = ((op_function)tree->op)(tree, obj, values);
+    } else {
+        status = extract_field_values(
+            obj, tree->field_path, json_type_string, values);
+        if (status != U1DB_OK)
+            return status;
+    }
+    return status;
+}
+
+static int
+op_lower(parse_tree *tree, json_object *obj, string_list *result)
+{
+    string_list *values = NULL;
     string_list_item *item = NULL;
     char *new_value, *value = NULL;
     int i;
     int status = U1DB_OK;
 
+    status = init_list(&values);
+    if (status != U1DB_OK)
+        return status;
+    status = get_values(tree->first_child, obj, values);
+    if (status != U1DB_OK)
+        goto finish;
     for (item = values->head; item != NULL; item = item->next)
     {
         value = item->data;
@@ -390,19 +358,31 @@ op_lower(string_list *result, const string_list *values,
         }
         free(new_value);
     }
+finish:
+    if (values != NULL)
+        destroy_list(values);
     return status;
 }
 
 static int
-op_number(string_list *result, const string_list *values,
-          const string_list *args)
+op_number(parse_tree *tree, json_object *obj, string_list *result)
 {
+    string_list *values = NULL;
     string_list_item *item = NULL;
     char *p, *new_value, *value, *number = NULL;
+    parse_tree *node = NULL;
     int count, zeroes, value_size, isnumber;
     int status = U1DB_OK;
 
-    number = args->head->data;
+    node = tree->first_child;
+    status = init_list(&values);
+    if (status != U1DB_OK)
+        return status;
+    status = get_values(node, obj, values);
+    if (status != U1DB_OK)
+        goto finish;
+    node = node->next_sibling;
+    number = node->data;
     for (p = number; *p; p++) {
         if (isdigit(*p) == 0) {
             status = U1DB_INVALID_VALUE_FOR_INDEX;
@@ -410,7 +390,6 @@ op_number(string_list *result, const string_list *values,
         }
     }
     zeroes = atoi(number);
-
     for (item = values->head; item != NULL; item = item->next)
     {
         value = item->data;
@@ -445,17 +424,26 @@ op_number(string_list *result, const string_list *values,
         free(new_value);
     }
 finish:
+    if (values != NULL)
+        destroy_list(values);
     return status;
 }
 
 static int
-op_split_words(string_list *result, const string_list *values,
-               const string_list *args)
+op_split_words(parse_tree *tree, json_object *obj, string_list *result)
 {
     string_list_item *item = NULL;
+    string_list *values = NULL;
     char *intermediate, *intermediate_ptr = NULL;
     char *space_chr = NULL;
     int status = U1DB_OK;
+
+    status = init_list(&values);
+    if (status != U1DB_OK)
+        return status;
+    status = get_values(tree->first_child, obj, values);
+    if (status != U1DB_OK)
+        goto finish;
     for (item = values->head; item != NULL; item = item->next)
     {
         intermediate = strdup(item->data);
@@ -479,16 +467,25 @@ op_split_words(string_list *result, const string_list *values,
         }
         free(intermediate);
     }
+finish:
+    if (values != NULL)
+        destroy_list(values);
     return status;
 }
 
 static int
-op_bool(string_list *result, const string_list *values,
-         const string_list *args)
+op_bool(parse_tree *tree, json_object *obj, string_list *result)
 {
     string_list_item *item = NULL;
+    string_list *values = NULL;
     int status = U1DB_OK;
 
+    status = init_list(&values);
+    if (status != U1DB_OK)
+        return status;
+    status = get_values(tree->first_child, obj, values);
+    if (status != U1DB_OK)
+        goto finish;
     //just return all the strings which have been filtered and converted from
     //booleans by extract_field_values.
 
@@ -499,6 +496,9 @@ op_bool(string_list *result, const string_list *values,
             return status;
         }
     }
+finish:
+    if (values != NULL)
+        destroy_list(values);
     return status;
 }
 
@@ -1171,8 +1171,30 @@ u1db__format_index_keys_query(int n_fields, char **buf)
 
 struct sqlcb_to_field_cb {
     void *user_context;
-    int (*user_cb)(void *, const char*, transformation *tr);
+    int (*user_cb)(void *, const char*, parse_tree *tree);
 };
+
+static int
+check_fieldname(const char *fieldname)
+{
+    if (fieldname[strlen(fieldname) - 1] == '.')
+        return U1DB_INVALID_FIELD_SPECIFIER;
+    return U1DB_OK;
+}
+
+static int
+set_data(parse_tree *tree, const char *expression, int size)
+{
+    char *word = NULL;
+    word = (char *)calloc(size + 1, 1);
+    if (word == NULL) {
+        return U1DB_NOMEM;
+    }
+    strncpy(word, expression, size);
+    word[size] = '\0';
+    tree->data = word;
+    return U1DB_OK;
+}
 
 static int
 make_tree(const char *expression, int *idx, int *start, int *open_parens,
@@ -1180,9 +1202,11 @@ make_tree(const char *expression, int *idx, int *start, int *open_parens,
 {
     int status = U1DB_OK;
     int size, i;
-    char *word = NULL;
+    char *op_name = NULL;
+    const char *arg_type = NULL;
     char c;
     parse_tree *subtree = NULL;
+    parse_tree *node = NULL;
 
     while (*idx < strlen(expression))
     {
@@ -1191,17 +1215,20 @@ make_tree(const char *expression, int *idx, int *start, int *open_parens,
             (*open_parens)++;
             size = *idx - *start;
             if (size) {
-                word = (char *)calloc(size + 1, 1);
-                if (word == NULL) {
+                op_name = (char *)calloc(size + 1, 1);
+                if (op_name == NULL) {
                     status = U1DB_NOMEM;
                     goto finish;
                 }
-                strncpy(word, expression + *start, size);
-                word[size] = '\0';
+                strncpy(op_name, expression + *start, size);
+                op_name[size] = '\0';
+                append_child(result);
+                if (status != U1DB_OK)
+                    goto finish;
+                subtree = result->last_child;
                 for (i = 0; i < OPS; i++) {
-                    if (strcmp(OPERATIONS[i].name, word) == 0)
+                    if (strcmp(OPERATIONS[i].name, op_name) == 0)
                     {
-                        status = init_parse_tree(&subtree);
                         if (status != U1DB_OK)
                             goto finish;
                         subtree->op = OPERATIONS[i].function;
@@ -1210,8 +1237,8 @@ make_tree(const char *expression, int *idx, int *start, int *open_parens,
                         break;
                     }
                 }
-                free(word);
-                if (subtree == NULL) {
+                free(op_name);
+                if (subtree->op == NULL) {
                     status = U1DB_UNKNOWN_OPERATION;
                     goto finish;
                 }
@@ -1229,24 +1256,20 @@ make_tree(const char *expression, int *idx, int *start, int *open_parens,
                 i = 0;
                 for (node = subtree->first_child; node != NULL;
                      node = node->next_sibling) {
-                    arg_type = subtree->value_types[
+                    node->arg_type = subtree->value_types[
                         i % subtree->number_of_children];
-                    if (arg_type == "expression") {
+                    if (node->arg_type == EXPRESSION) {
                         if (node->op == NULL) {
                             status = check_fieldname(node->data);
                             if (status != U1DB_OK)
                                 goto finish;
-                            node->get_value = extract_field;
+                            status = split(node->field_path, node->data, '.');
+                            if (status != U1DB_OK)
+                                goto finish;
                         }
-                    } else {
-                        node->get_value = get_value_getter(arg_type);
                     }
                     i++;
                 }
-                status = append_child(tree, subtree);
-                if (status != U1DB_OK)
-                    goto finish;
-                subtree = NULL;
             }
         } else if (c == ')') {
             (*open_parens)--;
@@ -1256,21 +1279,13 @@ make_tree(const char *expression, int *idx, int *start, int *open_parens,
             }
             size = *idx - *start;
             if (size) {
-                word = (char *)calloc(size + 1, 1);
-                if (word == NULL) {
-                    status = U1DB_NOMEM;
-                    goto finish;
-                }
-                strncpy(word, expression + *start, size);
-                word[size] = '\0';
-                status = init_parse_tree(&subtree);
+                append_child(result);
                 if (status != U1DB_OK)
                     goto finish;
-                set_data(subtree, word);
-                status = append_child(result, subtree);
+                subtree = result->last_child;
+                status = set_data(subtree, expression + *start, size);
                 if (status != U1DB_OK)
                     goto finish;
-                subtree = NULL;
             }
             (*idx)++;
             *start = *idx;
@@ -1282,24 +1297,14 @@ make_tree(const char *expression, int *idx, int *start, int *open_parens,
             }
             size = *idx - *start;
             if (size) {
-                word = (char *)calloc(size + 1, 1);
-                if (word == NULL) {
-                    status = U1DB_NOMEM;
-                    goto finish;
-                }
-                strncpy(word, expression + *start, size);
-                word[size] = '\0';
-                status = init_parse_tree(&subtree);
+                append_child(result);
                 if (status != U1DB_OK)
                     goto finish;
-                set_data(subtree, word);
-                status = append_child(result, subtree);
+                subtree = result->last_child;
+                status = set_data(subtree, expression + *start, size);
                 if (status != U1DB_OK)
                     goto finish;
-                subtree = NULL;
             }
-            if (status != U1DB_OK)
-                goto finish;
             (*idx)++;
             *start = *idx;
         } else {
@@ -1309,108 +1314,40 @@ make_tree(const char *expression, int *idx, int *start, int *open_parens,
     if (*start < strlen(expression)) {
         size = strlen(expression) - *start;
         if (size) {
-            word = (char *)calloc(size + 1, 1);
-            if (word == NULL)
-                return U1DB_NOMEM;
-            strncpy(word, expression + *start, size);
-            word[size] = '\0';
-            status = init_parse_tree(&subtree);
+            append_child(result);
             if (status != U1DB_OK)
                 goto finish;
-            set_data(subtree, word);
-            status = append_child(result, subtree);
+            subtree = result->last_child;
+            status = set_data(subtree, expression + *start, size);
+            status = check_fieldname(subtree->data);
+            if (status != U1DB_OK)
+                goto finish;
         }
     }
+
 finish:
     if (status == U1DB_OK)
         return status;
-    if (word != NULL)
-        free(word);
-    if (subtree != NULL)
-        destroy_parse_tree(subtree);
+    if (op_name != NULL)
+        free(op_name);
     if (result != NULL)
         destroy_parse_tree(result);
     return status;
 }
 
 static int
-inner_parse(parse_tree *tree, transformation *result, int value_type)
-{
-    parse_tree *subtree = NULL;
-    transformation *inner = NULL;
-    transformation *last = NULL;
-    int status = U1DB_OK;
-    int i, size;
-    int new_value_type = json_type_string;
-
-    last = result;
-    subtree = tree;
-    if (subtree->first_child != NULL) {
-        for (i = 0; i < OPS; i++) {
-            if (strcmp(OPERATIONS[i].name, subtree->data) == 0)
-            {
-                last->op = OPERATIONS[i].function;
-                last->value_type = value_type;
-                new_value_type = OPERATIONS[i].value_type;
-                break;
-            }
-        }
-        if (last->op == NULL) {
-            return U1DB_UNKNOWN_OPERATION;
-        }
-        subtree = subtree->first_child;
-        while (subtree != NULL) {
-            status = init_transformation(&inner);
-            if (status != U1DB_OK)
-                return status;
-            status = inner_parse(subtree, inner, new_value_type);
-            if (status != U1DB_OK)
-            {
-                // free the memory if the parsing fails. Otherwise, inner will
-                // be cleaned up when the outer transformation (result) is
-                // destroyed.
-                destroy_transformation(inner);
-                return status;
-            }
-            last->next = inner;
-            last = inner;
-            subtree = subtree->next_sibling;
-        }
-    } else {
-        if (subtree->data == NULL || strlen(subtree->data) == 0) {
-            return U1DB_MISSING_FIELD_SPECIFIER;
-        }
-        if (subtree->data[strlen(subtree->data) - 1] == '.') {
-            return U1DB_INVALID_FIELD_SPECIFIER;
-        }
-        last->value_type = value_type;
-        status = split(last->args, subtree->data, '.');
-    }
-    return status;
-}
-
-static int
-parse(const char *field, transformation *result, int value_type)
+parse(const char *expression, parse_tree *result)
 {
     int status = U1DB_OK;
     int idx = 0;
     int start = 0;
     int open_parens = 0;
-    parse_tree *tree = NULL;
 
-    status = init_parse_tree(&tree);
+    status = make_tree(expression, &idx, &start, &open_parens, result);
     if (status != U1DB_OK)
-        goto finish;
-    status = make_tree(field, &idx, &start, &open_parens, tree);
-    if (status != U1DB_OK)
-        goto finish;
+        return status;
     if (open_parens != 0)
         return U1DB_INVALID_TRANSFORMATION_FUNCTION;
-    status = inner_parse(tree->first_child, result, value_type);
-    printf("inner parsed\n");
-finish:
-    if (tree != NULL)
-        destroy_parse_tree(tree);
     return status;
 }
 
@@ -1419,7 +1356,7 @@ static int
 sqlite_cb_to_field_cb(void *context, int n_cols, char **cols, char **rows)
 {
     struct sqlcb_to_field_cb *ctx = NULL;
-    transformation *tr = NULL;
+    parse_tree *tree = NULL;
     char *expression = NULL;
     int status = U1DB_OK;
     ctx = (struct sqlcb_to_field_cb*)context;
@@ -1427,15 +1364,15 @@ sqlite_cb_to_field_cb(void *context, int n_cols, char **cols, char **rows)
         return 1; // Error
     }
     expression = cols[0];
-    status = init_transformation(&tr);
+    status = init_parse_tree(&tree);
     if (status != U1DB_OK)
         goto finish;
-    status = parse(expression, tr, json_type_string);
+    status = parse(expression, tree);
     if (status != U1DB_OK)
         goto finish;
-    status = ctx->user_cb(ctx->user_context, expression, tr);
+    status = ctx->user_cb(ctx->user_context, expression, tree);
 finish:
-    destroy_transformation(tr);
+    destroy_parse_tree(tree);
     return status;
 }
 
@@ -1444,7 +1381,7 @@ finish:
 static int
 iter_field_definitions(u1database *db, void *context,
                       int (*cb)(void *context, const char *expression,
-                                transformation *tr))
+                                parse_tree *tree))
 {
     int status;
     struct sqlcb_to_field_cb ctx;
@@ -1495,7 +1432,7 @@ finish:
 
 static int
 evaluate_index_and_insert_into_db(void *context, const char *expression,
-                                  transformation *tr)
+                                  parse_tree *tree)
 {
     struct evaluate_index_context *ctx;
     string_list *values = NULL;
@@ -1512,7 +1449,9 @@ evaluate_index_and_insert_into_db(void *context, const char *expression,
         goto finish;
     if ((status = init_list(&values)) != U1DB_OK)
         goto finish;
-    status = apply_transformation(tr, ctx->obj, values);
+    status = get_values(tree, ctx->obj, values);
+    if (status != U1DB_OK)
+        goto finish;
     for (item = values->head; item != NULL; item = item->next)
     {
         if ((status = add_to_document_fields(ctx->db, ctx->doc_id, expression,
@@ -1624,12 +1563,12 @@ u1db__index_all_docs(u1database *db, int n_expressions,
     int status, i;
     sqlite3_stmt *statement = NULL;
     struct evaluate_index_context context = {0};
-    transformation **transformations;
+    parse_tree **trees;
 
-    transformations = (transformation**)calloc(n_expressions, sizeof(transformation*));
+    trees = (parse_tree**)calloc(n_expressions, sizeof(parse_tree*));
     for (i = 0; i < n_expressions; ++i) {
-        init_transformation(&transformations[i]);
-        status = parse(expressions[i], transformations[i], json_type_string);
+        init_parse_tree(&trees[i]);
+        status = parse(expressions[i], trees[i]);
         if (status != U1DB_OK)
             goto finish;
     }
@@ -1664,8 +1603,8 @@ u1db__index_all_docs(u1database *db, int n_expressions,
             continue;
         }
         for (i = 0; i < n_expressions; ++i) {
-            status = evaluate_index_and_insert_into_db(&context,
-                    expressions[i], transformations[i]);
+            status = evaluate_index_and_insert_into_db(
+                &context, expressions[i], trees[i]);
             if (status != U1DB_OK)
                 goto finish;
         }
@@ -1676,8 +1615,8 @@ u1db__index_all_docs(u1database *db, int n_expressions,
     }
 finish:
     for (i = 0; i < n_expressions; ++i)
-        destroy_transformation(transformations[i]);
-    free(transformations);
+        destroy_parse_tree(trees[i]);
+    free(trees);
     if (context.obj != NULL) {
         json_object_put(context.obj);
         context.obj = NULL;
