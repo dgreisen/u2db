@@ -727,8 +727,6 @@ cdef class CSyncTarget(object):
         if st_trans_id != NULL:
             res_st_trans_id = st_trans_id
             free(st_trans_id)
-        if c_source_replica_uid != NULL:
-            free(c_source_replica_uid)
         return (
             safe_str(st_replica_uid), st_gen, res_st_trans_id, source_gen,
             res_trans_id)
@@ -745,12 +743,9 @@ cdef class CSyncTarget(object):
         c_source_gen = source_gen
         c_source_trans_id = source_trans_id
         with nogil:
-            status = self._st.record_sync_info(self._st, source_replica_uid,
-                                               source_gen, source_trans_id)
-        if c_source_replica_uid != NULL:
-            free(c_source_replica_uid);
-        if c_source_trans_id != NULL:
-            free(c_source_trans_id);
+            status = self._st.record_sync_info(
+                self._st, c_source_replica_uid, c_source_gen,
+                c_source_trans_id)
         handle_status("record_sync_info", status)
 
     def _get_sync_exchange(self, source_replica_uid, source_gen):
@@ -849,8 +844,6 @@ cdef class CSyncTarget(object):
                     self._st, c_source_replica_uid, count, docs, generations,
                     trans_ids, &target_gen, &target_trans_id,
                     <void *>return_doc_cb, return_doc_cb_wrapper)
-            if c_source_replica_uid != NULL:
-                free(c_source_replica_uid)
             handle_status("sync_exchange", status)
         finally:
             if docs != NULL:
