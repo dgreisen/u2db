@@ -17,7 +17,7 @@
 """U1DB"""
 
 import simplejson
-from u1db.errors import InvalidJSON
+from u1db.errors import InvalidJSON, InvalidContent
 
 __version_info__ = (0, 0, 2)
 __version__ = '.'.join(map(str, __version_info__))
@@ -555,8 +555,18 @@ class Document(DocumentBase):
 
     def _set_content(self, content):
         """Set the dictionary representing this document."""
-        self._json = None
-        self._content = content
+        try:
+            tmp = simplejson.dumps(content)
+        except TypeError:
+            raise InvalidContent(
+                "Can not be converted to JSON: %r" % (content,))
+        if not tmp.startswith('{'):
+            raise InvalidContent(
+                "Can not be converted to a JSON object: %r." % (content,))
+        # We might as well store the JSON at this point since we did the work
+        # of encoding it, and it doesn't lose any information.
+        self._json = tmp
+        self._content = None
 
     content = property(
         _get_content, _set_content, doc="Content of the Document.")

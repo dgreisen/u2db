@@ -26,14 +26,14 @@ Starting u1db
 
 .. doctest ::
 
-    >>> import u1db, json, tempfile
+    >>> import u1db, tempfile
     >>> db = u1db.open(":memory:", create=True)
 
     >>> content = {"name": "Alan Hansen"} # create a document
     >>> doc = db.create_doc(content)
     >>> doc.content
     {'name': 'Alan Hansen'}
-    >>> doc.content = json.dumps({"name": "Alan Hansen", "position": "defence"}) # update the document's content
+    >>> doc.content = {"name": "Alan Hansen", "position": "defence"} # update the document's content
     >>> rev = db.put_doc(doc)
 
     >>> content = {"name": "John Barnes", "position": "forward"} # create more documents
