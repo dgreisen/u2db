@@ -459,11 +459,11 @@ write_doc(u1database *db, const char *doc_id, const char *doc_rev,
         status = SQLITE_OK;
     }
     if (status != SQLITE_OK) { goto finish; }
-    sqlite3_finalize(statement);
     status = u1db__update_indexes(db, doc_id, content);
     if (status != U1DB_OK) { goto finish; }
     status = generate_transaction_id(transaction_id);
     if (status != U1DB_OK) { goto finish; }
+    sqlite3_finalize(statement);
     status = sqlite3_prepare_v2(db->sql_handle,
         "INSERT INTO transaction_log(doc_id, transaction_id) VALUES (?, ?)",
         -1, &statement, NULL);
