@@ -71,9 +71,13 @@ class ExtractField(Getter):
         self.field = field
 
     def get(self, raw_doc):
-        for subfield in self.field.split('.'):
+        subfields = self.field.split('.')
+        while subfields:
+            subfield = subfields.pop(0)
             if isinstance(raw_doc, dict):
                 raw_doc = raw_doc.get(subfield)
+            elif isinstance(raw_doc, list):
+                raw_doc = [r.get(subfield) for r in raw_doc]
             else:
                 return []
         if isinstance(raw_doc, dict):
