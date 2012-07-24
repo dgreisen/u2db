@@ -44,6 +44,11 @@ add_custom_target(doctests
     COMMAND cd html-docs && make doctest && cd ..
 )
 
+add_custom_target(check-nodoc
+    COMMAND python -m testtools.run discover
+    DEPENDS build-inplace
+)
+
 add_custom_target(check
     COMMAND python -m testtools.run discover
     DEPENDS build-inplace doctests

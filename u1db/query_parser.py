@@ -93,12 +93,13 @@ class Transformation(Getter):
     """A transformation on a value from another Getter."""
 
     name = None
-    """The name that the transform has in a query string."""
+    arity = 1
+    args = ['expression']
 
     def __init__(self, inner):
         """Create a transformation.
 
-        :param inner: the Getter to transform the value for.
+        :param inner: the argument(s) to the transformation.
         """
         self.inner = inner
 
@@ -148,6 +149,8 @@ class Number(Transformation):
     """
 
     name = 'number'
+    arity = 2
+    args = ['expression', int]
 
     def __init__(self, inner, number):
         super(Number, self).__init__(inner)
@@ -167,6 +170,7 @@ class Bool(Transformation):
     """Convert bool to string."""
 
     name = "bool"
+    args = ['expression']
 
     def _can_transform(self, val):
         return isinstance(val, bool)
@@ -194,15 +198,12 @@ class SplitWords(Transformation):
     def transform(self, values):
         if not values:
             return []
-        result = []
+        result = set()
         for value in values:
             if self._can_transform(value):
-                # TODO: This is quadratic to search the list linearly while we
-                #       are appending to it. Consider using a set() instead.
                 for word in value.split():
-                    if word not in result:
-                        result.append(word)
-        return result
+                    result.add(word)
+        return list(result)
 
 
 class IsNull(Transformation):
@@ -217,57 +218,98 @@ class IsNull(Transformation):
         return [len(values) == 0]
 
 
+def check_fieldname(fieldname, expression, idx):
+    if fieldname.endswith('.'):
+        raise errors.IndexDefinitionParseError(
+            "Fieldname cannot end in '.':\n%s\n%s^" %
+            (expression, " " * idx))
+
+
 class Parser(object):
     """Parse an index expression into a sequence of transformations."""
 
     _transformations = {}
     _delimiters = '()'
 
-    def _take_word(self, partial):
-        for idx, char in enumerate(partial):
-            if char in self._delimiters:
-                return partial[:idx], partial[idx:]
-        return partial, ''
-
-    def parse(self, field):
-        inner = self._inner_parse(field)
-        return inner
-
-    def _inner_parse(self, field):
-        word, field = self._take_word(field)
-        if field.startswith("("):
-            # We have an operation
-            if not field.endswith(")"):
-                raise errors.IndexDefinitionParseError(
-                    "Invalid transformation function: %s" % field)
-            op = self._transformations.get(word, None)
-            if op is None:
-                raise errors.IndexDefinitionParseError(
-                    "Unknown operation: %s" % word)
-            if ',' in field:
-                # XXX: The arguments should probably be cast to whatever types
-                # they represent, but short of evaling them, I don't see an
-                # easy way to do that without adding a lot of complexity.
-                # Since there is only one operation with an extra argument, I'm
-                # punting on this until we grow some more.
-                args = [a.strip() for a in field[1:-1].split(',')]
-                extracted = args[0]
+    def make_subtree(self, expression, start, idx, open_parens):
+        tree = []
+        while idx < len(expression):
+            char = expression[idx]
+            if char == '(':
+                open_parens.append(1)
+                op_name = expression[start:idx].strip()
+                op = self._transformations.get(op_name, None)
+                if op is None:
+                    raise errors.IndexDefinitionParseError(
+                        "Unknown operation: %s" % op_name)
+                idx += 1
+                start = idx
+                idx, start, args = self.make_subtree(
+                    expression, start, idx, open_parens)
+                if op.arity >= 0 and len(args) != op.arity:
+                    raise errors.IndexDefinitionParseError(
+                        "Invalid number of arguments for transformation "
+                        "function: %s, %r" % (op_name, args))
+                parsed = []
+                for i, arg in enumerate(args):
+                    arg_type = op.args[i % len(op.args)]
+                    if arg_type == 'expression':
+                        if isinstance(arg, Getter):
+                            inner = arg
+                        else:
+                            check_fieldname(arg, expression, idx)
+                            inner = ExtractField(arg)
+                    else:
+                        try:
+                            inner = arg_type(arg)
+                        except ValueError, e:
+                            raise errors.IndexDefinitionParseError(
+                                "Invalid value %r for argument type %r (%r)." %
+                                (arg, arg_type, e))
+                    parsed.append(inner)
+                tree.append(op(*parsed))
+            elif char == ')':
+                try:
+                    open_parens.pop()
+                except IndexError:
+                    raise errors.IndexDefinitionParseError(
+                        "Encountered ')' before '(' when parsing:\n%s\n%s^" %
+                        (expression, " " * idx))
+                term = expression[start:idx].strip()
+                if term:
+                    tree.append(term)
+                idx += 1
+                start = idx
+                return idx, start, tree
+            elif char == ',':
+                if not open_parens:
+                    raise errors.IndexDefinitionParseError(
+                        "Encountered ',' outside parentheses:\n%s\n%s^" %
+                        (expression, " " * idx))
+                term = expression[start:idx].strip()
+                if term:
+                    tree.append(term)
+                idx += 1
+                start = idx
             else:
-                args = []
-                extracted = field[1:-1]
-            inner = self._inner_parse(extracted)
-            return op(inner, *args[1:])
-        else:
-            if len(field) != 0:
-                raise errors.IndexDefinitionParseError(
-                    "Unhandled characters: %s" % (field,))
-            if len(word) == 0:
-                raise errors.IndexDefinitionParseError(
-                    "Missing field specifier")
-            if word.endswith("."):
-                raise errors.IndexDefinitionParseError(
-                    "Invalid field specifier: %s" % word)
-            return ExtractField(word)
+                idx += 1
+        if start < len(expression):
+            term = expression[start:]
+            check_fieldname(term, expression, start)
+            tree.append(ExtractField(term))
+        return idx, start, tree
+
+    def parse(self, expression):
+        open_parens = []
+        tree = self.make_subtree(expression, 0, 0, open_parens)[2]
+        if open_parens:
+            raise errors.IndexDefinitionParseError(
+                "%d missing ')'s when parsing '%s'." %
+                (len(open_parens), expression))
+        if len(tree) != 1:
+            raise errors.IndexDefinitionParseError(
+                "Invalid expression: %s" % expression)
+        return tree[0]
 
     def parse_all(self, fields):
         return [self.parse(field) for field in fields]
