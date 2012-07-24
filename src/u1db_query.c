@@ -1238,15 +1238,19 @@ make_tree(const char *expression, int *idx, int *start, int *open_parens,
                 }
                 strncpy(op_name, expression + *start, size);
                 op_name[size] = '\0';
-                append_child(result);
-                if (status != U1DB_OK)
+                status = append_child(result);
+                if (status != U1DB_OK) {
+                    free(op_name);
                     goto finish;
+                }
                 subtree = result->last_child;
                 for (i = 0; i < OPS; i++) {
                     if (strcmp(OPERATIONS[i].name, op_name) == 0)
                     {
-                        if (status != U1DB_OK)
+                        if (status != U1DB_OK) {
+                            free(op_name);
                             goto finish;
+                        }
                         subtree->op = OPERATIONS[i].function;
                         subtree->arity = OPERATIONS[i].arity;
                         subtree->value_types = OPERATIONS[i].value_types;
@@ -1357,12 +1361,6 @@ make_tree(const char *expression, int *idx, int *start, int *open_parens,
     }
 
 finish:
-    if (status == U1DB_OK)
-        return status;
-    if (op_name != NULL)
-        free(op_name);
-    if (result != NULL)
-        destroy_parse_tree(result);
     return status;
 }
 
