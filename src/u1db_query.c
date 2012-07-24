@@ -49,6 +49,7 @@ typedef struct string_list_
     string_list_item *tail;
 } string_list;
 
+/*
 static void
 print_list(string_list *list)
 {
@@ -58,6 +59,7 @@ print_list(string_list *list)
         printf("%s,", item->data);
     printf("]\n");
 }
+*/
 
 static int
 init_list(string_list **list)
