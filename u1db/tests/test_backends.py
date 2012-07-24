@@ -1633,6 +1633,22 @@ class DatabaseIndexTests(tests.DatabaseBaseTests):
         rows = self.db.get_from_index("index", "value2")
         self.assertEqual([doc], rows)
 
+    def test_get_complex_combine(self):
+        self.db.create_index(
+            "index", "combine(number(foo, 5), lower(bar), split_words(baz))")
+        content = '{"foo": 12, "bar": "ALLCAPS", "baz": "qux nox"}'
+        doc = self.db.create_doc_from_json(content)
+        content = '{"foo": "not a number", "bar": "something"}'
+        doc2 = self.db.create_doc_from_json(content)
+        rows = self.db.get_from_index("index", "00012")
+        self.assertEqual([doc], rows)
+        rows = self.db.get_from_index("index", "allcaps")
+        self.assertEqual([doc], rows)
+        rows = self.db.get_from_index("index", "nox")
+        self.assertEqual([doc], rows)
+        rows = self.db.get_from_index("index", "something")
+        self.assertEqual([doc2], rows)
+
     def test_get_index_keys_from_index(self):
         self.db.create_index('test-idx', 'key')
         content1 = '{"key": "value1"}'
