@@ -37,6 +37,10 @@ class InvalidJSON(U1DBError):
     """Content was not valid json."""
 
 
+class InvalidContent(U1DBError):
+    """Content was not a python dictionary."""
+
+
 class InvalidDocId(U1DBError):
     """A document was tried with an invalid document identifier."""
 

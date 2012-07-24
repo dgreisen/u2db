@@ -78,7 +78,7 @@ class CmdCreate(OneDbCmd):
         if infile is None:
             infile = self.stdin
         db = self._open(database, create=False)
-        doc = db.create_doc(infile.read(), doc_id=doc_id)
+        doc = db.create_doc_from_json(infile.read(), doc_id=doc_id)
         self.stderr.write('id: %s\nrev: %s\n' % (doc.doc_id, doc.rev))
 
 client_commands.register(CmdCreate)

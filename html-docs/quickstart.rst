@@ -26,19 +26,19 @@ Starting u1db
 
 .. doctest ::
 
-    >>> import u1db, json, tempfile
+    >>> import u1db, tempfile
     >>> db = u1db.open(":memory:", create=True)
 
-    >>> content = json.dumps({"name": "Alan Hansen"}) # create a document
+    >>> content = {"name": "Alan Hansen"} # create a document
     >>> doc = db.create_doc(content)
     >>> doc.content
     {'name': 'Alan Hansen'}
-    >>> doc.content = json.dumps({"name": "Alan Hansen", "position": "defence"}) # update the document's content
+    >>> doc.content = {"name": "Alan Hansen", "position": "defence"} # update the document's content
     >>> rev = db.put_doc(doc)
 
-    >>> content = json.dumps({"name": "John Barnes", "position": "forward"}) # create more documents
+    >>> content = {"name": "John Barnes", "position": "forward"} # create more documents
     >>> doc2 = db.create_doc(content)
-    >>> content = json.dumps({"name": "Ian Rush", "position": "forward"})
+    >>> content = {"name": "Ian Rush", "position": "forward"}
     >>> doc2 = db.create_doc(content)
 
     >>> db.create_index("by-position", "position") # create an index by passing a field name

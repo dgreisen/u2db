@@ -267,7 +267,7 @@ class TestRemoteSyncTargets(tests.TestCaseWithServer):
         self.patch(self.server.RequestHandlerClass, 'get_stderr',
                    blackhole_getstderr)
         db = self.request_state._create_database('test')
-        doc = db.create_doc('{"value": "there"}')
+        doc = db.create_doc_from_json('{"value": "there"}')
 
         def bomb_get_docs(doc_ids, check_for_conflicts=None,
                           include_deleted=False):
@@ -294,7 +294,7 @@ class TestRemoteSyncTargets(tests.TestCaseWithServer):
     def test_sync_exchange_receive(self):
         self.startServer()
         db = self.request_state._create_database('test')
-        doc = db.create_doc('{"value": "there"}')
+        doc = db.create_doc_from_json('{"value": "there"}')
         remote_target = self.getSyncTarget('test')
         other_changes = []
 

@@ -99,27 +99,28 @@ class AllDatabaseTests(tests.DatabaseBaseTests, tests.TestCaseWithServer):
         self.db.close()
 
     def test_create_doc_allocating_doc_id(self):
-        doc = self.db.create_doc(simple_doc)
+        doc = self.db.create_doc_from_json(simple_doc)
         self.assertNotEqual(None, doc.doc_id)
         self.assertNotEqual(None, doc.rev)
         self.assertGetDoc(self.db, doc.doc_id, doc.rev, simple_doc, False)
 
     def test_create_doc_different_ids_same_db(self):
-        doc1 = self.db.create_doc(simple_doc)
-        doc2 = self.db.create_doc(nested_doc)
+        doc1 = self.db.create_doc_from_json(simple_doc)
+        doc2 = self.db.create_doc_from_json(nested_doc)
         self.assertNotEqual(doc1.doc_id, doc2.doc_id)
 
     def test_create_doc_with_id(self):
-        doc = self.db.create_doc(simple_doc, doc_id='my-id')
+        doc = self.db.create_doc_from_json(simple_doc, doc_id='my-id')
         self.assertEqual('my-id', doc.doc_id)
         self.assertNotEqual(None, doc.rev)
         self.assertGetDoc(self.db, doc.doc_id, doc.rev, simple_doc, False)
 
     def test_create_doc_existing_id(self):
-        doc = self.db.create_doc(simple_doc)
+        doc = self.db.create_doc_from_json(simple_doc)
         new_content = '{"something": "else"}'
-        self.assertRaises(errors.RevisionConflict, self.db.create_doc,
-                          new_content, doc.doc_id)
+        self.assertRaises(
+            errors.RevisionConflict, self.db.create_doc_from_json,
+            new_content, doc.doc_id)
         self.assertGetDoc(self.db, doc.doc_id, doc.rev, simple_doc, False)
 
     def test_put_doc_creating_initial(self):
@@ -133,7 +134,7 @@ class AllDatabaseTests(tests.DatabaseBaseTests, tests.TestCaseWithServer):
         self.assertRaises(errors.InvalidDocId, self.db.put_doc, doc)
 
     def test_put_doc_update(self):
-        doc = self.db.create_doc(simple_doc, doc_id='my_doc_id')
+        doc = self.db.create_doc_from_json(simple_doc, doc_id='my_doc_id')
         orig_rev = doc.rev
         doc.set_json('{"updated": "stuff"}')
         new_rev = self.db.put_doc(doc)
@@ -144,12 +145,12 @@ class AllDatabaseTests(tests.DatabaseBaseTests, tests.TestCaseWithServer):
 
     def test_put_non_ascii_key(self):
         content = simplejson.dumps({u'key\xe5': u'val'})
-        doc = self.db.create_doc(content, doc_id='my_doc')
+        doc = self.db.create_doc_from_json(content, doc_id='my_doc')
         self.assertGetDoc(self.db, 'my_doc', doc.rev, content, False)
 
     def test_put_non_ascii_value(self):
         content = simplejson.dumps({'key': u'\xe5'})
-        doc = self.db.create_doc(content, doc_id='my_doc')
+        doc = self.db.create_doc_from_json(content, doc_id='my_doc')
         self.assertGetDoc(self.db, 'my_doc', doc.rev, content, False)
 
     def test_put_doc_refuses_no_id(self):
@@ -173,7 +174,7 @@ class AllDatabaseTests(tests.DatabaseBaseTests, tests.TestCaseWithServer):
         self.assertRaises(errors.InvalidDocId, self.db.put_doc, doc)
 
     def test_put_fails_with_bad_old_rev(self):
-        doc = self.db.create_doc(simple_doc, doc_id='my_doc_id')
+        doc = self.db.create_doc_from_json(simple_doc, doc_id='my_doc_id')
         old_rev = doc.rev
         bad_doc = self.make_document(doc.doc_id, 'other:1',
                                      '{"something": "else"}')
@@ -181,11 +182,11 @@ class AllDatabaseTests(tests.DatabaseBaseTests, tests.TestCaseWithServer):
         self.assertGetDoc(self.db, 'my_doc_id', old_rev, simple_doc, False)
 
     def test_create_succeeds_after_delete(self):
-        doc = self.db.create_doc(simple_doc, doc_id='my_doc_id')
+        doc = self.db.create_doc_from_json(simple_doc, doc_id='my_doc_id')
         self.db.delete_doc(doc)
         deleted_doc = self.db.get_doc('my_doc_id', include_deleted=True)
         deleted_vc = vectorclock.VectorClockRev(deleted_doc.rev)
-        new_doc = self.db.create_doc(simple_doc, doc_id='my_doc_id')
+        new_doc = self.db.create_doc_from_json(simple_doc, doc_id='my_doc_id')
         self.assertGetDoc(self.db, 'my_doc_id', new_doc.rev, simple_doc, False)
         new_vc = vectorclock.VectorClockRev(new_doc.rev)
         self.assertTrue(
@@ -193,7 +194,7 @@ class AllDatabaseTests(tests.DatabaseBaseTests, tests.TestCaseWithServer):
             "%s does not supersede %s" % (new_doc.rev, deleted_doc.rev))
 
     def test_put_succeeds_after_delete(self):
-        doc = self.db.create_doc(simple_doc, doc_id='my_doc_id')
+        doc = self.db.create_doc_from_json(simple_doc, doc_id='my_doc_id')
         self.db.delete_doc(doc)
         deleted_doc = self.db.get_doc('my_doc_id', include_deleted=True)
         deleted_vc = vectorclock.VectorClockRev(deleted_doc.rev)
@@ -206,46 +207,46 @@ class AllDatabaseTests(tests.DatabaseBaseTests, tests.TestCaseWithServer):
             "%s does not supersede %s" % (doc2.rev, deleted_doc.rev))
 
     def test_get_doc_after_put(self):
-        doc = self.db.create_doc(simple_doc, doc_id='my_doc_id')
+        doc = self.db.create_doc_from_json(simple_doc, doc_id='my_doc_id')
         self.assertGetDoc(self.db, 'my_doc_id', doc.rev, simple_doc, False)
 
     def test_get_doc_nonexisting(self):
         self.assertIs(None, self.db.get_doc('non-existing'))
 
     def test_get_doc_deleted(self):
-        doc = self.db.create_doc(simple_doc, doc_id='my_doc_id')
+        doc = self.db.create_doc_from_json(simple_doc, doc_id='my_doc_id')
         self.db.delete_doc(doc)
         self.assertIs(None, self.db.get_doc('my_doc_id'))
 
     def test_get_doc_include_deleted(self):
-        doc = self.db.create_doc(simple_doc, doc_id='my_doc_id')
+        doc = self.db.create_doc_from_json(simple_doc, doc_id='my_doc_id')
         self.db.delete_doc(doc)
         self.assertGetDocIncludeDeleted(
             self.db, doc.doc_id, doc.rev, None, False)
 
     def test_get_docs(self):
-        doc1 = self.db.create_doc(simple_doc)
-        doc2 = self.db.create_doc(nested_doc)
+        doc1 = self.db.create_doc_from_json(simple_doc)
+        doc2 = self.db.create_doc_from_json(nested_doc)
         self.assertEqual([doc1, doc2],
                          self.db.get_docs([doc1.doc_id, doc2.doc_id]))
 
     def test_get_docs_deleted(self):
-        doc1 = self.db.create_doc(simple_doc)
-        doc2 = self.db.create_doc(nested_doc)
+        doc1 = self.db.create_doc_from_json(simple_doc)
+        doc2 = self.db.create_doc_from_json(nested_doc)
         self.db.delete_doc(doc1)
         self.assertEqual([doc2], self.db.get_docs([doc1.doc_id, doc2.doc_id]))
 
     def test_get_docs_include_deleted(self):
-        doc1 = self.db.create_doc(simple_doc)
-        doc2 = self.db.create_doc(nested_doc)
+        doc1 = self.db.create_doc_from_json(simple_doc)
+        doc2 = self.db.create_doc_from_json(nested_doc)
         self.db.delete_doc(doc1)
         self.assertEqual(
             [doc1, doc2],
             self.db.get_docs([doc1.doc_id, doc2.doc_id], include_deleted=True))
 
     def test_get_docs_request_ordered(self):
-        doc1 = self.db.create_doc(simple_doc)
-        doc2 = self.db.create_doc(nested_doc)
+        doc1 = self.db.create_doc_from_json(simple_doc)
+        doc2 = self.db.create_doc_from_json(nested_doc)
         self.assertEqual([doc1, doc2],
                          self.db.get_docs([doc1.doc_id, doc2.doc_id]))
         self.assertEqual([doc2, doc1],
@@ -255,15 +256,15 @@ class AllDatabaseTests(tests.DatabaseBaseTests, tests.TestCaseWithServer):
         self.assertEqual([], self.db.get_docs([]))
 
     def test_handles_nested_content(self):
-        doc = self.db.create_doc(nested_doc)
+        doc = self.db.create_doc_from_json(nested_doc)
         self.assertGetDoc(self.db, doc.doc_id, doc.rev, nested_doc, False)
 
     def test_handles_doc_with_null(self):
-        doc = self.db.create_doc('{"key": null}')
+        doc = self.db.create_doc_from_json('{"key": null}')
         self.assertGetDoc(self.db, doc.doc_id, doc.rev, '{"key": null}', False)
 
     def test_delete_doc(self):
-        doc = self.db.create_doc(simple_doc)
+        doc = self.db.create_doc_from_json(simple_doc)
         self.assertGetDoc(self.db, doc.doc_id, doc.rev, simple_doc, False)
         orig_rev = doc.rev
         self.db.delete_doc(doc)
@@ -277,7 +278,7 @@ class AllDatabaseTests(tests.DatabaseBaseTests, tests.TestCaseWithServer):
         self.assertRaises(errors.DocumentDoesNotExist, self.db.delete_doc, doc)
 
     def test_delete_doc_already_deleted(self):
-        doc = self.db.create_doc(simple_doc)
+        doc = self.db.create_doc_from_json(simple_doc)
         self.db.delete_doc(doc)
         self.assertRaises(errors.DocumentAlreadyDeleted,
                           self.db.delete_doc, doc)
@@ -285,19 +286,19 @@ class AllDatabaseTests(tests.DatabaseBaseTests, tests.TestCaseWithServer):
             self.db, doc.doc_id, doc.rev, None, False)
 
     def test_delete_doc_bad_rev(self):
-        doc1 = self.db.create_doc(simple_doc)
+        doc1 = self.db.create_doc_from_json(simple_doc)
         self.assertGetDoc(self.db, doc1.doc_id, doc1.rev, simple_doc, False)
         doc2 = self.make_document(doc1.doc_id, 'other:1', simple_doc)
         self.assertRaises(errors.RevisionConflict, self.db.delete_doc, doc2)
         self.assertGetDoc(self.db, doc1.doc_id, doc1.rev, simple_doc, False)
 
     def test_delete_doc_sets_content_to_None(self):
-        doc = self.db.create_doc(simple_doc)
+        doc = self.db.create_doc_from_json(simple_doc)
         self.db.delete_doc(doc)
         self.assertIs(None, doc.get_json())
 
     def test_delete_doc_rev_supersedes(self):
-        doc = self.db.create_doc(simple_doc)
+        doc = self.db.create_doc_from_json(simple_doc)
         doc.set_json(nested_doc)
         self.db.put_doc(doc)
         doc.set_json('{"fishy": "content"}')
@@ -310,7 +311,7 @@ class AllDatabaseTests(tests.DatabaseBaseTests, tests.TestCaseWithServer):
                 "%s does not supersede %s" % (doc.rev, old_rev))
 
     def test_delete_then_put(self):
-        doc = self.db.create_doc(simple_doc)
+        doc = self.db.create_doc_from_json(simple_doc)
         self.db.delete_doc(doc)
         self.assertGetDocIncludeDeleted(
             self.db, doc.doc_id, doc.rev, None, False)
@@ -331,7 +332,7 @@ class DocumentSizeTests(tests.DatabaseBaseTests):
     def test_create_doc_refuses_oversized_documents(self):
         self.db.set_document_size_limit(1)
         self.assertRaises(
-            errors.DocumentTooBig, self.db.create_doc, simple_doc,
+            errors.DocumentTooBig, self.db.create_doc_from_json, simple_doc,
             doc_id='my_doc_id')
 
     def test_set_document_size_limit_zero(self):
@@ -348,9 +349,9 @@ class LocalDatabaseTests(tests.DatabaseBaseTests):
     scenarios = tests.LOCAL_DATABASES_SCENARIOS + tests.C_DATABASE_SCENARIOS
 
     def test_create_doc_different_ids_diff_db(self):
-        doc1 = self.db.create_doc(simple_doc)
+        doc1 = self.db.create_doc_from_json(simple_doc)
         db2 = self.create_database('other-uid')
-        doc2 = db2.create_doc(simple_doc)
+        doc2 = db2.create_doc_from_json(simple_doc)
         self.assertNotEqual(doc1.doc_id, doc2.doc_id)
 
     def test_put_doc_refuses_slashes_picky(self):
@@ -361,28 +362,28 @@ class LocalDatabaseTests(tests.DatabaseBaseTests):
         self.assertEqual([], self.db.get_all_docs()[1])
 
     def test_get_all_docs(self):
-        doc1 = self.db.create_doc(simple_doc)
-        doc2 = self.db.create_doc(nested_doc)
+        doc1 = self.db.create_doc_from_json(simple_doc)
+        doc2 = self.db.create_doc_from_json(nested_doc)
         self.assertEqual(
             sorted([doc1, doc2]), sorted(self.db.get_all_docs()[1]))
 
     def test_get_all_docs_exclude_deleted(self):
-        doc1 = self.db.create_doc(simple_doc)
-        doc2 = self.db.create_doc(nested_doc)
+        doc1 = self.db.create_doc_from_json(simple_doc)
+        doc2 = self.db.create_doc_from_json(nested_doc)
         self.db.delete_doc(doc2)
         self.assertEqual([doc1], self.db.get_all_docs()[1])
 
     def test_get_all_docs_include_deleted(self):
-        doc1 = self.db.create_doc(simple_doc)
-        doc2 = self.db.create_doc(nested_doc)
+        doc1 = self.db.create_doc_from_json(simple_doc)
+        doc2 = self.db.create_doc_from_json(nested_doc)
         self.db.delete_doc(doc2)
         self.assertEqual(
             sorted([doc1, doc2]),
             sorted(self.db.get_all_docs(include_deleted=True)[1]))
 
     def test_get_all_docs_generation(self):
-        self.db.create_doc(simple_doc)
-        self.db.create_doc(nested_doc)
+        self.db.create_doc_from_json(simple_doc)
+        self.db.create_doc_from_json(nested_doc)
         self.assertEqual(2, self.db.get_all_docs()[0])
 
     def test_simple_put_doc_if_newer(self):
@@ -394,7 +395,7 @@ class LocalDatabaseTests(tests.DatabaseBaseTests):
         self.assertGetDoc(self.db, 'my-doc-id', 'test:1', simple_doc, False)
 
     def test_simple_put_doc_if_newer_deleted(self):
-        self.db.create_doc('{}', doc_id='my-doc-id')
+        self.db.create_doc_from_json('{}', doc_id='my-doc-id')
         doc = self.make_document('my-doc-id', 'test:2', None)
         state_at_gen = self.db._put_doc_if_newer(
             doc, save_conflict=False, replica_uid='r', replica_gen=1,
@@ -405,7 +406,7 @@ class LocalDatabaseTests(tests.DatabaseBaseTests):
 
     def test_put_doc_if_newer_already_superseded(self):
         orig_doc = '{"new": "doc"}'
-        doc1 = self.db.create_doc(orig_doc)
+        doc1 = self.db.create_doc_from_json(orig_doc)
         doc1_rev1 = doc1.rev
         doc1.set_json(simple_doc)
         self.db.put_doc(doc1)
@@ -419,7 +420,7 @@ class LocalDatabaseTests(tests.DatabaseBaseTests):
         self.assertGetDoc(self.db, doc1.doc_id, doc1_rev2, simple_doc, False)
 
     def test_put_doc_if_newer_autoresolve(self):
-        doc1 = self.db.create_doc(simple_doc)
+        doc1 = self.db.create_doc_from_json(simple_doc)
         rev = doc1.rev
         doc = self.make_document(doc1.doc_id, "whatever:1", doc1.get_json())
         state, _ = self.db._put_doc_if_newer(
@@ -433,14 +434,14 @@ class LocalDatabaseTests(tests.DatabaseBaseTests):
 
     def test_put_doc_if_newer_already_converged(self):
         orig_doc = '{"new": "doc"}'
-        doc1 = self.db.create_doc(orig_doc)
+        doc1 = self.db.create_doc_from_json(orig_doc)
         state_at_gen = self.db._put_doc_if_newer(
             doc1, save_conflict=False, replica_uid='r', replica_gen=1,
             replica_trans_id='foo')
         self.assertEqual(('converged', 1), state_at_gen)
 
     def test_put_doc_if_newer_conflicted(self):
-        doc1 = self.db.create_doc(simple_doc)
+        doc1 = self.db.create_doc_from_json(simple_doc)
         # Nothing is inserted, the document id is returned as would-conflict
         alt_doc = self.make_document(doc1.doc_id, 'alternate:1', nested_doc)
         state, _ = self.db._put_doc_if_newer(
@@ -460,7 +461,7 @@ class LocalDatabaseTests(tests.DatabaseBaseTests):
 
     def test_put_doc_if_newer_same_generation_same_txid(self):
         self.db._set_replica_gen_and_trans_id('other', 1, 'T-sid')
-        doc = self.db.create_doc(simple_doc)
+        doc = self.db.create_doc_from_json(simple_doc)
         self.make_document(doc.doc_id, 'other:1', simple_doc)
         state, _ = self.db._put_doc_if_newer(
             doc, save_conflict=False, replica_uid='other', replica_gen=1,
@@ -477,7 +478,7 @@ class LocalDatabaseTests(tests.DatabaseBaseTests):
 
     def test_put_doc_if_newer_old_generation_older_doc(self):
         orig_doc = '{"new": "doc"}'
-        doc = self.db.create_doc(orig_doc)
+        doc = self.db.create_doc_from_json(orig_doc)
         doc_rev1 = doc.rev
         doc.set_json(simple_doc)
         self.db.put_doc(doc)
@@ -497,7 +498,7 @@ class LocalDatabaseTests(tests.DatabaseBaseTests):
             replica_uid='other', replica_gen=1, replica_trans_id='T-sad')
 
     def test_put_doc_if_newer_replica_uid(self):
-        doc1 = self.db.create_doc(simple_doc)
+        doc1 = self.db.create_doc_from_json(simple_doc)
         self.db._set_replica_gen_and_trans_id('other', 1, 'T-sid')
         doc2 = self.make_document(doc1.doc_id, doc1.rev + '|other:1',
                                   nested_doc)
@@ -535,7 +536,7 @@ class LocalDatabaseTests(tests.DatabaseBaseTests):
             self.db._get_replica_gen_and_trans_id('other-db'))
 
     def test_put_updates_transaction_log(self):
-        doc = self.db.create_doc(simple_doc)
+        doc = self.db.create_doc_from_json(simple_doc)
         self.assertTransactionLog([doc.doc_id], self.db)
         doc.set_json('{"something": "else"}')
         self.db.put_doc(doc)
@@ -545,7 +546,7 @@ class LocalDatabaseTests(tests.DatabaseBaseTests):
                          self.db.whats_changed())
 
     def test_delete_updates_transaction_log(self):
-        doc = self.db.create_doc(simple_doc)
+        doc = self.db.create_doc_from_json(simple_doc)
         db_gen, _, _ = self.db.whats_changed()
         self.db.delete_doc(doc)
         last_trans_id = self.getLastTransId(self.db)
@@ -556,7 +557,7 @@ class LocalDatabaseTests(tests.DatabaseBaseTests):
         self.assertEqual((0, '', []), self.db.whats_changed())
 
     def test_whats_changed_returns_one_id_for_multiple_changes(self):
-        doc = self.db.create_doc(simple_doc)
+        doc = self.db.create_doc_from_json(simple_doc)
         doc.set_json('{"new": "contents"}')
         self.db.put_doc(doc)
         last_trans_id = self.getLastTransId(self.db)
@@ -565,8 +566,8 @@ class LocalDatabaseTests(tests.DatabaseBaseTests):
         self.assertEqual((2, last_trans_id, []), self.db.whats_changed(2))
 
     def test_whats_changed_returns_last_edits_ascending(self):
-        doc = self.db.create_doc(simple_doc)
-        doc1 = self.db.create_doc(simple_doc)
+        doc = self.db.create_doc_from_json(simple_doc)
+        doc1 = self.db.create_doc_from_json(simple_doc)
         doc.set_json('{"new": "contents"}')
         self.db.delete_doc(doc1)
         delete_trans_id = self.getLastTransId(self.db)
@@ -578,9 +579,9 @@ class LocalDatabaseTests(tests.DatabaseBaseTests):
                          self.db.whats_changed())
 
     def test_whats_changed_doesnt_include_old_gen(self):
-        self.db.create_doc(simple_doc)
-        self.db.create_doc(simple_doc)
-        doc2 = self.db.create_doc(simple_doc)
+        self.db.create_doc_from_json(simple_doc)
+        self.db.create_doc_from_json(simple_doc)
+        doc2 = self.db.create_doc_from_json(simple_doc)
         last_trans_id = self.getLastTransId(self.db)
         self.assertEqual((3, last_trans_id, [(doc2.doc_id, 3, last_trans_id)]),
                          self.db.whats_changed(2))
@@ -591,19 +592,19 @@ class LocalDatabaseValidateGenNTransIdTests(tests.DatabaseBaseTests):
     scenarios = tests.LOCAL_DATABASES_SCENARIOS + tests.C_DATABASE_SCENARIOS
 
     def test_validate_gen_and_trans_id(self):
-        self.db.create_doc(simple_doc)
+        self.db.create_doc_from_json(simple_doc)
         gen, trans_id = self.db._get_generation_info()
         self.db.validate_gen_and_trans_id(gen, trans_id)
 
     def test_validate_gen_and_trans_id_invalid_txid(self):
-        self.db.create_doc(simple_doc)
+        self.db.create_doc_from_json(simple_doc)
         gen, _ = self.db._get_generation_info()
         self.assertRaises(
             errors.InvalidTransactionId,
             self.db.validate_gen_and_trans_id, gen, 'wrong')
 
     def test_validate_gen_and_trans_id_invalid_gen(self):
-        self.db.create_doc(simple_doc)
+        self.db.create_doc_from_json(simple_doc)
         gen, trans_id = self.db._get_generation_info()
         self.assertRaises(
             errors.InvalidGeneration,
@@ -635,7 +636,7 @@ class LocalDatabaseWithConflictsTests(tests.DatabaseBaseTests):
     scenarios = tests.LOCAL_DATABASES_SCENARIOS + tests.C_DATABASE_SCENARIOS
 
     def test_get_docs_conflicted(self):
-        doc1 = self.db.create_doc(simple_doc)
+        doc1 = self.db.create_doc_from_json(simple_doc)
         doc2 = self.make_document(doc1.doc_id, 'alternate:1', nested_doc)
         self.db._put_doc_if_newer(
             doc2, save_conflict=True, replica_uid='r', replica_gen=1,
@@ -643,8 +644,8 @@ class LocalDatabaseWithConflictsTests(tests.DatabaseBaseTests):
         self.assertEqual([doc2], self.db.get_docs([doc1.doc_id]))
 
     def test_get_docs_conflicts_ignored(self):
-        doc1 = self.db.create_doc(simple_doc)
-        doc2 = self.db.create_doc(nested_doc)
+        doc1 = self.db.create_doc_from_json(simple_doc)
+        doc2 = self.db.create_doc_from_json(nested_doc)
         alt_doc = self.make_document(doc1.doc_id, 'alternate:1', nested_doc)
         self.db._put_doc_if_newer(
             alt_doc, save_conflict=True, replica_uid='r', replica_gen=1,
@@ -656,7 +657,7 @@ class LocalDatabaseWithConflictsTests(tests.DatabaseBaseTests):
                                           check_for_conflicts=False))
 
     def test_get_doc_conflicts(self):
-        doc = self.db.create_doc(simple_doc)
+        doc = self.db.create_doc_from_json(simple_doc)
         alt_doc = self.make_document(doc.doc_id, 'alternate:1', nested_doc)
         self.db._put_doc_if_newer(
             alt_doc, save_conflict=True, replica_uid='r', replica_gen=1,
@@ -665,14 +666,14 @@ class LocalDatabaseWithConflictsTests(tests.DatabaseBaseTests):
                          self.db.get_doc_conflicts(doc.doc_id))
 
     def test_get_doc_conflicts_unconflicted(self):
-        doc = self.db.create_doc(simple_doc)
+        doc = self.db.create_doc_from_json(simple_doc)
         self.assertEqual([], self.db.get_doc_conflicts(doc.doc_id))
 
     def test_get_doc_conflicts_no_such_id(self):
         self.assertEqual([], self.db.get_doc_conflicts('doc-id'))
 
     def test_resolve_doc(self):
-        doc = self.db.create_doc(simple_doc)
+        doc = self.db.create_doc_from_json(simple_doc)
         alt_doc = self.make_document(doc.doc_id, 'alternate:1', nested_doc)
         self.db._put_doc_if_newer(
             alt_doc, save_conflict=True, replica_uid='r', replica_gen=1,
@@ -687,7 +688,7 @@ class LocalDatabaseWithConflictsTests(tests.DatabaseBaseTests):
         self.assertGetDocConflicts(self.db, doc.doc_id, [])
 
     def test_resolve_doc_picks_biggest_vcr(self):
-        doc1 = self.db.create_doc(simple_doc)
+        doc1 = self.db.create_doc_from_json(simple_doc)
         doc2 = self.make_document(doc1.doc_id, 'alternate:1', nested_doc)
         self.db._put_doc_if_newer(
             doc2, save_conflict=True, replica_uid='r', replica_gen=1,
@@ -708,7 +709,7 @@ class LocalDatabaseWithConflictsTests(tests.DatabaseBaseTests):
         self.assertTrue(vcr_new.is_newer(vcr_2))
 
     def test_resolve_doc_partial_not_winning(self):
-        doc1 = self.db.create_doc(simple_doc)
+        doc1 = self.db.create_doc_from_json(simple_doc)
         doc2 = self.make_document(doc1.doc_id, 'alternate:1', nested_doc)
         self.db._put_doc_if_newer(
             doc2, save_conflict=True, replica_uid='r', replica_gen=1,
@@ -733,7 +734,7 @@ class LocalDatabaseWithConflictsTests(tests.DatabaseBaseTests):
              (doc1.rev, simple_doc)])
 
     def test_resolve_doc_partial_winning(self):
-        doc1 = self.db.create_doc(simple_doc)
+        doc1 = self.db.create_doc_from_json(simple_doc)
         doc2 = self.make_document(doc1.doc_id, 'alternate:1', nested_doc)
         self.db._put_doc_if_newer(
             doc2, save_conflict=True, replica_uid='r', replica_gen=1,
@@ -754,7 +755,7 @@ class LocalDatabaseWithConflictsTests(tests.DatabaseBaseTests):
                                     (doc2.rev, nested_doc)])
 
     def test_resolve_doc_with_delete_conflict(self):
-        doc1 = self.db.create_doc(simple_doc)
+        doc1 = self.db.create_doc_from_json(simple_doc)
         self.db.delete_doc(doc1)
         doc2 = self.make_document(doc1.doc_id, 'alternate:1', nested_doc)
         self.db._put_doc_if_newer(
@@ -768,7 +769,7 @@ class LocalDatabaseWithConflictsTests(tests.DatabaseBaseTests):
         self.assertGetDoc(self.db, doc2.doc_id, doc2.rev, nested_doc, False)
 
     def test_resolve_doc_with_delete_to_delete(self):
-        doc1 = self.db.create_doc(simple_doc)
+        doc1 = self.db.create_doc_from_json(simple_doc)
         self.db.delete_doc(doc1)
         doc2 = self.make_document(doc1.doc_id, 'alternate:1', nested_doc)
         self.db._put_doc_if_newer(
@@ -783,7 +784,7 @@ class LocalDatabaseWithConflictsTests(tests.DatabaseBaseTests):
             self.db, doc1.doc_id, doc1.rev, None, False)
 
     def test_put_doc_if_newer_save_conflicted(self):
-        doc1 = self.db.create_doc(simple_doc)
+        doc1 = self.db.create_doc_from_json(simple_doc)
         # Document is inserted as a conflict
         doc2 = self.make_document(doc1.doc_id, 'alternate:1', nested_doc)
         state, _ = self.db._put_doc_if_newer(
@@ -794,7 +795,7 @@ class LocalDatabaseWithConflictsTests(tests.DatabaseBaseTests):
         self.assertGetDoc(self.db, doc1.doc_id, doc2.rev, nested_doc, True)
 
     def test_force_doc_conflict_supersedes_properly(self):
-        doc1 = self.db.create_doc(simple_doc)
+        doc1 = self.db.create_doc_from_json(simple_doc)
         doc2 = self.make_document(doc1.doc_id, 'alternate:1', '{"b": 1}')
         self.db._put_doc_if_newer(
             doc2, save_conflict=True, replica_uid='r', replica_gen=1,
@@ -813,7 +814,7 @@ class LocalDatabaseWithConflictsTests(tests.DatabaseBaseTests):
              (doc1.rev, simple_doc)])
 
     def test_put_doc_if_newer_save_conflict_was_deleted(self):
-        doc1 = self.db.create_doc(simple_doc)
+        doc1 = self.db.create_doc_from_json(simple_doc)
         self.db.delete_doc(doc1)
         doc2 = self.make_document(doc1.doc_id, 'alternate:1', nested_doc)
         self.db._put_doc_if_newer(
@@ -826,7 +827,7 @@ class LocalDatabaseWithConflictsTests(tests.DatabaseBaseTests):
             [('alternate:1', nested_doc), (doc1.rev, None)])
 
     def test_put_doc_if_newer_propagates_full_resolution(self):
-        doc1 = self.db.create_doc(simple_doc)
+        doc1 = self.db.create_doc_from_json(simple_doc)
         doc2 = self.make_document(doc1.doc_id, 'alternate:1', nested_doc)
         self.db._put_doc_if_newer(
             doc2, save_conflict=True, replica_uid='r', replica_gen=1,
@@ -847,7 +848,7 @@ class LocalDatabaseWithConflictsTests(tests.DatabaseBaseTests):
         self.assertFalse(doc3.has_conflicts)
 
     def test_put_doc_if_newer_propagates_partial_resolution(self):
-        doc1 = self.db.create_doc(simple_doc)
+        doc1 = self.db.create_doc_from_json(simple_doc)
         doc2 = self.make_document(doc1.doc_id, 'altalt:1', '{}')
         self.db._put_doc_if_newer(
             doc2, save_conflict=True, replica_uid='r', replica_gen=1,
@@ -876,7 +877,7 @@ class LocalDatabaseWithConflictsTests(tests.DatabaseBaseTests):
             [('alternate:2|test:1', '{"good": 1}'), ('altalt:1', '{}')])
 
     def test_put_doc_if_newer_replica_uid(self):
-        doc1 = self.db.create_doc(simple_doc)
+        doc1 = self.db.create_doc_from_json(simple_doc)
         self.db._set_replica_gen_and_trans_id('other', 1, 'T-id')
         doc2 = self.make_document(doc1.doc_id, doc1.rev + '|other:1',
                                   nested_doc)
@@ -896,7 +897,7 @@ class LocalDatabaseWithConflictsTests(tests.DatabaseBaseTests):
     def test_put_doc_if_newer_autoresolve_2(self):
         # this is an ordering variant of _3, but that already works
         # adding the test explicitly to catch the regression easily
-        doc_a1 = self.db.create_doc(simple_doc)
+        doc_a1 = self.db.create_doc_from_json(simple_doc)
         doc_a2 = self.make_document(doc_a1.doc_id, 'test:2', "{}")
         doc_a1b1 = self.make_document(doc_a1.doc_id, 'test:1|other:1',
                                       '{"a":"42"}')
@@ -916,7 +917,7 @@ class LocalDatabaseWithConflictsTests(tests.DatabaseBaseTests):
         self.assertFalse(self.db.get_doc(doc_a1.doc_id).has_conflicts)
 
     def test_put_doc_if_newer_autoresolve_3(self):
-        doc_a1 = self.db.create_doc(simple_doc)
+        doc_a1 = self.db.create_doc_from_json(simple_doc)
         doc_a1b1 = self.make_document(doc_a1.doc_id, 'test:1|other:1', "{}")
         doc_a2 = self.make_document(doc_a1.doc_id, 'test:2',  '{"a":"42"}')
         doc_a3 = self.make_document(doc_a1.doc_id, 'test:3', "{}")
@@ -941,7 +942,7 @@ class LocalDatabaseWithConflictsTests(tests.DatabaseBaseTests):
         self.assertTrue(rev.is_newer(rev_a1b1))
 
     def test_put_doc_if_newer_autoresolve_4(self):
-        doc_a1 = self.db.create_doc(simple_doc)
+        doc_a1 = self.db.create_doc_from_json(simple_doc)
         doc_a1b1 = self.make_document(doc_a1.doc_id, 'test:1|other:1', None)
         doc_a2 = self.make_document(doc_a1.doc_id, 'test:2',  '{"a":"42"}')
         doc_a3 = self.make_document(doc_a1.doc_id, 'test:3', None)
@@ -966,7 +967,7 @@ class LocalDatabaseWithConflictsTests(tests.DatabaseBaseTests):
         self.assertTrue(rev.is_newer(rev_a1b1))
 
     def test_put_refuses_to_update_conflicted(self):
-        doc1 = self.db.create_doc(simple_doc)
+        doc1 = self.db.create_doc_from_json(simple_doc)
         content2 = '{"key": "altval"}'
         doc2 = self.make_document(doc1.doc_id, 'altrev:1', content2)
         self.db._put_doc_if_newer(
@@ -978,7 +979,7 @@ class LocalDatabaseWithConflictsTests(tests.DatabaseBaseTests):
         self.assertRaises(errors.ConflictedDoc, self.db.put_doc, doc2)
 
     def test_delete_refuses_for_conflicted(self):
-        doc1 = self.db.create_doc(simple_doc)
+        doc1 = self.db.create_doc_from_json(simple_doc)
         doc2 = self.make_document(doc1.doc_id, 'altrev:1', nested_doc)
         self.db._put_doc_if_newer(
             doc2, save_conflict=True, replica_uid='r', replica_gen=1,
@@ -997,7 +998,8 @@ class DatabaseIndexTests(tests.DatabaseBaseTests):
                          self.db.list_indexes())
 
     def test_create_index_on_non_ascii_field_name(self):
-        doc = self.db.create_doc(simplejson.dumps({u'\xe5': 'value'}))
+        doc = self.db.create_doc_from_json(
+            simplejson.dumps({u'\xe5': 'value'}))
         self.db.create_index('test-idx', u'\xe5')
         self.assertEqual([doc], self.db.get_from_index('test-idx', 'value'))
 
@@ -1007,17 +1009,19 @@ class DatabaseIndexTests(tests.DatabaseBaseTests):
             [('test-idx', [u'\xe5'])], self.db.list_indexes())
 
     def test_create_index_evaluates_it(self):
-        doc = self.db.create_doc(simple_doc)
+        doc = self.db.create_doc_from_json(simple_doc)
         self.db.create_index('test-idx', 'key')
         self.assertEqual([doc], self.db.get_from_index('test-idx', 'value'))
 
     def test_wildcard_matches_unicode_value(self):
-        doc = self.db.create_doc(simplejson.dumps({"key": u"valu\xe5"}))
+        doc = self.db.create_doc_from_json(simplejson.dumps(
+            {"key": u"valu\xe5"}))
         self.db.create_index('test-idx', 'key')
         self.assertEqual([doc], self.db.get_from_index('test-idx', '*'))
 
     def test_retrieve_unicode_value_from_index(self):
-        doc = self.db.create_doc(simplejson.dumps({"key": u"valu\xe5"}))
+        doc = self.db.create_doc_from_json(simplejson.dumps(
+            {"key": u"valu\xe5"}))
         self.db.create_index('test-idx', 'key')
         self.assertEqual(
             [doc], self.db.get_from_index('test-idx', u"valu\xe5"))
@@ -1034,8 +1038,8 @@ class DatabaseIndexTests(tests.DatabaseBaseTests):
         self.assertEqual([('test-idx', ['key'])], self.db.list_indexes())
 
     def test_create_index_after_deleting_document(self):
-        doc = self.db.create_doc(simple_doc)
-        doc2 = self.db.create_doc(simple_doc)
+        doc = self.db.create_doc_from_json(simple_doc)
+        doc2 = self.db.create_doc_from_json(simple_doc)
         self.db.delete_doc(doc2)
         self.db.create_index('test-idx', 'key')
         self.assertEqual([doc], self.db.get_from_index('test-idx', 'value'))
@@ -1048,30 +1052,30 @@ class DatabaseIndexTests(tests.DatabaseBaseTests):
 
     def test_create_adds_to_index(self):
         self.db.create_index('test-idx', 'key')
-        doc = self.db.create_doc(simple_doc)
+        doc = self.db.create_doc_from_json(simple_doc)
         self.assertEqual([doc], self.db.get_from_index('test-idx', 'value'))
 
     def test_get_from_index_unmatched(self):
-        self.db.create_doc(simple_doc)
+        self.db.create_doc_from_json(simple_doc)
         self.db.create_index('test-idx', 'key')
         self.assertEqual([], self.db.get_from_index('test-idx', 'novalue'))
 
     def test_create_index_multiple_exact_matches(self):
-        doc = self.db.create_doc(simple_doc)
-        doc2 = self.db.create_doc(simple_doc)
+        doc = self.db.create_doc_from_json(simple_doc)
+        doc2 = self.db.create_doc_from_json(simple_doc)
         self.db.create_index('test-idx', 'key')
         self.assertEqual(
             sorted([doc, doc2]),
             sorted(self.db.get_from_index('test-idx', 'value')))
 
     def test_get_from_index(self):
-        doc = self.db.create_doc(simple_doc)
+        doc = self.db.create_doc_from_json(simple_doc)
         self.db.create_index('test-idx', 'key')
         self.assertEqual([doc], self.db.get_from_index('test-idx', 'value'))
 
     def test_get_from_index_multi(self):
         content = '{"key": "value", "key2": "value2"}'
-        doc = self.db.create_doc(content)
+        doc = self.db.create_doc_from_json(content)
         self.db.create_index('test-idx', 'key', 'key2')
         self.assertEqual(
             [doc], self.db.get_from_index('test-idx', 'value', 'value2'))
@@ -1105,83 +1109,89 @@ class DatabaseIndexTests(tests.DatabaseBaseTests):
             sorted(self.db.get_index_keys('test-idx')))
 
     def test_get_from_index_multi_ordered(self):
-        doc1 = self.db.create_doc('{"key": "value3", "key2": "value4"}')
-        doc2 = self.db.create_doc('{"key": "value2", "key2": "value3"}')
-        doc3 = self.db.create_doc('{"key": "value2", "key2": "value2"}')
-        doc4 = self.db.create_doc('{"key": "value1", "key2": "value1"}')
+        doc1 = self.db.create_doc_from_json(
+            '{"key": "value3", "key2": "value4"}')
+        doc2 = self.db.create_doc_from_json(
+            '{"key": "value2", "key2": "value3"}')
+        doc3 = self.db.create_doc_from_json(
+            '{"key": "value2", "key2": "value2"}')
+        doc4 = self.db.create_doc_from_json(
+            '{"key": "value1", "key2": "value1"}')
         self.db.create_index('test-idx', 'key', 'key2')
         self.assertEqual(
             [doc4, doc3, doc2, doc1],
             self.db.get_from_index('test-idx', 'v*', '*'))
 
     def test_get_range_from_index_start_end(self):
-        doc1 = self.db.create_doc('{"key": "value3"}')
-        doc2 = self.db.create_doc('{"key": "value2"}')
-        self.db.create_doc('{"key": "value4"}')
-        self.db.create_doc('{"key": "value1"}')
+        doc1 = self.db.create_doc_from_json('{"key": "value3"}')
+        doc2 = self.db.create_doc_from_json('{"key": "value2"}')
+        self.db.create_doc_from_json('{"key": "value4"}')
+        self.db.create_doc_from_json('{"key": "value1"}')
         self.db.create_index('test-idx', 'key')
         self.assertEqual(
             [doc2, doc1],
             self.db.get_range_from_index('test-idx', 'value2', 'value3'))
 
     def test_get_range_from_index_start(self):
-        doc1 = self.db.create_doc('{"key": "value3"}')
-        doc2 = self.db.create_doc('{"key": "value2"}')
-        doc3 = self.db.create_doc('{"key": "value4"}')
-        self.db.create_doc('{"key": "value1"}')
+        doc1 = self.db.create_doc_from_json('{"key": "value3"}')
+        doc2 = self.db.create_doc_from_json('{"key": "value2"}')
+        doc3 = self.db.create_doc_from_json('{"key": "value4"}')
+        self.db.create_doc_from_json('{"key": "value1"}')
         self.db.create_index('test-idx', 'key')
         self.assertEqual(
             [doc2, doc1, doc3],
             self.db.get_range_from_index('test-idx', 'value2'))
 
     def test_get_range_from_index_end(self):
-        self.db.create_doc('{"key": "value3"}')
-        doc2 = self.db.create_doc('{"key": "value2"}')
-        self.db.create_doc('{"key": "value4"}')
-        doc4 = self.db.create_doc('{"key": "value1"}')
+        self.db.create_doc_from_json('{"key": "value3"}')
+        doc2 = self.db.create_doc_from_json('{"key": "value2"}')
+        self.db.create_doc_from_json('{"key": "value4"}')
+        doc4 = self.db.create_doc_from_json('{"key": "value1"}')
         self.db.create_index('test-idx', 'key')
         self.assertEqual(
             [doc4, doc2],
             self.db.get_range_from_index('test-idx', None, 'value2'))
 
     def test_get_wildcard_range_from_index_start(self):
-        doc1 = self.db.create_doc('{"key": "value4"}')
-        doc2 = self.db.create_doc('{"key": "value23"}')
-        doc3 = self.db.create_doc('{"key": "value2"}')
-        doc4 = self.db.create_doc('{"key": "value22"}')
-        self.db.create_doc('{"key": "value1"}')
+        doc1 = self.db.create_doc_from_json('{"key": "value4"}')
+        doc2 = self.db.create_doc_from_json('{"key": "value23"}')
+        doc3 = self.db.create_doc_from_json('{"key": "value2"}')
+        doc4 = self.db.create_doc_from_json('{"key": "value22"}')
+        self.db.create_doc_from_json('{"key": "value1"}')
         self.db.create_index('test-idx', 'key')
         self.assertEqual(
             [doc3, doc4, doc2, doc1],
             self.db.get_range_from_index('test-idx', 'value2*'))
 
     def test_get_wildcard_range_from_index_end(self):
-        self.db.create_doc('{"key": "value4"}')
-        doc2 = self.db.create_doc('{"key": "value23"}')
-        doc3 = self.db.create_doc('{"key": "value2"}')
-        doc4 = self.db.create_doc('{"key": "value22"}')
-        doc5 = self.db.create_doc('{"key": "value1"}')
+        self.db.create_doc_from_json('{"key": "value4"}')
+        doc2 = self.db.create_doc_from_json('{"key": "value23"}')
+        doc3 = self.db.create_doc_from_json('{"key": "value2"}')
+        doc4 = self.db.create_doc_from_json('{"key": "value22"}')
+        doc5 = self.db.create_doc_from_json('{"key": "value1"}')
         self.db.create_index('test-idx', 'key')
         self.assertEqual(
             [doc5, doc3, doc4, doc2],
             self.db.get_range_from_index('test-idx', None, 'value2*'))
 
     def test_get_wildcard_range_from_index_start_end(self):
-        self.db.create_doc('{"key": "a"}')
-        self.db.create_doc('{"key": "boo3"}')
-        doc3 = self.db.create_doc('{"key": "catalyst"}')
-        doc4 = self.db.create_doc('{"key": "whaever"}')
-        self.db.create_doc('{"key": "zerg"}')
+        self.db.create_doc_from_json('{"key": "a"}')
+        self.db.create_doc_from_json('{"key": "boo3"}')
+        doc3 = self.db.create_doc_from_json('{"key": "catalyst"}')
+        doc4 = self.db.create_doc_from_json('{"key": "whaever"}')
+        self.db.create_doc_from_json('{"key": "zerg"}')
         self.db.create_index('test-idx', 'key')
         self.assertEqual(
             [doc3, doc4],
             self.db.get_range_from_index('test-idx', 'cat*', 'zap*'))
 
     def test_get_range_from_index_multi_column_start_end(self):
-        self.db.create_doc('{"key": "value3", "key2": "value4"}')
-        doc2 = self.db.create_doc('{"key": "value2", "key2": "value3"}')
-        doc3 = self.db.create_doc('{"key": "value2", "key2": "value2"}')
-        self.db.create_doc('{"key": "value1", "key2": "value1"}')
+        self.db.create_doc_from_json('{"key": "value3", "key2": "value4"}')
+        doc2 = self.db.create_doc_from_json(
+            '{"key": "value2", "key2": "value3"}')
+        doc3 = self.db.create_doc_from_json(
+            '{"key": "value2", "key2": "value2"}')
+        self.db.create_doc_from_json('{"key": "value1", "key2": "value1"}')
         self.db.create_index('test-idx', 'key', 'key2')
         self.assertEqual(
             [doc3, doc2],
@@ -1189,20 +1199,25 @@ class DatabaseIndexTests(tests.DatabaseBaseTests):
                 'test-idx', ('value2', 'value2'), ('value2', 'value3')))
 
     def test_get_range_from_index_multi_column_start(self):
-        doc1 = self.db.create_doc('{"key": "value3", "key2": "value4"}')
-        doc2 = self.db.create_doc('{"key": "value2", "key2": "value3"}')
-        self.db.create_doc('{"key": "value2", "key2": "value2"}')
-        self.db.create_doc('{"key": "value1", "key2": "value1"}')
+        doc1 = self.db.create_doc_from_json(
+            '{"key": "value3", "key2": "value4"}')
+        doc2 = self.db.create_doc_from_json(
+            '{"key": "value2", "key2": "value3"}')
+        self.db.create_doc_from_json('{"key": "value2", "key2": "value2"}')
+        self.db.create_doc_from_json('{"key": "value1", "key2": "value1"}')
         self.db.create_index('test-idx', 'key', 'key2')
         self.assertEqual(
             [doc2, doc1],
             self.db.get_range_from_index('test-idx', ('value2', 'value3')))
 
     def test_get_range_from_index_multi_column_end(self):
-        self.db.create_doc('{"key": "value3", "key2": "value4"}')
-        doc2 = self.db.create_doc('{"key": "value2", "key2": "value3"}')
-        doc3 = self.db.create_doc('{"key": "value2", "key2": "value2"}')
-        doc4 = self.db.create_doc('{"key": "value1", "key2": "value1"}')
+        self.db.create_doc_from_json('{"key": "value3", "key2": "value4"}')
+        doc2 = self.db.create_doc_from_json(
+            '{"key": "value2", "key2": "value3"}')
+        doc3 = self.db.create_doc_from_json(
+            '{"key": "value2", "key2": "value2"}')
+        doc4 = self.db.create_doc_from_json(
+            '{"key": "value1", "key2": "value1"}')
         self.db.create_index('test-idx', 'key', 'key2')
         self.assertEqual(
             [doc4, doc3, doc2],
@@ -1210,20 +1225,26 @@ class DatabaseIndexTests(tests.DatabaseBaseTests):
                 'test-idx', None, ('value2', 'value3')))
 
     def test_get_wildcard_range_from_index_multi_column_start(self):
-        doc1 = self.db.create_doc('{"key": "value3", "key2": "value4"}')
-        doc2 = self.db.create_doc('{"key": "value2", "key2": "value23"}')
-        doc3 = self.db.create_doc('{"key": "value2", "key2": "value2"}')
-        self.db.create_doc('{"key": "value1", "key2": "value1"}')
+        doc1 = self.db.create_doc_from_json(
+            '{"key": "value3", "key2": "value4"}')
+        doc2 = self.db.create_doc_from_json(
+            '{"key": "value2", "key2": "value23"}')
+        doc3 = self.db.create_doc_from_json(
+            '{"key": "value2", "key2": "value2"}')
+        self.db.create_doc_from_json('{"key": "value1", "key2": "value1"}')
         self.db.create_index('test-idx', 'key', 'key2')
         self.assertEqual(
             [doc3, doc2, doc1],
             self.db.get_range_from_index('test-idx', ('value2', 'value2*')))
 
     def test_get_wildcard_range_from_index_multi_column_end(self):
-        self.db.create_doc('{"key": "value3", "key2": "value4"}')
-        doc2 = self.db.create_doc('{"key": "value2", "key2": "value23"}')
-        doc3 = self.db.create_doc('{"key": "value2", "key2": "value2"}')
-        doc4 = self.db.create_doc('{"key": "value1", "key2": "value1"}')
+        self.db.create_doc_from_json('{"key": "value3", "key2": "value4"}')
+        doc2 = self.db.create_doc_from_json(
+            '{"key": "value2", "key2": "value23"}')
+        doc3 = self.db.create_doc_from_json(
+            '{"key": "value2", "key2": "value2"}')
+        doc4 = self.db.create_doc_from_json(
+            '{"key": "value1", "key2": "value1"}')
         self.db.create_index('test-idx', 'key', 'key2')
         self.assertEqual(
             [doc4, doc3, doc2],
@@ -1231,20 +1252,25 @@ class DatabaseIndexTests(tests.DatabaseBaseTests):
                 'test-idx', None, ('value2', 'value2*')))
 
     def test_get_glob_range_from_index_multi_column_start(self):
-        doc1 = self.db.create_doc('{"key": "value3", "key2": "value4"}')
-        doc2 = self.db.create_doc('{"key": "value2", "key2": "value23"}')
-        self.db.create_doc('{"key": "value1", "key2": "value2"}')
-        self.db.create_doc('{"key": "value1", "key2": "value1"}')
+        doc1 = self.db.create_doc_from_json(
+            '{"key": "value3", "key2": "value4"}')
+        doc2 = self.db.create_doc_from_json(
+            '{"key": "value2", "key2": "value23"}')
+        self.db.create_doc_from_json('{"key": "value1", "key2": "value2"}')
+        self.db.create_doc_from_json('{"key": "value1", "key2": "value1"}')
         self.db.create_index('test-idx', 'key', 'key2')
         self.assertEqual(
             [doc2, doc1],
             self.db.get_range_from_index('test-idx', ('value2', '*')))
 
     def test_get_glob_range_from_index_multi_column_end(self):
-        self.db.create_doc('{"key": "value3", "key2": "value4"}')
-        doc2 = self.db.create_doc('{"key": "value2", "key2": "value23"}')
-        doc3 = self.db.create_doc('{"key": "value1", "key2": "value2"}')
-        doc4 = self.db.create_doc('{"key": "value1", "key2": "value1"}')
+        self.db.create_doc_from_json('{"key": "value3", "key2": "value4"}')
+        doc2 = self.db.create_doc_from_json(
+            '{"key": "value2", "key2": "value23"}')
+        doc3 = self.db.create_doc_from_json(
+            '{"key": "value1", "key2": "value2"}')
+        doc4 = self.db.create_doc_from_json(
+            '{"key": "value1", "key2": "value1"}')
         self.db.create_index('test-idx', 'key', 'key2')
         self.assertEqual(
             [doc4, doc3, doc2],
@@ -1288,7 +1314,7 @@ class DatabaseIndexTests(tests.DatabaseBaseTests):
         self.assertEqual([], self.db.get_index_keys('test-idx'))
 
     def test_put_updates_index(self):
-        doc = self.db.create_doc(simple_doc)
+        doc = self.db.create_doc_from_json(simple_doc)
         self.db.create_index('test-idx', 'key')
         new_content = '{"key": "altval"}'
         doc.set_json(new_content)
@@ -1297,8 +1323,8 @@ class DatabaseIndexTests(tests.DatabaseBaseTests):
         self.assertEqual([doc], self.db.get_from_index('test-idx', 'altval'))
 
     def test_delete_updates_index(self):
-        doc = self.db.create_doc(simple_doc)
-        doc2 = self.db.create_doc(simple_doc)
+        doc = self.db.create_doc_from_json(simple_doc)
+        doc2 = self.db.create_doc_from_json(simple_doc)
         self.db.create_index('test-idx', 'key')
         self.assertEqual(
             sorted([doc, doc2]),
@@ -1331,12 +1357,12 @@ class DatabaseIndexTests(tests.DatabaseBaseTests):
 
     def test_get_all_from_index(self):
         self.db.create_index('test-idx', 'key')
-        doc1 = self.db.create_doc(simple_doc)
-        doc2 = self.db.create_doc(nested_doc)
+        doc1 = self.db.create_doc_from_json(simple_doc)
+        doc2 = self.db.create_doc_from_json(nested_doc)
         # This one should not be in the index
-        self.db.create_doc('{"no": "key"}')
+        self.db.create_doc_from_json('{"no": "key"}')
         diff_value_doc = '{"key": "diff value"}'
-        doc4 = self.db.create_doc(diff_value_doc)
+        doc4 = self.db.create_doc_from_json(diff_value_doc)
         # This is essentially a 'prefix' match, but we match every entry.
         self.assertEqual(
             sorted([doc1, doc2, doc4]),
@@ -1344,16 +1370,16 @@ class DatabaseIndexTests(tests.DatabaseBaseTests):
 
     def test_get_all_from_index_ordered(self):
         self.db.create_index('test-idx', 'key')
-        doc1 = self.db.create_doc('{"key": "value x"}')
-        doc2 = self.db.create_doc('{"key": "value b"}')
-        doc3 = self.db.create_doc('{"key": "value a"}')
-        doc4 = self.db.create_doc('{"key": "value m"}')
+        doc1 = self.db.create_doc_from_json('{"key": "value x"}')
+        doc2 = self.db.create_doc_from_json('{"key": "value b"}')
+        doc3 = self.db.create_doc_from_json('{"key": "value a"}')
+        doc4 = self.db.create_doc_from_json('{"key": "value m"}')
         # This is essentially a 'prefix' match, but we match every entry.
         self.assertEqual(
             [doc3, doc2, doc4, doc1], self.db.get_from_index('test-idx', '*'))
 
     def test_put_updates_when_adding_key(self):
-        doc = self.db.create_doc("{}")
+        doc = self.db.create_doc_from_json("{}")
         self.db.create_index('test-idx', 'key')
         self.assertEqual([], self.db.get_from_index('test-idx', '*'))
         doc.set_json(simple_doc)
@@ -1362,9 +1388,9 @@ class DatabaseIndexTests(tests.DatabaseBaseTests):
 
     def test_get_from_index_empty_string(self):
         self.db.create_index('test-idx', 'key')
-        doc1 = self.db.create_doc(simple_doc)
+        doc1 = self.db.create_doc_from_json(simple_doc)
         content2 = '{"key": ""}'
-        doc2 = self.db.create_doc(content2)
+        doc2 = self.db.create_doc_from_json(content2)
         self.assertEqual([doc2], self.db.get_from_index('test-idx', ''))
         # Empty string matches the wildcard.
         self.assertEqual(
@@ -1373,8 +1399,8 @@ class DatabaseIndexTests(tests.DatabaseBaseTests):
 
     def test_get_from_index_not_null(self):
         self.db.create_index('test-idx', 'key')
-        doc1 = self.db.create_doc(simple_doc)
-        self.db.create_doc('{"key": null}')
+        doc1 = self.db.create_doc_from_json(simple_doc)
+        self.db.create_doc_from_json('{"key": null}')
         self.assertEqual([doc1], self.db.get_from_index('test-idx', '*'))
 
     def test_get_partial_from_index(self):
@@ -1383,10 +1409,10 @@ class DatabaseIndexTests(tests.DatabaseBaseTests):
         content3 = '{"k1": "v1", "k2": "y2"}'
         # doc4 has a different k1 value, so it doesn't match the prefix.
         content4 = '{"k1": "NN", "k2": "v2"}'
-        doc1 = self.db.create_doc(content1)
-        doc2 = self.db.create_doc(content2)
-        doc3 = self.db.create_doc(content3)
-        self.db.create_doc(content4)
+        doc1 = self.db.create_doc_from_json(content1)
+        doc2 = self.db.create_doc_from_json(content2)
+        doc3 = self.db.create_doc_from_json(content3)
+        self.db.create_doc_from_json(content4)
         self.db.create_index('test-idx', 'k1', 'k2')
         self.assertEqual(
             sorted([doc1, doc2, doc3]),
@@ -1400,32 +1426,32 @@ class DatabaseIndexTests(tests.DatabaseBaseTests):
         # doc4 has a different k2 prefix value, so it doesn't match
         content4 = '{"k1": "v1", "k2": "ZZ"}'
         self.db.create_index('test-idx', 'k1', 'k2')
-        doc1 = self.db.create_doc(content1)
-        doc2 = self.db.create_doc(content2)
-        doc3 = self.db.create_doc(content3)
-        self.db.create_doc(content4)
+        doc1 = self.db.create_doc_from_json(content1)
+        doc2 = self.db.create_doc_from_json(content2)
+        doc3 = self.db.create_doc_from_json(content3)
+        self.db.create_doc_from_json(content4)
         self.assertEqual(
             sorted([doc1, doc2, doc3]),
             sorted(self.db.get_from_index('test-idx', "v1", "v*")))
 
     def test_nested_index(self):
-        doc = self.db.create_doc(nested_doc)
+        doc = self.db.create_doc_from_json(nested_doc)
         self.db.create_index('test-idx', 'sub.doc')
         self.assertEqual(
             [doc], self.db.get_from_index('test-idx', 'underneath'))
-        doc2 = self.db.create_doc(nested_doc)
+        doc2 = self.db.create_doc_from_json(nested_doc)
         self.assertEqual(
             sorted([doc, doc2]),
             sorted(self.db.get_from_index('test-idx', 'underneath')))
 
     def test_nested_nonexistent(self):
-        self.db.create_doc(nested_doc)
+        self.db.create_doc_from_json(nested_doc)
         # sub exists, but sub.foo does not:
         self.db.create_index('test-idx', 'sub.foo')
         self.assertEqual([], self.db.get_from_index('test-idx', '*'))
 
     def test_nested_nonexistent2(self):
-        self.db.create_doc(nested_doc)
+        self.db.create_doc_from_json(nested_doc)
         # sub exists, but sub.foo does not:
         self.db.create_index('test-idx', 'sub.foo.bar.baz.qux.fnord')
         self.assertEqual([], self.db.get_from_index('test-idx', '*'))
@@ -1433,20 +1459,20 @@ class DatabaseIndexTests(tests.DatabaseBaseTests):
     def test_index_list1(self):
         self.db.create_index("index", "name")
         content = '{"name": ["foo", "bar"]}'
-        doc = self.db.create_doc(content)
+        doc = self.db.create_doc_from_json(content)
         rows = self.db.get_from_index("index", "bar")
         self.assertEqual([doc], rows)
 
     def test_index_list2(self):
         self.db.create_index("index", "name")
         content = '{"name": ["foo", "bar"]}'
-        doc = self.db.create_doc(content)
+        doc = self.db.create_doc_from_json(content)
         rows = self.db.get_from_index("index", "foo")
         self.assertEqual([doc], rows)
 
     def test_get_from_index_case_sensitive(self):
         self.db.create_index('test-idx', 'key')
-        doc1 = self.db.create_doc(simple_doc)
+        doc1 = self.db.create_doc_from_json(simple_doc)
         self.assertEqual([], self.db.get_from_index('test-idx', 'V*'))
         self.assertEqual([doc1], self.db.get_from_index('test-idx', 'v*'))
 
@@ -1467,9 +1493,9 @@ class DatabaseIndexTests(tests.DatabaseBaseTests):
         content1 = '{"key": "va%lue"}'
         content2 = '{"key": "value"}'
         content3 = '{"key": "va_lue"}'
-        doc1 = self.db.create_doc(content1)
-        self.db.create_doc(content2)
-        doc3 = self.db.create_doc(content3)
+        doc1 = self.db.create_doc_from_json(content1)
+        self.db.create_doc_from_json(content2)
+        doc3 = self.db.create_doc_from_json(content3)
         # The '%' in the search should be treated literally, not as a sql
         # globbing character.
         self.assertEqual([doc1], self.db.get_from_index('test-idx', 'va%*'))
@@ -1479,21 +1505,21 @@ class DatabaseIndexTests(tests.DatabaseBaseTests):
     def test_get_from_index_with_lower(self):
         self.db.create_index("index", "lower(name)")
         content = '{"name": "Foo"}'
-        doc = self.db.create_doc(content)
+        doc = self.db.create_doc_from_json(content)
         rows = self.db.get_from_index("index", "foo")
         self.assertEqual([doc], rows)
 
     def test_get_from_index_with_lower_matches_same_case(self):
         self.db.create_index("index", "lower(name)")
         content = '{"name": "foo"}'
-        doc = self.db.create_doc(content)
+        doc = self.db.create_doc_from_json(content)
         rows = self.db.get_from_index("index", "foo")
         self.assertEqual([doc], rows)
 
     def test_index_lower_doesnt_match_different_case(self):
         self.db.create_index("index", "lower(name)")
         content = '{"name": "Foo"}'
-        self.db.create_doc(content)
+        self.db.create_doc_from_json(content)
         rows = self.db.get_from_index("index", "Foo")
         self.assertEqual([], rows)
 
@@ -1501,93 +1527,93 @@ class DatabaseIndexTests(tests.DatabaseBaseTests):
         self.db.create_index("index", "lower(name)")
         self.db.create_index("other_index", "name")
         content = '{"name": "Foo"}'
-        self.db.create_doc(content)
+        self.db.create_doc_from_json(content)
         rows = self.db.get_from_index("index", "Foo")
         self.assertEqual(0, len(rows))
 
     def test_index_split_words_match_first(self):
         self.db.create_index("index", "split_words(name)")
         content = '{"name": "foo bar"}'
-        doc = self.db.create_doc(content)
+        doc = self.db.create_doc_from_json(content)
         rows = self.db.get_from_index("index", "foo")
         self.assertEqual([doc], rows)
 
     def test_index_split_words_match_second(self):
         self.db.create_index("index", "split_words(name)")
         content = '{"name": "foo bar"}'
-        doc = self.db.create_doc(content)
+        doc = self.db.create_doc_from_json(content)
         rows = self.db.get_from_index("index", "bar")
         self.assertEqual([doc], rows)
 
     def test_index_split_words_match_both(self):
         self.db.create_index("index", "split_words(name)")
         content = '{"name": "foo foo"}'
-        doc = self.db.create_doc(content)
+        doc = self.db.create_doc_from_json(content)
         rows = self.db.get_from_index("index", "foo")
         self.assertEqual([doc], rows)
 
     def test_index_split_words_double_space(self):
         self.db.create_index("index", "split_words(name)")
         content = '{"name": "foo  bar"}'
-        doc = self.db.create_doc(content)
+        doc = self.db.create_doc_from_json(content)
         rows = self.db.get_from_index("index", "bar")
         self.assertEqual([doc], rows)
 
     def test_index_split_words_leading_space(self):
         self.db.create_index("index", "split_words(name)")
         content = '{"name": " foo bar"}'
-        doc = self.db.create_doc(content)
+        doc = self.db.create_doc_from_json(content)
         rows = self.db.get_from_index("index", "foo")
         self.assertEqual([doc], rows)
 
     def test_index_split_words_trailing_space(self):
         self.db.create_index("index", "split_words(name)")
         content = '{"name": "foo bar "}'
-        doc = self.db.create_doc(content)
+        doc = self.db.create_doc_from_json(content)
         rows = self.db.get_from_index("index", "bar")
         self.assertEqual([doc], rows)
 
     def test_get_from_index_with_number(self):
         self.db.create_index("index", "number(foo, 5)")
         content = '{"foo": 12}'
-        doc = self.db.create_doc(content)
+        doc = self.db.create_doc_from_json(content)
         rows = self.db.get_from_index("index", "00012")
         self.assertEqual([doc], rows)
 
     def test_get_from_index_with_number_bigger_than_padding(self):
         self.db.create_index("index", "number(foo, 5)")
         content = '{"foo": 123456}'
-        doc = self.db.create_doc(content)
+        doc = self.db.create_doc_from_json(content)
         rows = self.db.get_from_index("index", "123456")
         self.assertEqual([doc], rows)
 
     def test_number_mapping_ignores_non_numbers(self):
         self.db.create_index("index", "number(foo, 5)")
         content = '{"foo": 56}'
-        doc1 = self.db.create_doc(content)
+        doc1 = self.db.create_doc_from_json(content)
         content = '{"foo": "this is not a maigret painting"}'
-        self.db.create_doc(content)
+        self.db.create_doc_from_json(content)
         rows = self.db.get_from_index("index", "*")
         self.assertEqual([doc1], rows)
 
     def test_get_from_index_with_bool(self):
         self.db.create_index("index", "bool(foo)")
         content = '{"foo": true}'
-        doc = self.db.create_doc(content)
+        doc = self.db.create_doc_from_json(content)
         rows = self.db.get_from_index("index", "1")
         self.assertEqual([doc], rows)
 
     def test_get_from_index_with_bool_false(self):
         self.db.create_index("index", "bool(foo)")
         content = '{"foo": false}'
-        doc = self.db.create_doc(content)
+        doc = self.db.create_doc_from_json(content)
         rows = self.db.get_from_index("index", "0")
         self.assertEqual([doc], rows)
 
     def test_get_from_index_with_non_bool(self):
         self.db.create_index("index", "bool(foo)")
         content = '{"foo": 42}'
-        self.db.create_doc(content)
+        self.db.create_doc_from_json(content)
         rows = self.db.get_from_index("index", "*")
         self.assertEqual([], rows)
 
@@ -1596,9 +1622,9 @@ class DatabaseIndexTests(tests.DatabaseBaseTests):
         content1 = '{"key": "value1"}'
         content2 = '{"key": "value2"}'
         content3 = '{"key": "value2"}'
-        self.db.create_doc(content1)
-        self.db.create_doc(content2)
-        self.db.create_doc(content3)
+        self.db.create_doc_from_json(content1)
+        self.db.create_doc_from_json(content2)
+        self.db.create_doc_from_json(content3)
         self.assertEqual(
             [('value1',), ('value2',)],
             sorted(self.db.get_index_keys('test-idx')))
@@ -1609,10 +1635,10 @@ class DatabaseIndexTests(tests.DatabaseBaseTests):
         content2 = '{"key1": "value2", "key2": "val2-2"}'
         content3 = '{"key1": "value2", "key2": "val2-2"}'
         content4 = '{"key1": "value2", "key2": "val3"}'
-        self.db.create_doc(content1)
-        self.db.create_doc(content2)
-        self.db.create_doc(content3)
-        self.db.create_doc(content4)
+        self.db.create_doc_from_json(content1)
+        self.db.create_doc_from_json(content2)
+        self.db.create_doc_from_json(content3)
+        self.db.create_doc_from_json(content4)
         self.assertEqual([
             ('value1', 'val2-1'),
             ('value2', 'val2-2'),
@@ -1622,13 +1648,17 @@ class DatabaseIndexTests(tests.DatabaseBaseTests):
 
 class PythonBackendTests(tests.DatabaseBaseTests):
 
+    def setUp(self):
+        super(PythonBackendTests, self).setUp()
+        self.simple_doc = simplejson.loads(simple_doc)
+
     def test_create_doc_with_factory(self):
         self.db.set_document_factory(TestAlternativeDocument)
-        doc = self.db.create_doc(simple_doc, doc_id='my_doc_id')
+        doc = self.db.create_doc(self.simple_doc, doc_id='my_doc_id')
         self.assertTrue(isinstance(doc, TestAlternativeDocument))
 
     def test_get_doc_after_put_with_factory(self):
-        doc = self.db.create_doc(simple_doc, doc_id='my_doc_id')
+        doc = self.db.create_doc(self.simple_doc, doc_id='my_doc_id')
         self.db.set_document_factory(TestAlternativeDocument)
         result = self.db.get_doc('my_doc_id')
         self.assertTrue(isinstance(result, TestAlternativeDocument))
@@ -1643,13 +1673,13 @@ class PythonBackendTests(tests.DatabaseBaseTests):
 
     def test_get_all_docs_with_factory(self):
         self.db.set_document_factory(TestAlternativeDocument)
-        self.db.create_doc(simple_doc)
+        self.db.create_doc(self.simple_doc)
         self.assertTrue(isinstance(
             self.db.get_all_docs()[1][0], TestAlternativeDocument))
 
     def test_get_docs_conflicted_with_factory(self):
         self.db.set_document_factory(TestAlternativeDocument)
-        doc1 = self.db.create_doc(simple_doc)
+        doc1 = self.db.create_doc(self.simple_doc)
         doc2 = self.make_document(doc1.doc_id, 'alternate:1', nested_doc)
         self.db._put_doc_if_newer(
             doc2, save_conflict=True, replica_uid='r', replica_gen=1,
@@ -1660,7 +1690,7 @@ class PythonBackendTests(tests.DatabaseBaseTests):
 
     def test_get_from_index_with_factory(self):
         self.db.set_document_factory(TestAlternativeDocument)
-        self.db.create_doc(simple_doc)
+        self.db.create_doc(self.simple_doc)
         self.db.create_index('test-idx', 'key')
         self.assertTrue(
             isinstance(
@@ -1668,7 +1698,7 @@ class PythonBackendTests(tests.DatabaseBaseTests):
                 TestAlternativeDocument))
 
     def test_sync_exchange_updates_indexes(self):
-        doc = self.db.create_doc(simple_doc)
+        doc = self.db.create_doc(self.simple_doc)
         self.db.create_index('test-idx', 'key')
         new_content = '{"key": "altval"}'
         other_rev = 'test:1|z:2'

@@ -70,13 +70,13 @@ class TestCDatabase(BackendTests):
     def test__get_generation(self):
         db = c_backend_wrapper.CDatabase(':memory:')
         self.assertEqual(0, db._get_generation())
-        db.create_doc(tests.simple_doc)
+        db.create_doc_from_json(tests.simple_doc)
         self.assertEqual(1, db._get_generation())
 
     def test__get_generation_info(self):
         db = c_backend_wrapper.CDatabase(':memory:')
         self.assertEqual((0, ''), db._get_generation_info())
-        db.create_doc(tests.simple_doc)
+        db.create_doc_from_json(tests.simple_doc)
         info = db._get_generation_info()
         self.assertEqual(1, info[0])
         self.assertTrue(info[1].startswith('T-'))
@@ -107,14 +107,14 @@ class TestCDatabase(BackendTests):
         # We manually poke data into the DB, so that we test just the "get_doc"
         # code, rather than also testing the index management code.
         self.db = c_backend_wrapper.CDatabase(':memory:')
-        doc = self.db.create_doc(tests.simple_doc)
+        doc = self.db.create_doc_from_json(tests.simple_doc)
         self.db.create_index_list("key-idx", ["key"])
         docs = self.db.get_from_index('key-idx', 'value')
         self.assertEqual([doc], docs)
 
     def test_create_index_list_on_non_ascii_field_name(self):
         self.db = c_backend_wrapper.CDatabase(':memory:')
-        doc = self.db.create_doc(simplejson.dumps({u'\xe5': 'value'}))
+        doc = self.db.create_doc_from_json(simplejson.dumps({u'\xe5': 'value'}))
         self.db.create_index_list('test-idx', [u'\xe5'])
         self.assertEqual([doc], self.db.get_from_index('test-idx', 'value'))
 
@@ -126,13 +126,13 @@ class TestCDatabase(BackendTests):
 
     def test_create_index_evaluates_it(self):
         self.db = c_backend_wrapper.CDatabase(':memory:')
-        doc = self.db.create_doc(tests.simple_doc)
+        doc = self.db.create_doc_from_json(tests.simple_doc)
         self.db.create_index_list('test-idx', ['key'])
         self.assertEqual([doc], self.db.get_from_index('test-idx', 'value'))
 
     def test_wildcard_matches_unicode_value(self):
         self.db = c_backend_wrapper.CDatabase(':memory:')
-        doc = self.db.create_doc(simplejson.dumps({"key": u"valu\xe5"}))
+        doc = self.db.create_doc_from_json(simplejson.dumps({"key": u"valu\xe5"}))
         self.db.create_index_list('test-idx', ['key'])
         self.assertEqual([doc], self.db.get_from_index('test-idx', '*'))
 
@@ -151,8 +151,8 @@ class TestCDatabase(BackendTests):
 
     def test_create_index_after_deleting_document(self):
         self.db = c_backend_wrapper.CDatabase(':memory:')
-        doc = self.db.create_doc(tests.simple_doc)
-        doc2 = self.db.create_doc(tests.simple_doc)
+        doc = self.db.create_doc_from_json(tests.simple_doc)
+        doc2 = self.db.create_doc_from_json(tests.simple_doc)
         self.db.delete_doc(doc2)
         self.db.create_index_list('test-idx', ['key'])
         self.assertEqual([doc], self.db.get_from_index('test-idx', 'value'))
@@ -161,7 +161,7 @@ class TestCDatabase(BackendTests):
         # We manually poke data into the DB, so that we test just the "get_doc"
         # code, rather than also testing the index management code.
         self.db = c_backend_wrapper.CDatabase(':memory:')
-        doc = self.db.create_doc(tests.simple_doc)
+        doc = self.db.create_doc_from_json(tests.simple_doc)
         self.db.create_index("key-idx", "key")
         docs = self.db.get_from_index('key-idx', 'value')
         self.assertEqual([doc], docs)
@@ -170,7 +170,7 @@ class TestCDatabase(BackendTests):
         # We manually poke data into the DB, so that we test just the "get_doc"
         # code, rather than also testing the index management code.
         self.db = c_backend_wrapper.CDatabase(':memory:')
-        doc = self.db.create_doc(tests.simple_doc)
+        doc = self.db.create_doc_from_json(tests.simple_doc)
         self.db.create_index("key-idx", "key")
         docs = self.db.get_from_index_list('key-idx', ['value'])
         self.assertEqual([doc], docs)
@@ -178,7 +178,7 @@ class TestCDatabase(BackendTests):
     def test_get_from_index_list_multi(self):
         self.db = c_backend_wrapper.CDatabase(':memory:')
         content = '{"key": "value", "key2": "value2"}'
-        doc = self.db.create_doc(content)
+        doc = self.db.create_doc_from_json(content)
         self.db.create_index('test-idx', 'key', 'key2')
         self.assertEqual(
             [doc],
@@ -186,10 +186,10 @@ class TestCDatabase(BackendTests):
 
     def test_get_from_index_list_multi_ordered(self):
         self.db = c_backend_wrapper.CDatabase(':memory:')
-        doc1 = self.db.create_doc('{"key": "value3", "key2": "value4"}')
-        doc2 = self.db.create_doc('{"key": "value2", "key2": "value3"}')
-        doc3 = self.db.create_doc('{"key": "value2", "key2": "value2"}')
-        doc4 = self.db.create_doc('{"key": "value1", "key2": "value1"}')
+        doc1 = self.db.create_doc_from_json('{"key": "value3", "key2": "value4"}')
+        doc2 = self.db.create_doc_from_json('{"key": "value2", "key2": "value3"}')
+        doc3 = self.db.create_doc_from_json('{"key": "value2", "key2": "value2"}')
+        doc4 = self.db.create_doc_from_json('{"key": "value1", "key2": "value1"}')
         self.db.create_index('test-idx', 'key', 'key2')
         self.assertEqual(
             [doc4, doc3, doc2, doc1],
@@ -197,14 +197,14 @@ class TestCDatabase(BackendTests):
 
     def test_get_from_index_2(self):
         self.db = c_backend_wrapper.CDatabase(':memory:')
-        doc = self.db.create_doc(tests.nested_doc)
+        doc = self.db.create_doc_from_json(tests.nested_doc)
         self.db.create_index("multi-idx", "key", "sub.doc")
         docs = self.db.get_from_index('multi-idx', 'value', 'underneath')
         self.assertEqual([doc], docs)
 
     def test_get_index_keys(self):
         self.db = c_backend_wrapper.CDatabase(':memory:')
-        self.db.create_doc(tests.simple_doc)
+        self.db.create_doc_from_json(tests.simple_doc)
         self.db.create_index("key-idx", "key")
         keys = self.db.get_index_keys('key-idx')
         self.assertEqual([("value",)], keys)
@@ -303,7 +303,7 @@ class TestCSyncTarget(BackendTests):
         self.assertEqual(['doc-id'], exc.get_seen_ids())
 
     def test_sync_exchange_conflicted_doc(self):
-        doc = self.db.create_doc(tests.simple_doc)
+        doc = self.db.create_doc_from_json(tests.simple_doc)
         exc = self.st._get_sync_exchange("source-uid", 5)
         doc2 = c_backend_wrapper.make_document(doc.doc_id, 'replica:1',
                 tests.nested_doc)
@@ -315,7 +315,7 @@ class TestCSyncTarget(BackendTests):
         self.assertEqual([], exc.get_seen_ids())
 
     def test_sync_exchange_find_doc_ids(self):
-        doc = self.db.create_doc(tests.simple_doc)
+        doc = self.db.create_doc_from_json(tests.simple_doc)
         exc = self.st._get_sync_exchange("source-uid", 0)
         self.assertEqual(0, exc.target_gen)
         exc.find_doc_ids_to_return()
@@ -326,8 +326,8 @@ class TestCSyncTarget(BackendTests):
         self.assertEqual(1, exc.target_gen)
 
     def test_sync_exchange_find_doc_ids_not_including_recently_inserted(self):
-        doc1 = self.db.create_doc(tests.simple_doc)
-        doc2 = self.db.create_doc(tests.nested_doc)
+        doc1 = self.db.create_doc_from_json(tests.simple_doc)
+        doc2 = self.db.create_doc_from_json(tests.nested_doc)
         exc = self.st._get_sync_exchange("source-uid", 0)
         doc3 = c_backend_wrapper.make_document(doc1.doc_id,
                 doc1.rev + "|zreplica:2", tests.simple_doc)
@@ -343,16 +343,16 @@ class TestCSyncTarget(BackendTests):
         def return_doc_cb(doc, gen, trans_id):
             returned.append((doc, gen, trans_id))
 
-        doc1 = self.db.create_doc(tests.simple_doc)
+        doc1 = self.db.create_doc_from_json(tests.simple_doc)
         exc = self.st._get_sync_exchange("source-uid", 0)
         exc.find_doc_ids_to_return()
         exc.return_docs(return_doc_cb)
         self.assertEqual((doc1, 1), returned[0][:-1])
 
     def test_sync_exchange_doc_ids(self):
-        doc1 = self.db.create_doc(tests.simple_doc, doc_id='doc-1')
+        doc1 = self.db.create_doc_from_json(tests.simple_doc, doc_id='doc-1')
         db2 = c_backend_wrapper.CDatabase(':memory:')
-        doc2 = db2.create_doc(tests.nested_doc, doc_id='doc-2')
+        doc2 = db2.create_doc_from_json(tests.nested_doc, doc_id='doc-2')
         returned = []
 
         def return_doc_cb(doc, gen, trans_id):
@@ -419,11 +419,11 @@ class TestSyncCtoHTTPViaC(tests.TestCaseWithServer):
 
     def test_trivial_sync(self):
         mem_db = self.request_state._create_database('test.db')
-        mem_doc = mem_db.create_doc(tests.nested_doc)
+        mem_doc = mem_db.create_doc_from_json(tests.nested_doc)
         url = self.getURL('test.db')
         target = c_backend_wrapper.create_http_sync_target(url)
         db = c_backend_wrapper.CDatabase(':memory:')
-        doc = db.create_doc(tests.simple_doc)
+        doc = db.create_doc_from_json(tests.simple_doc)
         c_backend_wrapper.sync_db_to_target(db, target)
         self.assertGetDoc(mem_db, doc.doc_id, doc.rev, doc.get_json(), False)
         self.assertGetDoc(db, mem_doc.doc_id, mem_doc.rev, mem_doc.get_json(),
@@ -431,7 +431,7 @@ class TestSyncCtoHTTPViaC(tests.TestCaseWithServer):
 
     def test_unavailable(self):
         mem_db = self.request_state._create_database('test.db')
-        mem_db.create_doc(tests.nested_doc)
+        mem_db.create_doc_from_json(tests.nested_doc)
         tries = []
 
         def wrapper(instance, *args, **kwargs):
@@ -442,7 +442,7 @@ class TestSyncCtoHTTPViaC(tests.TestCaseWithServer):
         url = self.getURL('test.db')
         target = c_backend_wrapper.create_http_sync_target(url)
         db = c_backend_wrapper.CDatabase(':memory:')
-        db.create_doc(tests.simple_doc)
+        db.create_doc_from_json(tests.simple_doc)
         self.assertRaises(
             errors.Unavailable, c_backend_wrapper.sync_db_to_target, db,
             target)
@@ -450,7 +450,7 @@ class TestSyncCtoHTTPViaC(tests.TestCaseWithServer):
 
     def test_unavailable_then_available(self):
         mem_db = self.request_state._create_database('test.db')
-        mem_doc = mem_db.create_doc(tests.nested_doc)
+        mem_doc = mem_db.create_doc_from_json(tests.nested_doc)
         orig_whatschanged = mem_db.whats_changed
         tries = []
 
@@ -464,7 +464,7 @@ class TestSyncCtoHTTPViaC(tests.TestCaseWithServer):
         url = self.getURL('test.db')
         target = c_backend_wrapper.create_http_sync_target(url)
         db = c_backend_wrapper.CDatabase(':memory:')
-        doc = db.create_doc(tests.simple_doc)
+        doc = db.create_doc_from_json(tests.simple_doc)
         c_backend_wrapper.sync_db_to_target(db, target)
         self.assertEqual(1, len(tries))
         self.assertGetDoc(mem_db, doc.doc_id, doc.rev, doc.get_json(), False)
@@ -484,13 +484,13 @@ class TestSyncCtoOAuthHTTPViaC(tests.TestCaseWithServer):
 
     def test_trivial_sync(self):
         mem_db = self.request_state._create_database('test.db')
-        mem_doc = mem_db.create_doc(tests.nested_doc)
+        mem_doc = mem_db.create_doc_from_json(tests.nested_doc)
         url = self.getURL('~/test.db')
         target = c_backend_wrapper.create_oauth_http_sync_target(url,
                 tests.consumer1.key, tests.consumer1.secret,
                 tests.token1.key, tests.token1.secret)
         db = c_backend_wrapper.CDatabase(':memory:')
-        doc = db.create_doc(tests.simple_doc)
+        doc = db.create_doc_from_json(tests.simple_doc)
         c_backend_wrapper.sync_db_to_target(db, target)
         self.assertGetDoc(mem_db, doc.doc_id, doc.rev, doc.get_json(), False)
         self.assertGetDoc(db, mem_doc.doc_id, mem_doc.rev, mem_doc.get_json(),

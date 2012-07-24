@@ -210,7 +210,7 @@ class TestCmdCreate(TestCaseWithDB):
 class TestCmdDelete(TestCaseWithDB):
 
     def test_delete(self):
-        doc = self.db.create_doc(tests.simple_doc)
+        doc = self.db.create_doc_from_json(tests.simple_doc)
         cmd = self.make_command(client.CmdDelete)
         cmd.run(self.db_path, doc.doc_id, doc.rev)
         doc2 = self.db.get_doc(doc.doc_id, include_deleted=True)
@@ -221,7 +221,7 @@ class TestCmdDelete(TestCaseWithDB):
         self.assertEqual('rev: %s\n' % (doc2.rev,), cmd.stderr.getvalue())
 
     def test_delete_fails_if_nonexistent(self):
-        doc = self.db.create_doc(tests.simple_doc)
+        doc = self.db.create_doc_from_json(tests.simple_doc)
         db2_path = self.db_path + '.typo'
         cmd = self.make_command(client.CmdDelete)
         # TODO: We should really not be showing a traceback here. But we need
@@ -242,7 +242,7 @@ class TestCmdDelete(TestCaseWithDB):
             cmd.run, self.db_path, 'no-doc-id', 'no-rev')
 
     def test_delete_bad_rev(self):
-        doc = self.db.create_doc(tests.simple_doc)
+        doc = self.db.create_doc_from_json(tests.simple_doc)
         cmd = self.make_command(client.CmdDelete)
         self.assertRaises(errors.RevisionConflict,
             cmd.run, self.db_path, doc.doc_id, 'not-the-actual-doc-rev:1')
@@ -253,7 +253,7 @@ class TestCmdGet(TestCaseWithDB):
 
     def setUp(self):
         super(TestCmdGet, self).setUp()
-        self.doc = self.db.create_doc(tests.simple_doc, doc_id='my-test-doc')
+        self.doc = self.db.create_doc_from_json(tests.simple_doc, doc_id='my-test-doc')
 
     def test_get_simple(self):
         cmd = self.make_command(client.CmdGet)
@@ -292,14 +292,14 @@ class TestCmdGetDocConflicts(TestCaseWithDB):
 
     def setUp(self):
         super(TestCmdGetDocConflicts, self).setUp()
-        self.doc1 = self.db.create_doc(tests.simple_doc, doc_id='my-doc')
+        self.doc1 = self.db.create_doc_from_json(tests.simple_doc, doc_id='my-doc')
         self.doc2 = self.make_document('my-doc', 'other:1', '{}', False)
         self.db._put_doc_if_newer(
             self.doc2, save_conflict=True, replica_uid='r', replica_gen=1,
             replica_trans_id='foo')
 
     def test_get_doc_conflicts_none(self):
-        self.db.create_doc(tests.simple_doc, doc_id='a-doc')
+        self.db.create_doc_from_json(tests.simple_doc, doc_id='a-doc')
         cmd = self.make_command(client.CmdGetDocConflicts)
         cmd.run(self.db_path, 'a-doc')
         self.assertEqual([],
@@ -354,7 +354,7 @@ class TestCmdPut(TestCaseWithDB):
 
     def setUp(self):
         super(TestCmdPut, self).setUp()
-        self.doc = self.db.create_doc(tests.simple_doc, doc_id='my-test-doc')
+        self.doc = self.db.create_doc_from_json(tests.simple_doc, doc_id='my-test-doc')
 
     def test_put_simple(self):
         cmd = self.make_command(client.CmdPut)
@@ -416,7 +416,7 @@ class TestCmdResolve(TestCaseWithDB):
 
     def setUp(self):
         super(TestCmdResolve, self).setUp()
-        self.doc1 = self.db.create_doc(tests.simple_doc, doc_id='my-doc')
+        self.doc1 = self.db.create_doc_from_json(tests.simple_doc, doc_id='my-doc')
         self.doc2 = self.make_document('my-doc', 'other:1', '{}', False)
         self.db._put_doc_if_newer(
             self.doc2, save_conflict=True, replica_uid='r', replica_gen=1,
@@ -477,8 +477,8 @@ class TestCmdSync(TestCaseWithDB):
         self.db2 = u1db_open(self.db2_path, create=True)
         self.addCleanup(self.db2.close)
         self.db2._set_replica_uid('test2')
-        self.doc = self.db.create_doc(tests.simple_doc, doc_id='test-id')
-        self.doc2 = self.db2.create_doc(tests.nested_doc, doc_id='my-test-id')
+        self.doc = self.db.create_doc_from_json(tests.simple_doc, doc_id='test-id')
+        self.doc2 = self.db2.create_doc_from_json(tests.nested_doc, doc_id='my-test-id')
 
     def test_sync(self):
         cmd = self.make_command(client.CmdSync)
@@ -501,8 +501,8 @@ class TestCmdSyncRemote(tests.TestCaseWithServer, TestCaseWithDB):
         self.db2 = self.request_state._create_database('test2.db')
 
     def test_sync_remote(self):
-        doc1 = self.db.create_doc(tests.simple_doc)
-        doc2 = self.db2.create_doc(tests.nested_doc)
+        doc1 = self.db.create_doc_from_json(tests.simple_doc)
+        doc2 = self.db2.create_doc_from_json(tests.nested_doc)
         db2_url = self.getURL('test2.db')
         self.assertTrue(db2_url.startswith('http://'))
         self.assertTrue(db2_url.endswith('/test2.db'))
@@ -626,7 +626,7 @@ class TestCmdGetIndexKeys(TestCaseWithDB):
 
     def test_get_index_keys(self):
         self.db.create_index("foo", "bar")
-        self.db.create_doc('{"bar": 42}')
+        self.db.create_doc_from_json('{"bar": 42}')
         cmd = self.make_command(client.CmdGetIndexKeys)
         retval = cmd.run(self.db_path, "foo")
         self.assertEqual(retval, None)
@@ -635,7 +635,7 @@ class TestCmdGetIndexKeys(TestCaseWithDB):
 
     def test_get_index_keys_nonascii(self):
         self.db.create_index("foo", "bar")
-        self.db.create_doc('{"bar": "\u00a4"}')
+        self.db.create_doc_from_json('{"bar": "\u00a4"}')
         cmd = self.make_command(client.CmdGetIndexKeys)
         retval = cmd.run(self.db_path, "foo")
         self.assertEqual(retval, None)
@@ -669,8 +669,8 @@ class TestCmdGetFromIndex(TestCaseWithDB):
 
     def test_get_from_index(self):
         self.db.create_index("index", "key")
-        doc1 = self.db.create_doc(tests.simple_doc)
-        doc2 = self.db.create_doc(tests.nested_doc)
+        doc1 = self.db.create_doc_from_json(tests.simple_doc)
+        doc2 = self.db.create_doc_from_json(tests.nested_doc)
         cmd = self.make_command(client.CmdGetFromIndex)
         retval = cmd.run(self.db_path, "index", ["value"])
         self.assertEqual(retval, None)
@@ -815,7 +815,7 @@ class TestCommandLine(TestCaseWithDB, RunMainHelper):
             self.assertRegexpMatches(stripped, expected_re)
 
     def test_get(self):
-        doc = self.db.create_doc(tests.simple_doc, doc_id='test-id')
+        doc = self.db.create_doc_from_json(tests.simple_doc, doc_id='test-id')
         ret, stdout, stderr = self.run_main(['get', self.db_path, 'test-id'])
         self.assertEqual(0, ret)
         self.assertEqual(tests.simple_doc + "\n", stdout)
@@ -824,7 +824,7 @@ class TestCommandLine(TestCaseWithDB, RunMainHelper):
         self.assertEqual(1, ret)
 
     def test_delete(self):
-        doc = self.db.create_doc(tests.simple_doc, doc_id='test-id')
+        doc = self.db.create_doc_from_json(tests.simple_doc, doc_id='test-id')
         ret, stdout, stderr = self.run_main(
             ['delete', self.db_path, 'test-id', doc.rev])
         doc = self.db.get_doc('test-id', include_deleted=True)
@@ -838,7 +838,7 @@ class TestCommandLine(TestCaseWithDB, RunMainHelper):
         u1db_open(path, create=False)
 
     def test_put(self):
-        doc = self.db.create_doc(tests.simple_doc, doc_id='test-id')
+        doc = self.db.create_doc_from_json(tests.simple_doc, doc_id='test-id')
         ret, stdout, stderr = self.run_main(
             ['put', self.db_path, 'test-id', doc.rev],
             stdin=tests.nested_doc)
@@ -850,7 +850,7 @@ class TestCommandLine(TestCaseWithDB, RunMainHelper):
         self.assertEqual('rev: %s\n' % (doc.rev,), stderr)
 
     def test_sync(self):
-        doc = self.db.create_doc(tests.simple_doc, doc_id='test-id')
+        doc = self.db.create_doc_from_json(tests.simple_doc, doc_id='test-id')
         self.db2_path = self.working_dir + '/test2.db'
         self.db2 = u1db_open(self.db2_path, create=True)
         self.addCleanup(self.db2.close)

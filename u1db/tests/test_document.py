@@ -97,6 +97,12 @@ class TestPyDocument(tests.TestCase):
         doc.content = {"content": "new"}
         self.assertEqual('{"content": "new"}', doc.get_json())
 
+    def test_set_bad_content(self):
+        doc = self.make_document('id', 'rev', '{"content":""}')
+        self.assertRaises(
+            errors.InvalidContent, setattr, doc, 'content',
+            '{"content": "new"}')
+
     def test_is_tombstone(self):
         doc_a = self.make_document('a', 'b', '{}')
         self.assertFalse(doc_a.is_tombstone())

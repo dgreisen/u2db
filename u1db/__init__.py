@@ -17,9 +17,9 @@
 """U1DB"""
 
 import simplejson
-from u1db.errors import InvalidJSON
+from u1db.errors import InvalidJSON, InvalidContent
 
-__version_info__ = (0, 0, 1, 'dev', 0)
+__version_info__ = (0, 0, 3)
 __version__ = '.'.join(map(str, __version_info__))
 
 
@@ -136,11 +136,26 @@ class Database(object):
         If the database specifies a maximum document size and the document
         exceeds it, create will fail and raise a DocumentTooBig exception.
 
-        :param content: The JSON document string
+        :param content: A Python dictionary.
         :param doc_id: An optional identifier specifying the document id.
         :return: Document
         """
         raise NotImplementedError(self.create_doc)
+
+    def create_doc_from_json(self, json, doc_id=None):
+        """Create a new document.
+
+        You can optionally specify the document identifier, but the document
+        must not already exist. See 'put_doc' if you want to override an
+        existing document.
+        If the database specifies a maximum document size and the document
+        exceeds it, create will fail and raise a DocumentTooBig exception.
+
+        :param json: The JSON document string
+        :param doc_id: An optional identifier specifying the document id.
+        :return: Document
+        """
+        raise NotImplementedError(self.create_doc_from_json)
 
     def put_doc(self, doc):
         """Update a document.
@@ -540,8 +555,18 @@ class Document(DocumentBase):
 
     def _set_content(self, content):
         """Set the dictionary representing this document."""
-        self._json = None
-        self._content = content
+        try:
+            tmp = simplejson.dumps(content)
+        except TypeError:
+            raise InvalidContent(
+                "Can not be converted to JSON: %r" % (content,))
+        if not tmp.startswith('{'):
+            raise InvalidContent(
+                "Can not be converted to a JSON object: %r." % (content,))
+        # We might as well store the JSON at this point since we did the work
+        # of encoding it, and it doesn't lose any information.
+        self._json = tmp
+        self._content = None
 
     content = property(
         _get_content, _set_content, doc="Content of the Document.")

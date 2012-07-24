@@ -17,6 +17,7 @@
 """Abstract classes and common implementations for the backends."""
 
 import re
+import simplejson
 import uuid
 
 import u1db
@@ -85,9 +86,17 @@ class CommonBackend(u1db.Database):
         raise NotImplementedError(self._has_conflicts)
 
     def create_doc(self, content, doc_id=None):
+        json = simplejson.dumps(content)
         if doc_id is None:
             doc_id = self._allocate_doc_id()
-        doc = self._factory(doc_id, None, content)
+        doc = self._factory(doc_id, None, json)
+        self.put_doc(doc)
+        return doc
+
+    def create_doc_from_json(self, json, doc_id=None):
+        if doc_id is None:
+            doc_id = self._allocate_doc_id()
+        doc = self._factory(doc_id, None, json)
         self.put_doc(doc)
         return doc
 

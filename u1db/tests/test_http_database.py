@@ -147,7 +147,7 @@ class TestHTTPDatabaseSimpleOperations(tests.TestCase):
 
     def test_create_doc_with_id(self):
         self.response_val = {'rev': 'doc-rev'}, {}
-        new_doc = self.db.create_doc('{"v": 1}', doc_id='doc-id')
+        new_doc = self.db.create_doc_from_json('{"v": 1}', doc_id='doc-id')
         self.assertEqual('doc-rev', new_doc.rev)
         self.assertEqual('doc-id', new_doc.doc_id)
         self.assertEqual('{"v": 1}', new_doc.get_json())
@@ -156,7 +156,7 @@ class TestHTTPDatabaseSimpleOperations(tests.TestCase):
 
     def test_create_doc_without_id(self):
         self.response_val = {'rev': 'doc-rev-2'}, {}
-        new_doc = self.db.create_doc('{"v": 3}')
+        new_doc = self.db.create_doc_from_json('{"v": 3}')
         self.assertEqual('D-', new_doc.doc_id[:2])
         self.assertEqual('doc-rev-2', new_doc.rev)
         self.assertEqual('{"v": 3}', new_doc.get_json())
