@@ -138,6 +138,8 @@ cdef extern from "u1db/u1db.h":
     int U1DB_INDEX_DOES_NOT_EXIST
     int U1DB_INVALID_GENERATION
     int U1DB_INVALID_TRANSACTION_ID
+    int U1DB_INVALID_TRANSFORMATION_FUNCTION
+    int U1DB_UNKNOWN_OPERATION
     int U1DB_INTERNAL_ERROR
     int U1DB_TARGET_UNAVAILABLE
 
@@ -612,6 +614,10 @@ cdef handle_status(context, int status):
         raise errors.DocumentTooBig
     if status == U1DB_USER_QUOTA_EXCEEDED:
         raise errors.UserQuotaExceeded
+    if status == U1DB_INVALID_TRANSFORMATION_FUNCTION:
+        raise errors.IndexDefinitionParseError
+    if status == U1DB_UNKNOWN_OPERATION:
+        raise errors.IndexDefinitionParseError
     raise RuntimeError('%s (status: %s)' % (context, status))
 
 

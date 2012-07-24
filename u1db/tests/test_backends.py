@@ -1456,6 +1456,13 @@ class DatabaseIndexTests(tests.DatabaseBaseTests):
         self.db.create_index('test-idx', 'sub.foo.bar.baz.qux.fnord')
         self.assertEqual([], self.db.get_from_index('test-idx', '*'))
 
+    def test_nested_unknown_operation(self):
+        self.db.create_doc_from_json(nested_doc)
+        # sub exists, but sub.foo does not:
+        self.assertRaises(
+            errors.IndexDefinitionParseError, self.db.create_index, 'test-idx',
+            'unknown_operation(field1)')
+
     def test_index_list1(self):
         self.db.create_index("index", "name")
         content = '{"name": ["foo", "bar"]}'
@@ -1616,6 +1623,15 @@ class DatabaseIndexTests(tests.DatabaseBaseTests):
         self.db.create_doc_from_json(content)
         rows = self.db.get_from_index("index", "*")
         self.assertEqual([], rows)
+
+    def test_get_from_index_with_combine(self):
+        self.db.create_index("index", "combine(foo, bar)")
+        content = '{"foo": "value1", "bar": "value2"}'
+        doc = self.db.create_doc_from_json(content)
+        rows = self.db.get_from_index("index", "value1")
+        self.assertEqual([doc], rows)
+        rows = self.db.get_from_index("index", "value2")
+        self.assertEqual([doc], rows)
 
     def test_get_index_keys_from_index(self):
         self.db.create_index('test-idx', 'key')
