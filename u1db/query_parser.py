@@ -210,6 +210,26 @@ class SplitWords(Transformation):
         return list(result)
 
 
+class Combine(Transformation):
+    """Combine multiple expressions into a single index."""
+
+    name = "combine"
+    # variable number of args
+    arity = -1
+
+    def __init__(self, *inner):
+        super(Combine, self).__init__(inner)
+
+    def get(self, raw_doc):
+        inner_values = []
+        for inner in self.inner:
+            inner_values.extend(inner.get(raw_doc))
+        return self.transform(inner_values)
+
+    def transform(self, values):
+        return values
+
+
 class IsNull(Transformation):
     """Indicate whether the input is None.
 
@@ -331,3 +351,4 @@ Parser.register_transormation(Lower)
 Parser.register_transormation(Number)
 Parser.register_transormation(Bool)
 Parser.register_transormation(IsNull)
+Parser.register_transormation(Combine)
