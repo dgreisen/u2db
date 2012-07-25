@@ -231,12 +231,16 @@ class Parser(object):
     _transformations = {}
     _delimiters = '()'
 
-    def make_subtree(self, expression, start, idx, open_parens):
+    def __init__(self):
+        self.open_parens = 0
+
+    def make_subtree(self, expression, start):
         tree = []
+        idx = start
         while idx < len(expression):
             char = expression[idx]
             if char == '(':
-                open_parens.append(1)
+                self.open_parens += 1
                 op_name = expression[start:idx].strip()
                 op = self._transformations.get(op_name, None)
                 if op is None:
@@ -245,7 +249,7 @@ class Parser(object):
                 idx += 1
                 start = idx
                 idx, start, args = self.make_subtree(
-                    expression, start, idx, open_parens)
+                    expression, start)
                 if op.arity >= 0 and len(args) != op.arity:
                     raise errors.IndexDefinitionParseError(
                         "Invalid number of arguments for transformation "
@@ -269,9 +273,8 @@ class Parser(object):
                     parsed.append(inner)
                 tree.append(op(*parsed))
             elif char == ')':
-                try:
-                    open_parens.pop()
-                except IndexError:
+                self.open_parens -= 1
+                if self.open_parens < 0:
                     raise errors.IndexDefinitionParseError(
                         "Encountered ')' before '(' when parsing:\n%s\n%s^" %
                         (expression, " " * idx))
@@ -282,7 +285,7 @@ class Parser(object):
                 start = idx
                 return idx, start, tree
             elif char == ',':
-                if not open_parens:
+                if self.open_parens == 0:
                     raise errors.IndexDefinitionParseError(
                         "Encountered ',' outside parentheses:\n%s\n%s^" %
                         (expression, " " * idx))
@@ -300,12 +303,11 @@ class Parser(object):
         return idx, start, tree
 
     def parse(self, expression):
-        open_parens = []
-        tree = self.make_subtree(expression, 0, 0, open_parens)[2]
-        if open_parens:
+        tree = self.make_subtree(expression, 0)[2]
+        if self.open_parens:
             raise errors.IndexDefinitionParseError(
                 "%d missing ')'s when parsing '%s'." %
-                (len(open_parens), expression))
+                (self.open_parens, expression))
         if len(tree) != 1:
             raise errors.IndexDefinitionParseError(
                 "Invalid expression: %s" % expression)

@@ -1211,25 +1211,27 @@ set_data(parse_tree *tree, const char *expression, int size)
 }
 
 static int
-make_tree(const char *expression, int *idx, int *start, int *open_parens,
+make_tree(const char *expression, int *start, int *open_parens,
           parse_tree *result)
 {
     int status = U1DB_OK;
     int size, i;
+    int idx;
     char *op_name = NULL;
     const char *arg_type = NULL;
     char c;
     parse_tree *subtree = NULL;
     parse_tree *node = NULL;
 
-    while (*idx < strlen(expression))
+    idx = *start;
+    while (idx < strlen(expression))
     {
-        c = expression[*idx];
+        c = expression[idx];
         if (c == '(') {
             (*open_parens)++;
             while (expression[*start] == ' ')
                 (*start)++;
-            size = *idx - *start;
+            size = idx - *start;
             if (size) {
                 op_name = (char *)calloc(size + 1, 1);
                 if (op_name == NULL) {
@@ -1262,12 +1264,12 @@ make_tree(const char *expression, int *idx, int *start, int *open_parens,
                     status = U1DB_UNKNOWN_OPERATION;
                     goto finish;
                 }
-                (*idx)++;
-                while (expression[*idx] == ' ')
-                    (*idx)++;
-                *start = *idx;
-                status = make_tree(
-                    expression, idx, start, open_parens, subtree);
+                idx++;
+                while (expression[idx] == ' ')
+                    idx++;
+                *start = idx;
+                status = make_tree(expression, start, open_parens, subtree);
+                idx = *start;
                 if (status != U1DB_OK)
                     goto finish;
                 if (subtree->arity >= 0 &&
@@ -1301,7 +1303,7 @@ make_tree(const char *expression, int *idx, int *start, int *open_parens,
             }
             while (expression[*start] == ' ')
                 (*start)++;
-            size = *idx - *start;
+            size = idx - *start;
             if (size) {
                 append_child(result);
                 if (status != U1DB_OK)
@@ -1311,10 +1313,10 @@ make_tree(const char *expression, int *idx, int *start, int *open_parens,
                 if (status != U1DB_OK)
                     goto finish;
             }
-            (*idx)++;
-            while (expression[*idx] == ' ')
-                (*idx)++;
-            *start = *idx;
+            idx++;
+            while (expression[idx] == ' ')
+                idx++;
+            *start = idx;
             return status;
         } else if (c == ',') {
             if (*open_parens < 1) {
@@ -1323,7 +1325,7 @@ make_tree(const char *expression, int *idx, int *start, int *open_parens,
             }
             while (expression[*start] == ' ')
                 (*start)++;
-            size = *idx - *start;
+            size = idx - *start;
             if (size) {
                 append_child(result);
                 if (status != U1DB_OK)
@@ -1333,12 +1335,12 @@ make_tree(const char *expression, int *idx, int *start, int *open_parens,
                 if (status != U1DB_OK)
                     goto finish;
             }
-            (*idx)++;
-            while (expression[*idx] == ' ')
-                (*idx)++;
-            *start = *idx;
+            idx++;
+            while (expression[idx] == ' ')
+                idx++;
+            *start = idx;
         } else {
-            (*idx)++;
+            idx++;
         }
     }
     if (*start < strlen(expression)) {
@@ -1359,7 +1361,6 @@ make_tree(const char *expression, int *idx, int *start, int *open_parens,
                 goto finish;
         }
     }
-
 finish:
     return status;
 }
@@ -1368,11 +1369,10 @@ static int
 parse(const char *expression, parse_tree *result)
 {
     int status = U1DB_OK;
-    int idx = 0;
     int start = 0;
     int open_parens = 0;
 
-    status = make_tree(expression, &idx, &start, &open_parens, result);
+    status = make_tree(expression, &start, &open_parens, result);
     if (status != U1DB_OK)
         return status;
     if (open_parens != 0)
