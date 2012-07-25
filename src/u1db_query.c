@@ -1291,14 +1291,11 @@ make_tree(const char *expression, int *start, int *open_parens,
                 (*start)++;
             size = idx - *start;
             if (size) {
-                op_name = (char *)calloc(size + 1, 1);
+                op_name = strndup(expression + *start, size);
                 if (op_name == NULL) {
                     status = U1DB_NOMEM;
                     goto finish;
                 }
-                op_name = strndup(expression + *start, size);
-                if (op_name == NULL)
-                    return U1DB_NOMEM;
                 idx++;
                 while (expression[idx] == ' ')
                     idx++;
