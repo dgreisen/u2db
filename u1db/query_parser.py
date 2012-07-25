@@ -274,7 +274,7 @@ class Parser(object):
         return op(*parsed)
 
     def extract_term_to_tree(self, tree):
-        term = self.expression[self._start:self._idx].strip()
+        term = self._expression[self._start:self._idx].strip()
         if term:
             tree.append(term)
         self._idx += 1
