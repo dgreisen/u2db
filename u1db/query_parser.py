@@ -219,11 +219,10 @@ class IsNull(Transformation):
         return [len(values) == 0]
 
 
-def check_fieldname(fieldname, expression, idx):
+def check_fieldname(fieldname):
     if fieldname.endswith('.'):
         raise errors.IndexDefinitionParseError(
-            "Fieldname cannot end in '.':\n%s\n%s^" %
-            (expression, " " * idx))
+            "Fieldname cannot end in '.':%s^" % (fieldname,))
 
 
 class Parser(object):
@@ -235,6 +234,27 @@ class Parser(object):
     def __init__(self):
         self.open_parens = 0
 
+    @staticmethod
+    def parse_args(op, args):
+        parsed = []
+        for i, arg in enumerate(args):
+            arg_type = op.args[i % len(op.args)]
+            if arg_type == 'expression':
+                if isinstance(arg, Getter):
+                    inner = arg
+                else:
+                    check_fieldname(arg)
+                    inner = ExtractField(arg)
+            else:
+                try:
+                    inner = arg_type(arg)
+                except ValueError, e:
+                    raise errors.IndexDefinitionParseError(
+                        "Invalid value %r for argument type %r "
+                        "(%r)." % (arg, arg_type, e))
+            parsed.append(inner)
+        return parsed
+
     def make_subtree(self, expression, start):
         tree = []
         idx = start
@@ -242,7 +262,7 @@ class Parser(object):
         if not delimiter:
             if start < len(expression):
                 term = expression[start:]
-                check_fieldname(term, expression, start)
+                check_fieldname(term)
                 tree.append(ExtractField(term))
         else:
             while delimiter:
@@ -263,23 +283,7 @@ class Parser(object):
                         raise errors.IndexDefinitionParseError(
                             "Invalid number of arguments for transformation "
                             "function: %s, %r" % (op_name, args))
-                    parsed = []
-                    for i, arg in enumerate(args):
-                        arg_type = op.args[i % len(op.args)]
-                        if arg_type == 'expression':
-                            if isinstance(arg, Getter):
-                                inner = arg
-                            else:
-                                check_fieldname(arg, expression, idx)
-                                inner = ExtractField(arg)
-                        else:
-                            try:
-                                inner = arg_type(arg)
-                            except ValueError, e:
-                                raise errors.IndexDefinitionParseError(
-                                    "Invalid value %r for argument type %r "
-                                    "(%r)." % (arg, arg_type, e))
-                        parsed.append(inner)
+                    parsed = self.parse_args(op, args)
                     tree.append(op(*parsed))
                 elif char == ')':
                     self.open_parens -= 1
