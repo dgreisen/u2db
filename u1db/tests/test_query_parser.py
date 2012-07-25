@@ -150,7 +150,7 @@ class TestExtractField(tests.TestCase):
 
     def test_get_value_list_of_dicts2(self):
         self.assertExtractField(
-            ['bar', 'baz'], 'foo.zap',
+            ['bar', 'baz'], 'foo.*.zap',
             {'foo': [{'zap': 'bar'}, {'zap': 'baz'}]})
 
     def test_get_value_int(self):

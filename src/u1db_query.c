@@ -235,18 +235,47 @@ extract_field_values(json_object *obj, const string_list *field_path,
 {
     string_list_item *item = NULL;
     char string_value[MAX_INT_STR_LEN];
-    struct array_list *list_val = NULL;
+    json_object *list_val = NULL;
     json_object *val = NULL;
-    int i, integer_value, boolean_value;
+    json_object *array_item = NULL;
+    json_object *tmp_val = NULL;
+    json_object *new_array = NULL;
+    int i, integer_value, boolean_value, length;
     int status = U1DB_OK;
     val = obj;
+
     if (val == NULL)
         goto finish;
     for (item = field_path->head; item != NULL; item = item->next)
     {
-        val = json_object_object_get(val, item->data);
-        if (val == NULL)
+        if (item->data == "*") {
+            if (!json_object_is_type(val, json_type_array) ||
+                    item->next == NULL) {
+                goto finish;
+            }
+            item = item->next;
+            new_array = json_object_new_array();
+            length = json_object_array_length(val);
+            for (i = 0; i < length; i++) {
+                array_item = json_object_array_get_idx(val, i);
+                if (json_object_is_type(array_item, json_type_object)) {
+                    tmp_val = json_object_object_get(array_item, item->data);
+                    if (tmp_val != NULL)
+                        json_object_array_add(new_array, tmp_val);
+                }
+            }
+            if (json_object_array_length) {
+                val = new_array;
+            } else {
+                goto finish;
+            }
+        } else if (json_object_is_type(val, json_type_object)) {
+            val = json_object_object_get(val, item->data);
+            if (val == NULL)
+                goto finish;
+        } else {
             goto finish;
+        }
     }
     if (json_object_is_type(val, json_type_string) && value_type ==
             json_type_string) {
@@ -272,12 +301,11 @@ extract_field_values(json_object *obj, const string_list *field_path,
         }
     } else if (json_object_is_type(val, json_type_array)) {
         // TODO: recursively check the types
-        list_val = json_object_get_array(val);
-        for (i = 0; i < list_val->length; i++)
-        {
-            if ((status = append(values, json_object_get_string(
-                                array_list_get_idx(
-                                    list_val, i)))) != U1DB_OK)
+        length = json_object_array_length(val);
+        for (i = 0; i < length; i++) {
+            if ((status = append(
+                    values, json_object_get_string(json_object_array_get_idx(
+                        val, i)))) != U1DB_OK)
                 goto finish;
         }
     }
