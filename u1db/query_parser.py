@@ -273,12 +273,11 @@ class Parser(object):
             parsed.append(inner)
         return op(*parsed)
 
-    def _extract_term_to_tree(self, tree):
+    def _extract_term(self):
         term = self._expression[self._start:self._idx].strip()
-        if term:
-            tree.append(term)
         self._idx += 1
         self._start = self._idx
+        return term
 
     def _make_subtree(self):
         expression = self._expression
@@ -296,9 +295,7 @@ class Parser(object):
                 char = delimiter.group()
                 if char == '(':
                     self._open_parens += 1
-                    op_name = expression[self._start:self._idx].strip()
-                    self._idx += 1
-                    self._start = self._idx
+                    op_name = self._extract_term()
                     op = self._make_op(op_name)
                     tree.append(op)
                 elif char == ')':
@@ -308,14 +305,18 @@ class Parser(object):
                             "Encountered ')' before '(' when "
                             "parsing:\n%s\n%s^" %
                             (expression, " " * self._idx))
-                    self._extract_term_to_tree(tree)
+                    term = self._extract_term()
+                    if term:
+                        tree.append(term)
                     return tree
                 elif char == ',':
                     if self._open_parens == 0:
                         raise errors.IndexDefinitionParseError(
                             "Encountered ',' outside parentheses:\n%s\n%s^" %
                             (expression, " " * self._idx))
-                    self._extract_term_to_tree(tree)
+                    term = self._extract_term()
+                    if term:
+                        tree.append(term)
                 delimiter = self._delimiters.search(expression, self._idx)
         return tree
 

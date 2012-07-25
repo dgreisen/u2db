@@ -1200,17 +1200,6 @@ check_fieldname(const char *fieldname)
 }
 
 static int
-set_data(parse_tree *tree, const char *expression, int size)
-{
-    char *word = NULL;
-    word = strndup(expression, size);
-    if (word == NULL)
-        return U1DB_NOMEM;
-    tree->data = word;
-    return U1DB_OK;
-}
-
-static int
 make_op(const char *op_name, const char *expression, int *start,
         int *open_parens, parse_tree *result)
 {
@@ -1270,6 +1259,23 @@ finish:
 }
 
 static int
+extract_term(const char *expression, int *start, int *idx, char **term)
+{
+    int size;
+    size = *idx - *start;
+    if (!size)
+        return U1DB_OK;
+    *term = strndup(expression + *start, size);
+    if (*term == NULL)
+        return U1DB_NOMEM;
+    (*idx)++;
+    while (expression[*idx] == ' ')
+        (*idx)++;
+    *start = *idx;
+    return U1DB_OK;
+}
+
+static int
 make_tree(const char *expression, int *start, int *open_parens,
           parse_tree *result)
 {
@@ -1277,6 +1283,7 @@ make_tree(const char *expression, int *start, int *open_parens,
     int size, i;
     int idx;
     char *op_name = NULL;
+    char *term = NULL;
     const char *arg_type = NULL;
     char c;
     parse_tree *subtree = NULL;
@@ -1289,17 +1296,8 @@ make_tree(const char *expression, int *start, int *open_parens,
             (*open_parens)++;
             while (expression[*start] == ' ')
                 (*start)++;
-            size = idx - *start;
-            if (size) {
-                op_name = strndup(expression + *start, size);
-                if (op_name == NULL) {
-                    status = U1DB_NOMEM;
-                    goto finish;
-                }
-                idx++;
-                while (expression[idx] == ' ')
-                    idx++;
-                *start = idx;
+            status = extract_term(expression, start, &idx, &op_name);
+            if (op_name != NULL) {
                 status = make_op(
                     op_name, expression, start, open_parens, result);
                 free(op_name);
@@ -1316,20 +1314,21 @@ make_tree(const char *expression, int *start, int *open_parens,
             }
             while (expression[*start] == ' ')
                 (*start)++;
-            size = idx - *start;
-            if (size) {
+            status = extract_term(expression, start, &idx, &term);
+            if (term != NULL) {
                 append_child(result);
-                if (status != U1DB_OK)
+                if (status != U1DB_OK) {
+                    free(term);
                     goto finish;
+                }
                 subtree = result->last_child;
-                status = set_data(subtree, expression + *start, size);
-                if (status != U1DB_OK)
+                subtree->data = strdup(term);
+                free(term);
+                if (subtree->data == NULL) {
+                    status = U1DB_NOMEM;
                     goto finish;
+                }
             }
-            idx++;
-            while (expression[idx] == ' ')
-                idx++;
-            *start = idx;
             return status;
         } else if (c == ',') {
             if (*open_parens < 1) {
@@ -1338,20 +1337,21 @@ make_tree(const char *expression, int *start, int *open_parens,
             }
             while (expression[*start] == ' ')
                 (*start)++;
-            size = idx - *start;
-            if (size) {
+            status = extract_term(expression, start, &idx, &term);
+            if (term != NULL) {
                 append_child(result);
-                if (status != U1DB_OK)
+                if (status != U1DB_OK) {
+                    free(term);
                     goto finish;
+                }
                 subtree = result->last_child;
-                status = set_data(subtree, expression + *start, size);
-                if (status != U1DB_OK)
+                subtree->data = strdup(term);
+                free(term);
+                if (subtree->data == NULL) {
+                    status = U1DB_NOMEM;
                     goto finish;
+                }
             }
-            idx++;
-            while (expression[idx] == ' ')
-                idx++;
-            *start = idx;
         } else {
             idx++;
         }
@@ -1365,7 +1365,11 @@ make_tree(const char *expression, int *start, int *open_parens,
             if (status != U1DB_OK)
                 goto finish;
             subtree = result->last_child;
-            status = set_data(subtree, expression + *start, size);
+            subtree->data = strndup(expression + *start, size);
+            if (subtree->data == NULL) {
+                status = U1DB_NOMEM;
+                goto finish;
+            }
             status = check_fieldname(subtree->data);
             if (status != U1DB_OK)
                 goto finish;
