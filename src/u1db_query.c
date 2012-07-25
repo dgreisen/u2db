@@ -49,6 +49,7 @@ typedef struct string_list_
     string_list_item *tail;
 } string_list;
 
+/*
 static void
 print_list(string_list *list)
 {
@@ -58,6 +59,7 @@ print_list(string_list *list)
         printf("%s,", item->data);
     printf("]\n");
 }
+*/
 
 static int
 init_list(string_list **list)
@@ -126,6 +128,7 @@ typedef struct parse_tree_
     const int *value_types;
 } parse_tree;
 
+/*
 static void
 print_tree(parse_tree *tree)
 {
@@ -147,6 +150,7 @@ print_tree(parse_tree *tree)
         print_tree(sub);
     printf(")\n");
 }
+*/
 
 static int
 init_parse_tree(parse_tree **result)
@@ -1370,7 +1374,6 @@ parse(const char *expression, parse_tree *result)
     int open_parens = 0;
 
     status = make_tree(expression, &start, &open_parens, result);
-    print_tree(result);
     if (status != U1DB_OK)
         return status;
     if (open_parens != 0)
