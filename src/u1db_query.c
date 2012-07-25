@@ -1262,6 +1262,8 @@ extract_term(const char *expression, int *start, int *idx, parse_tree *result)
     parse_tree *subtree = NULL;
     const char *term = NULL;
 
+    while (expression[*start] == ' ')
+        (*start)++;
     size = *idx - *start;
     if (!size)
         return U1DB_OK;
@@ -1304,7 +1306,6 @@ make_tree(const char *expression, int *start, int *open_parens,
             (*open_parens)++;
             while (expression[*start] == ' ')
                 (*start)++;
-            size = 0;
             status = extract_term(expression, start, &idx, result);
             if (result->last_child->data != NULL) {
                 status = make_op(expression, start, open_parens, result);
@@ -1319,9 +1320,6 @@ make_tree(const char *expression, int *start, int *open_parens,
                 status = U1DB_INVALID_TRANSFORMATION_FUNCTION;
                 goto finish;
             }
-            while (expression[*start] == ' ')
-                (*start)++;
-            size = 0;
             status = extract_term(expression, start, &idx, result);
             return status;
         } else if (c == ',') {
@@ -1329,27 +1327,15 @@ make_tree(const char *expression, int *start, int *open_parens,
                 status = U1DB_INVALID_TRANSFORMATION_FUNCTION;
                 goto finish;
             }
-            while (expression[*start] == ' ')
-                (*start)++;
             status = extract_term(expression, start, &idx, result);
         } else {
             idx++;
         }
     }
     if (*start < strlen(expression)) {
-        while (expression[*start] == ' ')
-            (*start)++;
-        size = strlen(expression) - *start;
-        if (size) {
-            append_child(result);
-            if (status != U1DB_OK)
-                goto finish;
-            subtree = result->last_child;
-            subtree->data = strndup(expression + *start, size);
-            if (subtree->data == NULL) {
-                status = U1DB_NOMEM;
-                goto finish;
-            }
+        status = extract_term(expression, start, &idx, result);
+        subtree = result->last_child;
+        if (subtree->data) {
             status = check_fieldname(subtree->data);
             if (status != U1DB_OK)
                 goto finish;
