@@ -1203,10 +1203,6 @@ static int
 set_data(parse_tree *tree, const char *expression, int size)
 {
     char *word = NULL;
-    word = (char *)calloc(size + 1, 1);
-    if (word == NULL) {
-        return U1DB_NOMEM;
-    }
     word = strndup(expression, size);
     if (word == NULL)
         return U1DB_NOMEM;
