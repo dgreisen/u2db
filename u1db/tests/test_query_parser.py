@@ -27,12 +27,12 @@ trivial_raw_doc = {}
 class TestFieldName(tests.TestCase):
 
     def test_check_fieldname_valid(self):
-        self.assertIsNone(query_parser.check_fieldname("foo", "expr", 0))
+        self.assertIsNone(query_parser.check_fieldname("foo"))
 
     def test_check_fieldname_invalid(self):
         self.assertRaises(
             errors.IndexDefinitionParseError, query_parser.check_fieldname,
-            "foo.", "expr", 0)
+            "foo.")
 
 
 class TestMakeTree(tests.TestCase):
