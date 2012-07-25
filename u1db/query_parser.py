@@ -232,10 +232,28 @@ class Parser(object):
     _delimiters = re.compile("\(|\)|,")
 
     def __init__(self):
-        self.open_parens = 0
+        self._expression = None
+        self._open_parens = 0
+        self._start = 0
+        self._idx = 0
 
-    @staticmethod
-    def parse_args(op, args):
+    def _set_expression(self, expression):
+        self._expression = expression
+        self._open_parens = 0
+        self._start = 0
+        self._idx = 0
+
+    def _make_op(self, op_name):
+        op = self._transformations.get(op_name, None)
+        if op is None:
+            raise errors.IndexDefinitionParseError(
+                "Unknown operation: %s" % op_name)
+        args = self._make_subtree()
+        self._idx = self._start
+        if op.arity >= 0 and len(args) != op.arity:
+            raise errors.IndexDefinitionParseError(
+                "Invalid number of arguments for transformation "
+                "function: %s, %r" % (op_name, args))
         parsed = []
         for i, arg in enumerate(args):
             arg_type = op.args[i % len(op.args)]
@@ -253,72 +271,65 @@ class Parser(object):
                         "Invalid value %r for argument type %r "
                         "(%r)." % (arg, arg_type, e))
             parsed.append(inner)
-        return parsed
+        return op(*parsed)
 
-    def make_subtree(self, expression, start):
+    def _make_subtree(self):
+        expression = self._expression
         tree = []
-        idx = start
-        delimiter = self._delimiters.search(expression, idx)
+        self._idx = self._start
+        delimiter = self._delimiters.search(expression, self._idx)
         if not delimiter:
-            if start < len(expression):
-                term = expression[start:]
+            if self._start < len(expression):
+                term = expression[self._start:]
                 check_fieldname(term)
                 tree.append(ExtractField(term))
         else:
             while delimiter:
-                idx = delimiter.start()
+                self._idx = delimiter.start()
                 char = delimiter.group()
                 if char == '(':
-                    self.open_parens += 1
-                    op_name = expression[start:idx].strip()
-                    op = self._transformations.get(op_name, None)
-                    if op is None:
-                        raise errors.IndexDefinitionParseError(
-                            "Unknown operation: %s" % op_name)
-                    idx += 1
-                    start = idx
-                    start, args = self.make_subtree(expression, start)
-                    idx = start
-                    if op.arity >= 0 and len(args) != op.arity:
-                        raise errors.IndexDefinitionParseError(
-                            "Invalid number of arguments for transformation "
-                            "function: %s, %r" % (op_name, args))
-                    parsed = self.parse_args(op, args)
-                    tree.append(op(*parsed))
+                    self._open_parens += 1
+                    op_name = expression[self._start:self._idx].strip()
+                    self._idx += 1
+                    self._start = self._idx
+                    op = self._make_op(op_name)
+                    tree.append(op)
                 elif char == ')':
-                    self.open_parens -= 1
-                    if self.open_parens < 0:
+                    self._open_parens -= 1
+                    if self._open_parens < 0:
                         raise errors.IndexDefinitionParseError(
                             "Encountered ')' before '(' when "
-                            "parsing:\n%s\n%s^" % (expression, " " * idx))
-                    term = expression[start:idx].strip()
+                            "parsing:\n%s\n%s^" %
+                            (expression, " " * self._idx))
+                    term = expression[self._start:self._idx].strip()
                     if term:
                         tree.append(term)
-                    idx += 1
-                    start = idx
-                    return start, tree
+                    self._idx += 1
+                    self._start = self._idx
+                    return tree
                 elif char == ',':
-                    if self.open_parens == 0:
+                    if self._open_parens == 0:
                         raise errors.IndexDefinitionParseError(
                             "Encountered ',' outside parentheses:\n%s\n%s^" %
-                            (expression, " " * idx))
-                    term = expression[start:idx].strip()
+                            (expression, " " * self._idx))
+                    term = expression[self._start:self._idx].strip()
                     if term:
                         tree.append(term)
-                    idx += 1
-                    start = idx
-                delimiter = self._delimiters.search(expression, idx)
-        return start, tree
+                    self._idx += 1
+                    self._start = self._idx
+                delimiter = self._delimiters.search(expression, self._idx)
+        return tree
 
     def parse(self, expression):
-        _, tree = self.make_subtree(expression, 0)
-        if self.open_parens:
+        self._set_expression(expression)
+        tree = self._make_subtree()
+        if self._open_parens:
             raise errors.IndexDefinitionParseError(
                 "%d missing ')'s when parsing '%s'." %
-                (self.open_parens, expression))
+                (self._open_parens, self._expression))
         if len(tree) != 1:
             raise errors.IndexDefinitionParseError(
-                "Invalid expression: %s" % expression)
+                "Invalid expression: %s" % self._expression)
         return tree[0]
 
     def parse_all(self, fields):

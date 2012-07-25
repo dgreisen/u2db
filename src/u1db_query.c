@@ -1204,8 +1204,7 @@ set_data(parse_tree *tree, const char *expression, int size)
     if (word == NULL) {
         return U1DB_NOMEM;
     }
-    strncpy(word, expression, size);
-    word[size] = '\0';
+    word = strndup(expression, size);
     tree->data = word;
     return U1DB_OK;
 }
@@ -1238,8 +1237,7 @@ make_tree(const char *expression, int *start, int *open_parens,
                     status = U1DB_NOMEM;
                     goto finish;
                 }
-                strncpy(op_name, expression + *start, size);
-                op_name[size] = '\0';
+                op_name = strndup(expression + *start, size);
                 status = append_child(result);
                 if (status != U1DB_OK) {
                     free(op_name);
