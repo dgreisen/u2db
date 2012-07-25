@@ -1200,21 +1200,17 @@ check_fieldname(const char *fieldname)
 }
 
 static int
-make_op(const char *op_name, const char *expression, int *start,
-        int *open_parens, parse_tree *result)
+make_op(const char *expression, int *start, int *open_parens,
+        parse_tree *result)
 {
     int status = U1DB_OK;
     int i;
     parse_tree *subtree = NULL;
     parse_tree *node = NULL;
 
-    status = append_child(result);
-    if (status != U1DB_OK) {
-        goto finish;
-    }
     subtree = result->last_child;
     for (i = 0; i < OPS; i++) {
-        if (strcmp(OPERATIONS[i].name, op_name) == 0)
+        if (strcmp(OPERATIONS[i].name, subtree->data) == 0)
         {
             if (status != U1DB_OK) {
                 goto finish;
@@ -1259,19 +1255,32 @@ finish:
 }
 
 static int
-extract_term(const char *expression, int *start, int *idx, char **term)
+extract_term(const char *expression, int *start, int *idx, parse_tree *result)
 {
+    int status = U1DB_OK;
     int size;
+    parse_tree *subtree = NULL;
+    const char *term = NULL;
+
     size = *idx - *start;
     if (!size)
         return U1DB_OK;
-    *term = strndup(expression + *start, size);
-    if (*term == NULL)
-        return U1DB_NOMEM;
+    term = expression + *start;
     (*idx)++;
     while (expression[*idx] == ' ')
         (*idx)++;
     *start = *idx;
+    if (size) {
+        status = append_child(result);
+        if (status != U1DB_OK) {
+            return status;
+        }
+        subtree = result->last_child;
+        subtree->data = strndup(term, size);
+        if (subtree->data == NULL) {
+            return U1DB_NOMEM;
+        }
+    }
     return U1DB_OK;
 }
 
@@ -1282,7 +1291,6 @@ make_tree(const char *expression, int *start, int *open_parens,
     int status = U1DB_OK;
     int size, i;
     int idx;
-    char *op_name = NULL;
     char *term = NULL;
     const char *arg_type = NULL;
     char c;
@@ -1296,11 +1304,10 @@ make_tree(const char *expression, int *start, int *open_parens,
             (*open_parens)++;
             while (expression[*start] == ' ')
                 (*start)++;
-            status = extract_term(expression, start, &idx, &op_name);
-            if (op_name != NULL) {
-                status = make_op(
-                    op_name, expression, start, open_parens, result);
-                free(op_name);
+            size = 0;
+            status = extract_term(expression, start, &idx, result);
+            if (result->last_child->data != NULL) {
+                status = make_op(expression, start, open_parens, result);
                 if (status != U1DB_OK) {
                     goto finish;
                 }
@@ -1314,21 +1321,8 @@ make_tree(const char *expression, int *start, int *open_parens,
             }
             while (expression[*start] == ' ')
                 (*start)++;
-            status = extract_term(expression, start, &idx, &term);
-            if (term != NULL) {
-                append_child(result);
-                if (status != U1DB_OK) {
-                    free(term);
-                    goto finish;
-                }
-                subtree = result->last_child;
-                subtree->data = strdup(term);
-                free(term);
-                if (subtree->data == NULL) {
-                    status = U1DB_NOMEM;
-                    goto finish;
-                }
-            }
+            size = 0;
+            status = extract_term(expression, start, &idx, result);
             return status;
         } else if (c == ',') {
             if (*open_parens < 1) {
@@ -1337,21 +1331,7 @@ make_tree(const char *expression, int *start, int *open_parens,
             }
             while (expression[*start] == ' ')
                 (*start)++;
-            status = extract_term(expression, start, &idx, &term);
-            if (term != NULL) {
-                append_child(result);
-                if (status != U1DB_OK) {
-                    free(term);
-                    goto finish;
-                }
-                subtree = result->last_child;
-                subtree->data = strdup(term);
-                free(term);
-                if (subtree->data == NULL) {
-                    status = U1DB_NOMEM;
-                    goto finish;
-                }
-            }
+            status = extract_term(expression, start, &idx, result);
         } else {
             idx++;
         }
