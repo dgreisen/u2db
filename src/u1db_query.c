@@ -1304,8 +1304,6 @@ make_tree(const char *expression, int *start, int *open_parens,
         c = expression[idx];
         if (c == '(') {
             (*open_parens)++;
-            while (expression[*start] == ' ')
-                (*start)++;
             status = extract_term(expression, start, &idx, result);
             if (result->last_child->data != NULL) {
                 status = make_op(expression, start, open_parens, result);
