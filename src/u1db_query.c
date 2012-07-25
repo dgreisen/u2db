@@ -1208,6 +1208,8 @@ set_data(parse_tree *tree, const char *expression, int size)
         return U1DB_NOMEM;
     }
     word = strndup(expression, size);
+    if (word == NULL)
+        return U1DB_NOMEM;
     tree->data = word;
     return U1DB_OK;
 }
@@ -1299,6 +1301,8 @@ make_tree(const char *expression, int *start, int *open_parens,
                     goto finish;
                 }
                 op_name = strndup(expression + *start, size);
+                if (op_name == NULL)
+                    return U1DB_NOMEM;
                 idx++;
                 while (expression[idx] == ' ')
                     idx++;
