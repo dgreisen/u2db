@@ -1283,7 +1283,7 @@ extract_term(const char *expression, int *start, int *idx, parse_tree *result)
     while (expression[*start] == ' ')
         (*start)++;
     end = *idx - 1;
-    while (expression[end] == ' ')
+    while (end > 0 && expression[end] == ' ')
         end--;
     size = end + 1 - *start;
     term = expression + *start;
