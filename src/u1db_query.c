@@ -1282,16 +1282,15 @@ extract_term(const char *expression, int *start, int *idx, parse_tree *result)
 
     while (expression[*start] == ' ')
         (*start)++;
-    end = *idx - 1;
-    while (end >= *start && expression[end] == ' ')
-        end--;
-    size = end + 1 - *start;
+    size = *idx - *start;
     term = expression + *start;
+    while (size > 0 && term[size - 1] == ' ')
+        size--;
     (*idx)++;
     while (expression[*idx] == ' ')
         (*idx)++;
     *start = *idx;
-    if (size < 1)
+    if (!size)
         return U1DB_NO_TERM;
     status = append_child(result);
     if (status != U1DB_OK) {
