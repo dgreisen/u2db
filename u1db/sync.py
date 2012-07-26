@@ -249,11 +249,13 @@ class SyncExchange(object):
         docs_by_gen = izip(
             docs, (gen for _, gen, _ in changes_to_return),
             (trans_id for _, _, trans_id in changes_to_return))
+        _outgoing_trace = []  # for tests
         for doc, gen, trans_id in docs_by_gen:
             return_doc_cb(doc, gen, trans_id)
+            _outgoing_trace.append((doc.doc_id, doc.rev))
         # for tests
         self._db._last_exchange_log['return'] = {
-            'docs': [(d.doc_id, d.rev) for d in docs],
+            'docs': _outgoing_trace,
             'last_gen': self.new_gen
             }
 
