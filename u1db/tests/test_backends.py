@@ -228,13 +228,14 @@ class AllDatabaseTests(tests.DatabaseBaseTests, tests.TestCaseWithServer):
         doc1 = self.db.create_doc_from_json(simple_doc)
         doc2 = self.db.create_doc_from_json(nested_doc)
         self.assertEqual([doc1, doc2],
-                         self.db.get_docs([doc1.doc_id, doc2.doc_id]))
+                         list(self.db.get_docs([doc1.doc_id, doc2.doc_id])))
 
     def test_get_docs_deleted(self):
         doc1 = self.db.create_doc_from_json(simple_doc)
         doc2 = self.db.create_doc_from_json(nested_doc)
         self.db.delete_doc(doc1)
-        self.assertEqual([doc2], self.db.get_docs([doc1.doc_id, doc2.doc_id]))
+        self.assertEqual([doc2],
+                         list(self.db.get_docs([doc1.doc_id, doc2.doc_id])))
 
     def test_get_docs_include_deleted(self):
         doc1 = self.db.create_doc_from_json(simple_doc)
@@ -242,18 +243,19 @@ class AllDatabaseTests(tests.DatabaseBaseTests, tests.TestCaseWithServer):
         self.db.delete_doc(doc1)
         self.assertEqual(
             [doc1, doc2],
-            self.db.get_docs([doc1.doc_id, doc2.doc_id], include_deleted=True))
+            list(self.db.get_docs([doc1.doc_id, doc2.doc_id],
+                                  include_deleted=True)))
 
     def test_get_docs_request_ordered(self):
         doc1 = self.db.create_doc_from_json(simple_doc)
         doc2 = self.db.create_doc_from_json(nested_doc)
         self.assertEqual([doc1, doc2],
-                         self.db.get_docs([doc1.doc_id, doc2.doc_id]))
+                         list(self.db.get_docs([doc1.doc_id, doc2.doc_id])))
         self.assertEqual([doc2, doc1],
-                         self.db.get_docs([doc2.doc_id, doc1.doc_id]))
+                         list(self.db.get_docs([doc2.doc_id, doc1.doc_id])))
 
     def test_get_docs_empty_list(self):
-        self.assertEqual([], self.db.get_docs([]))
+        self.assertEqual([], list(self.db.get_docs([])))
 
     def test_handles_nested_content(self):
         doc = self.db.create_doc_from_json(nested_doc)
@@ -641,7 +643,7 @@ class LocalDatabaseWithConflictsTests(tests.DatabaseBaseTests):
         self.db._put_doc_if_newer(
             doc2, save_conflict=True, replica_uid='r', replica_gen=1,
             replica_trans_id='foo')
-        self.assertEqual([doc2], self.db.get_docs([doc1.doc_id]))
+        self.assertEqual([doc2], list(self.db.get_docs([doc1.doc_id])))
 
     def test_get_docs_conflicts_ignored(self):
         doc1 = self.db.create_doc_from_json(simple_doc)
@@ -653,8 +655,8 @@ class LocalDatabaseWithConflictsTests(tests.DatabaseBaseTests):
         no_conflict_doc = self.make_document(doc1.doc_id, 'alternate:1',
                                              nested_doc)
         self.assertEqual([no_conflict_doc, doc2],
-                         self.db.get_docs([doc1.doc_id, doc2.doc_id],
-                                          check_for_conflicts=False))
+                         list(self.db.get_docs([doc1.doc_id, doc2.doc_id],
+                                          check_for_conflicts=False)))
 
     def test_get_doc_conflicts(self):
         doc = self.db.create_doc_from_json(simple_doc)
@@ -1718,7 +1720,8 @@ class PythonBackendTests(tests.DatabaseBaseTests):
             replica_trans_id='foo')
         self.assertTrue(
             isinstance(
-                self.db.get_docs([doc1.doc_id])[0], TestAlternativeDocument))
+                list(self.db.get_docs([doc1.doc_id]))[0],
+                TestAlternativeDocument))
 
     def test_get_from_index_with_factory(self):
         self.db.set_document_factory(TestAlternativeDocument)

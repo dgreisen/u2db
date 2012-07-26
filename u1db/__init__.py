@@ -111,7 +111,8 @@ class Database(object):
         :param include_deleted: If set to True, deleted documents will be
             returned with empty content. Otherwise deleted documents will not
             be included in the results.
-        :return: [Document] for each document id and matching doc_ids order.
+        :return: iterable giving the Document object for each document id
+            in matching doc_ids order.
         """
         raise NotImplementedError(self.get_docs)
 
