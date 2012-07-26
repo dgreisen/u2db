@@ -76,6 +76,7 @@ typedef int (*u1db_trans_info_callback)(void *context, const char *doc_id,
 #define U1DB_TARGET_UNAVAILABLE -22
 #define U1DB_DOCUMENT_TOO_BIG -23
 #define U1DB_USER_QUOTA_EXCEEDED -24
+#define U1DB_NO_TERM -25
 #define U1DB_INTERNAL_ERROR -999
 
 // Used by put_doc_if_newer

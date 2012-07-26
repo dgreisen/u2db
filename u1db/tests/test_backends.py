@@ -992,6 +992,12 @@ class DatabaseIndexTests(tests.DatabaseBaseTests):
 
     scenarios = tests.LOCAL_DATABASES_SCENARIOS + tests.C_DATABASE_SCENARIOS
 
+    def assertParseError(self, definition):
+        self.db.create_index('idx', definition)
+        self.assertRaises(
+            errors.IndexDefinitionParseError, self.db.create_doc_from_json,
+            simple_doc)
+
     def test_create_index(self):
         self.db.create_index('test-idx', 'name')
         self.assertEqual([('test-idx', ['name'])],
@@ -1644,6 +1650,51 @@ class DatabaseIndexTests(tests.DatabaseBaseTests):
             ('value2', 'val2-2'),
             ('value2', 'val3')],
             sorted(self.db.get_index_keys('test-idx')))
+
+    def test_unknown_mapping(self):
+        self.assertParseError('mapping(whatever)')
+
+    def test_parse_missing_close_paren(self):
+        self.assertParseError("lower(a")
+
+    def test_parse_trailing_chars(self):
+        self.assertParseError("lower(ab))")
+
+    def test_parse_empty_op(self):
+        self.assertParseError("(ab)")
+
+    def test_parse_top_level_commas(self):
+        self.assertParseError("a, b")
+
+    def test_invalid_field_name(self):
+        self.assertParseError("a.")
+
+    def test_invalid_inner_field_name(self):
+        self.assertParseError("lower(a.)")
+
+    def test_gobbledigook(self):
+        self.assertParseError("(@#@cc   @#!*DFJSXV(()jccd")
+
+    def test_leading_space(self):
+        self.assertParseError("  lower(a)")
+
+    def test_trailing_space(self):
+        self.assertParseError("lower(a)  ")
+
+    def test_spaces_before_open_paren(self):
+        self.assertParseError("lower  (a)")
+
+    def test_spaces_after_open_paren(self):
+        self.assertParseError("lower(  a)")
+
+    def test_spaces_before_close_paren(self):
+        self.assertParseError("lower(a  )")
+
+    def test_spaces_before_comma(self):
+        self.assertParseError("combine(a  , b  , c)")
+
+    def test_spaces_after_comma(self):
+        self.assertParseError("combine(a,  b,  c)")
 
 
 class PythonBackendTests(tests.DatabaseBaseTests):

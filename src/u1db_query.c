@@ -1266,7 +1266,7 @@ extract_term(const char *expression, int *start, int *idx, parse_tree *result)
         (*start)++;
     size = *idx - *start;
     if (!size)
-        return U1DB_OK;
+        return U1DB_NO_TERM;
     term = expression + *start;
     (*idx)++;
     while (expression[*idx] == ' ')
@@ -1305,7 +1305,10 @@ make_tree(const char *expression, int *start, int *open_parens,
         if (c == '(') {
             (*open_parens)++;
             status = extract_term(expression, start, &idx, result);
-            if (result->last_child->data != NULL) {
+            if (status != U1DB_OK && status != U1DB_NO_TERM) {
+                goto finish;
+            }
+            if (status != U1DB_NO_TERM) {
                 status = make_op(expression, start, open_parens, result);
                 if (status != U1DB_OK) {
                     goto finish;
@@ -1326,12 +1329,17 @@ make_tree(const char *expression, int *start, int *open_parens,
                 goto finish;
             }
             status = extract_term(expression, start, &idx, result);
+            if (status != U1DB_OK && status != U1DB_NO_TERM) {
+                goto finish;
+            }
         } else {
             idx++;
         }
     }
     if (*start < strlen(expression)) {
         status = extract_term(expression, start, &idx, result);
+        if (status != U1DB_OK)
+            goto finish;
         subtree = result->last_child;
         if (subtree->data) {
             status = check_fieldname(subtree->data);
