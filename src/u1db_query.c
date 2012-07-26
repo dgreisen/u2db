@@ -213,6 +213,7 @@ static int op_number(parse_tree *tree, json_object *obj, string_list *result);
 static int op_split_words(
     parse_tree *tree, json_object *obj, string_list *result);
 static int op_bool(parse_tree *tree, json_object *obj, string_list *result);
+static int op_combine(parse_tree *tree, json_object *obj, string_list *result);
 
 static const int JUST_EXPRESSION[1] = {EXPRESSION};
 static const int EXPRESSION_INTEGER[2] = {EXPRESSION, INTEGER};
@@ -228,7 +229,8 @@ struct operation
     op_lower, "lower", json_type_string, 1, JUST_EXPRESSION,
     op_number, "number", json_type_int, 2, EXPRESSION_INTEGER,
     op_split_words, "split_words", json_type_string, 1, JUST_EXPRESSION,
-    op_bool, "bool", json_type_boolean, 1, JUST_EXPRESSION};
+    op_bool, "bool", json_type_boolean, 1, JUST_EXPRESSION,
+    op_combine, "combine", json_type_string, -1, JUST_EXPRESSION};
 
 static int
 extract_field_values(json_object *obj, const string_list *field_path,
@@ -439,6 +441,21 @@ op_number(parse_tree *tree, json_object *obj, string_list *result)
 finish:
     if (values != NULL)
         destroy_list(values);
+    return status;
+}
+
+static int
+op_combine(parse_tree *tree, json_object *obj, string_list *result)
+{
+    parse_tree *node = NULL;
+    int status = U1DB_OK;
+
+    node = tree->first_child;
+    for (node = tree->first_child; node != NULL; node = node->next_sibling) {
+        status = get_values(node, obj, result);
+        if (status != U1DB_OK)
+            return status;
+    }
     return status;
 }
 
@@ -1265,13 +1282,13 @@ extract_term(const char *expression, int *start, int *idx, parse_tree *result)
     while (expression[*start] == ' ')
         (*start)++;
     size = *idx - *start;
-    if (!size)
-        return U1DB_OK;
     term = expression + *start;
     (*idx)++;
     while (expression[*idx] == ' ')
         (*idx)++;
     *start = *idx;
+    if (!size)
+        return U1DB_OK;
     if (size) {
         status = append_child(result);
         if (status != U1DB_OK) {

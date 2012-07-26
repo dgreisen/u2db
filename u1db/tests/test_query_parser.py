@@ -59,6 +59,12 @@ class TestMakeTree(tests.TestCase):
             self.parser.parse('lower(split_words(field1))'),
             query_parser.Lower)
 
+    def test_nested_branching_mapping(self):
+        self.assertIsInstance(
+            self.parser.parse(
+                'combine(lower(field1), split_words(field2), '
+                'number(field3, 5))'), query_parser.Combine)
+
     def test_single_mapping_multiple_fields(self):
         self.assertIsInstance(
             self.parser.parse('number(field1, 5)'), query_parser.Number)
