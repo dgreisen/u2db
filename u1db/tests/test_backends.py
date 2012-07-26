@@ -1730,6 +1730,9 @@ class DatabaseIndexTests(tests.DatabaseBaseTests):
     def test_spaces_after_comma(self):
         self.assertIndexCreatable("combine(a,  b,  c)")
 
+    def test_all_together_now(self):
+        self.assertParseError('    (a) ')
+
 
 class PythonBackendTests(tests.DatabaseBaseTests):
 
