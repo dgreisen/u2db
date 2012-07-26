@@ -49,17 +49,15 @@ typedef struct string_list_
     string_list_item *tail;
 } string_list;
 
-/*
 static void
 print_list(string_list *list)
 {
     string_list_item *item = NULL;
     printf("[");
     for (item = list->head; item != NULL; item = item->next)
-        printf("%s,", item->data);
+        printf("'%s',", item->data);
     printf("]\n");
 }
-*/
 
 static int
 init_list(string_list **list)
@@ -128,13 +126,12 @@ typedef struct parse_tree_
     const int *value_types;
 } parse_tree;
 
-/*
 static void
 print_tree(parse_tree *tree)
 {
     parse_tree *sub;
     if (tree->data)
-        printf("data: %s ", tree->data);
+        printf("data: '%s'\n", tree->data);
     if (tree->field_path->head) {
         printf("field_path: ");
         print_list(tree->field_path);
@@ -150,7 +147,6 @@ print_tree(parse_tree *tree)
         print_tree(sub);
     printf(")\n");
 }
-*/
 
 static int
 init_parse_tree(parse_tree **result)
@@ -243,6 +239,7 @@ extract_field_values(json_object *obj, const string_list *field_path,
     int i, integer_value, boolean_value;
     int status = U1DB_OK;
     val = obj;
+    printf("start\n");
     if (val == NULL)
         goto finish;
     for (item = field_path->head; item != NULL; item = item->next)
@@ -285,6 +282,7 @@ extract_field_values(json_object *obj, const string_list *field_path,
         }
     }
 finish:
+    printf("finish\n");
     return status;
 }
 
@@ -292,7 +290,7 @@ static int
 split(string_list *result, char *string, char splitter)
 {
     int status = U1DB_OK;
-    char *result_ptr, *split_point;
+    char *result_ptr = NULL, *split_point = NULL;
     result_ptr = string;
     while (result_ptr != NULL) {
         split_point = strchr(result_ptr, splitter);
@@ -331,9 +329,12 @@ get_values(parse_tree *tree, json_object *obj, string_list *values)
     if (tree->op) {
         status = ((op_function)tree->op)(tree, obj, values);
     } else {
+        printf("before extract_values\n");
         status = extract_field_values(
             obj, tree->field_path, json_type_string, values);
+        printf("after extract_values\n");
     }
+    printf("status %d\n", status);
     return status;
 }
 
@@ -342,7 +343,7 @@ op_lower(parse_tree *tree, json_object *obj, string_list *result)
 {
     string_list *values = NULL;
     string_list_item *item = NULL;
-    char *new_value, *value = NULL;
+    char *new_value = NULL, *value = NULL;
     int i;
     int status = U1DB_OK;
 
@@ -382,7 +383,7 @@ op_number(parse_tree *tree, json_object *obj, string_list *result)
 {
     string_list *values = NULL;
     string_list_item *item = NULL;
-    char *p, *new_value, *value, *number = NULL;
+    char *p = NULL, *new_value = NULL, *value = NULL, *number = NULL;
     parse_tree *node = NULL;
     int count, zeroes, value_size, isnumber;
     int status = U1DB_OK;
@@ -464,7 +465,7 @@ op_split_words(parse_tree *tree, json_object *obj, string_list *result)
 {
     string_list_item *item = NULL;
     string_list *values = NULL;
-    char *intermediate, *intermediate_ptr = NULL;
+    char *intermediate = NULL, *intermediate_ptr = NULL;
     char *space_chr = NULL;
     int status = U1DB_OK;
 
@@ -1288,17 +1289,15 @@ extract_term(const char *expression, int *start, int *idx, parse_tree *result)
         (*idx)++;
     *start = *idx;
     if (!size)
-        return U1DB_OK;
-    if (size) {
-        status = append_child(result);
-        if (status != U1DB_OK) {
-            return status;
-        }
-        subtree = result->last_child;
-        subtree->data = strndup(term, size);
-        if (subtree->data == NULL) {
-            return U1DB_NOMEM;
-        }
+        return U1DB_NO_TERM;
+    status = append_child(result);
+    if (status != U1DB_OK) {
+        return status;
+    }
+    subtree = result->last_child;
+    subtree->data = strndup(term, size);
+    if (subtree->data == NULL) {
+        return U1DB_NOMEM;
     }
     return U1DB_OK;
 }
@@ -1480,7 +1479,10 @@ evaluate_index_and_insert_into_db(void *context, const char *expression,
     }
     if ((status = init_list(&values)) != U1DB_OK)
         goto finish;
+    printf("before get_values\n");
+    print_tree(tree);
     status = get_values(tree->first_child, ctx->obj, values);
+    printf("after get_values\n");
     if (status != U1DB_OK)
         goto finish;
     for (item = values->head; item != NULL; item = item->next)

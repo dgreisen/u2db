@@ -993,10 +993,17 @@ class DatabaseIndexTests(tests.DatabaseBaseTests):
     scenarios = tests.LOCAL_DATABASES_SCENARIOS + tests.C_DATABASE_SCENARIOS
 
     def assertParseError(self, definition):
-        self.db.create_index('idx', definition)
+        self.db.create_doc_from_json(nested_doc)
         self.assertRaises(
-            errors.IndexDefinitionParseError, self.db.create_doc_from_json,
-            simple_doc)
+            errors.IndexDefinitionParseError, self.db.create_index, 'idx',
+            definition)
+
+    def assertIndexCreatable(self, definition):
+        name = "idx"
+        self.db.create_doc_from_json(nested_doc)
+        self.db.create_index(name, definition)
+        self.assertEqual(
+            [(name, [definition])], self.db.list_indexes())
 
     def test_create_index(self):
         self.db.create_index('test-idx', 'name')
@@ -1458,16 +1465,8 @@ class DatabaseIndexTests(tests.DatabaseBaseTests):
 
     def test_nested_nonexistent2(self):
         self.db.create_doc_from_json(nested_doc)
-        # sub exists, but sub.foo does not:
         self.db.create_index('test-idx', 'sub.foo.bar.baz.qux.fnord')
         self.assertEqual([], self.db.get_from_index('test-idx', '*'))
-
-    def test_nested_unknown_operation(self):
-        self.db.create_doc_from_json(nested_doc)
-        # sub exists, but sub.foo does not:
-        self.assertRaises(
-            errors.IndexDefinitionParseError, self.db.create_index, 'test-idx',
-            'unknown_operation(field1)')
 
     def test_index_list1(self):
         self.db.create_index("index", "name")
@@ -1683,14 +1682,17 @@ class DatabaseIndexTests(tests.DatabaseBaseTests):
             ('value2', 'val3')],
             sorted(self.db.get_index_keys('test-idx')))
 
-    def test_unknown_mapping(self):
-        self.assertParseError('mapping(whatever)')
+    def test_nested_unknown_operation(self):
+        self.assertParseError('unknown_operation(field1)')
 
     def test_parse_missing_close_paren(self):
         self.assertParseError("lower(a")
 
-    def test_parse_trailing_chars(self):
+    def test_parse_trailing_close_paren(self):
         self.assertParseError("lower(ab))")
+
+    def test_parse_trailing_chars(self):
+        self.assertParseError("lower(ab)adsf")
 
     def test_parse_empty_op(self):
         self.assertParseError("(ab)")
@@ -1708,25 +1710,25 @@ class DatabaseIndexTests(tests.DatabaseBaseTests):
         self.assertParseError("(@#@cc   @#!*DFJSXV(()jccd")
 
     def test_leading_space(self):
-        self.assertParseError("  lower(a)")
+        self.assertIndexCreatable("  lower(a)")
 
     def test_trailing_space(self):
-        self.assertParseError("lower(a)  ")
+        self.assertIndexCreatable("lower(a)  ")
 
     def test_spaces_before_open_paren(self):
-        self.assertParseError("lower  (a)")
+        self.assertIndexCreatable("lower  (a)")
 
     def test_spaces_after_open_paren(self):
-        self.assertParseError("lower(  a)")
+        self.assertIndexCreatable("lower(  a)")
 
     def test_spaces_before_close_paren(self):
-        self.assertParseError("lower(a  )")
+        self.assertIndexCreatable("lower(a  )")
 
     def test_spaces_before_comma(self):
-        self.assertParseError("combine(a  , b  , c)")
+        self.assertIndexCreatable("combine(a  , b  , c)")
 
     def test_spaces_after_comma(self):
-        self.assertParseError("combine(a,  b,  c)")
+        self.assertIndexCreatable("combine(a,  b,  c)")
 
 
 class PythonBackendTests(tests.DatabaseBaseTests):
