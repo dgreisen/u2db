@@ -1313,14 +1313,20 @@ make_tree(const char *expression, int *start, int *open_parens,
     int idx;
     char *term = NULL;
     const char *arg_type = NULL;
-    char c;
+    char last_char, c = '\0';
     parse_tree *subtree = NULL;
 
     idx = *start;
     while (idx < strlen(expression))
     {
+        last_char = c;
         c = expression[idx];
         if (c == '(') {
+            if (last_char == ')') {
+                // )( is never valid
+                status = U1DB_INVALID_TRANSFORMATION_FUNCTION;
+                goto finish;
+            }
             (*open_parens)++;
             status = extract_term(expression, start, &idx, result);
             if (status == U1DB_NO_TERM)
@@ -1342,15 +1348,6 @@ make_tree(const char *expression, int *start, int *open_parens,
             if (status == U1DB_NO_TERM)
                 // empty term is fine
                 status = U1DB_OK;
-            if (idx < strlen(expression)) {
-                while (expression[idx] == ' ' && idx < strlen(expression))
-                    idx++;
-                if (idx < strlen(expression)) {
-                    if (expression[idx] != ',' && expression[idx] != ')') {
-                        status = U1DB_INVALID_TRANSFORMATION_FUNCTION;
-                    }
-                }
-            }
             return status;
         } else if (c == ',') {
             if (*open_parens < 1) {
@@ -1364,6 +1361,11 @@ make_tree(const char *expression, int *start, int *open_parens,
             // empty term is fine
             status = U1DB_OK;
         } else {
+            if (last_char == ')') {
+                // after ) only ) and , are ever valid
+                status = U1DB_INVALID_TRANSFORMATION_FUNCTION;
+                goto finish;
+            }
             idx++;
         }
     }
