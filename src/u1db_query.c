@@ -1346,9 +1346,6 @@ make_tree(const char *expression, int *start, int *open_parens,
         } else {
             idx++;
         }
-        if (idx == 0) {
-            exit(1);
-        }
     }
     if (*start < strlen(expression)) {
         status = extract_term(expression, start, &idx, result);
