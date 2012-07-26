@@ -1733,6 +1733,9 @@ class DatabaseIndexTests(tests.DatabaseBaseTests):
     def test_all_together_now(self):
         self.assertParseError('    (a) ')
 
+    def test_all_together_now2(self):
+        self.assertParseError('a(b(x)x,foo)')
+
 
 class PythonBackendTests(tests.DatabaseBaseTests):
 
