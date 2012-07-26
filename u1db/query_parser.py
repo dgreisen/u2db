@@ -328,6 +328,14 @@ class Parser(object):
                     term = self._extract_term()
                     if term:
                         tree.append(term)
+                    idx = self._idx
+                    while idx < len(expression) and expression[idx] == ' ':
+                        idx += 1
+                    if idx < len(expression):
+                        if expression[idx] != ',' and expression[idx] != ')':
+                            raise errors.IndexDefinitionParseError(
+                                "trailing characters after ')' when parsing:\n"
+                                "%s\n%s^" % (expression, " " * idx))
                     return tree
                 elif char == ',':
                     if self._open_parens == 0:

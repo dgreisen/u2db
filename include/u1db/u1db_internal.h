@@ -27,7 +27,7 @@
 typedef struct sqlite3 sqlite3;
 typedef struct sqlite3_stmt sqlite3_stmt;
 
-void u1db__set_zero_delays();
+void u1db__set_zero_delays(void);
 
 struct _u1database
 {
