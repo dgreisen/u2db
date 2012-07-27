@@ -1064,13 +1064,9 @@ class DatabaseIndexTests(tests.DatabaseBaseTests):
         self.assertEqual([], self.db.list_indexes())
 
     def test_create_adds_to_index(self):
-        print "before create_index"
         self.db.create_index('test-idx', 'key')
-        print "before create_doc_from_json"
         doc = self.db.create_doc_from_json(simple_doc)
-        print "before get_from_index"
         self.assertEqual([doc], self.db.get_from_index('test-idx', 'value'))
-        print "after get_from_index"
 
     def test_get_from_index_unmatched(self):
         self.db.create_doc_from_json(simple_doc)

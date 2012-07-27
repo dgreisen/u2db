@@ -328,7 +328,7 @@ class Parser(object):
                 "Unexpected end of index definition.")
         if term in (',', ')', '('):
             raise errors.IndexDefinitionParseError(
-                "Unexpected token '%s' at start of expression.", (term,))
+                "Unexpected token '%s' at start of expression." % (term,))
         next_token = self._peek_token()
         if next_token == '(':
             return self._parse_op(term)

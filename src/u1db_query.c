@@ -47,6 +47,7 @@ typedef struct string_list_
 {
     string_list_item *head;
     string_list_item *tail;
+    string_list_item *pos;
 } string_list;
 
 /*
@@ -105,6 +106,7 @@ append(string_list *list, const char *data)
     if (list->head == NULL)
     {
         list->head = new_item;
+        list->pos = new_item;
     }
     if (list->tail != NULL)
     {
@@ -127,6 +129,7 @@ appendn(string_list *list, const char *data, int size)
     if (list->head == NULL)
     {
         list->head = new_item;
+        list->pos = new_item;
     }
     if (list->tail != NULL)
     {
@@ -191,10 +194,10 @@ destroy_parse_tree(parse_tree *t)
     parse_tree *subtree = NULL;
     parse_tree *previous = NULL;
 
-    if (t->field_path != NULL)
-        destroy_list(t->field_path);
     if (t == NULL)
         return;
+    if (t->field_path != NULL)
+        destroy_list(t->field_path);
     if (t->data != NULL)
         free(t->data);
     subtree = t->first_child;
@@ -1234,18 +1237,10 @@ check_fieldname(const char *fieldname)
 static char *
 get_token(string_list *tokens)
 {
-    string_list_item *previous;
     char *token = NULL;
-    if (tokens->head != NULL) {
-        token = tokens->head->data;
-        previous = tokens->head;
-        if (tokens->head->next != NULL)
-            tokens->head = tokens->head->next;
-        else {
-            tokens->head = NULL;
-            tokens->tail = NULL;
-        }
-        free(previous);
+    if (tokens->pos != NULL) {
+        token = tokens->pos->data;
+        tokens->pos = tokens->pos->next;
     }
     return token;
 }
@@ -1253,8 +1248,8 @@ get_token(string_list *tokens)
 static char *
 peek_token(string_list *tokens)
 {
-    if (tokens->head != NULL) {
-        return tokens->head->data;
+    if (tokens->pos != NULL) {
+        return tokens->pos->data;
     }
     return NULL;
 }
@@ -1281,9 +1276,7 @@ parse_op(string_list *tokens, char *term, parse_tree *result)
     int i;
 
     sep = get_token(tokens);
-    if (strcmp(sep, "(") == 0) {
-        free(sep);
-    } else {
+    if (sep == NULL || strcmp(sep, "(") != 0) {
         return U1DB_INVALID_TRANSFORMATION_FUNCTION;
     }
     for (i = 0; i < OPS; i++) {
@@ -1319,15 +1312,12 @@ parse_op(string_list *tokens, char *term, parse_tree *result)
             goto finish;
         }
         if (strcmp(sep, ")") == 0) {
-            free(sep);
             break;
         }
         if (strcmp(sep, ",") != 0) {
             status = U1DB_INVALID_TRANSFORMATION_FUNCTION;
-            free(sep);
             goto finish;
         }
-        free(sep);
     }
     i = 0;
     for (node = result->first_child; node != NULL; node = node->next_sibling) {
@@ -1368,9 +1358,6 @@ parse_term(string_list *tokens, parse_tree *result)
         result->data = strdup(term);
     }
 finish:
-    if (term != NULL) {
-        free(term);
-    }
     return status;
 }
 
