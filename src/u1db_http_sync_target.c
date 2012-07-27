@@ -31,11 +31,15 @@
 #define max(a, b) ((a) > (b) ? (a) : (b))
 #endif // max
 #define TRIES 4
-#ifndef RETRY_DELAYS
-#define RETRY_DELAYS {1, 1, 2, 4}
-#endif
 
-int retry_delays[] = RETRY_DELAYS;
+static int retry_delays[] = {1, 1, 2, 4};
+
+void u1db__set_zero_delays() {
+    retry_delays[0] = 0;
+    retry_delays[1] = 0;
+    retry_delays[2] = 0;
+    retry_delays[3] = 0;
+}
 
 struct _http_state;
 struct _http_request;

@@ -229,6 +229,8 @@ Available transformation functions are:
    false and '1' if true.
  * ``is_null(index_expression)`` - True if value is null or not a string or the
    field is absent, otherwise false
+ * ``combine(index_expression1, index_expression2, ...)`` - Combine the values
+   of an arbitrary number of sub expressions into a single index.
 
 So, the index expression ``splitwords(lower(field.name))`` applied to
 a document with ID "doc3" and content::

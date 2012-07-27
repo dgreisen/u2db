@@ -252,37 +252,65 @@ class Parser(object):
     _delimiters = re.compile("\(|\)|,")
 
     def __init__(self):
-        self._expression = None
-        self._open_parens = 0
-        self._start = 0
-        self._idx = 0
+        self._tokens = []
 
     def _set_expression(self, expression):
-        self._expression = expression
         self._open_parens = 0
-        self._start = 0
-        self._idx = 0
+        self._tokens = []
+        expression = expression.strip()
+        while expression:
+            delimiter = self._delimiters.search(expression)
+            if delimiter:
+                idx = delimiter.start()
+                if idx == 0:
+                    result, expression = (expression[:1], expression[1:])
+                    self._tokens.append(result)
+                else:
+                    result, expression = (expression[:idx], expression[idx:])
+                    result = result.strip()
+                    if result:
+                        self._tokens.append(result)
+            else:
+                expression = expression.strip()
+                if expression:
+                    self._tokens.append(expression)
+                expression = None
 
-    def _make_op(self, op_name):
+    def _get_token(self):
+        if self._tokens:
+            return self._tokens.pop(0)
+
+    def _peek_token(self):
+        if self._tokens:
+            return self._tokens[0]
+
+    @staticmethod
+    def _to_getter(term):
+        if isinstance(term, Getter):
+            return term
+        check_fieldname(term)
+        return ExtractField(term)
+
+    def _parse_op(self, op_name):
+        self._get_token()  # '('
         op = self._transformations.get(op_name, None)
         if op is None:
             raise errors.IndexDefinitionParseError(
                 "Unknown operation: %s" % op_name)
-        args = self._make_subtree()
-        self._idx = self._start
-        if op.arity >= 0 and len(args) != op.arity:
-            raise errors.IndexDefinitionParseError(
-                "Invalid number of arguments for transformation "
-                "function: %s, %r" % (op_name, args))
+        args = []
+        while True:
+            args.append(self._parse_term())
+            sep = self._get_token()
+            if sep == ')':
+                break
+            if sep != ',':
+                raise errors.IndexDefinitionParseError(
+                    "Unexpected token '%s' in parentheses." % (sep,))
         parsed = []
         for i, arg in enumerate(args):
             arg_type = op.args[i % len(op.args)]
             if arg_type == 'expression':
-                if isinstance(arg, Getter):
-                    inner = arg
-                else:
-                    check_fieldname(arg)
-                    inner = ExtractField(arg)
+                inner = self._to_getter(arg)
             else:
                 try:
                     inner = arg_type(arg)
@@ -293,64 +321,27 @@ class Parser(object):
             parsed.append(inner)
         return op(*parsed)
 
-    def _extract_term(self):
-        term = self._expression[self._start:self._idx].strip()
-        self._idx += 1
-        self._start = self._idx
+    def _parse_term(self):
+        term = self._get_token()
+        if term is None:
+            raise errors.IndexDefinitionParseError(
+                "Unexpected end of index definition.")
+        if term in (',', ')', '('):
+            raise errors.IndexDefinitionParseError(
+                "Unexpected token '%s' at start of expression." % (term,))
+        next_token = self._peek_token()
+        if next_token == '(':
+            return self._parse_op(term)
         return term
-
-    def _make_subtree(self):
-        expression = self._expression
-        tree = []
-        self._idx = self._start
-        delimiter = self._delimiters.search(expression, self._idx)
-        if not delimiter:
-            if self._start < len(expression):
-                term = expression[self._start:]
-                check_fieldname(term)
-                tree.append(ExtractField(term))
-        else:
-            while delimiter:
-                self._idx = delimiter.start()
-                char = delimiter.group()
-                if char == '(':
-                    self._open_parens += 1
-                    op_name = self._extract_term()
-                    op = self._make_op(op_name)
-                    tree.append(op)
-                elif char == ')':
-                    self._open_parens -= 1
-                    if self._open_parens < 0:
-                        raise errors.IndexDefinitionParseError(
-                            "Encountered ')' before '(' when "
-                            "parsing:\n%s\n%s^" %
-                            (expression, " " * self._idx))
-                    term = self._extract_term()
-                    if term:
-                        tree.append(term)
-                    return tree
-                elif char == ',':
-                    if self._open_parens == 0:
-                        raise errors.IndexDefinitionParseError(
-                            "Encountered ',' outside parentheses:\n%s\n%s^" %
-                            (expression, " " * self._idx))
-                    term = self._extract_term()
-                    if term:
-                        tree.append(term)
-                delimiter = self._delimiters.search(expression, self._idx)
-        return tree
 
     def parse(self, expression):
         self._set_expression(expression)
-        tree = self._make_subtree()
-        if self._open_parens:
+        term = self._to_getter(self._parse_term())
+        if self._peek_token():
             raise errors.IndexDefinitionParseError(
-                "%d missing ')'s when parsing '%s'." %
-                (self._open_parens, self._expression))
-        if len(tree) != 1:
-            raise errors.IndexDefinitionParseError(
-                "Invalid expression: %s" % self._expression)
-        return tree[0]
+                "Unexpected token '%s' after end of expression."
+                % (self._peek_token(),))
+        return term
 
     def parse_all(self, fields):
         return [self.parse(field) for field in fields]

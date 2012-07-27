@@ -132,6 +132,7 @@ cdef extern from "u1db/u1db.h":
     int U1DB_DOCUMENT_TOO_BIG
     int U1DB_USER_QUOTA_EXCEEDED
     int U1DB_INVALID_VALUE_FOR_INDEX
+    int U1DB_INVALID_FIELD_SPECIFIER
     int U1DB_INVALID_GLOBBING
     int U1DB_BROKEN_SYNC_STREAM
     int U1DB_DUPLICATE_INDEX_NAME
@@ -208,6 +209,7 @@ cdef extern from "u1db/u1db_internal.h":
                                void *context, u1db__trace_callback cb) nogil
 
 
+    void u1db__set_zero_delays()
     int u1db__get_generation(u1database *, int *db_rev)
     int u1db__get_document_size_limit(u1database *, int *limit)
     int u1db__get_generation_info(u1database *, int *db_rev, char **trans_id)
@@ -618,6 +620,8 @@ cdef handle_status(context, int status):
         raise errors.IndexDefinitionParseError
     if status == U1DB_UNKNOWN_OPERATION:
         raise errors.IndexDefinitionParseError
+    if status == U1DB_INVALID_FIELD_SPECIFIER:
+        raise errors.IndexDefinitionParseError()
     raise RuntimeError('%s (status: %s)' % (context, status))
 
 
@@ -703,6 +707,7 @@ cdef class CSyncTarget(object):
     def __init__(self):
         self._db = None
         self._st = NULL
+        u1db__set_zero_delays()
 
     def __dealloc__(self):
         u1db__free_sync_target(&self._st)
