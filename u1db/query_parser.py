@@ -252,7 +252,6 @@ class Parser(object):
     _delimiters = re.compile("\(|\)|,")
 
     def __init__(self):
-        self._open_parens = 0
         self._tokens = []
 
     def _set_expression(self, expression):
@@ -281,29 +280,36 @@ class Parser(object):
         if self._tokens:
             return self._tokens.pop(0)
 
-    def _peek(self):
+    def _peek_token(self):
         if self._tokens:
             return self._tokens[0]
 
-    def _make_op(self, op_name):
+    @staticmethod
+    def _to_getter(term):
+        if isinstance(term, Getter):
+            return term
+        check_fieldname(term)
+        return ExtractField(term)
+
+    def _parse_op(self, op_name):
+        self._get_token()  # '('
         op = self._transformations.get(op_name, None)
         if op is None:
             raise errors.IndexDefinitionParseError(
                 "Unknown operation: %s" % op_name)
-        args = self._make_tree()
-        if op.arity >= 0 and len(args) != op.arity:
-            raise errors.IndexDefinitionParseError(
-                "Invalid number of arguments for transformation "
-                "function: %s, %r" % (op_name, args))
+        args = []
+        while True:
+            args.append(self._parse_term())
+            sep = self._get_token()
+            if sep == ')':
+                break
+            if sep != ',':
+                raise errors.IndexDefinitionParseError()
         parsed = []
         for i, arg in enumerate(args):
             arg_type = op.args[i % len(op.args)]
             if arg_type == 'expression':
-                if isinstance(arg, Getter):
-                    inner = arg
-                else:
-                    check_fieldname(arg)
-                    inner = ExtractField(arg)
+                inner = self._to_getter(arg)
             else:
                 try:
                     inner = arg_type(arg)
@@ -314,58 +320,23 @@ class Parser(object):
             parsed.append(inner)
         return op(*parsed)
 
-    def _make_tree(self):
-        tree = []
-        while True:
-            token = self._get_token()
-            next_token = self._peek()
-            if not next_token:
-                if token:
-                    check_fieldname(token)
-                    tree.append(ExtractField(token))
-                return tree
-            if next_token == '(':
-                self._open_parens += 1
-                op_name = token
-                self._get_token()
-                op = self._make_op(op_name)
-                tree.append(op)
-            elif next_token == ')':
-                self._open_parens -= 1
-                if self._open_parens < 0:
-                    raise errors.IndexDefinitionParseError(
-                        "Encountered ')' before '('")
-                term = token
-                if term:
-                    tree.append(term)
-                self._get_token()
-                while self._peek() == ')':
-                    self._get_token()
-                    self._open_parens -= 1
-                    if self._open_parens < 0:
-                        raise errors.IndexDefinitionParseError(
-                            "Encountered ')' before '('")
-                return tree
-            elif next_token == ',':
-                if self._open_parens < 1:
-                    raise errors.IndexDefinitionParseError(
-                        "Encountered ',' outside parentheses")
-                term = token
-                if term:
-                    tree.append(term)
-                self._get_token()
+    def _parse_term(self):
+        term = self._get_token()
+        if term is None:
+            raise errors.IndexDefinitionParseError()
+        if term in (',', ')', '('):
+            raise errors.IndexDefinitionParseError()
+        next_token = self._peek_token()
+        if next_token == '(':
+            return self._parse_op(term)
+        return term
 
     def parse(self, expression):
         self._set_expression(expression)
-        tree = self._make_tree()
-        if self._open_parens:
-            raise errors.IndexDefinitionParseError(
-                "%d missing ')'s when parsing '%s'." %
-                (self._open_parens, expression))
-        if len(tree) != 1:
-            raise errors.IndexDefinitionParseError(
-                "Invalid expression: %s" % expression)
-        return tree[0]
+        term = self._to_getter(self._parse_term())
+        if self._peek_token():
+            raise errors.IndexDefinitionParseError()
+        return term
 
     def parse_all(self, fields):
         return [self.parse(field) for field in fields]

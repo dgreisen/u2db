@@ -1064,9 +1064,13 @@ class DatabaseIndexTests(tests.DatabaseBaseTests):
         self.assertEqual([], self.db.list_indexes())
 
     def test_create_adds_to_index(self):
+        print "before create_index"
         self.db.create_index('test-idx', 'key')
+        print "before create_doc_from_json"
         doc = self.db.create_doc_from_json(simple_doc)
+        print "before get_from_index"
         self.assertEqual([doc], self.db.get_from_index('test-idx', 'value'))
+        print "after get_from_index"
 
     def test_get_from_index_unmatched(self):
         self.db.create_doc_from_json(simple_doc)
@@ -1682,6 +1686,9 @@ class DatabaseIndexTests(tests.DatabaseBaseTests):
             ('value2', 'val3')],
             sorted(self.db.get_index_keys('test-idx')))
 
+    def test_empty_expr(self):
+        self.assertParseError('')
+
     def test_nested_unknown_operation(self):
         self.assertParseError('unknown_operation(field1)')
 
@@ -1734,7 +1741,7 @@ class DatabaseIndexTests(tests.DatabaseBaseTests):
         self.assertParseError('    (a) ')
 
     def test_all_together_now2(self):
-        self.assertParseError('a(b(x)x,foo)')
+        self.assertParseError('combine(lower(x)x,foo)')
 
 
 class PythonBackendTests(tests.DatabaseBaseTests):
