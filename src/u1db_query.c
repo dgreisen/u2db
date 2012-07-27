@@ -49,6 +49,7 @@ typedef struct string_list_
     string_list_item *tail;
 } string_list;
 
+/*
 static void
 print_list(string_list *list)
 {
@@ -58,6 +59,7 @@ print_list(string_list *list)
         printf("'%s',", item->data);
     printf("]\n");
 }
+*/
 
 static int
 init_list(string_list **list)
@@ -1296,7 +1298,12 @@ get_token(string_list *tokens)
     if (tokens->head != NULL) {
         token = tokens->head->data;
         previous = tokens->head;
-        tokens->head = tokens->head->next;
+        if (tokens->head->next != NULL)
+            tokens->head = tokens->head->next;
+        else {
+            tokens->head = NULL;
+            tokens->tail = NULL;
+        }
         free(previous);
     }
     return token;
@@ -1339,26 +1346,22 @@ make_tree(string_list *tokens, int *open_parens, parse_tree *result)
     const char *next_token = NULL;
     parse_tree *subtree = NULL;
 
-    printf("called\n");
-    print_list(tokens);
     while (1)
     {
         token = get_token(tokens);
-        if (strcmp(token, "(") == 0 || strcmp(token, ",") == 0 ||
-                strcmp(token, ")") == 0) {
-            free(token);
-            return U1DB_INVALID_TRANSFORMATION_FUNCTION;
-        }
         next_token = peek(tokens);
         if (next_token == NULL) {
             if (token != NULL) {
                 status = append_token(result, token);
-                if (status != U1DB_OK)
+                if (status != U1DB_OK) {
+                    free(token);
                     return status;
+                }
                 subtree = result->last_child;
                 status = check_fieldname(subtree->data);
-                if (status != U1DB_OK)
+                if (status != U1DB_OK) {
                     return status;
+                }
                 status = split(
                     subtree->field_path, subtree->data, '.');
             }
@@ -1368,6 +1371,7 @@ make_tree(string_list *tokens, int *open_parens, parse_tree *result)
             (*open_parens)++;
             status = append_token(result, token);
             if (status != U1DB_OK) {
+                free(token);
                 return status;
             }
             token = get_token(tokens);
@@ -1379,12 +1383,13 @@ make_tree(string_list *tokens, int *open_parens, parse_tree *result)
         } else if (strcmp(next_token, ")") == 0) {
             (*open_parens)--;
             if (*open_parens < 0) {
-                free(token);
                 status = U1DB_INVALID_TRANSFORMATION_FUNCTION;
+                free(token);
                 return status;
             }
             status = append_token(result, token);
             if (status != U1DB_OK) {
+                free(token);
                 return status;
             }
             token = get_token(tokens);
@@ -1399,8 +1404,9 @@ make_tree(string_list *tokens, int *open_parens, parse_tree *result)
                     return U1DB_INVALID_TRANSFORMATION_FUNCTION;
                 }
             }
-            if (*open_parens == 0 && next_token != NULL)
-                return U1DB_INVALID_TRANSFORMATION_FUNCTION;
+            if (*open_parens == 0 && next_token != NULL) {
+                    return U1DB_INVALID_TRANSFORMATION_FUNCTION;
+            }
             return status;
         } else if (strcmp(next_token, ",") == 0) {
             if (*open_parens < 1) {
@@ -1409,6 +1415,7 @@ make_tree(string_list *tokens, int *open_parens, parse_tree *result)
             }
             status = append_token(result, token);
             if (status != U1DB_OK) {
+                free(token);
                 return status;
             }
             token = get_token(tokens);
@@ -1447,7 +1454,7 @@ make_tokens(const char *expression, string_list *tokens)
                 size = idx - start;
                 while (size && expression[start + size - 1] == ' ')
                     size--;
-                if (size) {
+                if (size > 0) {
                     status = appendn(tokens, expression + start, size);
                     if (status != U1DB_OK)
                         return status;
@@ -1459,7 +1466,7 @@ make_tokens(const char *expression, string_list *tokens)
         }
     }
     size = end - start;
-    if (size) {
+    if (size > 0) {
         status = appendn(tokens, expression + start, size);
     }
     return status;
@@ -1470,19 +1477,16 @@ parse(const char *expression, parse_tree *result)
 {
     int status = U1DB_OK;
     int open_parens = 0;
-    string_list *tokens;
+    string_list *tokens = NULL;
 
     status = init_list(&tokens);
     if (status != U1DB_OK)
         return status;
-    printf("before make_tokens\n");
     status = make_tokens(expression, tokens);
-    printf("after make_tokens\n");
-    print_list(tokens);
-    if (status != U1DB_OK)
+    if (status != U1DB_OK) {
         destroy_list(tokens);
         return status;
-    printf("status: %d\n", status);
+    }
     status = make_tree(tokens, &open_parens, result);
     destroy_list(tokens);
     if (status != U1DB_OK)

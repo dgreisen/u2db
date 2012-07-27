@@ -318,9 +318,6 @@ class Parser(object):
         tree = []
         while True:
             token = self._get_token()
-            if token in ('(', ',', ')'):
-                raise errors.IndexDefinitionParseError(
-                    "Encountered delimiter as first character of expression.")
             next_token = self._peek()
             if not next_token:
                 if token:
