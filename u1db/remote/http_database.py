@@ -104,9 +104,8 @@ class HTTPDatabase(http_client.HTTPClientBase, Database):
 
     def get_docs(self, doc_ids, check_for_conflicts=True,
                  include_deleted=False):
-        docs = []
         if not doc_ids:
-            return docs
+            return
         doc_ids = ','.join(doc_ids)
         res, headers = self._request(
             'GET', ['docs'], {
@@ -116,8 +115,7 @@ class HTTPDatabase(http_client.HTTPClientBase, Database):
             doc = self._factory(
                 doc_dict['doc_id'], doc_dict['doc_rev'], doc_dict['content'])
             doc.has_conflicts = doc_dict['has_conflicts']
-            docs.append(doc)
-        return docs
+            yield doc
 
     def create_doc_from_json(self, content, doc_id=None):
         if doc_id is None:

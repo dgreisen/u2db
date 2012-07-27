@@ -228,13 +228,14 @@ class AllDatabaseTests(tests.DatabaseBaseTests, tests.TestCaseWithServer):
         doc1 = self.db.create_doc_from_json(simple_doc)
         doc2 = self.db.create_doc_from_json(nested_doc)
         self.assertEqual([doc1, doc2],
-                         self.db.get_docs([doc1.doc_id, doc2.doc_id]))
+                         list(self.db.get_docs([doc1.doc_id, doc2.doc_id])))
 
     def test_get_docs_deleted(self):
         doc1 = self.db.create_doc_from_json(simple_doc)
         doc2 = self.db.create_doc_from_json(nested_doc)
         self.db.delete_doc(doc1)
-        self.assertEqual([doc2], self.db.get_docs([doc1.doc_id, doc2.doc_id]))
+        self.assertEqual([doc2],
+                         list(self.db.get_docs([doc1.doc_id, doc2.doc_id])))
 
     def test_get_docs_include_deleted(self):
         doc1 = self.db.create_doc_from_json(simple_doc)
@@ -242,18 +243,19 @@ class AllDatabaseTests(tests.DatabaseBaseTests, tests.TestCaseWithServer):
         self.db.delete_doc(doc1)
         self.assertEqual(
             [doc1, doc2],
-            self.db.get_docs([doc1.doc_id, doc2.doc_id], include_deleted=True))
+            list(self.db.get_docs([doc1.doc_id, doc2.doc_id],
+                                  include_deleted=True)))
 
     def test_get_docs_request_ordered(self):
         doc1 = self.db.create_doc_from_json(simple_doc)
         doc2 = self.db.create_doc_from_json(nested_doc)
         self.assertEqual([doc1, doc2],
-                         self.db.get_docs([doc1.doc_id, doc2.doc_id]))
+                         list(self.db.get_docs([doc1.doc_id, doc2.doc_id])))
         self.assertEqual([doc2, doc1],
-                         self.db.get_docs([doc2.doc_id, doc1.doc_id]))
+                         list(self.db.get_docs([doc2.doc_id, doc1.doc_id])))
 
     def test_get_docs_empty_list(self):
-        self.assertEqual([], self.db.get_docs([]))
+        self.assertEqual([], list(self.db.get_docs([])))
 
     def test_handles_nested_content(self):
         doc = self.db.create_doc_from_json(nested_doc)
@@ -641,7 +643,7 @@ class LocalDatabaseWithConflictsTests(tests.DatabaseBaseTests):
         self.db._put_doc_if_newer(
             doc2, save_conflict=True, replica_uid='r', replica_gen=1,
             replica_trans_id='foo')
-        self.assertEqual([doc2], self.db.get_docs([doc1.doc_id]))
+        self.assertEqual([doc2], list(self.db.get_docs([doc1.doc_id])))
 
     def test_get_docs_conflicts_ignored(self):
         doc1 = self.db.create_doc_from_json(simple_doc)
@@ -653,8 +655,8 @@ class LocalDatabaseWithConflictsTests(tests.DatabaseBaseTests):
         no_conflict_doc = self.make_document(doc1.doc_id, 'alternate:1',
                                              nested_doc)
         self.assertEqual([no_conflict_doc, doc2],
-                         self.db.get_docs([doc1.doc_id, doc2.doc_id],
-                                          check_for_conflicts=False))
+                         list(self.db.get_docs([doc1.doc_id, doc2.doc_id],
+                                          check_for_conflicts=False)))
 
     def test_get_doc_conflicts(self):
         doc = self.db.create_doc_from_json(simple_doc)
@@ -991,6 +993,19 @@ class LocalDatabaseWithConflictsTests(tests.DatabaseBaseTests):
 class DatabaseIndexTests(tests.DatabaseBaseTests):
 
     scenarios = tests.LOCAL_DATABASES_SCENARIOS + tests.C_DATABASE_SCENARIOS
+
+    def assertParseError(self, definition):
+        self.db.create_doc_from_json(nested_doc)
+        self.assertRaises(
+            errors.IndexDefinitionParseError, self.db.create_index, 'idx',
+            definition)
+
+    def assertIndexCreatable(self, definition):
+        name = "idx"
+        self.db.create_doc_from_json(nested_doc)
+        self.db.create_index(name, definition)
+        self.assertEqual(
+            [(name, [definition])], self.db.list_indexes())
 
     def test_create_index(self):
         self.db.create_index('test-idx', 'name')
@@ -1452,7 +1467,6 @@ class DatabaseIndexTests(tests.DatabaseBaseTests):
 
     def test_nested_nonexistent2(self):
         self.db.create_doc_from_json(nested_doc)
-        # sub exists, but sub.foo does not:
         self.db.create_index('test-idx', 'sub.foo.bar.baz.qux.fnord')
         self.assertEqual([], self.db.get_from_index('test-idx', '*'))
 
@@ -1697,6 +1711,63 @@ class DatabaseIndexTests(tests.DatabaseBaseTests):
             ('value2', 'val3')],
             sorted(self.db.get_index_keys('test-idx')))
 
+    def test_empty_expr(self):
+        self.assertParseError('')
+
+    def test_nested_unknown_operation(self):
+        self.assertParseError('unknown_operation(field1)')
+
+    def test_parse_missing_close_paren(self):
+        self.assertParseError("lower(a")
+
+    def test_parse_trailing_close_paren(self):
+        self.assertParseError("lower(ab))")
+
+    def test_parse_trailing_chars(self):
+        self.assertParseError("lower(ab)adsf")
+
+    def test_parse_empty_op(self):
+        self.assertParseError("(ab)")
+
+    def test_parse_top_level_commas(self):
+        self.assertParseError("a, b")
+
+    def test_invalid_field_name(self):
+        self.assertParseError("a.")
+
+    def test_invalid_inner_field_name(self):
+        self.assertParseError("lower(a.)")
+
+    def test_gobbledigook(self):
+        self.assertParseError("(@#@cc   @#!*DFJSXV(()jccd")
+
+    def test_leading_space(self):
+        self.assertIndexCreatable("  lower(a)")
+
+    def test_trailing_space(self):
+        self.assertIndexCreatable("lower(a)  ")
+
+    def test_spaces_before_open_paren(self):
+        self.assertIndexCreatable("lower  (a)")
+
+    def test_spaces_after_open_paren(self):
+        self.assertIndexCreatable("lower(  a)")
+
+    def test_spaces_before_close_paren(self):
+        self.assertIndexCreatable("lower(a  )")
+
+    def test_spaces_before_comma(self):
+        self.assertIndexCreatable("combine(a  , b  , c)")
+
+    def test_spaces_after_comma(self):
+        self.assertIndexCreatable("combine(a,  b,  c)")
+
+    def test_all_together_now(self):
+        self.assertParseError('    (a) ')
+
+    def test_all_together_now2(self):
+        self.assertParseError('combine(lower(x)x,foo)')
+
 
 class PythonBackendTests(tests.DatabaseBaseTests):
 
@@ -1738,7 +1809,8 @@ class PythonBackendTests(tests.DatabaseBaseTests):
             replica_trans_id='foo')
         self.assertTrue(
             isinstance(
-                self.db.get_docs([doc1.doc_id])[0], TestAlternativeDocument))
+                list(self.db.get_docs([doc1.doc_id]))[0],
+                TestAlternativeDocument))
 
     def test_get_from_index_with_factory(self):
         self.db.set_document_factory(TestAlternativeDocument)

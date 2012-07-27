@@ -132,6 +132,7 @@ cdef extern from "u1db/u1db.h":
     int U1DB_DOCUMENT_TOO_BIG
     int U1DB_USER_QUOTA_EXCEEDED
     int U1DB_INVALID_VALUE_FOR_INDEX
+    int U1DB_INVALID_FIELD_SPECIFIER
     int U1DB_INVALID_GLOBBING
     int U1DB_BROKEN_SYNC_STREAM
     int U1DB_DUPLICATE_INDEX_NAME
@@ -208,6 +209,7 @@ cdef extern from "u1db/u1db_internal.h":
                                void *context, u1db__trace_callback cb) nogil
 
 
+    void u1db__set_zero_delays()
     int u1db__get_generation(u1database *, int *db_rev)
     int u1db__get_document_size_limit(u1database *, int *limit)
     int u1db__get_generation_info(u1database *, int *db_rev, char **trans_id)
@@ -618,6 +620,8 @@ cdef handle_status(context, int status):
         raise errors.IndexDefinitionParseError
     if status == U1DB_UNKNOWN_OPERATION:
         raise errors.IndexDefinitionParseError
+    if status == U1DB_INVALID_FIELD_SPECIFIER:
+        raise errors.IndexDefinitionParseError()
     raise RuntimeError('%s (status: %s)' % (context, status))
 
 
@@ -703,6 +707,7 @@ cdef class CSyncTarget(object):
     def __init__(self):
         self._db = None
         self._st = NULL
+        u1db__set_zero_delays()
 
     def __dealloc__(self):
         u1db__free_sync_target(&self._st)
@@ -716,11 +721,13 @@ cdef class CSyncTarget(object):
         cdef int st_gen = 0, source_gen = 0, status
         cdef char *trans_id = NULL
         cdef char *st_trans_id = NULL
+        cdef char *c_source_replica_uid = NULL
 
         self._check()
         assert self._st.get_sync_info != NULL, "get_sync_info is NULL?"
+        c_source_replica_uid = source_replica_uid
         with nogil:
-            status = self._st.get_sync_info(self._st, source_replica_uid,
+            status = self._st.get_sync_info(self._st, c_source_replica_uid,
                 &st_replica_uid, &st_gen, &st_trans_id, &source_gen, &trans_id)
         handle_status("get_sync_info", status)
         res_trans_id = None
@@ -737,12 +744,19 @@ cdef class CSyncTarget(object):
 
     def record_sync_info(self, source_replica_uid, source_gen, source_trans_id):
         cdef int status
+        cdef int c_source_gen
+        cdef char *c_source_replica_uid = NULL
+        cdef char *c_source_trans_id = NULL
 
         self._check()
         assert self._st.record_sync_info != NULL, "record_sync_info is NULL?"
+        c_source_replica_uid = source_replica_uid
+        c_source_gen = source_gen
+        c_source_trans_id = source_trans_id
         with nogil:
-            status = self._st.record_sync_info(self._st, source_replica_uid,
-                                               source_gen, source_trans_id)
+            status = self._st.record_sync_info(
+                self._st, c_source_replica_uid, c_source_gen,
+                c_source_trans_id)
         handle_status("record_sync_info", status)
 
     def _get_sync_exchange(self, source_replica_uid, source_gen):
@@ -810,6 +824,7 @@ cdef class CSyncTarget(object):
         cdef int *generations = NULL
         cdef const_char_ptr *trans_ids = NULL
         cdef char *target_trans_id = NULL
+        cdef char *c_source_replica_uid = NULL
         cdef int i, count, status, target_gen
 
         self._check()
@@ -834,9 +849,10 @@ cdef class CSyncTarget(object):
             target_gen = last_known_generation
             if last_known_trans_id is not None:
                 target_trans_id = last_known_trans_id
+            c_source_replica_uid = source_replica_uid
             with nogil:
                 status = self._st.sync_exchange(
-                    self._st, source_replica_uid, count, docs, generations,
+                    self._st, c_source_replica_uid, count, docs, generations,
                     trans_ids, &target_gen, &target_trans_id,
                     <void *>return_doc_cb, return_doc_cb_wrapper)
             handle_status("sync_exchange", status)

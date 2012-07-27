@@ -90,6 +90,37 @@ class TestMakeTree(tests.TestCase):
     def test_invalid_inner_field_name(self):
         self.assertParseError("lower(a.)")
 
+    def test_gobbledigook(self):
+        self.assertParseError("(@#@cc   @#!*DFJSXV(()jccd")
+
+    def test_leading_space(self):
+        self.assertIsInstance(
+            self.parser.parse("  lower(a)"), query_parser.Lower)
+
+    def test_trailing_space(self):
+        self.assertIsInstance(
+            self.parser.parse("lower(a)  "), query_parser.Lower)
+
+    def test_spaces_before_open_paren(self):
+        self.assertIsInstance(
+            self.parser.parse("lower  (a)"), query_parser.Lower)
+
+    def test_spaces_after_open_paren(self):
+        self.assertIsInstance(
+            self.parser.parse("lower(  a)"), query_parser.Lower)
+
+    def test_spaces_before_close_paren(self):
+        self.assertIsInstance(
+            self.parser.parse("lower(a  )"), query_parser.Lower)
+
+    def test_spaces_before_comma(self):
+        self.assertIsInstance(
+            self.parser.parse("number(a  , 5)"), query_parser.Number)
+
+    def test_spaces_after_comma(self):
+        self.assertIsInstance(
+            self.parser.parse("number(a,  5)"), query_parser.Number)
+
 
 class TestStaticGetter(tests.TestCase):
 

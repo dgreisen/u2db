@@ -109,15 +109,13 @@ class CommonBackend(u1db.Database):
 
     def get_docs(self, doc_ids, check_for_conflicts=True,
                  include_deleted=False):
-        result = []
         for doc_id in doc_ids:
             doc = self._get_doc(doc_id)
             if doc.is_tombstone() and not include_deleted:
                 continue
             if check_for_conflicts:
                 doc.has_conflicts = self._has_conflicts(doc_id)
-            result.append(doc)
-        return result
+            yield doc
 
     def _get_trans_id_for_gen(self, generation):
         """Get the transaction id corresponding to a particular generation.
