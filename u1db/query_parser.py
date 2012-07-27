@@ -53,6 +53,32 @@ class StaticGetter(Getter):
         return self.value
 
 
+def extract_field(raw_doc, subfields):
+    if not isinstance(raw_doc, dict):
+        return []
+    val = raw_doc.get(subfields.pop(0))
+    if val is None:
+        return []
+    if subfields:
+        if isinstance(val, list):
+            results = []
+            for item in val:
+                results.extend(extract_field(item, subfields[:]))
+            subfields = []
+            return results
+        if isinstance(val, dict):
+            return extract_field(val, subfields)
+        return []
+    if isinstance(val, dict):
+        return []
+    if val is None:
+        return []
+    if isinstance(val, list):
+        # Strip anything in the list that isn't a simple type
+        return [v for v in val if not isinstance(v, (dict, list))]
+    return [val]
+
+
 class ExtractField(Getter):
     """Extract a field from the document."""
 
@@ -73,30 +99,7 @@ class ExtractField(Getter):
 
     def get(self, raw_doc):
         subfields = self.field.split('.')
-        while subfields:
-            subfield = subfields.pop(0)
-            if subfield == '*':
-                if not isinstance(raw_doc, list) or not subfields:
-                    return []
-                subfield = subfields.pop(0)
-                raw_doc = [
-                    r.get(subfield) for r in raw_doc if
-                    isinstance(r, dict)]
-            elif isinstance(raw_doc, dict):
-                raw_doc = raw_doc.get(subfield)
-            else:
-                return []
-        if isinstance(raw_doc, dict):
-            return []
-        if raw_doc is None:
-            result = []
-        elif isinstance(raw_doc, list):
-            # Strip anything in the list that isn't a simple type
-            result = [val for val in raw_doc
-                      if not isinstance(val, (dict, list))]
-        else:
-            result = [raw_doc]
-        return result
+        return extract_field(raw_doc, subfields)
 
 
 class Transformation(Getter):

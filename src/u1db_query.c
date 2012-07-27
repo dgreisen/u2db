@@ -252,88 +252,84 @@ struct operation
     op_combine, "combine", json_type_string, -1, JUST_EXPRESSION};
 
 static int
-extract_field_values(json_object *obj, const string_list *field_path,
-                     int value_type, string_list *values)
+extract_value(json_object *val, int value_type, string_list *values)
 {
-    string_list_item *item = NULL;
-    char string_value[MAX_INT_STR_LEN];
-    json_object *list_val = NULL;
-    json_object *val = NULL;
-    json_object *array_item = NULL;
-    json_object *tmp_val = NULL;
-    json_object *new_array = NULL;
-    int i, integer_value, boolean_value, length;
     int status = U1DB_OK;
-    val = obj;
-
-    if (val == NULL)
-        goto finish;
-    for (item = field_path->head; item != NULL; item = item->next)
-    {
-        if (item->data == "*") {
-            if (!json_object_is_type(val, json_type_array) ||
-                    item->next == NULL) {
-                goto finish;
-            }
-            item = item->next;
-            new_array = json_object_new_array();
-            length = json_object_array_length(val);
-            for (i = 0; i < length; i++) {
-                array_item = json_object_array_get_idx(val, i);
-                if (json_object_is_type(array_item, json_type_object)) {
-                    tmp_val = json_object_object_get(array_item, item->data);
-                    if (tmp_val != NULL)
-                        json_object_array_add(new_array, tmp_val);
-                }
-            }
-            if (json_object_array_length) {
-                val = new_array;
-            } else {
-                goto finish;
-            }
-        } else if (json_object_is_type(val, json_type_object)) {
-            val = json_object_object_get(val, item->data);
-            if (val == NULL)
-                goto finish;
-        } else {
-            goto finish;
-        }
-    }
+    int i, integer_value, boolean_value, length;
+    char string_value[MAX_INT_STR_LEN];
     if (json_object_is_type(val, json_type_string) && value_type ==
             json_type_string) {
-        if ((status = append(values, json_object_get_string(val))) != U1DB_OK)
-            goto finish;
-    } else if (json_object_is_type(val, json_type_int) && value_type ==
+        status = append(values, json_object_get_string(val));
+        goto finish;
+    }
+    if (json_object_is_type(val, json_type_int) && value_type ==
             json_type_int) {
         integer_value = json_object_get_int(val);
         snprintf(string_value, MAX_INT_STR_LEN, "%d", integer_value);
-        if ((status = append(values, string_value)) != U1DB_OK)
-            goto finish;
-    } else if (json_object_is_type(val, json_type_boolean) &&
-               value_type == json_type_boolean) {
+        status = append(values, string_value);
+        goto finish;
+    }
+    if (json_object_is_type(val, json_type_boolean) &&
+            value_type == json_type_boolean) {
         boolean_value = json_object_get_boolean(val);
         if (boolean_value) {
             status = append(values, "1");
-            if (status != U1DB_OK)
-                goto finish;
         } else {
             status = append(values, "0");
-            if (status != U1DB_OK)
-                goto finish;
         }
-    } else if (json_object_is_type(val, json_type_array)) {
-        // TODO: recursively check the types
+        goto finish;
+    }
+    if (json_object_is_type(val, json_type_array)) {
         length = json_object_array_length(val);
         for (i = 0; i < length; i++) {
-            if ((status = append(
-                    values, json_object_get_string(json_object_array_get_idx(
-                        val, i)))) != U1DB_OK)
+            status = extract_value(
+                json_object_array_get_idx(val, i), value_type, values);
+            if (status != U1DB_OK)
                 goto finish;
         }
     }
 finish:
     return status;
 }
+
+static int
+extract_field_values(json_object *obj, const string_list_item *field,
+                     int value_type, string_list *values)
+{
+    json_object *val = NULL;
+    json_object *array_item = NULL;
+    int i, length;
+    int status = U1DB_OK;
+
+    if (!json_object_is_type(obj, json_type_object)) {
+        goto finish;
+    }
+    val = json_object_object_get(obj, field->data);
+    if (val == NULL)
+        goto finish;
+    if (field->next != NULL) {
+        if (json_object_is_type(val, json_type_array)) {
+            length = json_object_array_length(val);
+            for (i = 0; i < length; i++) {
+                array_item = json_object_array_get_idx(val, i);
+                status = extract_field_values(
+                    array_item, field->next, value_type, values);
+                if (status != U1DB_OK)
+                    goto finish;
+            }
+            goto finish;
+        }
+        if (json_object_is_type(val, json_type_object)) {
+            status = extract_field_values(val, field->next, value_type, values);
+            goto finish;
+        }
+        goto finish;
+    }
+    status = extract_value(val, value_type, values);
+finish:
+    return status;
+}
+
 
 static int
 split(string_list *result, char *string, char splitter)
@@ -379,7 +375,7 @@ get_values(parse_tree *tree, json_object *obj, string_list *values)
         status = ((op_function)tree->op)(tree, obj, values);
     } else {
         status = extract_field_values(
-            obj, tree->field_path, json_type_string, values);
+            obj, tree->field_path->head, json_type_string, values);
     }
     return status;
 }
@@ -439,7 +435,7 @@ op_number(parse_tree *tree, json_object *obj, string_list *result)
     if (status != U1DB_OK)
         return status;
     status = extract_field_values(
-        obj, node->field_path, json_type_int, values);
+        obj, node->field_path->head, json_type_int, values);
     if (status != U1DB_OK)
         goto finish;
     node = node->next_sibling;
@@ -567,7 +563,7 @@ op_bool(parse_tree *tree, json_object *obj, string_list *result)
     //booleans by extract_field_values.
 
     status = extract_field_values(
-        obj, tree->first_child->field_path, json_type_boolean, values);
+        obj, tree->first_child->field_path->head, json_type_boolean, values);
     if (status != U1DB_OK)
         goto finish;
     for (item = values->head; item != NULL; item = item->next)
@@ -1302,7 +1298,7 @@ parse_op(string_list *tokens, char *term, parse_tree *result)
     char *sep = NULL;
     parse_tree *node = NULL;
     int status = U1DB_OK;
-    int i;
+    int i, array_size;
 
     sep = get_token(tokens);
     if (sep == NULL || strcmp(sep, "(") != 0) {
@@ -1349,8 +1345,9 @@ parse_op(string_list *tokens, char *term, parse_tree *result)
         }
     }
     i = 0;
+    array_size = sizeof(result->value_types) / sizeof(int);
     for (node = result->first_child; node != NULL; node = node->next_sibling) {
-        node->arg_type = result->value_types[i % result->number_of_children];
+        node->arg_type = result->value_types[i % array_size];
         if (node->arg_type == EXPRESSION) {
             status = to_getter(node);
             if (status != U1DB_OK)
@@ -1566,7 +1563,8 @@ evaluate_index_and_insert_into_db(void *context, const char *expression,
     if (ctx->obj == NULL || !json_object_is_type(ctx->obj, json_type_object)) {
         return U1DB_INVALID_JSON;
     }
-    if ((status = init_list(&values)) != U1DB_OK)
+    status = init_list(&values);
+    if (status != U1DB_OK)
         goto finish;
     status = get_values(tree, ctx->obj, values);
     if (status != U1DB_OK)
@@ -1578,8 +1576,10 @@ evaluate_index_and_insert_into_db(void *context, const char *expression,
             goto finish;
     }
 finish:
-    if (values != NULL)
+    if (values != NULL) {
         destroy_list(values);
+        values = NULL;
+    }
     return status;
 }
 

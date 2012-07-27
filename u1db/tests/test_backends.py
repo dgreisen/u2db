@@ -1476,26 +1476,19 @@ class DatabaseIndexTests(tests.DatabaseBaseTests):
             '{"foo": [{"zap": "bar"}, {"zap": "baz"}]}')
         # subpath only finds dicts in list
         self.db.create_doc_from_json('{"foo": ["zap", "baz"]}')
-        self.db.create_index('test-idx', 'foo.*.zap')
+        self.db.create_index('test-idx', 'foo.zap')
         self.assertEqual([doc], self.db.get_from_index('test-idx', 'bar'))
         self.assertEqual([doc], self.db.get_from_index('test-idx', 'baz'))
 
-    def test_evil_scary_nesting(self):
+    def test_nested_list_traversal(self):
         # subpath finds dicts in list
         doc = self.db.create_doc_from_json(
             '{"foo": [{"zap": [{"qux": "fnord"}, {"qux": "zombo"}]},'
             '{"zap": "baz"}]}')
         # subpath only finds dicts in list
-        self.db.create_index('test-idx', 'foo.*.zap.*.qux')
+        self.db.create_index('test-idx', 'foo.zap.qux')
         self.assertEqual([doc], self.db.get_from_index('test-idx', 'fnord'))
         self.assertEqual([doc], self.db.get_from_index('test-idx', 'zombo'))
-
-    def test_nested_unknown_operation(self):
-        self.db.create_doc_from_json(nested_doc)
-        # sub exists, but sub.foo does not:
-        self.assertRaises(
-            errors.IndexDefinitionParseError, self.db.create_index, 'test-idx',
-            'unknown_operation(field1)')
 
     def test_index_list1(self):
         self.db.create_index("index", "name")
