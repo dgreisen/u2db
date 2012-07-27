@@ -304,7 +304,8 @@ class Parser(object):
             if sep == ')':
                 break
             if sep != ',':
-                raise errors.IndexDefinitionParseError()
+                raise errors.IndexDefinitionParseError(
+                    "Unexpected token '%s' in parentheses." % (sep,))
         parsed = []
         for i, arg in enumerate(args):
             arg_type = op.args[i % len(op.args)]
@@ -323,9 +324,11 @@ class Parser(object):
     def _parse_term(self):
         term = self._get_token()
         if term is None:
-            raise errors.IndexDefinitionParseError()
+            raise errors.IndexDefinitionParseError(
+                "Unexpected end of index definition.")
         if term in (',', ')', '('):
-            raise errors.IndexDefinitionParseError()
+            raise errors.IndexDefinitionParseError(
+                "Unexpected token '%s' at start of expression.", (term,))
         next_token = self._peek_token()
         if next_token == '(':
             return self._parse_op(term)
@@ -335,7 +338,9 @@ class Parser(object):
         self._set_expression(expression)
         term = self._to_getter(self._parse_term())
         if self._peek_token():
-            raise errors.IndexDefinitionParseError()
+            raise errors.IndexDefinitionParseError(
+                "Unexpected token '%s' after end of expression."
+                % (self._peek_token(),))
         return term
 
     def parse_all(self, fields):
