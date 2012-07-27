@@ -49,7 +49,6 @@ typedef struct string_list_
     string_list_item *tail;
 } string_list;
 
-/*
 static void
 print_list(string_list *list)
 {
@@ -59,7 +58,6 @@ print_list(string_list *list)
         printf("'%s',", item->data);
     printf("]\n");
 }
-*/
 
 static int
 init_list(string_list **list)
@@ -114,6 +112,27 @@ append(string_list *list, const char *data)
     return U1DB_OK;
 }
 
+static int
+appendn(string_list *list, const char *data, int size)
+{
+    string_list_item *new_item = NULL;
+    new_item = (string_list_item *)calloc(1, sizeof(string_list_item));
+    if (new_item == NULL)
+        return U1DB_NOMEM;
+    new_item->data = strndup(data, size);
+    if (new_item->data == NULL)
+        return U1DB_NOMEM;
+    if (list->head == NULL)
+    {
+        list->head = new_item;
+    }
+    if (list->tail != NULL)
+    {
+        list->tail->next = new_item;
+    }
+    list->tail = new_item;
+    return U1DB_OK;
+}
 typedef struct parse_tree_
 {
     char *data;
@@ -204,8 +223,7 @@ append_child(parse_tree *t)
 }
 
 static int
-make_tree(const char *expression, int *start, int *open_parens,
-          parse_tree *result);
+make_tree(string_list *tokens, int *open_parens, parse_tree *result);
 typedef int(*op_function)(parse_tree *, json_object *, string_list *);
 
 static int op_lower(parse_tree *tree, json_object *obj, string_list *result);
@@ -1217,8 +1235,7 @@ check_fieldname(const char *fieldname)
 }
 
 static int
-make_op(const char *expression, int *start, int *open_parens,
-        parse_tree *result)
+make_op(string_list *tokens, int *open_parens, parse_tree *result)
 {
     int status = U1DB_OK;
     int i;
@@ -1242,7 +1259,7 @@ make_op(const char *expression, int *start, int *open_parens,
         status = U1DB_UNKNOWN_OPERATION;
         goto finish;
     }
-    status = make_tree(expression, start, open_parens, subtree);
+    status = make_tree(tokens, open_parens, subtree);
     if (status != U1DB_OK)
         goto finish;
     if (subtree->arity >= 0 &&
@@ -1271,124 +1288,180 @@ finish:
     return status;
 }
 
-static int
-extract_term(const char *expression, int *start, int *idx, parse_tree *result)
+static char *
+get_token(string_list *tokens)
 {
-    int status = U1DB_OK;
-    int size;
-    int end;
-    parse_tree *subtree = NULL;
-    const char *term = NULL;
+    string_list_item *previous;
+    char *token = NULL;
+    if (tokens->head != NULL) {
+        token = tokens->head->data;
+        previous = tokens->head;
+        tokens->head = tokens->head->next;
+        free(previous);
+    }
+    return token;
+}
 
-    while (expression[*start] == ' ')
-        (*start)++;
-    size = *idx - *start;
-    term = expression + *start;
-    while (size > 0 && term[size - 1] == ' ')
-        size--;
-    (*idx)++;
-    while (expression[*idx] == ' ')
-        (*idx)++;
-    *start = *idx;
-    if (!size)
-        return U1DB_NO_TERM;
-    status = append_child(result);
-    if (status != U1DB_OK) {
-        return status;
+static char *
+peek(string_list *tokens)
+{
+    if (tokens->head != NULL) {
+        return tokens->head->data;
     }
-    subtree = result->last_child;
-    subtree->data = strndup(term, size);
-    if (subtree->data == NULL) {
-        return U1DB_NOMEM;
-    }
-    return U1DB_OK;
+    return NULL;
 }
 
 static int
-make_tree(const char *expression, int *start, int *open_parens,
-          parse_tree *result)
+append_token(parse_tree *tree, char *token)
 {
     int status = U1DB_OK;
-    int size, i;
-    int idx;
-    char *term = NULL;
-    const char *arg_type = NULL;
-    char last_char, c = '\0';
     parse_tree *subtree = NULL;
 
-    idx = *start;
-    while (idx < strlen(expression))
+    status = append_child(tree);
+    if (status != U1DB_OK) {
+        free(token);
+        return status;
+    }
+    subtree = tree->last_child;
+    subtree->data = strdup(token);
+    free(token);
+    if (subtree->data == NULL) {
+        return U1DB_NOMEM;
+    }
+    return status;
+}
+
+static int
+make_tree(string_list *tokens, int *open_parens, parse_tree *result)
+{
+    int status = U1DB_OK;
+    char *token = NULL;
+    const char *next_token = NULL;
+    parse_tree *subtree = NULL;
+
+    printf("called\n");
+    print_list(tokens);
+    while (1)
     {
-        last_char = c;
-        c = expression[idx];
-        if (c == '(') {
-            if (last_char == ')') {
-                // )( is never valid
-                status = U1DB_INVALID_TRANSFORMATION_FUNCTION;
-                goto finish;
+        token = get_token(tokens);
+        if (strcmp(token, "(") == 0 || strcmp(token, ",") == 0 ||
+                strcmp(token, ")") == 0) {
+            free(token);
+            return U1DB_INVALID_TRANSFORMATION_FUNCTION;
+        }
+        next_token = peek(tokens);
+        if (next_token == NULL) {
+            if (token != NULL) {
+                status = append_token(result, token);
+                if (status != U1DB_OK)
+                    return status;
+                subtree = result->last_child;
+                status = check_fieldname(subtree->data);
+                if (status != U1DB_OK)
+                    return status;
+                status = split(
+                    subtree->field_path, subtree->data, '.');
             }
+            return status;
+        }
+        if (strcmp(next_token, "(") == 0) {
             (*open_parens)++;
-            status = extract_term(expression, start, &idx, result);
-            if (status == U1DB_NO_TERM)
-                status = U1DB_INVALID_TRANSFORMATION_FUNCTION;
-            if (status != U1DB_OK)
-                goto finish;
-            status = make_op(expression, start, open_parens, result);
+            status = append_token(result, token);
             if (status != U1DB_OK) {
-                goto finish;
+                return status;
             }
-            idx = *start;
-        } else if (c == ')') {
+            token = get_token(tokens);
+            free(token);
+            status = make_op(tokens, open_parens, result);
+            if (status != U1DB_OK) {
+                return status;
+            }
+        } else if (strcmp(next_token, ")") == 0) {
             (*open_parens)--;
             if (*open_parens < 0) {
+                free(token);
                 status = U1DB_INVALID_TRANSFORMATION_FUNCTION;
-                goto finish;
+                return status;
             }
-            status = extract_term(expression, start, &idx, result);
-            if (status == U1DB_NO_TERM)
-                // empty term is fine
-                status = U1DB_OK;
+            status = append_token(result, token);
+            if (status != U1DB_OK) {
+                return status;
+            }
+            token = get_token(tokens);
+            free(token);
+            next_token = peek(tokens);
+            while (next_token != NULL && strcmp(next_token, ")") == 0) {
+                token = get_token(tokens);
+                free(token);
+                next_token = peek(tokens);
+                (*open_parens)--;
+                if (*open_parens < 0) {
+                    return U1DB_INVALID_TRANSFORMATION_FUNCTION;
+                }
+            }
+            if (*open_parens == 0 && next_token != NULL)
+                return U1DB_INVALID_TRANSFORMATION_FUNCTION;
             return status;
-        } else if (c == ',') {
+        } else if (strcmp(next_token, ",") == 0) {
             if (*open_parens < 1) {
-                status = U1DB_INVALID_TRANSFORMATION_FUNCTION;
-                goto finish;
+                free(token);
+                return U1DB_INVALID_TRANSFORMATION_FUNCTION;
             }
-            status = extract_term(expression, start, &idx, result);
-            if (status != U1DB_OK && status != U1DB_NO_TERM) {
-                goto finish;
+            status = append_token(result, token);
+            if (status != U1DB_OK) {
+                return status;
             }
-            // empty term is fine
-            status = U1DB_OK;
+            token = get_token(tokens);
+            free(token);
+        }
+    }
+}
+
+static int
+make_tokens(const char *expression, string_list *tokens)
+{
+    int status = U1DB_OK;
+    int size;
+    int idx, start, end;
+    char c;
+    idx = 0;
+    while (idx < strlen(expression) && expression[idx] == ' ')
+        idx++;
+    start = idx;
+    end = strlen(expression) - 1;
+    while (end && expression[end] == ' ')
+        end--;
+    end++;
+    while (idx < end) {
+        c = expression[idx];
+        if (c == '(' || c == ',' || c == ')') {
+            if (idx == start) {
+                status = appendn(tokens, expression + idx, 1);
+                if (status != U1DB_OK)
+                    return status;
+                idx++;
+                start = idx;
+            } else {
+                while (start < idx && expression[start] == ' ')
+                    start++;
+                size = idx - start;
+                while (size && expression[start + size - 1] == ' ')
+                    size--;
+                if (size) {
+                    status = appendn(tokens, expression + start, size);
+                    if (status != U1DB_OK)
+                        return status;
+                }
+                start = idx;
+            }
         } else {
-            if (last_char == ')') {
-                // after ) only ) and , are ever valid
-                status = U1DB_INVALID_TRANSFORMATION_FUNCTION;
-                goto finish;
-            }
             idx++;
         }
     }
-    if (*start < strlen(expression)) {
-        status = extract_term(expression, start, &idx, result);
-        if (status != U1DB_OK && status != U1DB_NO_TERM)
-            goto finish;
-        if (status == U1DB_NO_TERM) {
-            // empty term is fine
-            status = U1DB_OK;
-        } else {
-            subtree = result->last_child;
-            if (subtree->data) {
-                status = check_fieldname(subtree->data);
-                if (status != U1DB_OK)
-                    goto finish;
-                status = split(subtree->field_path, subtree->data, '.');
-                if (status != U1DB_OK)
-                    goto finish;
-            }
-        }
+    size = end - start;
+    if (size) {
+        status = appendn(tokens, expression + start, size);
     }
-finish:
     return status;
 }
 
@@ -1396,10 +1469,22 @@ static int
 parse(const char *expression, parse_tree *result)
 {
     int status = U1DB_OK;
-    int start = 0;
     int open_parens = 0;
+    string_list *tokens;
 
-    status = make_tree(expression, &start, &open_parens, result);
+    status = init_list(&tokens);
+    if (status != U1DB_OK)
+        return status;
+    printf("before make_tokens\n");
+    status = make_tokens(expression, tokens);
+    printf("after make_tokens\n");
+    print_list(tokens);
+    if (status != U1DB_OK)
+        destroy_list(tokens);
+        return status;
+    printf("status: %d\n", status);
+    status = make_tree(tokens, &open_parens, result);
+    destroy_list(tokens);
     if (status != U1DB_OK)
         return status;
     if (open_parens != 0)
