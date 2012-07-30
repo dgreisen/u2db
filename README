@@ -12,7 +12,7 @@ Inserting and retrieving documents::
 
     import u1db
     db = u1db.open(":memory:", create=True)
-    doc = db.create_doc('{"firstname": "Bob", "familyname": "Foo"}')
+    doc = db.create_doc({"firstname": "Bob", "familyname": "Foo"})
     print "document id: %s" % doc.doc_id
     print "document revision: %s" % doc.revision
 

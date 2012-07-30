@@ -15,10 +15,15 @@
 # You should have received a copy of the GNU Lesser General Public License
 # along with u1db.  If not, see <http://www.gnu.org/licenses/>.
 
+import os
 import sys
 
 
 def config():
+    try:
+        from setuptools import setup, Extension, find_packages
+    except ImportError:
+        from distutils.core import setup, Extension, find_packages
     import u1db
     ext = []
     kwargs = {
@@ -30,12 +35,12 @@ def config():
         "author": "Ubuntu One team",
         "author_email": "u1db-discuss@lists.launchpad.net",
         "download_url": "https://launchpad.net/u1db/+download",
-        "packages": ["u1db", "u1db.backends", "u1db.remote",
-                     "u1db.commandline", "u1db.compat"],
+        "packages": find_packages(exclude=["u1db.tests",
+            "u1db.tests.commandline", "u1todo"]),
         "package_data": {'': ["*.sql"]},
         "scripts": ['u1db-client', 'u1db-serve'],
         "ext_modules": ext,
-        "install_requires": ["paste", "simplejson", "routes", "pyxdg"],
+        "install_requires": ["dirspec", "paste", "simplejson", "routes"],
         # informational
         "tests_require": ["testtools", "testscenarios", "Cython",
                           "pyOpenSSL"],
@@ -59,12 +64,6 @@ This allows you to get, retrieve, index, and update JSON documents, and
 synchronize them with other stores.
 """
     }
-
-    try:
-        from setuptools import setup, Extension
-    except ImportError:
-        from distutils.core import setup, Extension
-
     try:
         from Cython.Distutils import build_ext
     except ImportError, e:
@@ -84,22 +83,12 @@ synchronize them with other stores.
         extra_libs.append('json')
         ext.append(Extension(
             "u1db.tests.c_backend_wrapper",
-            ["u1db/tests/c_backend_wrapper.pyx",
-             "src/mkstemp_compat.c",
-             "src/u1db.c",
-             "src/u1db_http_sync_target.c",
-             "src/u1db_query.c",
-             "src/u1db_schema.c",
-             "src/u1db_sync_target.c",
-             "src/u1db_uuid.c",
-             "src/u1db_vectorclock.c",
-             ],
-            include_dirs=["include"],
-            libraries=['sqlite3', 'oauth'] + extra_libs,
+            ["u1db/tests/c_backend_wrapper.pyx"],
+            include_dirs=['include'],
+            library_dirs=["src"],
+            libraries=['u1db', 'sqlite3', 'oauth'] + extra_libs,
             define_macros=[] + extra_defines,
             ))
-
-
     setup(**kwargs)
 
 if __name__ == "__main__":

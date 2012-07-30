@@ -24,18 +24,31 @@
 #include <json/json.h>
 #include <curl/curl.h>
 #include <oauth.h>
+#include <sys/socket.h>
+#include <sys/time.h>
 
 #ifndef max
 #define max(a, b) ((a) > (b) ? (a) : (b))
 #endif // max
+#define TRIES 4
+
+static int retry_delays[] = {1, 1, 2, 4};
+
+void u1db__set_zero_delays() {
+    retry_delays[0] = 0;
+    retry_delays[1] = 0;
+    retry_delays[2] = 0;
+    retry_delays[3] = 0;
+}
 
 struct _http_state;
 struct _http_request;
 
 static int st_http_get_sync_info(u1db_sync_target *st,
-        const char *source_replica_uid,
-        const char **st_replica_uid, int *st_gen, int *source_gen,
-        char **trans_id);
+                                 const char *source_replica_uid,
+                                 const char **st_replica_uid, int *st_gen,
+                                 char **st_trans_id, int *source_gen,
+                                 char **trans_id);
 
 static int st_http_record_sync_info(u1db_sync_target *st,
         const char *source_replica_uid, int source_gen, const char *trans_id);
@@ -45,14 +58,19 @@ static int st_http_get_sync_exchange(u1db_sync_target *st,
                          int source_gen,
                          u1db_sync_exchange **exchange);
 static int st_http_sync_exchange(u1db_sync_target *st,
-                      const char *source_replica_uid,
-                      int n_docs, u1db_document **docs,
-                      int *generations, int *target_gen, void *context,
-                      u1db_doc_gen_callback cb);
+                                 const char *source_replica_uid, int n_docs,
+                                 u1db_document **docs, int *generations,
+                                 const char **trans_ids, int *target_gen,
+                                 char **target_trans_id, void *context,
+                                 u1db_doc_gen_callback cb);
 static int st_http_sync_exchange_doc_ids(u1db_sync_target *st,
-        u1database *source_db, int n_doc_ids, const char **doc_ids,
-        int *generations, int *target_gen,
-        void *context, u1db_doc_gen_callback cb);
+                                         u1database *source_db, int n_doc_ids,
+                                         const char **doc_ids,
+                                         int *generations,
+                                         const char **trans_ids,
+                                         int *target_gen,
+                                         char **target_trans_id, void *context,
+                                         u1db_doc_gen_callback cb);
 static void st_http_finalize_sync_exchange(u1db_sync_target *st,
                                u1db_sync_exchange **exchange);
 static int st_http_set_trace_hook(u1db_sync_target *st,
@@ -352,20 +370,21 @@ maybe_sign_url(u1db_sync_target *st, const char *http_method,
     return U1DB_OK;
 }
 
-
 static int
-st_http_get_sync_info(u1db_sync_target *st,
-        const char *source_replica_uid,
-        const char **st_replica_uid, int *st_gen, int *source_gen,
-        char **trans_id)
+st_http_get_sync_info(u1db_sync_target *st, const char *source_replica_uid,
+                      const char **st_replica_uid, int *st_gen,
+                      char **st_trans_id, int *source_gen, char **trans_id)
 {
     struct _http_state *state;
     struct _http_request req = {0};
     char *url = NULL;
     const char *tmp = NULL;
-    int status;
+    const char *tmp2 = NULL;
+    int status = U1DB_OK;
     long http_code;
     struct curl_slist *headers = NULL;
+    int attempt = 0;
+    struct timeval timeout;
 
     json_object *json = NULL, *obj = NULL;
 
@@ -388,30 +407,49 @@ st_http_get_sync_info(u1db_sync_target *st,
     req.state = state;
     status = u1db__format_sync_url(st, source_replica_uid, &url);
     if (status != U1DB_OK) { goto finish; }
-    status = curl_easy_setopt(state->curl, CURLOPT_HTTPGET, 1L);
-    if (status != CURLE_OK) { goto finish; }
-    // status = curl_easy_setopt(state->curl, CURLOPT_USERAGENT, "...");
-    status = curl_easy_setopt(state->curl, CURLOPT_URL, url);
-    if (status != CURLE_OK) { goto finish; }
-    req.body_buffer = req.header_buffer = NULL;
-    status = simple_set_curl_data(state->curl, &req, &req, NULL);
-    if (status != CURLE_OK) { goto finish; }
-    status = maybe_sign_url(st, "GET", url, &headers);
+    for (;;) {
+        status = curl_easy_setopt(state->curl, CURLOPT_HTTPGET, 1L);
+        if (status != CURLE_OK) { goto finish; }
+        // status = curl_easy_setopt(state->curl, CURLOPT_USERAGENT, "...");
+        status = curl_easy_setopt(state->curl, CURLOPT_URL, url);
+        if (status != CURLE_OK) { goto finish; }
+        req.body_buffer = req.header_buffer = NULL;
+        status = simple_set_curl_data(state->curl, &req, &req, NULL);
+        if (status != CURLE_OK) { goto finish; }
+        status = maybe_sign_url(st, "GET", url, &headers);
+        if (status != U1DB_OK) { goto finish; }
+        status = curl_easy_setopt(state->curl, CURLOPT_HTTPHEADER, headers);
+        if (status != CURLE_OK) { goto finish; }
+        // Now do the GET
+        status = curl_easy_perform(state->curl);
+        if (status != CURLE_OK) {
+            goto finish; }
+        status = curl_easy_getinfo(
+            state->curl, CURLINFO_RESPONSE_CODE, &http_code);
+        if (status != CURLE_OK) {
+            goto finish; }
+        status = U1DB_OK;
+        if (http_code == 503) {
+            status = U1DB_TARGET_UNAVAILABLE;
+            if (attempt < TRIES) {
+                timeout.tv_sec = retry_delays[attempt];
+                timeout.tv_usec = 0;
+                select(0, NULL, NULL, NULL, &timeout);
+                attempt++;
+                req.num_body_bytes = 0;
+                continue;
+            }
+        }
+        break;
+    }
     if (status != U1DB_OK) { goto finish; }
-    status = curl_easy_setopt(state->curl, CURLOPT_HTTPHEADER, headers);
-    if (status != CURLE_OK) { goto finish; }
-    // Now do the GET
-    status = curl_easy_perform(state->curl);
-    if (status != CURLE_OK) { goto finish; }
-    status = curl_easy_getinfo(state->curl, CURLINFO_RESPONSE_CODE, &http_code);
-    if (status != CURLE_OK) { goto finish; }
     if (http_code != 200) { // 201 for created? shouldn't happen on GET
         status = http_code;
         goto finish;
     }
     if (req.body_buffer == NULL) {
-	status = U1DB_INVALID_HTTP_RESPONSE;
-	goto finish;
+        status = U1DB_INVALID_HTTP_RESPONSE;
+        goto finish;
     }
     json = json_tokener_parse(req.body_buffer);
     if (json == NULL) {
@@ -448,6 +486,21 @@ st_http_get_sync_info(u1db_sync_target *st,
         goto finish;
     }
     *st_gen = json_object_get_int(obj);
+    obj = json_object_object_get(json, "target_replica_transaction_id");
+    if (obj == NULL) {
+        status = U1DB_INVALID_HTTP_RESPONSE;
+        goto finish;
+    }
+    tmp2 = json_object_get_string(obj);
+    if (tmp2 == NULL) {
+        *st_trans_id = NULL;
+    } else {
+        *st_trans_id = strdup(tmp2);
+        if (*st_trans_id == NULL) {
+            status = U1DB_NOMEM;
+            goto finish;
+        }
+    }
     obj = json_object_object_get(json, "source_replica_generation");
     if (obj == NULL) {
         status = U1DB_INVALID_HTTP_RESPONSE;
@@ -536,6 +589,8 @@ st_http_record_sync_info(u1db_sync_target *st,
     const char *raw_body = NULL;
     int raw_len;
     struct curl_slist *headers = NULL;
+    int attempt = 0;
+    struct timeval timeout;
 
     if (st == NULL || source_replica_uid == NULL || st->implementation == NULL)
     {
@@ -567,27 +622,46 @@ st_http_record_sync_info(u1db_sync_target *st,
     // confirmation of the post.
     headers = curl_slist_append(headers, "Expect:");
 
-    status = curl_easy_setopt(state->curl, CURLOPT_URL, url);
-    if (status != CURLE_OK) { goto finish; }
-    status = curl_easy_setopt(state->curl, CURLOPT_HTTPHEADER, headers);
-    if (status != CURLE_OK) { goto finish; }
-    status = curl_easy_setopt(state->curl, CURLOPT_UPLOAD, 1L);
-    if (status != CURLE_OK) { goto finish; }
-    status = curl_easy_setopt(state->curl, CURLOPT_PUT, 1L);
-    if (status != CURLE_OK) { goto finish; }
-    status = simple_set_curl_data(state->curl, &req, &req, &req);
-    if (status != CURLE_OK) { goto finish; }
-    status = curl_easy_setopt(state->curl, CURLOPT_INFILESIZE_LARGE,
-                              (curl_off_t)req.num_put_bytes);
-    if (status != CURLE_OK) { goto finish; }
-    status = maybe_sign_url(st, "PUT", url, &headers);
-    if (status != U1DB_OK) { goto finish; }
+    for (;;) {
+        status = curl_easy_setopt(state->curl, CURLOPT_URL, url);
+        if (status != CURLE_OK) { goto finish; }
+        status = curl_easy_setopt(state->curl, CURLOPT_HTTPHEADER, headers);
+        if (status != CURLE_OK) { goto finish; }
+        status = curl_easy_setopt(state->curl, CURLOPT_UPLOAD, 1L);
+        if (status != CURLE_OK) { goto finish; }
+        status = curl_easy_setopt(state->curl, CURLOPT_PUT, 1L);
+        if (status != CURLE_OK) { goto finish; }
+        status = simple_set_curl_data(state->curl, &req, &req, &req);
+        if (status != CURLE_OK) { goto finish; }
+        status = curl_easy_setopt(state->curl, CURLOPT_INFILESIZE_LARGE,
+                                (curl_off_t)req.num_put_bytes);
+        if (status != CURLE_OK) { goto finish; }
+        status = maybe_sign_url(st, "PUT", url, &headers);
+        if (status != U1DB_OK) { goto finish; }
 
-    // Now actually send the data
-    status = curl_easy_perform(state->curl);
-    if (status != CURLE_OK) { goto finish; }
-    status = curl_easy_getinfo(state->curl, CURLINFO_RESPONSE_CODE, &http_code);
-    if (status != CURLE_OK) { goto finish; }
+        // Now actually send the data
+        status = curl_easy_perform(state->curl);
+        if (status != CURLE_OK) {
+            goto finish; }
+        status = curl_easy_getinfo(
+            state->curl, CURLINFO_RESPONSE_CODE, &http_code);
+        if (status != CURLE_OK) {
+            goto finish; }
+        status = U1DB_OK;
+        if (http_code == 503) {
+            status = U1DB_TARGET_UNAVAILABLE;
+            if (attempt < TRIES) {
+                timeout.tv_sec = retry_delays[attempt];
+                timeout.tv_usec = 0;
+                select(0, NULL, NULL, NULL, &timeout);
+                attempt++;
+                req.num_body_bytes = 0;
+                continue;
+            }
+        }
+        break;
+    }
+    if (status != U1DB_OK) { goto finish; }
     if (http_code != 200 && http_code != 201) {
         status = http_code;
         goto finish;
@@ -663,7 +737,7 @@ finish:
 
 
 static int
-doc_to_tempfile(u1db_document *doc, int gen, FILE *fd)
+doc_to_tempfile(u1db_document *doc, int gen, const char *trans_id, FILE *fd)
 {
     int status = U1DB_OK;
     json_object *json = NULL;
@@ -678,6 +752,7 @@ doc_to_tempfile(u1db_document *doc, int gen, FILE *fd)
     json_object_object_add(
         json, "content", doc->json?json_object_new_string(doc->json):NULL);
     json_object_object_add(json, "gen", json_object_new_int(gen));
+    json_object_object_add(json, "trans_id", json_object_new_string(trans_id));
     fputs(json_object_to_json_string(json), fd);
 finish:
     if (json != NULL) {
@@ -718,7 +793,8 @@ make_tempfile(char tmpname[1024])
 
 
 static int
-init_temp_file(char tmpname[], FILE **temp_fd, int target_gen)
+init_temp_file(char tmpname[], FILE **temp_fd, int target_gen,
+               char *target_trans_id)
 {
     int status = U1DB_OK;
     *temp_fd = make_tempfile(tmpname);
@@ -731,11 +807,13 @@ init_temp_file(char tmpname[], FILE **temp_fd, int target_gen)
     }
     // Spool all of the documents to a temporary file, so that it we can
     // determine Content-Length before we start uploading the data.
-    fprintf(*temp_fd, "[\r\n{\"last_known_generation\": %d}", target_gen);
+    fprintf(
+        *temp_fd,
+        "[\r\n{\"last_known_generation\": %d, \"last_known_trans_id\": \"%s\"}",
+        target_gen, target_trans_id);
 finish:
     return status;
 }
-
 
 static int
 finalize_and_send_temp_file(u1db_sync_target *st, FILE *temp_fd,
@@ -747,6 +825,8 @@ finalize_and_send_temp_file(u1db_sync_target *st, FILE *temp_fd,
     char *url = NULL;
     struct _http_state *state;
     struct curl_slist *headers = NULL;
+    int attempt = 0;
+    struct timeval timeout;
 
     fputs("\r\n]", temp_fd);
     status = impl_as_http_state(st->implementation, &state);
@@ -755,18 +835,38 @@ finalize_and_send_temp_file(u1db_sync_target *st, FILE *temp_fd,
     }
     status = u1db__format_sync_url(st, source_replica_uid, &url);
     if (status != U1DB_OK) { goto finish; }
-    status = curl_easy_setopt(state->curl, CURLOPT_URL, url);
-    if (status != CURLE_OK) { goto finish; }
-    status = setup_curl_for_sync(state->curl, &headers, req, temp_fd);
-    if (status != CURLE_OK) { goto finish; }
-    status = maybe_sign_url(st, "POST", url, &headers);
+    for (;;) {
+        status = curl_easy_setopt(state->curl, CURLOPT_URL, url);
+        if (status != CURLE_OK) { goto finish; }
+        status = setup_curl_for_sync(state->curl, &headers, req, temp_fd);
+        if (status != CURLE_OK) { goto finish; }
+        status = maybe_sign_url(st, "POST", url, &headers);
+        if (status != U1DB_OK) { goto finish; }
+        // Now send off the messages, and handle the returned content.
+        status = curl_easy_perform(state->curl);
+        if (status != CURLE_OK) {
+            goto finish; }
+        status = curl_easy_getinfo(
+                state->curl, CURLINFO_RESPONSE_CODE, &http_code);
+        if (status != CURLE_OK) {
+            goto finish; }
+        status = U1DB_OK;
+        if (http_code == 503) {
+            status = U1DB_TARGET_UNAVAILABLE;
+            if (attempt < TRIES) {
+                timeout.tv_sec = retry_delays[attempt];
+                timeout.tv_usec = 0;
+                select(0, NULL, NULL, NULL, &timeout);
+                attempt++;
+                req->num_body_bytes = 0;
+                continue;
+            }
+        }
+        break;
+    }
     if (status != U1DB_OK) { goto finish; }
-    // Now send off the messages, and handle the returned content.
-    status = curl_easy_perform(state->curl);
-    if (status != CURLE_OK) { goto finish; }
-    status = curl_easy_getinfo(state->curl, CURLINFO_RESPONSE_CODE, &http_code);
-    if (status != CURLE_OK) { goto finish; }
     if (http_code != 200 && http_code != 201) {
+        printf("broken 0\n");
         status = U1DB_BROKEN_SYNC_STREAM;
         goto finish;
     }
@@ -783,51 +883,76 @@ finish:
 
 static int
 process_response(u1db_sync_target *st, void *context, u1db_doc_gen_callback cb,
-                 char *response, int *target_gen)
+                 char *response, int *target_gen, char **target_trans_id)
 {
     int status = U1DB_OK;
     int i, doc_count;
     json_object *json = NULL, *obj = NULL, *attr = NULL;
     const char *doc_id, *content, *rev;
+    const char *tmp = NULL;
     int gen;
+    const char *trans_id = NULL;
     u1db_document *doc;
 
     json = json_tokener_parse(response);
     if (json == NULL || !json_object_is_type(json, json_type_array)) {
+        printf("broken 1, response: %s\n", response);
         status = U1DB_BROKEN_SYNC_STREAM;
         goto finish;
     }
     doc_count = json_object_array_length(json);
     if (doc_count < 1) {
         // the first response is the new_generation info, so it must exist
+        printf("broken 2\n");
         status = U1DB_BROKEN_SYNC_STREAM;
         goto finish;
     }
     obj = json_object_array_get_idx(json, 0);
     attr = json_object_object_get(obj, "new_generation");
-    *target_gen = json_object_get_int(attr);
     if (attr == NULL) {
+        printf("broken 3\n");
         status = U1DB_BROKEN_SYNC_STREAM;
         goto finish;
     }
+    *target_gen = json_object_get_int(attr);
+    attr = json_object_object_get(obj, "new_transaction_id");
+    if (attr == NULL) {
+        printf("broken 4\n");
+        status = U1DB_BROKEN_SYNC_STREAM;
+        goto finish;
+    }
+    tmp = json_object_get_string(attr);
+    if (tmp == NULL) {
+        printf("broken 5\n");
+        status = U1DB_BROKEN_SYNC_STREAM;
+        goto finish;
+    }
+    *target_trans_id = strdup(tmp);
+    if (*target_trans_id == NULL) {
+        status = U1DB_NOMEM;
+        goto finish;
+    }
+
     for (i = 1; i < doc_count; ++i) {
         obj = json_object_array_get_idx(json, i);
-        // TODO: Check that the attributes are not NULL, etc
         attr = json_object_object_get(obj, "id");
         doc_id = json_object_get_string(attr);
-        // TODO: Do we need to 'put' attr back?
         attr = json_object_object_get(obj, "rev");
         rev = json_object_get_string(attr);
         attr = json_object_object_get(obj, "content");
         content = json_object_get_string(attr);
         attr = json_object_object_get(obj, "gen");
         gen = json_object_get_int(attr);
-        doc = u1db__allocate_document(doc_id, rev, content, 0);
+        attr = json_object_object_get(obj, "trans_id");
+        trans_id = json_object_get_string(attr);
+        status = u1db__allocate_document(doc_id, rev, content, 0, &doc);
+        if (status != U1DB_OK)
+            goto finish;
         if (doc == NULL) {
             status = U1DB_NOMEM;
             goto finish;
         }
-        status = cb(context, doc, gen);
+        status = cb(context, doc, gen, trans_id);
         if (status != U1DB_OK) { goto finish; }
     }
 finish:
@@ -860,10 +985,10 @@ cleanup_temp_files(char tmpname[], FILE *temp_fd, struct _http_request *req)
 }
 
 static int
-st_http_sync_exchange(u1db_sync_target *st,
-                      const char *source_replica_uid, 
-                      int n_docs, u1db_document **docs,
-                      int *generations, int *target_gen, void *context,
+st_http_sync_exchange(u1db_sync_target *st, const char *source_replica_uid,
+                      int n_docs, u1db_document **docs, int *generations,
+                      const char **trans_ids, int *target_gen,
+                      char **target_trans_id, void *context,
                       u1db_doc_gen_callback cb)
 {
     int status, i;
@@ -872,22 +997,24 @@ st_http_sync_exchange(u1db_sync_target *st,
     char tmpname[1024] = {0};
 
     if (st == NULL || generations == NULL || target_gen == NULL
-            || cb == NULL)
+            || target_trans_id == NULL || cb == NULL)
     {
         return U1DB_INVALID_PARAMETER;
     }
     if (n_docs > 0 && (docs == NULL || generations == NULL)) {
         return U1DB_INVALID_PARAMETER;
     }
-    status = init_temp_file(tmpname, &temp_fd, *target_gen);
+    status = init_temp_file(tmpname, &temp_fd, *target_gen, *target_trans_id);
     if (status != U1DB_OK) { goto finish; }
     for (i = 0; i < n_docs; ++i) {
-        status = doc_to_tempfile(docs[i], generations[i], temp_fd);
+        status = doc_to_tempfile(
+            docs[i], generations[i], trans_ids[i], temp_fd);
         if (status != U1DB_OK) { goto finish; }
     }
     status = finalize_and_send_temp_file(st, temp_fd, source_replica_uid, &req);
     if (status != U1DB_OK) { goto finish; }
-    status = process_response(st, context, cb, req.body_buffer, target_gen);
+    status = process_response(st, context, cb, req.body_buffer, target_gen,
+                              target_trans_id);
 finish:
     cleanup_temp_files(tmpname, temp_fd, &req);
     return status;
@@ -898,6 +1025,7 @@ struct _get_doc_to_tempfile_context {
     int offset;
     int num;
     int *generations;
+    const char **trans_ids;
     FILE *temp_fd;
 };
 
@@ -913,6 +1041,7 @@ get_docs_to_tempfile(void *context, u1db_document *doc)
         status = U1DB_INTERNAL_ERROR;
     } else {
         status = doc_to_tempfile(doc, state->generations[state->offset],
+                                 state->trans_ids[state->offset],
                                  state->temp_fd);
     }
     u1db_free_doc(&doc);
@@ -921,13 +1050,15 @@ get_docs_to_tempfile(void *context, u1db_document *doc)
 
 
 int u1db_get_docs(u1database *db, int n_doc_ids, const char **doc_ids,
-                  int check_for_conflicts, void *context,
+                  int check_for_conflicts, int include_deleted, void *context,
                   u1db_doc_callback cb);
 
 static int
 st_http_sync_exchange_doc_ids(u1db_sync_target *st, u1database *source_db,
-        int n_doc_ids, const char **doc_ids, int *generations,
-        int *target_gen, void *context, u1db_doc_gen_callback cb)
+                              int n_doc_ids, const char **doc_ids,
+                              int *generations, const char **trans_ids,
+                              int *target_gen, char **target_trans_id,
+                              void *context, u1db_doc_gen_callback cb)
 {
     int status;
     FILE *temp_fd = NULL;
@@ -937,7 +1068,7 @@ st_http_sync_exchange_doc_ids(u1db_sync_target *st, u1database *source_db,
     struct _get_doc_to_tempfile_context state = {0};
 
     if (st == NULL || generations == NULL || target_gen == NULL
-            || cb == NULL)
+            || target_trans_id == NULL || cb == NULL)
     {
         return U1DB_INVALID_PARAMETER;
     }
@@ -946,17 +1077,19 @@ st_http_sync_exchange_doc_ids(u1db_sync_target *st, u1database *source_db,
     }
     status = u1db_get_replica_uid(source_db, &source_replica_uid);
     if (status != U1DB_OK) { goto finish; }
-    status = init_temp_file(tmpname, &temp_fd, *target_gen);
+    status = init_temp_file(tmpname, &temp_fd, *target_gen, *target_trans_id);
     if (status != U1DB_OK) { goto finish; }
     state.num = n_doc_ids;
     state.generations = generations;
+    state.trans_ids = trans_ids;
     state.temp_fd = temp_fd;
-    status = u1db_get_docs(source_db, n_doc_ids, doc_ids, 0,
+    status = u1db_get_docs(source_db, n_doc_ids, doc_ids, 0, 1,
             &state, get_docs_to_tempfile);
     if (status != U1DB_OK) { goto finish; }
     status = finalize_and_send_temp_file(st, temp_fd, source_replica_uid, &req);
     if (status != U1DB_OK) { goto finish; }
-    status = process_response(st, context, cb, req.body_buffer, target_gen);
+    status = process_response(st, context, cb, req.body_buffer, target_gen,
+                              target_trans_id);
 finish:
     cleanup_temp_files(tmpname, temp_fd, &req);
     return status;

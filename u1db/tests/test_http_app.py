@@ -292,7 +292,8 @@ class TestHTTPInvocationByMethodWithBody(tests.TestCase):
         res = invoke()
         self.assertEqual('Put/end', res)
         self.assertEqual({'a': '1', 'b': 2}, resource.args)
-        self.assertEqual(['{"entry": "x"}', '{"entry": "y"}'], resource.entries)
+        self.assertEqual(
+            ['{"entry": "x"}', '{"entry": "y"}'], resource.entries)
         self.assertEqual(['a', 's', 's', 'e'], resource.order)
 
     def _put_sync_stream(self, body):
@@ -303,7 +304,7 @@ class TestHTTPInvocationByMethodWithBody(tests.TestCase):
                    'CONTENT_TYPE': 'application/x-u1db-sync-stream'}
         invoke = http_app.HTTPInvocationByMethodWithBody(resource, environ,
                                                          parameters)
-        res = invoke()
+        invoke()
 
     def test_put_sync_stream_wrong_start(self):
         self.assertRaises(http_app.BadRequest,
@@ -362,9 +363,11 @@ class TestHTTPInvocationByMethodWithBody(tests.TestCase):
                    'wsgi.input': StringIO.StringIO('{}'),
                    'CONTENT_LENGTH': '10000',
                    'CONTENT_TYPE': 'text/plain'}
+
         class params:
             max_request_size = 5000
             max_entry_size = sys.maxint  # we don't get to use this
+
         invoke = http_app.HTTPInvocationByMethodWithBody(resource, environ,
                                                          params)
         self.assertRaises(http_app.BadRequest, invoke)
@@ -430,8 +433,10 @@ class TestHTTPResponder(tests.TestCase):
         self.status = status
         self.headers = dict(headers)
         self.response_body = []
+
         def write(data):
             self.response_body.append(data)
+
         return write
 
     def test_send_response_content_w_headers(self):
@@ -599,7 +604,7 @@ class TestHTTPApp(tests.TestCase):
         self.assertEqual({'rev': doc.rev}, simplejson.loads(resp.body))
 
     def test_put_doc(self):
-        doc = self.db0.create_doc('{"x": 1}', doc_id='doc1')
+        doc = self.db0.create_doc_from_json('{"x": 1}', doc_id='doc1')
         resp = self.app.put('/db0/doc/doc1?old_rev=%s' % doc.rev,
                             params='{"x": 2}',
                             headers={'content-type': 'application/json'})
@@ -611,7 +616,7 @@ class TestHTTPApp(tests.TestCase):
 
     def test_put_doc_too_large(self):
         self.http_app.max_request_size = 15000
-        doc = self.db0.create_doc('{"x": 1}', doc_id='doc1')
+        doc = self.db0.create_doc_from_json('{"x": 1}', doc_id='doc1')
         resp = self.app.put('/db0/doc/doc1?old_rev=%s' % doc.rev,
                             params='{"%s": 2}' % ('z' * 16000),
                             headers={'content-type': 'application/json'},
@@ -619,16 +624,16 @@ class TestHTTPApp(tests.TestCase):
         self.assertEqual(400, resp.status)
 
     def test_delete_doc(self):
-        doc = self.db0.create_doc('{"x": 1}', doc_id='doc1')
+        doc = self.db0.create_doc_from_json('{"x": 1}', doc_id='doc1')
         resp = self.app.delete('/db0/doc/doc1?old_rev=%s' % doc.rev)
-        doc = self.db0.get_doc('doc1')
+        doc = self.db0.get_doc('doc1', include_deleted=True)
         self.assertEqual(None, doc.content)
         self.assertEqual(200, resp.status)
         self.assertEqual('application/json', resp.header('content-type'))
         self.assertEqual({'rev': doc.rev}, simplejson.loads(resp.body))
 
     def test_get_doc(self):
-        doc = self.db0.create_doc('{"x": 1}', doc_id='doc1')
+        doc = self.db0.create_doc_from_json('{"x": 1}', doc_id='doc1')
         resp = self.app.get('/db0/doc/%s' % doc.doc_id)
         self.assertEqual(200, resp.status)
         self.assertEqual('application/json', resp.header('content-type'))
@@ -646,13 +651,35 @@ class TestHTTPApp(tests.TestCase):
         self.assertEqual('false', resp.header('x-u1db-has-conflicts'))
 
     def test_get_doc_deleted(self):
-        doc = self.db0.create_doc('{"x": 1}', doc_id='doc1')
+        doc = self.db0.create_doc_from_json('{"x": 1}', doc_id='doc1')
         self.db0.delete_doc(doc)
         resp = self.app.get('/db0/doc/doc1', expect_errors=True)
         self.assertEqual(404, resp.status)
         self.assertEqual('application/json', resp.header('content-type'))
-        self.assertEqual({"error": errors.DOCUMENT_DELETED},
-                         simplejson.loads(resp.body))
+        self.assertEqual(
+            {"error": errors.DocumentDoesNotExist.wire_description},
+            simplejson.loads(resp.body))
+
+    def test_get_doc_deleted_explicit_exclude(self):
+        doc = self.db0.create_doc_from_json('{"x": 1}', doc_id='doc1')
+        self.db0.delete_doc(doc)
+        resp = self.app.get(
+            '/db0/doc/doc1?include_deleted=false', expect_errors=True)
+        self.assertEqual(404, resp.status)
+        self.assertEqual('application/json', resp.header('content-type'))
+        self.assertEqual(
+            {"error": errors.DocumentDoesNotExist.wire_description},
+            simplejson.loads(resp.body))
+
+    def test_get_deleted_doc(self):
+        doc = self.db0.create_doc_from_json('{"x": 1}', doc_id='doc1')
+        self.db0.delete_doc(doc)
+        resp = self.app.get(
+            '/db0/doc/doc1?include_deleted=true', expect_errors=True)
+        self.assertEqual(404, resp.status)
+        self.assertEqual('application/json', resp.header('content-type'))
+        self.assertEqual(
+            {"error": errors.DOCUMENT_DELETED}, simplejson.loads(resp.body))
         self.assertEqual(doc.rev, resp.header('x-u1db-rev'))
         self.assertEqual('false', resp.header('x-u1db-has-conflicts'))
 
@@ -663,13 +690,74 @@ class TestHTTPApp(tests.TestCase):
         self.assertEqual({"error": "database does not exist"},
                          simplejson.loads(resp.body))
 
+    def test_get_docs(self):
+        doc1 = self.db0.create_doc_from_json('{"x": 1}', doc_id='doc1')
+        doc2 = self.db0.create_doc_from_json('{"x": 1}', doc_id='doc2')
+        ids = ','.join([doc1.doc_id, doc2.doc_id])
+        resp = self.app.get('/db0/docs?doc_ids=%s' % ids)
+        self.assertEqual(200, resp.status)
+        self.assertEqual(
+            'application/json', resp.header('content-type'))
+        expected = [
+            {"content": '{"x": 1}', "doc_rev": "db0:1", "doc_id": "doc1",
+             "has_conflicts": False},
+            {"content": '{"x": 1}', "doc_rev": "db0:1", "doc_id": "doc2",
+             "has_conflicts": False}]
+        self.assertEqual(expected, simplejson.loads(resp.body))
+
+    def test_get_docs_percent(self):
+        doc1 = self.db0.create_doc_from_json('{"x": 1}', doc_id='doc%1')
+        doc2 = self.db0.create_doc_from_json('{"x": 1}', doc_id='doc2')
+        ids = ','.join([doc1.doc_id, doc2.doc_id])
+        resp = self.app.get('/db0/docs?doc_ids=%s' % ids)
+        self.assertEqual(200, resp.status)
+        self.assertEqual(
+            'application/json', resp.header('content-type'))
+        expected = [
+            {"content": '{"x": 1}', "doc_rev": "db0:1", "doc_id": "doc%1",
+             "has_conflicts": False},
+            {"content": '{"x": 1}', "doc_rev": "db0:1", "doc_id": "doc2",
+             "has_conflicts": False}]
+        self.assertEqual(expected, simplejson.loads(resp.body))
+
+    def test_get_docs_deleted(self):
+        doc1 = self.db0.create_doc_from_json('{"x": 1}', doc_id='doc1')
+        doc2 = self.db0.create_doc_from_json('{"x": 1}', doc_id='doc2')
+        self.db0.delete_doc(doc2)
+        ids = ','.join([doc1.doc_id, doc2.doc_id])
+        resp = self.app.get('/db0/docs?doc_ids=%s' % ids)
+        self.assertEqual(200, resp.status)
+        self.assertEqual(
+            'application/json', resp.header('content-type'))
+        expected = [
+            {"content": '{"x": 1}', "doc_rev": "db0:1", "doc_id": "doc1",
+             "has_conflicts": False}]
+        self.assertEqual(expected, simplejson.loads(resp.body))
+
+    def test_get_docs_include_deleted(self):
+        doc1 = self.db0.create_doc_from_json('{"x": 1}', doc_id='doc1')
+        doc2 = self.db0.create_doc_from_json('{"x": 1}', doc_id='doc2')
+        self.db0.delete_doc(doc2)
+        ids = ','.join([doc1.doc_id, doc2.doc_id])
+        resp = self.app.get('/db0/docs?doc_ids=%s&include_deleted=true' % ids)
+        self.assertEqual(200, resp.status)
+        self.assertEqual(
+            'application/json', resp.header('content-type'))
+        expected = [
+            {"content": '{"x": 1}', "doc_rev": "db0:1", "doc_id": "doc1",
+             "has_conflicts": False},
+            {"content": None, "doc_rev": "db0:2", "doc_id": "doc2",
+             "has_conflicts": False}]
+        self.assertEqual(expected, simplejson.loads(resp.body))
+
     def test_get_sync_info(self):
-        self.db0._set_sync_info('other-id', 1, 'T-transid')
+        self.db0._set_replica_gen_and_trans_id('other-id', 1, 'T-transid')
         resp = self.app.get('/db0/sync-from/other-id')
         self.assertEqual(200, resp.status)
         self.assertEqual('application/json', resp.header('content-type'))
         self.assertEqual(dict(target_replica_uid='db0',
                               target_replica_generation=0,
+                              target_replica_transaction_id='',
                               source_replica_uid='other-id',
                               source_replica_generation=1,
                               source_transaction_id='T-transid'),
@@ -682,27 +770,33 @@ class TestHTTPApp(tests.TestCase):
         self.assertEqual(200, resp.status)
         self.assertEqual('application/json', resp.header('content-type'))
         self.assertEqual({'ok': True}, simplejson.loads(resp.body))
-        self.assertEqual((2, 'T-transid'),
-                         self.db0._get_sync_gen_info('other-id'))
+        self.assertEqual(
+            (2, 'T-transid'),
+            self.db0._get_replica_gen_and_trans_id('other-id'))
 
     def test_sync_exchange_send(self):
         entries = {
             10: {'id': 'doc-here', 'rev': 'replica:1', 'content':
-                 '{"value": "here"}', 'gen': 10},
+                 '{"value": "here"}', 'gen': 10, 'trans_id': 'T-sid'},
             11: {'id': 'doc-here2', 'rev': 'replica:1', 'content':
-                 '{"value": "here2"}', 'gen': 11}
+                 '{"value": "here2"}', 'gen': 11, 'trans_id': 'T-sed'}
             }
 
         gens = []
-        _do_set_sync_info = self.db0._do_set_sync_info
+        _do_set_replica_gen_and_trans_id = \
+            self.db0._do_set_replica_gen_and_trans_id
+
         def set_sync_generation_witness(other_uid, other_gen, other_trans_id):
             gens.append((other_uid, other_gen))
-            _do_set_sync_info(other_uid, other_gen, other_trans_id)
+            _do_set_replica_gen_and_trans_id(
+                other_uid, other_gen, other_trans_id)
             self.assertGetDoc(self.db0, entries[other_gen]['id'],
                               entries[other_gen]['rev'],
                               entries[other_gen]['content'], False)
 
-        self.patch(self.db0, '_do_set_sync_info', set_sync_generation_witness)
+        self.patch(
+            self.db0, '_do_set_replica_gen_and_trans_id',
+            set_sync_generation_witness)
 
         args = dict(last_known_generation=0)
         body = ("[\r\n" +
@@ -717,7 +811,14 @@ class TestHTTPApp(tests.TestCase):
         self.assertEqual(200, resp.status)
         self.assertEqual('application/x-u1db-sync-stream',
                          resp.header('content-type'))
-        self.assertEqual('[\r\n{"new_generation": 2}\r\n]\r\n', resp.body)
+        bits = resp.body.split('\r\n')
+        self.assertEqual('[', bits[0])
+        last_trans_id = self.db0._get_transaction_log()[-1][1]
+        self.assertEqual({'new_generation': 2,
+                          'new_transaction_id': last_trans_id},
+                         simplejson.loads(bits[1]))
+        self.assertEqual(']', bits[2])
+        self.assertEqual('', bits[3])
         self.assertEqual([('replica', 10), ('replica', 11)], gens)
 
     def test_sync_exchange_send_entry_too_large(self):
@@ -740,8 +841,8 @@ class TestHTTPApp(tests.TestCase):
         self.assertEqual(400, resp.status)
 
     def test_sync_exchange_receive(self):
-        doc = self.db0.create_doc('{"value": "there"}')
-        doc2 = self.db0.create_doc('{"value": "there2"}')
+        doc = self.db0.create_doc_from_json('{"value": "there"}')
+        doc2 = self.db0.create_doc_from_json('{"value": "there2"}')
         args = dict(last_known_generation=0)
         body = "[\r\n%s\r\n]" % simplejson.dumps(args)
         resp = self.app.post('/db0/sync-from/replica',
@@ -754,21 +855,31 @@ class TestHTTPApp(tests.TestCase):
         parts = resp.body.splitlines()
         self.assertEqual(5, len(parts))
         self.assertEqual('[', parts[0])
-        self.assertEqual({'new_generation': 2},
+        last_trans_id = self.db0._get_transaction_log()[-1][1]
+        self.assertEqual({'new_generation': 2,
+                          'new_transaction_id': last_trans_id},
                          simplejson.loads(parts[1].rstrip(",")))
-        self.assertEqual({'content': '{"value": "there"}',
-                          'rev': doc.rev, 'id': doc.doc_id, 'gen': 1},
-                         simplejson.loads(parts[2].rstrip(",")))
-        self.assertEqual({'content': '{"value": "there2"}',
-                          'rev': doc2.rev, 'id': doc2.doc_id, 'gen': 2},
-                         simplejson.loads(parts[3].rstrip(",")))
+        part2 = simplejson.loads(parts[2].rstrip(","))
+        self.assertTrue(part2['trans_id'].startswith('T-'))
+        self.assertEqual('{"value": "there"}', part2['content'])
+        self.assertEqual(doc.rev, part2['rev'])
+        self.assertEqual(doc.doc_id, part2['id'])
+        self.assertEqual(1, part2['gen'])
+        part3 = simplejson.loads(parts[3].rstrip(","))
+        self.assertTrue(part3['trans_id'].startswith('T-'))
+        self.assertEqual('{"value": "there2"}', part3['content'])
+        self.assertEqual(doc2.rev, part3['rev'])
+        self.assertEqual(doc2.doc_id, part3['id'])
+        self.assertEqual(2, part3['gen'])
         self.assertEqual(']', parts[4])
 
     def test_sync_exchange_error_in_stream(self):
         args = dict(last_known_generation=0)
         body = "[\r\n%s\r\n]" % simplejson.dumps(args)
+
         def boom(self, return_doc_cb):
             raise errors.Unavailable
+
         self.patch(sync.SyncExchange, 'return_docs',
                    boom)
         resp = self.app.post('/db0/sync-from/replica',
@@ -781,7 +892,7 @@ class TestHTTPApp(tests.TestCase):
         parts = resp.body.splitlines()
         self.assertEqual(3, len(parts))
         self.assertEqual('[', parts[0])
-        self.assertEqual({'new_generation': 0},
+        self.assertEqual({'new_generation': 0, 'new_transaction_id': ''},
                          simplejson.loads(parts[1].rstrip(",")))
         self.assertEqual({'error': 'unavailable'}, simplejson.loads(parts[2]))
 
@@ -797,32 +908,38 @@ class TestRequestHooks(tests.TestCase):
 
     def test_begin_and_done(self):
         calls = []
+
         def begin(environ):
             self.assertTrue('PATH_INFO' in environ)
             calls.append('begin')
+
         def done(environ):
             self.assertTrue('PATH_INFO' in environ)
             calls.append('done')
+
         self.http_app.request_begin = begin
         self.http_app.request_done = done
 
-        doc = self.db0.create_doc('{"x": 1}', doc_id='doc1')
-        resp = self.app.get('/db0/doc/%s' % doc.doc_id)
+        doc = self.db0.create_doc_from_json('{"x": 1}', doc_id='doc1')
+        self.app.get('/db0/doc/%s' % doc.doc_id)
 
         self.assertEqual(['begin', 'done'], calls)
 
     def test_bad_request(self):
         calls = []
+
         def begin(environ):
             self.assertTrue('PATH_INFO' in environ)
             calls.append('begin')
+
         def bad_request(environ):
             self.assertTrue('PATH_INFO' in environ)
             calls.append('bad-request')
+
         self.http_app.request_begin = begin
         self.http_app.request_bad_request = bad_request
         # shouldn't be called
-        self.http_app.request_done = lambda env: borken
+        self.http_app.request_done = lambda env: 1 / 0
 
         resp = self.app.put('/db0/foo/doc1', params='{"x": 1}',
                             headers={'content-type': 'application/json'},
@@ -843,6 +960,7 @@ class TestHTTPAppErrorHandling(tests.TestCase):
         super(TestHTTPAppErrorHandling, self).setUp()
         self.exc = None
         self.state = tests.ServerStateForTests()
+
         class ErroringResource(object):
 
             def post(_, args, content):
@@ -887,16 +1005,19 @@ class TestHTTPAppErrorHandling(tests.TestCase):
 
     def test_generic_u1db_errors_hooks(self):
         calls = []
+
         def begin(environ):
             self.assertTrue('PATH_INFO' in environ)
             calls.append('begin')
+
         def u1db_error(environ, exc):
             self.assertTrue('PATH_INFO' in environ)
             calls.append(('error', exc))
+
         self.http_app.request_begin = begin
         self.http_app.request_u1db_error = u1db_error
         # shouldn't be called
-        self.http_app.request_done = lambda env: borken
+        self.http_app.request_done = lambda env: 1 / 0
 
         self.exc = errors.U1DBError()
         resp = self.app.post('/req', params='{}',
@@ -916,15 +1037,18 @@ class TestHTTPAppErrorHandling(tests.TestCase):
         class Failure(Exception):
             pass
         calls = []
+
         def begin(environ):
             calls.append('begin')
+
         def failed(environ):
             self.assertTrue('PATH_INFO' in environ)
             calls.append(('failed', sys.exc_info()))
+
         self.http_app.request_begin = begin
         self.http_app.request_failed = failed
         # shouldn't be called
-        self.http_app.request_done = lambda env: borken
+        self.http_app.request_done = lambda env: 1 / 0
 
         self.exc = Failure()
         self.assertRaises(Failure, self.app.post, '/req', params='{}',
@@ -945,12 +1069,15 @@ class TestPluggableSyncExchange(tests.TestCase):
         self.state.ensure_database('foo')
 
     def test_plugging(self):
+
         class MySyncExchange(object):
             def __init__(self, db, source_replica_uid, last_known_generation):
                 pass
+
         class MySyncResource(http_app.SyncResource):
             sync_exchange_class = MySyncExchange
 
         sync_res = MySyncResource('foo', 'src', self.state, None)
-        sync_res.post_args({'last_known_generation': 0}, '{}')
+        sync_res.post_args(
+            {'last_known_generation': 0, 'last_known_trans_id': None}, '{}')
         self.assertIsInstance(sync_res.sync_exch, MySyncExchange)

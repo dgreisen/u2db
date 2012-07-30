@@ -38,6 +38,25 @@ from u1db.remote import (
     )
 
 
+def parse_bool(expression):
+    """Parse boolean querystring parameter."""
+    if expression == 'true':
+        return True
+    return False
+
+
+def parse_list(expression):
+    if expression is None:
+        return []
+    return [t.strip() for t in expression.split(',')]
+
+
+def none_or_str(expression):
+    if expression is None:
+        return None
+    return str(expression)
+
+
 class BadRequest(Exception):
     """Bad request."""
 
@@ -89,7 +108,8 @@ class _FencedReader(object):
 
 
 def http_method(**control):
-    """Decoration for handling of query arguments and content for a HTTP method.
+    """Decoration for handling of query arguments and content for a HTTP
+       method.
 
        args and content here are the query arguments and body of the incoming
        HTTP requests.
@@ -118,6 +138,7 @@ def http_method(**control):
     content_as_args = control.pop('content_as_args', False)
     no_query = control.pop('no_query', False)
     conversions = control.items()
+
     def wrap(f):
         argspec = inspect.getargspec(f)
         assert argspec.args[0] == "self"
@@ -125,6 +146,7 @@ def http_method(**control):
         ndefaults = len(argspec.defaults or ())
         required_args = set(argspec.args[1:nargs - ndefaults])
         all_args = set(argspec.args)
+
         @functools.wraps(f)
         def wrapper(self, args, content):
             if no_query and args:
@@ -147,7 +169,9 @@ def http_method(**control):
                 except ValueError:
                     raise BadRequest()
             return f(self, **args)
+
         return wrapper
+
     return wrap
 
 
@@ -217,6 +241,33 @@ class DatabaseResource(object):
 
 
 @url_to_resource.register
+class DocsResource(object):
+    """Documents resource."""
+
+    url_pattern = "/{dbname}/docs"
+
+    def __init__(self, dbname, state, responder):
+        self.responder = responder
+        self.db = state.open_database(dbname)
+
+    @http_method(doc_ids=parse_list, check_for_conflicts=parse_bool,
+                 include_deleted=parse_bool)
+    def get(self, doc_ids=None, check_for_conflicts=True,
+            include_deleted=False):
+        docs = self.db.get_docs(doc_ids, include_deleted=include_deleted)
+        self.responder.content_type = 'application/json'
+        self.responder.start_response(200)
+        self.responder.start_stream(),
+        for doc in docs:
+            entry = dict(
+                doc_id=doc.doc_id, doc_rev=doc.rev, content=doc.get_json(),
+                has_conflicts=doc.has_conflicts)
+            self.responder.stream_entry(entry)
+        self.responder.end_stream()
+        self.responder.finish_response()
+
+
+@url_to_resource.register
 class DocResource(object):
     """Document resource."""
 
@@ -243,9 +294,9 @@ class DocResource(object):
         self.db.delete_doc(doc)
         self.responder.send_response_json(200, rev=doc.rev)
 
-    @http_method()
-    def get(self):
-        doc = self.db.get_doc(self.id)
+    @http_method(include_deleted=parse_bool)
+    def get(self, include_deleted=False):
+        doc = self.db.get_doc(self.id, include_deleted=include_deleted)
         if doc is None:
             wire_descr = errors.DocumentDoesNotExist.wire_description
             self.responder.send_response_json(
@@ -262,7 +313,8 @@ class DocResource(object):
             }
         if doc.is_tombstone():
             self.responder.send_response_json(
-               http_errors.wire_description_to_status[errors.DOCUMENT_DELETED],
+               http_errors.wire_description_to_status[
+                   errors.DOCUMENT_DELETED],
                error=errors.DOCUMENT_DELETED,
                headers=headers)
         else:
@@ -288,11 +340,12 @@ class SyncResource(object):
     @http_method()
     def get(self):
         result = self.target.get_sync_info(self.source_replica_uid)
-        self.responder.send_response_json(target_replica_uid=result[0],
-                                     target_replica_generation=result[1],
-                                     source_replica_uid=self.source_replica_uid,
-                                     source_replica_generation=result[2],
-                                     source_transaction_id=result[3])
+        self.responder.send_response_json(
+            target_replica_uid=result[0], target_replica_generation=result[1],
+            target_replica_transaction_id=result[2],
+            source_replica_uid=self.source_replica_uid,
+            source_replica_generation=result[3],
+            source_transaction_id=result[4])
 
     @http_method(generation=int,
                  content_as_args=True, no_query=True)
@@ -303,29 +356,33 @@ class SyncResource(object):
 
     # Implements the same logic as LocalSyncTarget.sync_exchange
 
-    @http_method(last_known_generation=int,
+    @http_method(last_known_generation=int, last_known_trans_id=none_or_str,
                  content_as_args=True)
-    def post_args(self, last_known_generation):
-        self.sync_exch = self.sync_exchange_class(self.db,
-                                                  self.source_replica_uid,
-                                                  last_known_generation)
+    def post_args(self, last_known_generation, last_known_trans_id=None):
+        self.db.validate_gen_and_trans_id(
+            last_known_generation, last_known_trans_id)
+        self.sync_exch = self.sync_exchange_class(
+            self.db, self.source_replica_uid, last_known_generation)
 
     @http_method(content_as_args=True)
-    def post_stream_entry(self, id, rev, content, gen):
+    def post_stream_entry(self, id, rev, content, gen, trans_id):
         doc = Document(id, rev, content)
-        self.sync_exch.insert_doc_from_source(doc, gen)
+        self.sync_exch.insert_doc_from_source(doc, gen, trans_id)
 
     def post_end(self):
-        def send_doc(doc, gen):
+
+        def send_doc(doc, gen, trans_id):
             entry = dict(id=doc.doc_id, rev=doc.rev, content=doc.get_json(),
-                         gen=gen)
+                         gen=gen, trans_id=trans_id)
             self.responder.stream_entry(entry)
+
         new_gen = self.sync_exch.find_changes_to_return()
         self.responder.content_type = 'application/x-u1db-sync-stream'
         self.responder.start_response(200)
         self.responder.start_stream(),
-        self.responder.stream_entry({"new_generation": new_gen})
-        new_gen = self.sync_exch.return_docs(send_doc)
+        self.responder.stream_entry({"new_generation": new_gen,
+                     "new_transaction_id": self.sync_exch.new_trans_id})
+        self.sync_exch.return_docs(send_doc)
         self.responder.end_stream()
         self.responder.finish_response()
 
@@ -421,7 +478,8 @@ class HTTPInvocationByMethodWithBody(object):
         args = urlparse.parse_qsl(self.environ['QUERY_STRING'],
                                   strict_parsing=False)
         try:
-            args = dict((k.decode('utf-8'), v.decode('utf-8')) for k, v in args)
+            args = dict(
+                (k.decode('utf-8'), v.decode('utf-8')) for k, v in args)
         except ValueError:
             raise BadRequest()
         method = self.environ['REQUEST_METHOD'].lower()
@@ -433,7 +491,7 @@ class HTTPInvocationByMethodWithBody(object):
             # to support chunked enconding
             try:
                 content_length = int(self.environ['CONTENT_LENGTH'])
-            except (ValueError, KeyError), e:
+            except (ValueError, KeyError):
                 raise BadRequest
             if content_length <= 0:
                 raise BadRequest
@@ -486,7 +544,8 @@ class HTTPApp(object):
         resource_cls, params = url_to_resource.match(environ['PATH_INFO'])
         if resource_cls is None:
             raise BadRequest  # 404 instead?
-        resource = resource_cls(state=self.state, responder=responder, **params)
+        resource = resource_cls(
+            state=self.state, responder=responder, **params)
         return resource
 
     def __call__(self, environ, start_response):
@@ -498,8 +557,7 @@ class HTTPApp(object):
         except errors.U1DBError, e:
             self.request_u1db_error(environ, e)
             status = http_errors.wire_description_to_status.get(
-                                                            e.wire_description,
-                                                            500)
+                e.wire_description, 500)
             responder.send_response_json(status, error=e.wire_description)
         except BadRequest:
             self.request_bad_request(environ)

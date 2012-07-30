@@ -38,9 +38,11 @@ def oauth_https_server_def():
                                         )
         # workaround apparent interface mismatch
         orig_shutdown_request = srv.shutdown_request
+
         def shutdown_request(req):
             req.shutdown()
             srv.close_request(req)
+
         srv.shutdown_request = shutdown_request
         application.base_url = "https://localhost:%s" % srv.server_address[1]
         return srv
@@ -59,7 +61,7 @@ class TestHttpSyncTargetHttpsSupport(tests.TestCaseWithServer):
 
     scenarios = [
         ('oauth_https', {'server_def': oauth_https_server_def,
-                        'make_document': tests.create_doc,
+                        'make_document_for_test': tests.make_document_for_test,
                         'sync_target': oauth_https_sync_target
                          }),
         ]
@@ -84,7 +86,8 @@ class TestHttpSyncTargetHttpsSupport(tests.TestCaseWithServer):
         self.patch(http_client, 'CA_CERTS', self.cacert_pem)
         remote_target = self.getSyncTarget('localhost', 'test')
         remote_target.record_sync_info('other-id', 2, 'T-id')
-        self.assertEqual((2, 'T-id'), db._get_sync_gen_info('other-id'))
+        self.assertEqual(
+            (2, 'T-id'), db._get_replica_gen_and_trans_id('other-id'))
 
     def test_cannot_verify_cert(self):
         if not sys.platform.startswith('linux'):

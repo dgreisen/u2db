@@ -25,10 +25,14 @@ from u1db import (
 wire_description_to_status = dict([
     (errors.InvalidDocId.wire_description, 400),
     (errors.Unauthorized.wire_description, 401),
+    (errors.DocumentTooBig.wire_description, 403),
+    (errors.UserQuotaExceeded.wire_description, 403),
     (errors.DatabaseDoesNotExist.wire_description, 404),
     (errors.DocumentDoesNotExist.wire_description, 404),
     (errors.DocumentAlreadyDeleted.wire_description, 404),
     (errors.RevisionConflict.wire_description, 409),
+    (errors.InvalidGeneration.wire_description, 409),
+    (errors.InvalidTransactionId.wire_description, 409),
     (errors.Unavailable.wire_description, 503),
 # without matching exception
     (errors.DOCUMENT_DELETED, 404)

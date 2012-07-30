@@ -27,10 +27,15 @@ from u1db import (
 from u1db.backends import CommonBackend, CommonSyncTarget
 
 
+def get_prefix(value):
+    key_prefix = '\x01'.join(value)
+    return key_prefix.rstrip('*')
+
+
 class InMemoryDatabase(CommonBackend):
     """A database that only stores the data internally."""
 
-    def __init__(self, replica_uid):
+    def __init__(self, replica_uid, document_factory=None):
         self._transaction_log = []
         self._docs = {}
         # Map from doc_id => [(doc_rev, doc)] conflicts beyond 'winner'
@@ -38,23 +43,31 @@ class InMemoryDatabase(CommonBackend):
         self._other_generations = {}
         self._indexes = {}
         self._replica_uid = replica_uid
-        self._last_exchange_log = None
+        self._factory = document_factory or Document
+
+    def _set_replica_uid(self, replica_uid):
+        """Force the replica_uid to be set."""
+        self._replica_uid = replica_uid
+
+    def set_document_factory(self, factory):
+        self._factory = factory
 
     def close(self):
         # This is a no-op, We don't want to free the data because one client
         # may be closing it, while another wants to inspect the results.
         pass
 
-    def _get_sync_gen_info(self, other_replica_uid):
+    def _get_replica_gen_and_trans_id(self, other_replica_uid):
         return self._other_generations.get(other_replica_uid, (0, ''))
 
-    def _set_sync_info(self, other_replica_uid, other_generation,
-                       other_transaction_id):
-        self._do_set_sync_info(other_replica_uid, other_generation,
-                               other_transaction_id)
+    def _set_replica_gen_and_trans_id(self, other_replica_uid,
+                                      other_generation, other_transaction_id):
+        self._do_set_replica_gen_and_trans_id(
+            other_replica_uid, other_generation, other_transaction_id)
 
-    def _do_set_sync_info(self, other_replica_uid, other_generation,
-                          other_transaction_id):
+    def _do_set_replica_gen_and_trans_id(self, other_replica_uid,
+                                         other_generation,
+                                         other_transaction_id):
         # TODO: to handle race conditions, we may want to check if the current
         #       value is greater than this new value.
         self._other_generations[other_replica_uid] = (other_generation,
@@ -70,20 +83,36 @@ class InMemoryDatabase(CommonBackend):
     def _get_generation(self):
         return len(self._transaction_log)
 
+    def _get_generation_info(self):
+        if not self._transaction_log:
+            return 0, ''
+        return len(self._transaction_log), self._transaction_log[-1][1]
+
+    def _get_trans_id_for_gen(self, generation):
+        if generation == 0:
+            return ''
+        if generation > len(self._transaction_log):
+            raise errors.InvalidGeneration
+        return self._transaction_log[generation - 1][1]
+
     def put_doc(self, doc):
         if doc.doc_id is None:
             raise errors.InvalidDocId()
         self._check_doc_id(doc.doc_id)
+        self._check_doc_size(doc)
         if self._has_conflicts(doc.doc_id):
             raise errors.ConflictedDoc()
         old_doc = self._get_doc(doc.doc_id)
-        if old_doc is not None:
-            if old_doc.rev != doc.rev:
-                raise errors.RevisionConflict()
+        if old_doc and doc.rev is None and old_doc.is_tombstone():
+            new_rev = self._allocate_doc_rev(old_doc.rev)
         else:
-            if doc.rev is not None:
-                raise errors.RevisionConflict()
-        new_rev = self._allocate_doc_rev(doc.rev)
+            if old_doc is not None:
+                if old_doc.rev != doc.rev:
+                    raise errors.RevisionConflict()
+            else:
+                if doc.rev is not None:
+                    raise errors.RevisionConflict()
+            new_rev = self._allocate_doc_rev(doc.rev)
         doc.rev = new_rev
         self._put_and_update_indexes(old_doc, doc)
         return new_rev
@@ -103,24 +132,36 @@ class InMemoryDatabase(CommonBackend):
             doc_rev, content = self._docs[doc_id]
         except KeyError:
             return None
-        return Document(doc_id, doc_rev, content)
+        return self._factory(doc_id, doc_rev, content)
 
     def _has_conflicts(self, doc_id):
         return doc_id in self._conflicts
 
-    def get_doc(self, doc_id):
+    def get_doc(self, doc_id, include_deleted=False):
         doc = self._get_doc(doc_id)
         if doc is None:
             return None
+        if doc.is_tombstone() and not include_deleted:
+            return None
         doc.has_conflicts = (doc.doc_id in self._conflicts)
         return doc
+
+    def get_all_docs(self, include_deleted=False):
+        """Return all documents in the database."""
+        generation = self._get_generation()
+        results = []
+        for doc_id, (doc_rev, content) in self._docs.items():
+            if content is None and not include_deleted:
+                continue
+            results.append(self._factory(doc_id, doc_rev, content))
+        return (generation, results)
 
     def get_doc_conflicts(self, doc_id):
         if doc_id not in self._conflicts:
             return []
         result = [self._get_doc(doc_id)]
         result[0].has_conflicts = True
-        result.extend([Document(doc_id, rev, content)
+        result.extend([self._factory(doc_id, rev, content)
                        for rev, content in self._conflicts[doc_id]])
         return result
 
@@ -133,12 +174,21 @@ class InMemoryDatabase(CommonBackend):
 
     def _prune_conflicts(self, doc, doc_vcr):
         if self._has_conflicts(doc.doc_id):
+            autoresolved = False
             remaining_conflicts = []
             cur_conflicts = self._conflicts[doc.doc_id]
             for c_rev, c_doc in cur_conflicts:
-                if doc_vcr.is_newer(vectorclock.VectorClockRev(c_rev)):
+                c_vcr = vectorclock.VectorClockRev(c_rev)
+                if doc_vcr.is_newer(c_vcr):
+                    continue
+                if doc.same_content_as(Document(doc.doc_id, c_rev, c_doc)):
+                    doc_vcr.maximize(c_vcr)
+                    autoresolved = True
                     continue
                 remaining_conflicts.append((c_rev, c_doc))
+            if autoresolved:
+                doc_vcr.increment(self._replica_uid)
+                doc.rev = doc_vcr.as_str()
             self._replace_conflicts(doc, remaining_conflicts)
 
     def resolve_doc(self, doc, conflicted_doc_revs):
@@ -170,10 +220,13 @@ class InMemoryDatabase(CommonBackend):
         doc.make_tombstone()
         self.put_doc(doc)
 
-    def create_index(self, index_name, index_expression):
+    def create_index(self, index_name, *index_expressions):
         if index_name in self._indexes:
+            if self._indexes[index_name]._definition == list(
+                    index_expressions):
+                return
             raise errors.IndexNameTakenError
-        index = InMemoryIndex(index_name, index_expression)
+        index = InMemoryIndex(index_name, list(index_expressions))
         for doc_id, (doc_rev, doc) in self._docs.iteritems():
             if doc is not None:
                 index.add_json(doc_id, doc)
@@ -188,7 +241,7 @@ class InMemoryDatabase(CommonBackend):
             definitions.append((idx._name, idx._definition))
         return definitions
 
-    def get_from_index(self, index_name, key_values):
+    def get_from_index(self, index_name, *key_values):
         try:
             index = self._indexes[index_name]
         except KeyError:
@@ -197,7 +250,25 @@ class InMemoryDatabase(CommonBackend):
         result = []
         for doc_id in doc_ids:
             doc_rev, doc = self._docs[doc_id]
-            result.append(Document(doc_id, doc_rev, doc))
+            result.append(self._factory(doc_id, doc_rev, doc))
+        return result
+
+    def get_range_from_index(self, index_name, start_value=None,
+                             end_value=None):
+        """Return all documents with key values in the specified range."""
+        try:
+            index = self._indexes[index_name]
+        except KeyError:
+            raise errors.IndexDoesNotExist
+        if isinstance(start_value, basestring):
+            start_value = (start_value,)
+        if isinstance(end_value, basestring):
+            end_value = (end_value,)
+        doc_ids = index.lookup_range(start_value, end_value)
+        result = []
+        for doc_id in doc_ids:
+            doc_rev, doc = self._docs[doc_id]
+            result.append(self._factory(doc_id, doc_rev, doc))
         return result
 
     def get_index_keys(self, index_name):
@@ -205,7 +276,9 @@ class InMemoryDatabase(CommonBackend):
             index = self._indexes[index_name]
         except KeyError:
             raise errors.IndexDoesNotExist
-        return list(set(index.keys()))
+        keys = index.keys()
+        # XXX inefficiency warning
+        return list(set([tuple(key.split('\x01')) for key in keys]))
 
     def whats_changed(self, old_generation=0):
         changes = []
@@ -315,16 +388,39 @@ class InMemoryIndex(object):
             return -1
         return last
 
-    def lookup(self, key_values):
+    def lookup(self, values):
         """Find docs that match the values."""
-        result = []
-        for values in key_values:
-            last = self._find_non_wildcards(values)
-            if last == -1:
-                result.extend(self._lookup_exact(values))
+        last = self._find_non_wildcards(values)
+        if last == -1:
+            return self._lookup_exact(values)
+        else:
+            return self._lookup_prefix(values[:last])
+
+    def lookup_range(self, start_values, end_values):
+        """Find docs within the range."""
+        # TODO: Wildly inefficient, which is unlikely to be a problem for the
+        # inmemory implementation.
+        if start_values:
+            self._find_non_wildcards(start_values)
+            start_values = get_prefix(start_values)
+        if end_values:
+            if self._find_non_wildcards(end_values) == -1:
+                exact = True
             else:
-                result.extend(self._lookup_prefix(values[:last]))
-        return result
+                exact = False
+            end_values = get_prefix(end_values)
+        found = []
+        for key, doc_ids in sorted(self._values.iteritems()):
+            if start_values and start_values > key:
+                continue
+            if end_values and end_values < key:
+                if exact:
+                    break
+                else:
+                    if not key.startswith(end_values):
+                        break
+            found.extend(doc_ids)
+        return found
 
     def keys(self):
         """Find the indexed keys."""
@@ -334,10 +430,9 @@ class InMemoryIndex(object):
         """Find docs that match the prefix string in values."""
         # TODO: We need a different data structure to make prefix style fast,
         #       some sort of sorted list would work, but a plain dict doesn't.
-        key_prefix = '\x01'.join(value)
-        key_prefix = key_prefix.rstrip('*')
+        key_prefix = get_prefix(value)
         all_doc_ids = []
-        for key, doc_ids in self._values.iteritems():
+        for key, doc_ids in sorted(self._values.iteritems()):
             if key.startswith(key_prefix):
                 all_doc_ids.extend(doc_ids)
         return all_doc_ids
@@ -353,13 +448,17 @@ class InMemoryIndex(object):
 class InMemorySyncTarget(CommonSyncTarget):
 
     def get_sync_info(self, source_replica_uid):
-        source_gen, trans_id = self._db._get_sync_gen_info(source_replica_uid)
-        return (self._db._replica_uid, len(self._db._transaction_log),
-                source_gen, trans_id)
+        source_gen, source_trans_id = self._db._get_replica_gen_and_trans_id(
+            source_replica_uid)
+        my_gen, my_trans_id = self._db._get_generation_info()
+        return (
+            self._db._replica_uid, my_gen, my_trans_id, source_gen,
+            source_trans_id)
 
     def record_sync_info(self, source_replica_uid, source_replica_generation,
                          source_transaction_id):
         if self._trace_hook:
             self._trace_hook('record_sync_info')
-        self._db._set_sync_info(source_replica_uid, source_replica_generation,
-                                source_transaction_id)
+        self._db._set_replica_gen_and_trans_id(
+            source_replica_uid, source_replica_generation,
+            source_transaction_id)

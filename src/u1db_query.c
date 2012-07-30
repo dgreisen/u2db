@@ -23,18 +23,18 @@
 #include <ctype.h>
 #include <json/json.h>
 
-#define OPS 4
+#define NO_GLOB 0
+#define IS_GLOB 1
+#define ENDS_IN_GLOB 2
+
+#define EXPRESSION 1
+#define INTEGER 2
+
+#define OPS (sizeof(OPERATIONS) / sizeof (struct operation))
 #define MAX_INT_STR_LEN 21
 #ifndef max
     #define max(a, b) (((a) > (b)) ? (a) : (b))
 #endif
-
-typedef struct operation_
-{
-    void *function;
-    char *name;
-    int value_type;
-} operation;
 
 
 typedef struct string_list_item_
@@ -47,34 +47,20 @@ typedef struct string_list_
 {
     string_list_item *head;
     string_list_item *tail;
+    string_list_item *pos;
 } string_list;
 
-static int op_lower(string_list *result, const string_list *value,
-                    const string_list *args);
-static int op_number(string_list *result, const string_list *value,
-                     const string_list *args);
-static int op_split_words(string_list *result, const string_list *value,
-                          const string_list *args);
-static int op_bool(string_list *result, const string_list *value,
-                   const string_list *args);
-
-static const operation OPERATIONS[OPS] = {
-    {op_lower, "lower", json_type_string},
-    {op_number, "number", json_type_int},
-    {op_split_words, "split_words", json_type_string},
-    {op_bool, "bool", json_type_boolean}};
-
-
-typedef struct transformation_
+/*
+static void
+print_list(string_list *list)
 {
-    void *op;
-    struct transformation_ *next;
-    string_list *args;
-    int value_type;
-} transformation;
-
-typedef int(*op_function)(string_list *, const string_list *,
-                        const string_list *);
+    string_list_item *item = NULL;
+    printf("[");
+    for (item = list->head; item != NULL; item = item->next)
+        printf("'%s',", item->data);
+    printf("]\n");
+}
+*/
 
 static int
 init_list(string_list **list)
@@ -85,6 +71,28 @@ init_list(string_list **list)
     return U1DB_OK;
 }
 
+static void
+destroy_list(string_list *list)
+{
+    string_list_item *item = NULL;
+    string_list_item *previous = NULL;
+    if (list == NULL)
+        return;
+    item = list->head;
+    while (item != NULL)
+    {
+        previous = item;
+        item = item->next;
+        if (previous->data != NULL)
+            free(previous->data);
+        free(previous);
+    }
+    list->head = NULL;
+    list->tail = NULL;
+    free(list);
+    list = NULL;
+}
+
 static int
 append(string_list *list, const char *data)
 {
@@ -93,9 +101,12 @@ append(string_list *list, const char *data)
     if (new_item == NULL)
         return U1DB_NOMEM;
     new_item->data = strdup(data);
+    if (new_item->data == NULL)
+        return U1DB_NOMEM;
     if (list->head == NULL)
     {
         list->head = new_item;
+        list->pos = new_item;
     }
     if (list->tail != NULL)
     {
@@ -105,65 +116,144 @@ append(string_list *list, const char *data)
     return U1DB_OK;
 }
 
-static void
-destroy_list(string_list *list)
+static int
+appendn(string_list *list, const char *data, int size)
 {
-    string_list_item *item, *previous = NULL;
-    if (list == NULL)
-        return;
-    item = list->head;
-    while (item != NULL)
+    string_list_item *new_item = NULL;
+    new_item = (string_list_item *)calloc(1, sizeof(string_list_item));
+    if (new_item == NULL)
+        return U1DB_NOMEM;
+    new_item->data = strndup(data, size);
+    if (new_item->data == NULL)
+        return U1DB_NOMEM;
+    if (list->head == NULL)
     {
-        previous = item;
-        item = item->next;
-        free(previous->data);
-        free(previous);
+        list->head = new_item;
+        list->pos = new_item;
     }
-    list->head = NULL;
-    list->tail = NULL;
-    free(list);
-    list = NULL;
+    if (list->tail != NULL)
+    {
+        list->tail->next = new_item;
+    }
+    list->tail = new_item;
+    return U1DB_OK;
 }
+
+typedef struct parse_tree_
+{
+    char *data;
+    string_list *field_path;
+    int arg_type;
+    void *op;
+    int arity;
+    int number_of_children;
+    struct parse_tree_ *first_child;
+    struct parse_tree_ *last_child;
+    struct parse_tree_ *next_sibling;
+    const int *value_types;
+} parse_tree;
 
 /*
 static void
-print_list(string_list *list)
+print_tree(parse_tree *tree)
 {
-    string_list_item *item = NULL;
-    printf("[");
-    for (item = list->head; item != NULL; item = item->next)
-        printf("%s,", item->data);
-    printf("]\n");
+    parse_tree *sub;
+    if (tree->data)
+        printf("data: '%s'\n", tree->data);
+    if (tree->field_path->head) {
+        printf("field_path: ");
+        print_list(tree->field_path);
+    }
+    if (tree->arg_type)
+        printf("arg_type: %d\n", tree->arg_type);
+    if (tree->arity)
+        printf("arity: %d\n", tree->arity);
+    if (tree->number_of_children)
+        printf("number_of_children: %d\n", tree->number_of_children);
+    printf("(");
+    for (sub = tree->first_child; sub != NULL; sub = sub->next_sibling)
+        print_tree(sub);
+    printf(")\n");
 }
 */
 
 static int
-init_transformation(transformation **tr)
+init_parse_tree(parse_tree **result)
 {
     int status = U1DB_OK;
-    *tr = (transformation *)calloc(1, sizeof(transformation));
-    if (*tr == NULL)
+    *result = (parse_tree *)calloc(1, sizeof(parse_tree));
+    if (*result == NULL)
         return U1DB_NOMEM;
-    status = init_list(&((*tr)->args));
-    if (status != U1DB_OK)
-        return status;
+    (*result)->number_of_children = 0;
+    status = init_list(&(*result)->field_path);
     return status;
 }
 
 static void
-destroy_transformation(transformation *tr)
+destroy_parse_tree(parse_tree *t)
 {
-    if (tr == NULL)
+    parse_tree *subtree = NULL;
+    parse_tree *previous = NULL;
+
+    if (t == NULL)
         return;
-    if (tr->next != NULL)
-        destroy_transformation(tr->next);
-    destroy_list(tr->args);
-    free(tr);
+    if (t->field_path != NULL)
+        destroy_list(t->field_path);
+    if (t->data != NULL)
+        free(t->data);
+    subtree = t->first_child;
+    while (subtree != NULL)
+    {
+        previous = subtree;
+        subtree = subtree->next_sibling;
+        destroy_parse_tree(previous);
+    }
+    free(t);
 }
 
 static int
-extract_field_values(string_list *values, json_object *obj,
-                     const string_list *field_path, int value_type)
+append_node(parse_tree *t, parse_tree *node)
+{
+    if (t->first_child == NULL)
+        t->first_child = node;
+    if (t->last_child != NULL)
+        t->last_child->next_sibling = node;
+    t->last_child = node;
+    (t->number_of_children)++;
+    return U1DB_OK;
+}
+
+static int parse_op(string_list *tokens, char *term, parse_tree *result);
+static int parse_term(string_list *tokens, parse_tree *result);
+typedef int(*op_function)(parse_tree *, json_object *, string_list *);
+
+static int op_lower(parse_tree *tree, json_object *obj, string_list *result);
+static int op_number(parse_tree *tree, json_object *obj, string_list *result);
+static int op_split_words(
+    parse_tree *tree, json_object *obj, string_list *result);
+static int op_bool(parse_tree *tree, json_object *obj, string_list *result);
+static int op_combine(parse_tree *tree, json_object *obj, string_list *result);
+
+static const int JUST_EXPRESSION[1] = {EXPRESSION};
+static const int EXPRESSION_INTEGER[2] = {EXPRESSION, INTEGER};
+
+struct operation
+{
+    void *function;
+    char *name;
+    int value_type;
+    int arity;
+    const int *value_types;
+} OPERATIONS[] = {
+    op_lower, "lower", json_type_string, 1, JUST_EXPRESSION,
+    op_number, "number", json_type_int, 2, EXPRESSION_INTEGER,
+    op_split_words, "split_words", json_type_string, 1, JUST_EXPRESSION,
+    op_bool, "bool", json_type_boolean, 1, JUST_EXPRESSION,
+    op_combine, "combine", json_type_string, -1, JUST_EXPRESSION};
+
+static int
+extract_field_values(json_object *obj, const string_list *field_path,
+                     int value_type, string_list *values)
 {
     string_list_item *item = NULL;
     char string_value[MAX_INT_STR_LEN];
@@ -188,8 +278,6 @@ extract_field_values(string_list *values, json_object *obj,
             json_type_int) {
         integer_value = json_object_get_int(val);
         snprintf(string_value, MAX_INT_STR_LEN, "%d", integer_value);
-        if (status != U1DB_OK)
-            goto finish;
         if ((status = append(values, string_value)) != U1DB_OK)
             goto finish;
     } else if (json_object_is_type(val, json_type_boolean) &&
@@ -219,37 +307,11 @@ finish:
     return status;
 }
 
-
-static int
-apply_transformation(transformation *tr, json_object *obj, string_list *result)
-{
-    int status = U1DB_OK;
-    string_list *tmp_values = NULL;
-    if (tr->next != NULL)
-    {
-        init_list(&tmp_values);
-        status = apply_transformation(tr->next, obj, tmp_values);
-        if (status != U1DB_OK)
-            goto finish;
-        if (tr->args->head != NULL)
-        {
-            status = ((op_function)tr->op)(result, tmp_values, tr->args);
-        } else {
-            status = ((op_function)tr->op)(result, tmp_values, NULL);
-        }
-    } else {
-        status = extract_field_values(result, obj, tr->args, tr->value_type);
-    }
-finish:
-    destroy_list(tmp_values);
-    return status;
-}
-
 static int
 split(string_list *result, char *string, char splitter)
 {
     int status = U1DB_OK;
-    char *result_ptr, *split_point;
+    char *result_ptr = NULL, *split_point = NULL;
     result_ptr = string;
     while (result_ptr != NULL) {
         split_point = strchr(result_ptr, splitter);
@@ -282,14 +344,33 @@ list_index(string_list *list, char *data)
 }
 
 static int
-op_lower(string_list *result, const string_list *values,
-         const string_list *args)
+get_values(parse_tree *tree, json_object *obj, string_list *values)
 {
+    int status = U1DB_OK;
+    if (tree->op) {
+        status = ((op_function)tree->op)(tree, obj, values);
+    } else {
+        status = extract_field_values(
+            obj, tree->field_path, json_type_string, values);
+    }
+    return status;
+}
+
+static int
+op_lower(parse_tree *tree, json_object *obj, string_list *result)
+{
+    string_list *values = NULL;
     string_list_item *item = NULL;
-    char *new_value, *value = NULL;
+    char *new_value = NULL, *value = NULL;
     int i;
     int status = U1DB_OK;
 
+    status = init_list(&values);
+    if (status != U1DB_OK)
+        return status;
+    status = get_values(tree->first_child, obj, values);
+    if (status != U1DB_OK)
+        goto finish;
     for (item = values->head; item != NULL; item = item->next)
     {
         value = item->data;
@@ -305,26 +386,36 @@ op_lower(string_list *result, const string_list *values,
             }
             new_value[i] = '\0';
         }
-        if ((status = append(result, new_value)) != U1DB_OK)
-        {
-            free(new_value);
-            return status;
-        }
-        free(new_value);
+        status = append(result, new_value);
     }
+finish:
+    if (new_value != NULL)
+        free(new_value);
+    if (values != NULL)
+        destroy_list(values);
     return status;
 }
 
 static int
-op_number(string_list *result, const string_list *values,
-          const string_list *args)
+op_number(parse_tree *tree, json_object *obj, string_list *result)
 {
+    string_list *values = NULL;
     string_list_item *item = NULL;
-    char *p, *new_value, *value, *number = NULL;
+    char *p = NULL, *new_value = NULL, *value = NULL, *number = NULL;
+    parse_tree *node = NULL;
     int count, zeroes, value_size, isnumber;
     int status = U1DB_OK;
 
-    number = args->head->data;
+    node = tree->first_child;
+    status = init_list(&values);
+    if (status != U1DB_OK)
+        return status;
+    status = extract_field_values(
+        obj, node->field_path, json_type_int, values);
+    if (status != U1DB_OK)
+        goto finish;
+    node = node->next_sibling;
+    number = node->data;
     for (p = number; *p; p++) {
         if (isdigit(*p) == 0) {
             status = U1DB_INVALID_VALUE_FOR_INDEX;
@@ -332,7 +423,6 @@ op_number(string_list *result, const string_list *values,
         }
     }
     zeroes = atoi(number);
-
     for (item = values->head; item != NULL; item = item->next)
     {
         value = item->data;
@@ -357,6 +447,7 @@ op_number(string_list *result, const string_list *values,
         if (count != (value_size - 1)) {
             // Most likely encoding issues.
             status = U1DB_INVALID_PARAMETER;
+            free(new_value);
             goto finish;
         }
         if ((status = append(result, new_value)) != U1DB_OK)
@@ -367,20 +458,46 @@ op_number(string_list *result, const string_list *values,
         free(new_value);
     }
 finish:
+    if (values != NULL)
+        destroy_list(values);
     return status;
 }
 
 static int
-op_split_words(string_list *result, const string_list *values,
-               const string_list *args)
+op_combine(parse_tree *tree, json_object *obj, string_list *result)
+{
+    parse_tree *node = NULL;
+    int status = U1DB_OK;
+
+    node = tree->first_child;
+    for (node = tree->first_child; node != NULL; node = node->next_sibling) {
+        status = get_values(node, obj, result);
+        if (status != U1DB_OK)
+            return status;
+    }
+    return status;
+}
+
+static int
+op_split_words(parse_tree *tree, json_object *obj, string_list *result)
 {
     string_list_item *item = NULL;
-    char *intermediate, *intermediate_ptr = NULL;
+    string_list *values = NULL;
+    char *intermediate = NULL, *intermediate_ptr = NULL;
     char *space_chr = NULL;
     int status = U1DB_OK;
+
+    status = init_list(&values);
+    if (status != U1DB_OK)
+        return status;
+    status = get_values(tree->first_child, obj, values);
+    if (status != U1DB_OK)
+        goto finish;
     for (item = values->head; item != NULL; item = item->next)
     {
         intermediate = strdup(item->data);
+        if (intermediate == NULL)
+            return U1DB_NOMEM;
         intermediate_ptr = intermediate;
         while (intermediate_ptr != NULL) {
             space_chr = strchr(intermediate_ptr, ' ');
@@ -399,19 +516,32 @@ op_split_words(string_list *result, const string_list *values,
         }
         free(intermediate);
     }
+finish:
+    if (values != NULL)
+        destroy_list(values);
     return status;
 }
 
 static int
-op_bool(string_list *result, const string_list *values,
-         const string_list *args)
+op_bool(parse_tree *tree, json_object *obj, string_list *result)
 {
     string_list_item *item = NULL;
+    string_list *values = NULL;
     int status = U1DB_OK;
 
+    status = init_list(&values);
+    if (status != U1DB_OK)
+        return status;
+    status = get_values(tree->first_child, obj, values);
+    if (status != U1DB_OK)
+        goto finish;
     //just return all the strings which have been filtered and converted from
     //booleans by extract_field_values.
 
+    status = extract_field_values(
+        obj, tree->first_child->field_path, json_type_boolean, values);
+    if (status != U1DB_OK)
+        goto finish;
     for (item = values->head; item != NULL; item = item->next)
     {
         if ((status = append(result, item->data)) != U1DB_OK)
@@ -419,6 +549,9 @@ op_bool(string_list *result, const string_list *values,
             return status;
         }
     }
+finish:
+    if (values != NULL)
+        destroy_list(values);
     return status;
 }
 
@@ -459,6 +592,10 @@ lookup_index_fields(u1database *db, u1query *query)
             goto finish;
         }
         query->fields[offset] = strdup(field);
+        if (query->fields[offset] == NULL) {
+            status = U1DB_NOMEM;
+            goto finish;
+        }
         status = sqlite3_step(statement);
     }
     if (status == SQLITE_DONE) {
@@ -533,19 +670,16 @@ finish:
     return status;
 }
 
-
 int
-u1db_get_from_index(u1database *db, u1query *query,
-                    void *context, u1db_doc_callback cb,
-                    int n_values, ...)
+u1db_get_from_index_list(u1database *db, u1query *query, void *context,
+                         u1db_doc_callback cb, int n_values,
+                         const char **values)
 {
     int status = U1DB_OK;
     sqlite3_stmt *statement = NULL;
     char *doc_id = NULL;
     char *query_str = NULL;
     int i, bind_arg;
-    va_list argp;
-    const char *valN = NULL;
     int wildcard[20] = {0};
 
     if (db == NULL || query == NULL || cb == NULL || n_values < 0)
@@ -558,29 +692,26 @@ u1db_get_from_index(u1database *db, u1query *query,
     if (n_values > 20) {
         return U1DB_NOT_IMPLEMENTED;
     }
-    va_start(argp, n_values);
-    status = u1db__format_query(query->num_fields, argp, &query_str, wildcard);
-    va_end(argp);
+    status = u1db__format_query(
+        query->num_fields, values, &query_str, wildcard);
     if (status != U1DB_OK) { goto finish; }
     status = sqlite3_prepare_v2(db->sql_handle, query_str, -1,
                                 &statement, NULL);
     if (status != SQLITE_OK) { goto finish; }
     // Bind all of the 'field_name' parameters. sqlite_bind starts at 1
     bind_arg = 1;
-    va_start(argp, n_values);
     for (i = 0; i < query->num_fields; ++i) {
         status = sqlite3_bind_text(statement, bind_arg, query->fields[i], -1,
                                    SQLITE_TRANSIENT);
         bind_arg++;
         if (status != SQLITE_OK) { goto finish; }
-        valN = va_arg(argp, char *);
-        if (wildcard[i] == 0) {
+        if (wildcard[i] == NO_GLOB) {
             // Not a wildcard, so add the argument
-            status = sqlite3_bind_text(statement, bind_arg, valN, -1,
+            status = sqlite3_bind_text(statement, bind_arg, values[i], -1,
                                        SQLITE_TRANSIENT);
             bind_arg++;
-        } else if (wildcard[i] == 2) {
-            status = sqlite3_bind_text(statement, bind_arg, valN, -1,
+        } else if (wildcard[i] == ENDS_IN_GLOB) {
+            status = sqlite3_bind_text(statement, bind_arg, values[i], -1,
                                        SQLITE_TRANSIENT);
             bind_arg++;
         }
@@ -591,7 +722,8 @@ u1db_get_from_index(u1database *db, u1query *query,
         doc_id = (char*)sqlite3_column_text(statement, 0);
         // We use u1db_get_docs so we can pass check_for_conflicts=0, which is
         // currently expected by the test suite.
-        status = u1db_get_docs(db, 1, (const char**)&doc_id, 0, context, cb);
+        status = u1db_get_docs(
+            db, 1, (const char**)&doc_id, 0, 0, context, cb);
         if (status != U1DB_OK) { goto finish; }
         status = sqlite3_step(statement);
     }
@@ -599,7 +731,6 @@ u1db_get_from_index(u1database *db, u1query *query,
         status = U1DB_OK;
     }
 finish:
-    va_end(argp);
     sqlite3_finalize(statement);
     if (query_str != NULL) {
         free(query_str);
@@ -608,18 +739,156 @@ finish:
 }
 
 int
+u1db_get_range_from_index(u1database *db, u1query *query,
+                          void *context, u1db_doc_callback cb,
+                          int n_values, const char **start_values,
+                          const char **end_values)
+{
+    int i, bind_arg, status = U1DB_OK;
+    char *query_str = NULL;
+    sqlite3_stmt *statement = NULL;
+    char *doc_id = NULL;
+    char *stripped = NULL;
+    int start_wildcard[20] = {0};
+    int end_wildcard[20] = {0};
+
+    if (db == NULL || query == NULL || cb == NULL || n_values < 0) {
+        return U1DB_INVALID_PARAMETER;
+    }
+    if (n_values != query->num_fields) {
+        return U1DB_INVALID_VALUE_FOR_INDEX;
+    }
+    status = u1db__format_range_query(
+        query->num_fields, start_values, end_values, &query_str,
+        start_wildcard, end_wildcard);
+    if (status != U1DB_OK) { goto finish; }
+    status = sqlite3_prepare_v2(db->sql_handle, query_str, -1,
+                                &statement, NULL);
+    if (status != SQLITE_OK) { goto finish; }
+    // Bind all of the 'field_name' parameters. sqlite_bind starts at 1
+    bind_arg = 1;
+    for (i = 0; i < query->num_fields; ++i) {
+        status = sqlite3_bind_text(
+            statement, bind_arg, query->fields[i], -1, SQLITE_TRANSIENT);
+        if (status != SQLITE_OK) { goto finish; }
+        bind_arg++;
+        if (start_values != NULL) {
+            if (start_wildcard[i] == NO_GLOB) {
+                status = sqlite3_bind_text(
+                    statement, bind_arg, start_values[i], -1,
+                    SQLITE_TRANSIENT);
+                bind_arg++;
+            } else if (start_wildcard[i] == ENDS_IN_GLOB) {
+                if (stripped != NULL)
+                    free(stripped);
+                stripped = strdup(start_values[i]);
+                if (stripped == NULL) {
+                    status = U1DB_NOMEM;
+                    goto finish;
+                }
+                stripped[strlen(stripped) - 1] = '\0';
+                status = sqlite3_bind_text(
+                    statement, bind_arg, stripped, -1, SQLITE_TRANSIENT);
+                bind_arg++;
+            }
+           if (status != SQLITE_OK) { goto finish; }
+        }
+        if (end_values != NULL) {
+            if (end_wildcard[i] == NO_GLOB) {
+                status = sqlite3_bind_text(
+                    statement, bind_arg, end_values[i], -1,
+                    SQLITE_TRANSIENT);
+                bind_arg++;
+            } else if (end_wildcard[i] == ENDS_IN_GLOB) {
+                if (stripped != NULL)
+                    free(stripped);
+                stripped = strdup(end_values[i]);
+                if (stripped == NULL) {
+                    status = U1DB_NOMEM;
+                    goto finish;
+                }
+                stripped[strlen(stripped) - 1] = '\0';
+                status = sqlite3_bind_text(
+                    statement, bind_arg, stripped, -1, SQLITE_TRANSIENT);
+                bind_arg++;
+                status = sqlite3_bind_text(
+                    statement, bind_arg, end_values[i], -1, SQLITE_TRANSIENT);
+                bind_arg++;
+            }
+            if (status != SQLITE_OK) { goto finish; }
+        }
+    }
+    status = sqlite3_step(statement);
+    while (status == SQLITE_ROW) {
+        doc_id = (char*)sqlite3_column_text(statement, 0);
+        // We use u1db_get_docs so we can pass check_for_conflicts=0, which is
+        // currently expected by the test suite.
+        status = u1db_get_docs(
+            db, 1, (const char**)&doc_id, 0, 0, context, cb);
+        if (status != U1DB_OK) { goto finish; }
+        status = sqlite3_step(statement);
+    }
+    if (status == SQLITE_DONE) {
+        status = U1DB_OK;
+    }
+finish:
+    sqlite3_finalize(statement);
+    if (query_str != NULL) {
+        free(query_str);
+    }
+    if (stripped != NULL)
+        free(stripped);
+    return status;
+}
+
+
+int
+u1db_get_from_index(u1database *db, u1query *query, void *context,
+                    u1db_doc_callback cb, int n_values, ...)
+{
+    int i, status = U1DB_OK;
+    va_list argp;
+    const char **values = NULL;
+
+    values = (const char **)calloc(n_values, sizeof(char*));
+    if (values == NULL) {
+        status = U1DB_NOMEM;
+        goto finish;
+    }
+    va_start(argp, n_values);
+    for (i = 0; i < n_values; ++i) {
+        values[i] = va_arg(argp, char *);
+    }
+    status = u1db_get_from_index_list(
+        db, query, context, cb, n_values, values);
+finish:
+    if (values != NULL)
+        free(values);
+    va_end(argp);
+    return status;
+}
+
+
+int
 u1db_get_index_keys(u1database *db, char *index_name,
                     void *context, u1db_key_callback cb)
 {
     int status = U1DB_OK;
-    char *key = NULL;
+    int num_fields = 0;
+    int bind_arg, i;
+    const char **key = NULL;
+    string_list *field_names = NULL;
+    string_list_item *field_name = NULL;
+    char *query_str = NULL;
     sqlite3_stmt *statement;
+
+    status = init_list(&field_names);
+    if (status != U1DB_OK)
+        goto finish;
     status = sqlite3_prepare_v2(
         db->sql_handle,
-        "SELECT document_fields.value FROM "
-        "index_definitions INNER JOIN document_fields ON "
-        "index_definitions.field = document_fields.field_name WHERE "
-        "index_definitions.name = ? GROUP BY document_fields.value;",
+        "SELECT field FROM index_definitions WHERE name = ? ORDER BY "
+        "offset;",
         -1, &statement, NULL);
     if (status != SQLITE_OK) {
         goto finish;
@@ -631,37 +900,64 @@ u1db_get_index_keys(u1database *db, char *index_name,
     }
     status = sqlite3_step(statement);
     if (status == SQLITE_DONE) {
-        sqlite3_finalize(statement);
-        status = sqlite3_prepare_v2(
-            db->sql_handle,
-            "SELECT field FROM index_definitions WHERE name = ?;",
-            -1, &statement, NULL);
-        if (status != SQLITE_OK) {
-            goto finish;
-        }
-        status = sqlite3_bind_text(
-            statement, 1, index_name, -1, SQLITE_TRANSIENT);
-        if (status != SQLITE_OK) {
-            goto finish;
-        }
-        status = sqlite3_step(statement);
-        if (status == SQLITE_DONE) {
-            status = U1DB_INDEX_DOES_NOT_EXIST;
-        } else {
-            status = U1DB_OK;
-        }
+        status = U1DB_INDEX_DOES_NOT_EXIST;
         goto finish;
     }
     while (status == SQLITE_ROW) {
-        key = (char*)sqlite3_column_text(statement, 0);
-        if ((status = cb(context, key)) != U1DB_OK)
+        num_fields++;
+        status = append(field_names, (char*)sqlite3_column_text(statement, 0));
+        if (status != U1DB_OK)
             goto finish;
+        status = sqlite3_step(statement);
+    }
+    if (status != SQLITE_DONE) {
+        goto finish;
+    }
+    sqlite3_finalize(statement);
+    status = u1db__format_index_keys_query(num_fields, &query_str);
+
+    if (status != U1DB_OK) {
+        goto finish;
+    }
+    status = sqlite3_prepare_v2(
+        db->sql_handle, query_str, -1, &statement, NULL);
+    if (status != SQLITE_OK) {
+        goto finish;
+    }
+    bind_arg = 1;
+    for (field_name = field_names->head; field_name != NULL; field_name =
+             field_name->next) {
+        status = sqlite3_bind_text(
+            statement, bind_arg++, field_name->data, -1, SQLITE_TRANSIENT);
+        if (status != SQLITE_OK)
+            goto finish;
+    }
+    status = sqlite3_step(statement);
+    key = (const char**)calloc(num_fields, sizeof(char*));
+    if (key == NULL) {
+        status = U1DB_NOMEM;
+        goto finish;
+    }
+    while (status == SQLITE_ROW) {
+        for (i = 0; i < num_fields; ++i) {
+            key[i]  = (const char*)sqlite3_column_text(statement, i);
+        }
+        if ((status = cb(context, num_fields, key)) != U1DB_OK) {
+            goto finish;
+        }
         status = sqlite3_step(statement);
     }
     if (status == SQLITE_DONE) {
         status = U1DB_OK;
     }
 finish:
+    if (key != NULL) {
+        free(key);
+    }
+    if (query_str != NULL) {
+        free(query_str);
+    }
+    destroy_list(field_names);
     sqlite3_finalize(statement);
     return status;
 }
@@ -680,7 +976,8 @@ add_to_buf(char **buf, int *buf_size, const char *fmt, ...)
 
 
 int
-u1db__format_query(int n_fields, va_list argp, char **buf, int *wildcard)
+u1db__format_query(int n_fields, const char **values, char **buf,
+                   int *wildcard)
 {
     int status = U1DB_OK;
     int buf_size, i;
@@ -711,18 +1008,18 @@ u1db__format_query(int n_fields, va_list argp, char **buf, int *wildcard)
                 " AND d%d.field_name = ?",
                 i, i);
         }
-        val = va_arg(argp, char *);
+        val = values[i];
         if (val == NULL) {
             status = U1DB_INVALID_VALUE_FOR_INDEX;
             goto finish;
         }
         if (val[0] == '*') {
-            wildcard[i] = 1;
+            wildcard[i] = IS_GLOB;
             have_wildcard = 1;
             add_to_buf(&cur, &buf_size, " AND d%d.value NOT NULL", i);
         } else if (val[0] != '\0' && val[strlen(val)-1] == '*') {
             // glob
-            wildcard[i] = 2;
+            wildcard[i] = ENDS_IN_GLOB;
             if (have_wildcard) {
                 //globs not allowed after another wildcard
                 status = U1DB_INVALID_GLOBBING;
@@ -731,7 +1028,7 @@ u1db__format_query(int n_fields, va_list argp, char **buf, int *wildcard)
             have_wildcard = 1;
             add_to_buf(&cur, &buf_size, " AND d%d.value GLOB ?", i);
         } else {
-            wildcard[i] = 0;
+            wildcard[i] = NO_GLOB;
             if (have_wildcard) {
                 // Can't have a non-wildcard after a wildcard
                 status = U1DB_INVALID_GLOBBING;
@@ -739,6 +1036,13 @@ u1db__format_query(int n_fields, va_list argp, char **buf, int *wildcard)
             }
             add_to_buf(&cur, &buf_size, " AND d%d.value = ?", i);
         }
+    }
+    add_to_buf(&cur, &buf_size, " ORDER BY ");
+    for (i = 0; i < n_fields; ++i) {
+        if (i != 0) {
+            add_to_buf(&cur, &buf_size, ", ");
+        }
+        add_to_buf(&cur, &buf_size, "d%d.value", i);
     }
 finish:
     if (status != U1DB_OK && *buf != NULL) {
@@ -748,136 +1052,397 @@ finish:
     return status;
 }
 
+int
+u1db__format_range_query(int n_fields, const char **start_values,
+                         const char **end_values, char **buf,
+                         int *start_wildcard, int *end_wildcard)
+{
+    int status = U1DB_OK;
+    int buf_size, i;
+    char *cur = NULL;
+    const char *val = NULL;
+    int have_start_wildcard = 0;
+    int have_end_wildcard = 0;
+
+    if (n_fields < 1) {
+        return U1DB_INVALID_PARAMETER;
+    }
+    // 81 for 1 doc, 166 for 2, 251 for 3
+    buf_size = (1 + n_fields) * 100;
+    // The first field is treated specially
+    cur = (char*)calloc(buf_size, 1);
+    if (cur == NULL) {
+        return U1DB_NOMEM;
+    }
+    *buf = cur;
+    add_to_buf(&cur, &buf_size, "SELECT d0.doc_id FROM document_fields d0");
+    for (i = 1; i < n_fields; ++i) {
+        add_to_buf(&cur, &buf_size, ", document_fields d%d", i);
+    }
+    add_to_buf(&cur, &buf_size, " WHERE d0.field_name = ?");
+    for (i = 0; i < n_fields; ++i) {
+        if (i != 0) {
+            add_to_buf(&cur, &buf_size,
+                " AND d0.doc_id = d%d.doc_id"
+                " AND d%d.field_name = ?",
+                i, i);
+        }
+        if (start_values != NULL) {
+            val = start_values[i];
+            if (val == NULL) {
+                status = U1DB_INVALID_VALUE_FOR_INDEX;
+                goto finish;
+            }
+            if (val[0] == '*') {
+                start_wildcard[i] = IS_GLOB;
+                have_start_wildcard= 1;
+                add_to_buf(&cur, &buf_size, " and d%d.value not null", i);
+            } else if (val[0] != '\0' && val[strlen(val)-1] == '*') {
+                // glob
+                start_wildcard[i] = ENDS_IN_GLOB;
+                if (have_start_wildcard) {
+                    //globs not allowed after another wildcard
+                    status = U1DB_INVALID_GLOBBING;
+                    goto finish;
+                }
+                have_start_wildcard = 1;
+                add_to_buf(&cur, &buf_size, " and d%d.value >= ?", i);
+            } else {
+                start_wildcard[i] = NO_GLOB;
+                if (have_start_wildcard) {
+                    // can't have a non-wildcard after a wildcard
+                    status = U1DB_INVALID_GLOBBING;
+                    goto finish;
+                }
+                add_to_buf(&cur, &buf_size, " and d%d.value >= ?", i);
+            }
+        }
+        if (end_values != NULL) {
+            val = end_values[i];
+            if (val == NULL) {
+                status = U1DB_INVALID_VALUE_FOR_INDEX;
+                goto finish;
+            }
+            if (val[0] == '*') {
+                end_wildcard[i] = IS_GLOB;
+                have_end_wildcard = 1;
+                add_to_buf(&cur, &buf_size, " AND d%d.value NOT NULL", i);
+            } else if (val[0] != '\0' && val[strlen(val)-1] == '*') {
+                // glob
+                end_wildcard[i] = ENDS_IN_GLOB;
+                if (have_end_wildcard) {
+                    //globs not allowed after another wildcard
+                    status = U1DB_INVALID_GLOBBING;
+                    goto finish;
+                }
+                have_end_wildcard = 1;
+                add_to_buf(
+                    &cur, &buf_size,
+                    " AND (d%d.value < ? OR d%d.value GLOB ?)", i, i);
+            } else {
+                end_wildcard[i] = NO_GLOB;
+                if (have_end_wildcard) {
+                    // Can't have a non-wildcard after a wildcard
+                    status = U1DB_INVALID_GLOBBING;
+                    goto finish;
+                }
+                add_to_buf(&cur, &buf_size, " AND d%d.value <= ?", i);
+            }
+        }
+
+    }
+    add_to_buf(&cur, &buf_size, " ORDER BY ");
+    for (i = 0; i < n_fields; ++i) {
+        if (i != 0) {
+            add_to_buf(&cur, &buf_size, ", ");
+        }
+        add_to_buf(&cur, &buf_size, "d%d.value", i);
+    }
+finish:
+    if (status != U1DB_OK && *buf != NULL) {
+        free(*buf);
+        *buf = NULL;
+    }
+    return status;
+}
+
+int
+u1db__format_index_keys_query(int n_fields, char **buf)
+{
+    int status = U1DB_OK;
+    int buf_size, i;
+    char *cur = NULL;
+
+    if (n_fields < 1) {
+        return U1DB_INVALID_PARAMETER;
+    }
+    // 81 for 1 doc, 166 for 2, 251 for 3
+    buf_size = (1 + n_fields) * 100;
+    // The first field is treated specially
+    cur = (char*)calloc(buf_size, 1);
+    if (cur == NULL) {
+        return U1DB_NOMEM;
+    }
+    *buf = cur;
+    add_to_buf(&cur, &buf_size, "SELECT ");
+    for (i = 0; i < n_fields; ++i) {
+        if (i != 0) {
+            add_to_buf(&cur, &buf_size, ", ");
+        }
+        add_to_buf(&cur, &buf_size, " d%d.value", i);
+    }
+    add_to_buf(&cur, &buf_size, " FROM ");
+    for (i = 0; i < n_fields; ++i) {
+        if (i != 0) {
+            add_to_buf(&cur, &buf_size, ", ");
+        }
+        add_to_buf(&cur, &buf_size, "document_fields d%d", i);
+    }
+    add_to_buf(&cur, &buf_size, " WHERE d0.field_name = ?");
+    for (i = 0; i < n_fields; ++i) {
+        if (i != 0) {
+            add_to_buf(&cur, &buf_size,
+                " AND d0.doc_id = d%d.doc_id"
+                " AND d%d.field_name = ?",
+                i, i);
+        }
+        add_to_buf(&cur, &buf_size, " AND d%d.value NOT NULL", i);
+    }
+    add_to_buf(&cur, &buf_size, " GROUP BY ");
+    for (i = 0; i < n_fields; ++i) {
+        if (i != 0) {
+            add_to_buf(&cur, &buf_size, ", ");
+        }
+        add_to_buf(&cur, &buf_size, "d%d.value", i);
+    }
+    if (status != U1DB_OK && *buf != NULL) {
+        free(*buf);
+        *buf = NULL;
+    }
+    return status;
+}
+
 struct sqlcb_to_field_cb {
     void *user_context;
-    int (*user_cb)(void *, const char*, transformation *tr);
+    int (*user_cb)(void *, const char*, parse_tree *tree);
 };
 
 static int
-parse(const char *field, transformation *result, int value_type)
+check_fieldname(const char *fieldname)
 {
-    transformation *inner = NULL;
-    char *new_field = NULL, *new_ptr, *argptr, *argend;
-    char *word, *first_comma;
-    int status = U1DB_OK;
-    int i, size;
-    int new_value_type = json_type_string;
-    char *field_copy, *end = NULL;
-    field_copy = strdup(field);
-    end = field_copy;
-    while (*end != '(' && *end != ')' && *end != '\0')
-    {
-        end++;
+    if (fieldname[strlen(fieldname) - 1] == '.')
+        return U1DB_INVALID_FIELD_SPECIFIER;
+    return U1DB_OK;
+}
+
+static char *
+get_token(string_list *tokens)
+{
+    char *token = NULL;
+    if (tokens->pos != NULL) {
+        token = tokens->pos->data;
+        tokens->pos = tokens->pos->next;
     }
-    if (*end == '\0')
-    {
-        word = strdup(field_copy);
-        if (word == NULL)
+    return token;
+}
+
+static char *
+peek_token(string_list *tokens)
+{
+    if (tokens->pos != NULL) {
+        return tokens->pos->data;
+    }
+    return NULL;
+}
+
+static int
+to_getter(parse_tree *node)
+{
+    int status = U1DB_OK;
+    if (node->op == NULL) {
+        status = check_fieldname(node->data);
+        if (status != U1DB_OK)
+            return status;
+        status = split(node->field_path, node->data, '.');
+    }
+    return status;
+}
+
+static int
+parse_op(string_list *tokens, char *term, parse_tree *result)
+{
+    char *sep = NULL;
+    parse_tree *node = NULL;
+    int status = U1DB_OK;
+    int i;
+
+    sep = get_token(tokens);
+    if (sep == NULL || strcmp(sep, "(") != 0) {
+        return U1DB_INVALID_TRANSFORMATION_FUNCTION;
+    }
+    for (i = 0; i < OPS; i++) {
+        if (strcmp(OPERATIONS[i].name, term) == 0)
         {
-            status = U1DB_NOMEM;
-            goto finish;
+            result->data = strdup(term);
+            result->op = OPERATIONS[i].function;
+            result->arity = OPERATIONS[i].arity;
+            result->value_types = OPERATIONS[i].value_types;
+            break;
         }
     }
-    else {
-        // TODO: unicode fieldnames ?
-        size = (end - field_copy);
-        word = (char *)calloc(size + 1, 1);
-        strncpy(word, field_copy, size);
-    }
-    new_field = strdup(end);
-    new_ptr = new_field;
-    if (status != U1DB_OK)
+    if (result->op == NULL) {
+        status = U1DB_UNKNOWN_OPERATION;
         goto finish;
-    if (*new_ptr == '(')
-    {
-        if (new_field[strlen(new_field) - 1] != ')')
-        {
+    }
+    while (1) {
+        init_parse_tree(&node);
+        status = parse_term(tokens, node);
+        if (status != U1DB_OK)
+            if (node != NULL) {
+                destroy_parse_tree(node);
+                goto finish;
+            }
+        status = append_node(result, node);
+        if (status != U1DB_OK) {
+            destroy_parse_tree(node);
+            goto finish;
+        }
+        sep = get_token(tokens);
+        if (sep == NULL) {
             status = U1DB_INVALID_TRANSFORMATION_FUNCTION;
             goto finish;
         }
-        // step into parens
-        new_ptr++;
-        new_field[strlen(new_field) - 1] = '\0';
-        for (i = 0; i < OPS; i++)
-        {
-            if (strcmp(OPERATIONS[i].name, word) == 0)
-            {
-                result->op = OPERATIONS[i].function;
-                result->value_type = value_type;
-                new_value_type = OPERATIONS[i].value_type;
-                break;
-            }
+        if (strcmp(sep, ")") == 0) {
+            break;
         }
-        if (result->op == NULL)
-        {
-            status = U1DB_UNKNOWN_OPERATION;
+        if (strcmp(sep, ",") != 0) {
+            status = U1DB_INVALID_TRANSFORMATION_FUNCTION;
             goto finish;
         }
-        first_comma = strchr(new_field, ',');
-        if (first_comma != NULL)
-        {
-            argptr = first_comma + 1;
-            argend = argptr;
-            *first_comma = '\0';
-            while (*argend != '\0')
-            {
-                if (*argend == ',')
-                {
-                    *argend = '\0';
-                    while (*argptr == ' ')
-                        argptr++;
-                    status = append(result->args, argptr);
-                    if (status != U1DB_OK)
-                        goto finish;
-                    argptr = argend + 1;
-                }
-                argend++;
-            }
-            if ((argend - argptr) > 0)
-            {
-                while (*argptr == ' ')
-                    argptr++;
-                status = append(result->args, argptr);
-                if (status != U1DB_OK)
-                    goto finish;
-            }
+    }
+    i = 0;
+    for (node = result->first_child; node != NULL; node = node->next_sibling) {
+        node->arg_type = result->value_types[i % result->number_of_children];
+        if (node->arg_type == EXPRESSION) {
+            status = to_getter(node);
+            if (status != U1DB_OK)
+                goto finish;
         }
-        status = init_transformation(&inner);
-        if (status != U1DB_OK)
-            goto finish;
-        status = parse(new_ptr, inner, new_value_type);
-        if (status != U1DB_OK)
-        {
-            // free the memory if the parsing fails. Otherwise, inner will be
-            // cleaned up when the outer transformation (result) is destroyed.
-            destroy_transformation(inner);
-            goto finish;
-        }
-        result->next = inner;
-    } else {
-        if (*new_ptr != '\0')
-        {
-            status = U1DB_UNHANDLED_CHARACTERS;
-            goto finish;
-        }
-        if (strlen(word) == 0)
-        {
-            status = U1DB_MISSING_FIELD_SPECIFIER;
-            goto finish;
-        }
-        if (word[strlen(word) - 1] == '.')
-        {
-            status = U1DB_INVALID_FIELD_SPECIFIER;
-            goto finish;
-        }
-        status = split(result->args, word, '.');
-        result->value_type = value_type;
+        i++;
     }
 finish:
-    free(word);
-    free(field_copy);
-    if (new_field != NULL)
-    free(new_field);
+    return status;
+}
+
+static int
+parse_term(string_list *tokens, parse_tree *result)
+{
+    char *term = NULL;
+    char *next = NULL;
+    int status = U1DB_OK;
+
+    term = get_token(tokens);
+    if (term == NULL) {
+        status = U1DB_INVALID_TRANSFORMATION_FUNCTION;
+        goto finish;
+    }
+    if (strcmp(term, ",") == 0 || strcmp(term, "(") == 0 ||
+            strcmp(term, ")") == 0) {
+        status = U1DB_INVALID_TRANSFORMATION_FUNCTION;
+        goto finish;
+    }
+    next = peek_token(tokens);
+    if (next != NULL && strcmp(next, "(") == 0) {
+        status = parse_op(tokens, term, result);
+        goto finish;
+    } else {
+        result->data = strdup(term);
+    }
+finish:
+    return status;
+}
+
+static int
+make_tokens(const char *expression, string_list *tokens)
+{
+    int status = U1DB_OK;
+    int size;
+    int idx, start, end;
+    char c;
+    idx = 0;
+    while (idx < strlen(expression) && expression[idx] == ' ')
+        idx++;
+    start = idx;
+    end = strlen(expression) - 1;
+    while (end && expression[end] == ' ')
+        end--;
+    end++;
+    while (idx < end) {
+        c = expression[idx];
+        if (c == '(' || c == ',' || c == ')') {
+            if (idx == start) {
+                status = appendn(tokens, expression + idx, 1);
+                if (status != U1DB_OK)
+                    return status;
+                idx++;
+                start = idx;
+            } else {
+                while (start < idx && expression[start] == ' ')
+                    start++;
+                size = idx - start;
+                while (size && expression[start + size - 1] == ' ')
+                    size--;
+                if (size > 0) {
+                    status = appendn(tokens, expression + start, size);
+                    if (status != U1DB_OK)
+                        return status;
+                }
+                start = idx;
+            }
+        } else {
+            idx++;
+        }
+    }
+    size = end - start;
+    if (size > 0) {
+        status = appendn(tokens, expression + start, size);
+    }
+    return status;
+}
+
+static int
+parse(const char *expression, parse_tree *result)
+{
+    int status = U1DB_OK;
+    int open_parens = 0;
+    string_list *tokens = NULL;
+
+    status = init_list(&tokens);
+    if (status != U1DB_OK)
+        goto finish;
+    status = make_tokens(expression, tokens);
+    if (status != U1DB_OK) {
+        goto finish;
+    }
+    status = parse_term(tokens, result);
+    if (status != U1DB_OK) {
+        goto finish;
+    }
+    if (peek_token(tokens) != NULL) {
+        status = U1DB_INVALID_TRANSFORMATION_FUNCTION;
+        goto finish;
+    }
+    status = to_getter(result);
+    if (status != U1DB_OK) {
+        goto finish;
+    }
+    if (status != U1DB_OK)
+        goto finish;
+    if (open_parens != 0)
+        status = U1DB_INVALID_TRANSFORMATION_FUNCTION;
+finish:
+    if (tokens != NULL)
+        destroy_list(tokens);
     return status;
 }
 
@@ -886,7 +1451,7 @@ static int
 sqlite_cb_to_field_cb(void *context, int n_cols, char **cols, char **rows)
 {
     struct sqlcb_to_field_cb *ctx = NULL;
-    transformation *tr = NULL;
+    parse_tree *tree = NULL;
     char *expression = NULL;
     int status = U1DB_OK;
     ctx = (struct sqlcb_to_field_cb*)context;
@@ -894,15 +1459,15 @@ sqlite_cb_to_field_cb(void *context, int n_cols, char **cols, char **rows)
         return 1; // Error
     }
     expression = cols[0];
-    status = init_transformation(&tr);
+    status = init_parse_tree(&tree);
     if (status != U1DB_OK)
         goto finish;
-    status = parse(expression, tr, json_type_string);
+    status = parse(expression, tree);
     if (status != U1DB_OK)
         goto finish;
-    status = ctx->user_cb(ctx->user_context, expression, tr);
+    status = ctx->user_cb(ctx->user_context, expression, tree);
 finish:
-    destroy_transformation(tr);
+    destroy_parse_tree(tree);
     return status;
 }
 
@@ -911,7 +1476,7 @@ finish:
 static int
 iter_field_definitions(u1database *db, void *context,
                       int (*cb)(void *context, const char *expression,
-                                transformation *tr))
+                                parse_tree *tree))
 {
     int status;
     struct sqlcb_to_field_cb ctx;
@@ -961,8 +1526,8 @@ finish:
 }
 
 static int
-evaluate_index_and_insert_into_db(void *context, const char *expression, 
-                                  transformation *tr)
+evaluate_index_and_insert_into_db(void *context, const char *expression,
+                                  parse_tree *tree)
 {
     struct evaluate_index_context *ctx;
     string_list *values = NULL;
@@ -973,13 +1538,11 @@ evaluate_index_and_insert_into_db(void *context, const char *expression,
     if (ctx->obj == NULL || !json_object_is_type(ctx->obj, json_type_object)) {
         return U1DB_INVALID_JSON;
     }
-    if (status != U1DB_OK)
-        goto finish;
-    if (status != U1DB_OK)
-        goto finish;
     if ((status = init_list(&values)) != U1DB_OK)
         goto finish;
-    status = apply_transformation(tr, ctx->obj, values);
+    status = get_values(tree, ctx->obj, values);
+    if (status != U1DB_OK)
+        goto finish;
     for (item = values->head; item != NULL; item = item->next)
     {
         if ((status = add_to_document_fields(ctx->db, ctx->doc_id, expression,
@@ -987,7 +1550,8 @@ evaluate_index_and_insert_into_db(void *context, const char *expression,
             goto finish;
     }
 finish:
-    destroy_list(values);
+    if (values != NULL)
+        destroy_list(values);
     return status;
 }
 
@@ -1077,8 +1641,8 @@ u1db__update_indexes(u1database *db, const char *doc_id, const char *content)
     {
         return U1DB_INVALID_JSON;
     }
-    status = iter_field_definitions(db, &context,
-            evaluate_index_and_insert_into_db);
+    status = iter_field_definitions(
+        db, &context, evaluate_index_and_insert_into_db);
     json_object_put(context.obj);
     return status;
 }
@@ -1091,11 +1655,12 @@ u1db__index_all_docs(u1database *db, int n_expressions,
     int status, i;
     sqlite3_stmt *statement = NULL;
     struct evaluate_index_context context = {0};
-    transformation **transformations;
-    transformations = (transformation**)calloc(n_expressions, sizeof(transformation*));
+    parse_tree **trees;
+
+    trees = (parse_tree**)calloc(n_expressions, sizeof(parse_tree*));
     for (i = 0; i < n_expressions; ++i) {
-        init_transformation(&transformations[i]);
-        status = parse(expressions[i], transformations[i], json_type_string);
+        init_parse_tree(&trees[i]);
+        status = parse(expressions[i], trees[i]);
         if (status != U1DB_OK)
             goto finish;
     }
@@ -1130,8 +1695,8 @@ u1db__index_all_docs(u1database *db, int n_expressions,
             continue;
         }
         for (i = 0; i < n_expressions; ++i) {
-            status = evaluate_index_and_insert_into_db(&context,
-                    expressions[i], transformations[i]);
+            status = evaluate_index_and_insert_into_db(
+                &context, expressions[i], trees[i]);
             if (status != U1DB_OK)
                 goto finish;
         }
@@ -1142,8 +1707,8 @@ u1db__index_all_docs(u1database *db, int n_expressions,
     }
 finish:
     for (i = 0; i < n_expressions; ++i)
-        destroy_transformation(transformations[i]);
-    free(transformations);
+        destroy_parse_tree(trees[i]);
+    free(trees);
     if (context.obj != NULL) {
         json_object_put(context.obj);
         context.obj = NULL;

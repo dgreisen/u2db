@@ -24,6 +24,104 @@ from u1db import (
 trivial_raw_doc = {}
 
 
+class TestFieldName(tests.TestCase):
+
+    def test_check_fieldname_valid(self):
+        self.assertIsNone(query_parser.check_fieldname("foo"))
+
+    def test_check_fieldname_invalid(self):
+        self.assertRaises(
+            errors.IndexDefinitionParseError, query_parser.check_fieldname,
+            "foo.")
+
+
+class TestMakeTree(tests.TestCase):
+
+    def setUp(self):
+        super(TestMakeTree, self).setUp()
+        self.parser = query_parser.Parser()
+
+    def assertParseError(self, definition):
+        self.assertRaises(
+            errors.IndexDefinitionParseError, self.parser.parse,
+            definition)
+
+    def test_single_field(self):
+        self.assertIsInstance(
+            self.parser.parse('f'), query_parser.ExtractField)
+
+    def test_single_mapping(self):
+        self.assertIsInstance(
+            self.parser.parse('bool(field1)'), query_parser.Bool)
+
+    def test_nested_mapping(self):
+        self.assertIsInstance(
+            self.parser.parse('lower(split_words(field1))'),
+            query_parser.Lower)
+
+    def test_nested_branching_mapping(self):
+        self.assertIsInstance(
+            self.parser.parse(
+                'combine(lower(field1), split_words(field2), '
+                'number(field3, 5))'), query_parser.Combine)
+
+    def test_single_mapping_multiple_fields(self):
+        self.assertIsInstance(
+            self.parser.parse('number(field1, 5)'), query_parser.Number)
+
+    def test_unknown_mapping(self):
+        self.assertParseError('mapping(whatever)')
+
+    def test_parse_missing_close_paren(self):
+        self.assertParseError("lower(a")
+
+    def test_parse_trailing_chars(self):
+        self.assertParseError("lower(ab))")
+
+    def test_parse_empty_op(self):
+        self.assertParseError("(ab)")
+
+    def test_parse_top_level_commas(self):
+        self.assertParseError("a, b")
+
+    def test_invalid_field_name(self):
+        self.assertParseError("a.")
+
+    def test_invalid_inner_field_name(self):
+        self.assertParseError("lower(a.)")
+
+    def test_gobbledigook(self):
+        self.assertParseError("(@#@cc   @#!*DFJSXV(()jccd")
+
+    def test_leading_space(self):
+        self.assertIsInstance(
+            self.parser.parse("  lower(a)"), query_parser.Lower)
+
+    def test_trailing_space(self):
+        self.assertIsInstance(
+            self.parser.parse("lower(a)  "), query_parser.Lower)
+
+    def test_spaces_before_open_paren(self):
+        self.assertIsInstance(
+            self.parser.parse("lower  (a)"), query_parser.Lower)
+
+    def test_spaces_after_open_paren(self):
+        self.assertIsInstance(
+            self.parser.parse("lower(  a)"), query_parser.Lower)
+
+    def test_spaces_before_close_paren(self):
+        self.assertIsInstance(
+            self.parser.parse("lower(a  )"), query_parser.Lower)
+
+    def test_spaces_before_comma(self):
+        self.assertIsInstance(
+            self.parser.parse("number(a  , 5)"), query_parser.Number)
+
+    def test_spaces_after_comma(self):
+        self.assertIsInstance(
+            self.parser.parse("number(a,  5)"), query_parser.Number)
+
+
 class TestStaticGetter(tests.TestCase):
 
     def test_returns_string(self):
@@ -97,7 +195,7 @@ class TestLower(tests.TestCase):
     def assertLowerGets(self, expected, input_val):
         getter = query_parser.Lower(query_parser.StaticGetter(input_val))
         out_val = getter.get(trivial_raw_doc)
-        self.assertEqual(expected, out_val)
+        self.assertEqual(sorted(expected), sorted(out_val))
 
     def test_inner_returns_None(self):
         self.assertLowerGets([], None)
@@ -138,7 +236,7 @@ class TestSplitWords(tests.TestCase):
 
     def assertSplitWords(self, expected, value):
         getter = query_parser.SplitWords(query_parser.StaticGetter(value))
-        self.assertEqual(expected, getter.get(trivial_raw_doc))
+        self.assertEqual(sorted(expected), sorted(getter.get(trivial_raw_doc)))
 
     def test_inner_returns_None(self):
         self.assertSplitWords([], None)
@@ -321,6 +419,9 @@ class TestParser(tests.TestCase):
 
     def test_parse_unknown_op(self):
         self.assertParseError("no_such_operation(field)")
+
+    def test_parse_wrong_arg_type(self):
+        self.assertParseError("number(field, fnord)")
 
     def test_parse_transformation(self):
         getter = self.parse("lower(a)")

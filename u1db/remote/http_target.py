@@ -42,6 +42,7 @@ class HTTPSyncTarget(http_client.HTTPClientBase, SyncTarget):
         self._ensure_connection()
         res, _ = self._request_json('GET', ['sync-from', source_replica_uid])
         return (res['target_replica_uid'], res['target_replica_generation'],
+                res['target_replica_transaction_id'],
                 res['source_replica_generation'], res['source_transaction_id'])
 
     def record_sync_info(self, source_replica_uid, source_replica_generation,
@@ -65,7 +66,7 @@ class HTTPSyncTarget(http_client.HTTPClientBase, SyncTarget):
                 line, comma = utils.check_and_strip_comma(entry)
                 entry = simplejson.loads(line)
                 doc = Document(entry['id'], entry['rev'], entry['content'])
-                return_doc_cb(doc, entry['gen'])
+                return_doc_cb(doc, entry['gen'], entry['trans_id'])
         if parts[-1] != ']':
             try:
                 partdic = simplejson.loads(parts[-1])
@@ -80,7 +81,8 @@ class HTTPSyncTarget(http_client.HTTPClientBase, SyncTarget):
         return res
 
     def sync_exchange(self, docs_by_generations, source_replica_uid,
-                      last_known_generation, return_doc_cb):
+                      last_known_generation, last_known_trans_id,
+                      return_doc_cb):
         self._ensure_connection()
         url = '%s/sync-from/%s' % (self._url.path, source_replica_uid)
         self._conn.putrequest('POST', url)
@@ -96,11 +98,13 @@ class HTTPSyncTarget(http_client.HTTPClientBase, SyncTarget):
             return len(entry)
 
         comma = ''
-        size += prepare(last_known_generation=last_known_generation)
+        size += prepare(
+            last_known_generation=last_known_generation,
+            last_known_trans_id=last_known_trans_id)
         comma = ','
-        for doc, gen in docs_by_generations:
+        for doc, gen, trans_id in docs_by_generations:
             size += prepare(id=doc.doc_id, rev=doc.rev, content=doc.get_json(),
-                            gen=gen)
+                            gen=gen, trans_id=trans_id)
         entries.append('\r\n]')
         size += len(entries[-1])
         self._conn.putheader('content-length', str(size))
@@ -111,4 +115,4 @@ class HTTPSyncTarget(http_client.HTTPClientBase, SyncTarget):
         data, _ = self._response()
         res = self._parse_sync_stream(data, return_doc_cb)
         data = None
-        return res['new_generation']
+        return res['new_generation'], res['new_transaction_id']

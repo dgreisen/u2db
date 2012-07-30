@@ -32,20 +32,22 @@ class TodoStoreTestCase(TestCase):
         """Creates indexes."""
         store = TodoStore(self.db)
         store.initialize_db()
-        self.assertEqual(INDEXES, dict(self.db.list_indexes()))
+        for key, value in self.db.list_indexes():
+            self.assertEqual(INDEXES[key], value[0])
 
     def test_reinitialize_db(self):
         """Creates indexes."""
         store = TodoStore(self.db)
         store.new_task()
         store.initialize_db()
-        self.assertEqual(INDEXES, dict(self.db.list_indexes()))
+        for key, value in self.db.list_indexes():
+            self.assertEqual(INDEXES[key], value[0])
 
     def test_indexes_are_added(self):
         """New indexes are added when a new store is created."""
         store = TodoStore(self.db)
         store.initialize_db()
-        INDEXES['foo'] = ['bar']
+        INDEXES['foo'] = 'bar'
         self.assertNotIn('foo', dict(self.db.list_indexes()))
         store = TodoStore(self.db)
         store.initialize_db()
@@ -55,13 +57,14 @@ class TodoStoreTestCase(TestCase):
         """Indexes are updated when a new store is created."""
         store = TodoStore(self.db)
         store.initialize_db()
-        new_expression = ['newtags']
+        new_expression = 'newtags'
         INDEXES[TAGS_INDEX] = new_expression
         self.assertNotEqual(
             new_expression, dict(self.db.list_indexes())['tags'])
         store = TodoStore(self.db)
         store.initialize_db()
-        self.assertEqual(new_expression, dict(self.db.list_indexes())['tags'])
+        self.assertEqual(
+            [new_expression], dict(self.db.list_indexes())['tags'])
 
     def test_get_all_tags(self):
         store = TodoStore(self.db)
@@ -180,7 +183,7 @@ class TaskTestCase(TestCase):
     def setUp(self):
         super(TaskTestCase, self).setUp()
         self.db = inmemory.InMemoryDatabase("cosas")
-        self.document = self.db.create_doc(EMPTY_TASK)
+        self.document = self.db.create_doc_from_json(EMPTY_TASK)
 
     def test_task(self):
         """Initializing a task."""

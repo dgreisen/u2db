@@ -22,14 +22,18 @@
 #include <stdarg.h>
 #include "u1db/u1db.h"
 #include "u1db/compat.h"
+#include "u1db/u1db_vectorclock.h"
 
 typedef struct sqlite3 sqlite3;
 typedef struct sqlite3_stmt sqlite3_stmt;
+
+void u1db__set_zero_delays(void);
 
 struct _u1database
 {
     sqlite3 *sql_handle;
     char *replica_uid;
+    int document_size_limit;
 };
 
 struct _u1query {
@@ -61,23 +65,25 @@ struct _u1db_sync_target {
      *                          Note that this is const char and memory will be
      *                          managed by the sync_target, so it should *not*
      *                          be freed.
-     * @param st_get            (OUT) The database generation for this sync
+     * @param st_gen            (OUT) The database generation for this sync
+     *                          target, matches st_replica_uid
+     * @param st_trans_id       (OUT) The database transaction id for this sync
      *                          target, matches st_replica_uid
      * @param source_gen        (OUT) The last generation of source_replica_uid
      *                          that st has synchronized with.
-     * @param trans_id          (OUT) The transaction id associated with the
+     * @param source_trans_id   (OUT) The transaction id associated with the
      *                          source generation, the memory must be freed by
      *                          the caller.
      */
     int (*get_sync_info)(u1db_sync_target *st,
         const char *source_replica_uid,
-        const char **st_replica_uid, int *st_gen, int *source_gen,
-        char **trans_id);
+        const char **st_replica_uid, int *st_gen, char **st_trans_id,
+        int *source_gen, char **source_trans_id);
     /**
      * Set the synchronization information about another replica.
      *
      * @param st    Pass this sync_target to the function,
-     *              eg st->get_sync_info(st, ...)
+     *              eg st->record_sync_info(st, ...)
      * @param source_replica_uid    The unique identifier for the source we
      *                              want to synchronize from.
      * @param source_gen        The last generation of source_replica_uid
@@ -98,10 +104,17 @@ struct _u1db_sync_target {
      *                  want to send to the sync target
      * @param generations   An array of generations. Each generation
      *                      corresponds to a doc_id.
+     * @param trans_ids   An array of transaction ids. Each transaction id
+     *                      corresponds to a doc_id.
      * @param target_gen    (IN/OUT) Seed this with the generation of the
      *                      target that source_db has last seen, it will then
      *                      be filled with the final generation of the target
      *                      database from the returned document stream.
+     * @param target_trans_id (IN/OUT) This is associated with the generation
+     *                        of the target that the source has seen. Will be
+     *                        filled in with the final generation of the
+     *                        target. Note the value passed in and the value
+     *                        returned should be freed by the caller.
      * @param context   Passed to cb.
      * @param cb        After sending the requested documents, we read the
      *                  response stream. For each document in the stream, we
@@ -109,17 +122,18 @@ struct _u1db_sync_target {
      */
     int (*sync_exchange_doc_ids)(u1db_sync_target *st, u1database *source_db,
             int n_doc_ids, const char **doc_ids, int *generations,
-            int *target_gen,
+            const char **trans_ids, int *target_gen, char **target_trans_id,
             void *context, u1db_doc_gen_callback cb);
 
     /**
      * Same as sync_exchange, only using document objects.
      */
     int (*sync_exchange)(u1db_sync_target *st,
-                              const char *source_replica_uid, int n_docs,
-                              u1db_document **docs, int *generations,
-                              int *target_gen, void *context,
-                              u1db_doc_gen_callback cb);
+                         const char *source_replica_uid, int n_docs,
+                         u1db_document **docs, int *generations,
+                         const char **trans_ids, int *target_gen,
+                         char **target_trans_id, void *context,
+                         u1db_doc_gen_callback cb);
     /**
      * Create a sync_exchange state object.
      *
@@ -161,9 +175,11 @@ struct _u1db_sync_exchange {
     u1database *db;
     const char *source_replica_uid;
     int target_gen;
+    char *target_trans_id;
     struct lh_table *seen_ids;
     int num_doc_ids;
     int *gen_for_doc_ids;
+    const char **trans_ids_for_doc_ids;
     char **doc_ids_to_return;
     void *trace_context;
     u1db__trace_callback trace_cb;
@@ -198,15 +214,59 @@ int u1db__put_doc_if_newer(u1database *db, u1db_document *doc,
                            int *state, int *at_gen);
 
 /**
+ * Validate source generation and transaction id.
+ *
+ * @param replica_uid uid of source replica at the time of the
+ *     change we are syncing.
+ * @param replica_gen Generation of the replica at the time of the
+ *     change we are syncing.
+ * @param replica_trans_id Transaction id of the replica at the time of the
+ *     change we are syncing.
+ * @param cur_vcr Vector clock for the document in the database.
+ * @param other_vcr Vector clock of the document being put.
+ * @param state (OUT) 0 for success, U1DB_SUPERSEDED if the document is
+ *     superseded.
+ */
+int u1db__validate_source(u1database *db, const char *replica_uid,
+                          int replica_gen, const char *replica_trans_id);
+
+/**
  * Internal API, Get the global database rev.
  */
 int u1db__get_generation(u1database *db, int *generation);
 
 /**
+ * Internal API, Get the document size limit.
+ */
+int u1db__get_document_size_limit(u1database *db, int *limit);
+
+/**
+ * Internal API, Get the global database rev and transaction id.
+ */
+int u1db__get_generation_info(u1database *db, int *generation,
+                              char **trans_id);
+
+/**
+ * Internal API, Get the transaction id for the db generation.
+ */
+int u1db__get_trans_id_for_gen(u1database *db, int generation,
+                               char **trans_id);
+
+/**
+ * Internal API, Validate generation and transaction id.
+ */
+int u1db_validate_gen_and_trans_id(u1database *db, int generation,
+                                   const char *trans_id);
+/**
  * Internal API, Allocate a new document id, for cases when callers do not
  * supply their own. Callers of this API are expected to free the result.
  */
 char *u1db__allocate_doc_id(u1database *db);
+
+/**
+ * Internal api, copy db. NEVER USE THIS OUTSIDE TESTS.
+ */
+u1database *u1db__copy(u1database *db);
 
 /**
  * Internal api, close the underlying sql instance.
@@ -259,15 +319,15 @@ int u1db__get_transaction_log(u1database *db, void *context,
  * @param trans_id    (OUT) The transaction id associated with the generation.
  *                    Callers must free the data.
  */
-int u1db__get_sync_gen_info(u1database *db, const char *replica_uid,
-                            int *generation, char **trans_id);
+int u1db__get_replica_gen_and_trans_id(u1database *db, const char *replica_uid,
+                                       int *generation, char **trans_id);
 
 /**
  * Set the known sync generation for another replica.
  *
  */
-int u1db__set_sync_info(u1database *db, const char *replica_uid,
-                        int generation, const char *trans_id);
+int u1db__set_replica_gen_and_trans_id(u1database *db, const char *replica_uid,
+                                       int generation, const char *trans_id);
 
 /**
  * Internal sync api, get the stored information about another machine.
@@ -317,8 +377,9 @@ void u1db__free_records(u1db_record **record);
 /**
  * Create a new u1db_document object. This should be freed
  */
-u1db_document *u1db__allocate_document(const char *doc_id, const char *revision,
-                                       const char *content, int has_conflicts);
+int u1db__allocate_document(const char *doc_id, const char *revision,
+                            const char *content, int has_conflicts,
+                            u1db_document **result);
 
 /**
  * Generate a unique id.
@@ -331,19 +392,45 @@ int u1db__generate_hex_uuid(char *uuid);
 /**
  * Format a given query.
  *
- * @param n_fields  The number of fields being passed in, (the number of args
- * 		    in argp)
- * @param argp	    Arguments being passed. It is assumed that all arguments
- * 		    will be of type "char*".
+ * @param n_fields The number of fields being passed in. (The number of values
+ *     in values)
+ * @param values Array of values being passed.
  * @param buf (OUT) The character array. This will be dynamically allocated,
- * 		    and callers must free() it.
+ *     and callers must free() it.
  * @param wildcard (IN/OUT) Any array indicating a wildcard type for this
- * 			 argument. A 0 indicates this is an exact match, a 1
- * 			 indicates this is a pure wildcard (eg, "*") and a 2
- * 			 indicates this is a glob (eg "f*").
- * 			 This must point to an array at least n_fields wide.
+ *     argument. A 0 indicates this is an exact match, a 1
+ *     indicates this is a pure wildcard (eg, "*") and a 2
+ *     indicates this is a glob (eg "f*").
+ *     This must point to an array at least n_fields wide.
  */
-int u1db__format_query(int n_fields, va_list argp, char **buf, int *wildcard);
+int u1db__format_query(int n_fields, const char **values, char **buf,
+                       int *wildcard);
+
+/**
+ * Format a given range query.
+ *
+ * @param n_fields The number of fields being passed in. (The number of values
+ *     in start_values and end_values)
+ * @param start_values Array of values used to define the lower bound of the
+ *     query.
+ * @param end_values Array of values used to define the upper bound of the
+ *     query.
+ * @param buf (OUT) The character array. This will be dynamically allocated,
+ *     and callers must free() it.
+ */
+int u1db__format_range_query(int n_fields, const char **start_values,
+                             const char **end_values, char **buf,
+                             int *start_wildcard, int *end_wildcard);
+
+/**
+ * Format an index keys query
+ *
+ * @param n_fields  The number of fields being passed in, (the number of args
+ *     in argp)
+ * @param buf (OUT) The character array. This will be dynamically allocated,
+ *     and callers must free() it.
+ */
+int u1db__format_index_keys_query(int n_fields, char **buf);
 
 /**
  * Given this document content, update the indexed fields in the db.
@@ -416,7 +503,7 @@ int u1db__sync_exchange_seen_ids(u1db_sync_exchange *se, int *n_ids,
  * We have received a doc from source, record it.
  */
 int u1db__sync_exchange_insert_doc_from_source(u1db_sync_exchange *se,
-        u1db_document *doc, int source_gen);
+        u1db_document *doc, int source_gen, const char *trans_id);
 
 /**
  * We are done receiving docs, find what we want to return.
@@ -434,8 +521,9 @@ int u1db__sync_exchange_find_doc_ids_to_return(u1db_sync_exchange *se);
  *                  u1db_free_doc().
  */
 int u1db__sync_exchange_return_docs(u1db_sync_exchange *se, void *context,
-        int (*cb)(void *context, u1db_document *doc, int gen));
-
+                                    int (*cb)(void *context,
+                                    u1db_document *doc, int gen,
+                                    const char *trans_id));
 
 /**
  * Create a sync target pointing at a given URL.

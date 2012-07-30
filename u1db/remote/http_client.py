@@ -25,6 +25,7 @@ import sys
 import urlparse
 import urllib
 
+from time import sleep
 from u1db import (
     errors,
     )
@@ -33,13 +34,23 @@ from u1db.remote import (
     )
 
 from u1db.remote.ssl_match_hostname import (
-    match_hostname,
     CertificateError,
+    match_hostname,
     )
 
 # Ubuntu/debian
 # XXX other...
 CA_CERTS = "/etc/ssl/certs/ca-certificates.crt"
+
+
+def _encode_query_parameter(value):
+    """Encode query parameter."""
+    if isinstance(value, bool):
+        if value:
+            value = 'true'
+        else:
+            value = 'false'
+    return unicode(value).encode('utf-8')
 
 
 class _VerifiedHTTPSConnection(httplib.HTTPSConnection):
@@ -80,6 +91,10 @@ class HTTPClientBase(object):
     # attacks for example) one would need HTTPS
     oauth_signature_method = oauth.OAuthSignatureMethod_HMAC_SHA1()
 
+    # Will use these delays to retry on 503 befor finally giving up. The final
+    # 0 is there to not wait after the final try fails.
+    _delays = (1, 1, 2, 4, 0)
+
     def __init__(self, url):
         self._url = urlparse.urlsplit(url)
         self._conn = None
@@ -87,8 +102,9 @@ class HTTPClientBase(object):
 
     def set_oauth_credentials(self, consumer_key, consumer_secret,
                               token_key, token_secret):
-        self._oauth_creds = (oauth.OAuthConsumer(consumer_key, consumer_secret),
-                             oauth.OAuthToken(token_key, token_secret))
+        self._oauth_creds = (
+            oauth.OAuthConsumer(consumer_key, consumer_secret),
+            oauth.OAuthToken(token_key, token_secret))
 
     def _ensure_connection(self):
         if self._conn is not None:
@@ -142,7 +158,8 @@ class HTTPClientBase(object):
                 parameters=params,
                 http_url=full_url
                 )
-            oauth_req.sign_request(self.oauth_signature_method, consumer, token)
+            oauth_req.sign_request(
+                self.oauth_signature_method, consumer, token)
             # Authorization: OAuth ...
             return oauth_req.to_header().items()
         else:
@@ -160,20 +177,27 @@ class HTTPClientBase(object):
                                   for part in url_parts)
             # oauth performs its own quoting
             unquoted_url += '/'.join(url_parts)
+        encoded_params = {}
         if params:
-            params = dict((unicode(v).encode('utf-8'),
-                           unicode(k).encode('utf-8'))
-                                                   for v, k in params.items())
-            url_query += ('?' + urllib.urlencode(params))
+            for key, value in params.items():
+                key = unicode(key).encode('utf-8')
+                encoded_params[key] = _encode_query_parameter(value)
+            url_query += ('?' + urllib.urlencode(encoded_params))
         if body is not None and not isinstance(body, basestring):
             body = simplejson.dumps(body)
             content_type = 'application/json'
         headers = {}
         if content_type:
             headers['content-type'] = content_type
-        headers.update(self._sign_request(method, unquoted_url, params))
-        self._conn.request(method, url_query, body, headers)
-        return self._response()
+        headers.update(
+            self._sign_request(method, unquoted_url, encoded_params))
+        for delay in self._delays:
+            try:
+                self._conn.request(method, url_query, body, headers)
+                return self._response()
+            except errors.Unavailable, e:
+                sleep(delay)
+        raise e
 
     def _request_json(self, method, url_parts, params=None, body=None,
                                                             content_type=None):

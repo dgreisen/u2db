@@ -15,14 +15,14 @@
 # along with u1db.  If not, see <http://www.gnu.org/licenses/>.
 
 
-from u1db import Document
-from u1db import tests
+from u1db import errors, tests
 
 
 class TestDocument(tests.TestCase):
 
-    scenarios = ([('py', {'make_document': Document})] +
-                 tests.C_DATABASE_SCENARIOS)
+    scenarios = ([(
+        'py', {'make_document_for_test': tests.make_document_for_test})] +
+        tests.C_DATABASE_SCENARIOS)
 
     def test_create_doc(self):
         doc = self.make_document('doc-id', 'uid:1', tests.simple_doc)
@@ -61,10 +61,30 @@ class TestDocument(tests.TestCase):
         doc_b = self.make_document('a', 'b', '{}', has_conflicts=True)
         self.assertFalse(doc_a == doc_b)
 
+    def test_non_json_dict(self):
+        self.assertRaises(
+            errors.InvalidJSON, self.make_document, 'id', 'uid:1',
+            '"not a json dictionary"')
+
+    def test_non_json(self):
+        self.assertRaises(
+            errors.InvalidJSON, self.make_document, 'id', 'uid:1',
+            'not a json dictionary')
+
+    def test_get_size(self):
+        doc_a = self.make_document('a', 'b', '{"some": "content"}')
+        self.assertEqual(
+            len('a' + 'b' + '{"some": "content"}'), doc_a.get_size())
+
+    def test_get_size_empty_document(self):
+        doc_a = self.make_document('a', 'b', None)
+        self.assertEqual(len('a' + 'b'), doc_a.get_size())
+
 
 class TestPyDocument(tests.TestCase):
 
-    scenarios = ([('py', {'make_document': Document})])
+    scenarios = ([(
+        'py', {'make_document_for_test': tests.make_document_for_test})])
 
     def test_get_content(self):
         doc = self.make_document('id', 'rev', '{"content":""}')
@@ -76,6 +96,12 @@ class TestPyDocument(tests.TestCase):
         doc = self.make_document('id', 'rev', '{"content":""}')
         doc.content = {"content": "new"}
         self.assertEqual('{"content": "new"}', doc.get_json())
+
+    def test_set_bad_content(self):
+        doc = self.make_document('id', 'rev', '{"content":""}')
+        self.assertRaises(
+            errors.InvalidContent, setattr, doc, 'content',
+            '{"content": "new"}')
 
     def test_is_tombstone(self):
         doc_a = self.make_document('a', 'b', '{}')
@@ -107,9 +133,16 @@ class TestPyDocument(tests.TestCase):
 
     def test_set_json(self):
         doc = self.make_document('id', 'rev', '{"content":""}')
-        self.assertEqual('{"content":""}', doc.get_json())
         doc.set_json('{"content": "new"}')
         self.assertEqual('{"content": "new"}', doc.get_json())
+
+    def test_set_json_non_dict(self):
+        doc = self.make_document('id', 'rev', '{"content":""}')
+        self.assertRaises(errors.InvalidJSON, doc.set_json, '"is not a dict"')
+
+    def test_set_json_error(self):
+        doc = self.make_document('id', 'rev', '{"content":""}')
+        self.assertRaises(errors.InvalidJSON, doc.set_json, 'is not json')
 
 
 load_tests = tests.load_with_scenarios

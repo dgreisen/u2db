@@ -19,9 +19,11 @@
 #include "u1db/compat.h"
 
 #include <string.h>
+#include <ctype.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <sqlite3.h>
+#include <json/json.h>
 
 #include "u1db/u1db_internal.h"
 #include "u1db/u1db_vectorclock.h"
@@ -40,7 +42,6 @@ typedef struct _u1db_document_internal
 static int increment_doc_rev(u1database *db, const char *cur_rev,
                              char **doc_rev);
 static int generate_transaction_id(char buf[35]);
-
 
 static int
 initialize(u1database *db)
@@ -70,7 +71,8 @@ initialize(u1database *db)
     }
     u1db__generate_hex_uuid(default_replica_uid);
     u1db_set_replica_uid(db, default_replica_uid);
-    return SQLITE_OK;
+    u1db_set_document_size_limit(db, 0);
+    return U1DB_OK;
 }
 
 u1database *
@@ -84,15 +86,47 @@ u1db_open(const char *fname)
         free(db);
         return NULL;
     }
+    // TODO: surely this is not right? We should get the db sqlite, and only if
+    // that fails because it's not there, should we initialize?!?
     initialize(db);
     return db;
+}
+
+u1database *
+u1db__copy(u1database *db)
+{
+    // DO NOT COPY OR REUSE THIS CODE OUTSIDE TESTS: COPYING U1DB DATABASES IS
+    // THE WRONG THING TO DO, THE ONLY REASON WE DO SO HERE IS TO TEST THAT WE
+    // CORRECTLY DETECT IT HAPPENING SO THAT WE CAN RAISE ERRORS RATHER THAN
+    // CORRUPT USER DATA. USE SYNC INSTEAD, OR WE WILL SEND NINJA TO YOUR
+    // HOUSE.
+    u1database *new_db = (u1database *)(calloc(1, sizeof(u1database)));
+    sqlite3_backup *backup = NULL;
+    int status;
+    status = sqlite3_open(":memory:", &new_db->sql_handle);
+    if (status != SQLITE_OK) {
+        free(new_db);
+        return NULL;
+    }
+    backup = sqlite3_backup_init(
+        new_db->sql_handle, "main", db->sql_handle, "main");
+    status = sqlite3_backup_step(backup, -1);
+    if (status != SQLITE_DONE) {
+        free(new_db);
+        return NULL;
+    }
+    sqlite3_backup_finish(backup);
+    u1db_set_replica_uid(new_db, db->replica_uid);
+    u1db_set_document_size_limit(db, 0);
+    return new_db;
 }
 
 int
 u1db__sql_close(u1database *db)
 {
     if (db->sql_handle != NULL) {
-        // sqlite says closing a NULL handle is ok, but we don't want to trust that
+        // sqlite says closing a NULL handle is ok, but we don't want to trust
+        // that
         int status;
         status = sqlite3_close(db->sql_handle);
         db->sql_handle = NULL;
@@ -154,7 +188,39 @@ u1db_set_replica_uid(u1database *db, const char *replica_uid)
     num_bytes = strlen(replica_uid);
     db->replica_uid = (char *)calloc(1, num_bytes + 1);
     memcpy(db->replica_uid, replica_uid, num_bytes + 1);
-    return 0;
+    return U1DB_OK;
+}
+
+int
+u1db_set_document_size_limit(u1database *db, int limit)
+{
+    sqlite3_stmt *statement;
+    int status, final_status;
+
+    status = sqlite3_prepare_v2(db->sql_handle,
+        "INSERT OR REPLACE INTO u1db_config VALUES ('document_size_limit', ?)",
+        -1, &statement, NULL);
+    if (status != SQLITE_OK) {
+        return status;
+    }
+    status = sqlite3_bind_int(statement, 1, limit);
+    if (status != SQLITE_OK) {
+        sqlite3_finalize(statement);
+        return status;
+    }
+    status = sqlite3_step(statement);
+    if (status != SQLITE_DONE) {
+        sqlite3_finalize(statement);
+        return status;
+    }
+    status = sqlite3_finalize(statement);
+    if (status != SQLITE_OK) {
+        return status;
+    }
+    // If we got this far, then document_size_limit has been properly set.
+    // Copy it
+    db->document_size_limit = limit;
+    return U1DB_OK;
 }
 
 int
@@ -165,7 +231,7 @@ u1db_get_replica_uid(u1database *db, const char **replica_uid)
     const unsigned char *text;
     if (db->replica_uid != NULL) {
         *replica_uid = db->replica_uid;
-        return SQLITE_OK;
+        return U1DB_OK;
     }
     status = sqlite3_prepare_v2(db->sql_handle,
         "SELECT value FROM u1db_config WHERE name = 'replica_uid'", -1,
@@ -181,7 +247,7 @@ u1db_get_replica_uid(u1database *db, const char **replica_uid)
         if (status == SQLITE_DONE) {
             // No replica_uid set yet
             *replica_uid = NULL;
-            return SQLITE_OK;
+            return U1DB_OK;
         }
         *replica_uid = "Failed to step prepared statement";
         return status;
@@ -196,7 +262,7 @@ u1db_get_replica_uid(u1database *db, const char **replica_uid)
     db->replica_uid = (char *)calloc(1, num_bytes + 1);
     memcpy(db->replica_uid, text, num_bytes+1);
     *replica_uid = db->replica_uid;
-    return SQLITE_OK;
+    return U1DB_OK;
 }
 
 static int
@@ -243,8 +309,8 @@ handle_row(sqlite3_stmt *statement, u1db_row **row)
 }
 
 int
-u1db_create_doc(u1database *db, const char *json, const char *doc_id,
-                u1db_document **doc)
+u1db_create_doc_from_json(u1database *db, const char *json, const char *doc_id,
+                          u1db_document **doc)
 {
     char *local_doc_id = NULL;
     int status;
@@ -261,7 +327,9 @@ u1db_create_doc(u1database *db, const char *json, const char *doc_id,
         }
         doc_id = local_doc_id;
     }
-    *doc = u1db__allocate_document(doc_id, NULL, json, 0);
+    status = u1db__allocate_document(doc_id, NULL, json, 0, doc);
+    if (status != U1DB_OK)
+        goto finish;
     if (*doc == NULL) {
         status = U1DB_NOMEM;
         goto finish;
@@ -391,11 +459,11 @@ write_doc(u1database *db, const char *doc_id, const char *doc_rev,
         status = SQLITE_OK;
     }
     if (status != SQLITE_OK) { goto finish; }
-    sqlite3_finalize(statement);
     status = u1db__update_indexes(db, doc_id, content);
     if (status != U1DB_OK) { goto finish; }
     status = generate_transaction_id(transaction_id);
     if (status != U1DB_OK) { goto finish; }
+    sqlite3_finalize(statement);
     status = sqlite3_prepare_v2(db->sql_handle,
         "INSERT INTO transaction_log(doc_id, transaction_id) VALUES (?, ?)",
         -1, &statement, NULL);
@@ -480,6 +548,20 @@ finish:
     return status;
 }
 
+static int
+u1db__check_doc_size(u1database *db, u1db_document *doc)
+{
+    int status = U1DB_OK;
+    int limit = 0;
+    status = u1db__get_document_size_limit(db, &limit);
+    if (status != U1DB_OK)
+        return status;
+    if (limit == 0)
+        return U1DB_OK;
+    if (u1db_doc_get_size(doc) <= limit)
+        return U1DB_OK;
+    return U1DB_DOCUMENT_TOO_BIG;
+}
 
 int
 u1db_put_doc(u1database *db, u1db_document *doc)
@@ -491,10 +573,13 @@ u1db_put_doc(u1database *db, u1db_document *doc)
     sqlite3_stmt *statement = NULL;
 
     if (db == NULL || doc == NULL) {
-        // Bad parameter
-        return -1;
+        return U1DB_INVALID_PARAMETER;
     }
     status = u1db__is_doc_id_valid(doc->doc_id);
+    if (status != U1DB_OK) {
+        return status;
+    }
+    status = u1db__check_doc_size(db, doc);
     if (status != U1DB_OK) {
         return status;
     }
@@ -513,8 +598,10 @@ u1db_put_doc(u1database *db, u1db_document *doc)
                         &old_content_len, &statement);
     if (status != SQLITE_OK) { goto finish; }
     if (doc->doc_rev == NULL) {
-        if (old_doc_rev == NULL) {
-            // We are creating a new document from scratch. No problem.
+        if (old_doc_rev == NULL || old_content == NULL) {
+            // We are either creating a new document from scratch, or
+            // overwriting a previously deleted document, neither of which
+            // should lead to conflicts.
             status = 0;
         } else {
             // We were supplied a NULL doc rev, but the doc already exists
@@ -581,7 +668,9 @@ find_current_doc_for_conflict(u1database *db, const char *doc_id,
             status = U1DB_DOCUMENT_DOES_NOT_EXIST;
             goto finish;
         }
-        cur_doc = u1db__allocate_document(doc_id, doc_rev, content, 1);
+        status = u1db__allocate_document(doc_id, doc_rev, content, 1, &cur_doc);
+        if (status != U1DB_OK)
+            goto finish;
         if (cur_doc == NULL) {
             status = U1DB_NOMEM;
         } else {
@@ -628,7 +717,10 @@ u1db_get_doc_conflicts(u1database *db, const char *doc_id, void *context,
         } else {
             content = (const char*)sqlite3_column_text(statement, 1);
         }
-        cur_doc = u1db__allocate_document(doc_id, doc_rev, content, 0);
+        status = u1db__allocate_document(
+            doc_id, doc_rev, content, 0, &cur_doc);
+        if (status != U1DB_OK)
+            goto finish;
         if (cur_doc == NULL) {
             // fprintf(stderr, "Failed to allocate_document\n");
             status = U1DB_NOMEM;
@@ -676,10 +768,12 @@ static int
 prune_conflicts(u1database *db, u1db_document *doc,
                 u1db_vectorclock *new_vc)
 {
+    const char *local_replica_uid = NULL;
     int status = U1DB_OK;
+    int did_autoresolve = 0;
     sqlite3_stmt *statement;
     status = sqlite3_prepare_v2(db->sql_handle,
-        "SELECT doc_rev FROM conflicts WHERE doc_id = ?", -1,
+        "SELECT doc_rev, content FROM conflicts WHERE doc_id = ?", -1,
         &statement, NULL);
     if (status != SQLITE_OK) { goto finish; }
     status = sqlite3_bind_text(statement, 1, doc->doc_id, -1, SQLITE_TRANSIENT);
@@ -687,11 +781,15 @@ prune_conflicts(u1database *db, u1db_document *doc,
     status = sqlite3_step(statement);
     while (status == SQLITE_ROW) {
         const char *conflict_rev;
+        const char *conflict_content;
         u1db_vectorclock *conflict_vc;
 
+        conflict_content = (const char*)sqlite3_column_text(statement, 1);
         conflict_rev = (const char*)sqlite3_column_text(statement, 0);
         conflict_vc = u1db__vectorclock_from_str(conflict_rev);
-        if (conflict_vc == NULL) {
+        if (conflict_vc == NULL
+            || (sqlite3_column_type(statement, 1) != SQLITE_NULL
+                && conflict_content == NULL)) {
             status = U1DB_NOMEM;
         } else {
             if (u1db__vectorclock_is_newer(new_vc, conflict_vc)) {
@@ -699,6 +797,16 @@ prune_conflicts(u1database *db, u1db_document *doc,
                 //        from a table that we are currently selecting. If we
                 //        find out differently, update this to create a list of
                 //        things to delete, then iterate over deleting them.
+                status = delete_conflict(db, doc->doc_id, conflict_rev);
+            } else if ((doc->json == NULL && conflict_content == NULL)
+                       || (doc->json != NULL && conflict_content != NULL
+                           && strcmp(doc->json, conflict_content) == 0)) {
+                did_autoresolve = 1;
+                status = u1db__vectorclock_maximize(new_vc, conflict_vc);
+                if (status != U1DB_OK) {
+                    u1db__free_vectorclock(&conflict_vc);
+                    goto finish;
+                }
                 status = delete_conflict(db, doc->doc_id, conflict_rev);
             } else {
                 // There is an existing conflict that we do *not* supersede,
@@ -714,9 +822,45 @@ prune_conflicts(u1database *db, u1db_document *doc,
     }
     if (status == SQLITE_DONE) {
         status = U1DB_OK;
+    } else if (status == U1DB_OK && did_autoresolve) {
+        status = u1db_get_replica_uid(db, &local_replica_uid);
+        if (status != SQLITE_OK) { goto finish; }
+        status = u1db__vectorclock_increment(new_vc, local_replica_uid);
+        if (status != SQLITE_OK) { goto finish; }
+        free(doc->doc_rev);
+        status = u1db__vectorclock_as_str(new_vc, &doc->doc_rev);
+        if (status != SQLITE_OK) { goto finish; }
     }
 finish:
     sqlite3_finalize(statement);
+    return status;
+}
+
+int
+u1db__validate_source(u1database *db, const char *replica_uid, int replica_gen,
+                      const char *replica_trans_id)
+{
+    int old_generation;
+    char *old_trans_id = NULL;
+    int status = U1DB_OK;
+
+    status = u1db__get_replica_gen_and_trans_id(
+        db, replica_uid, &old_generation, &old_trans_id);
+    if (status != U1DB_OK)
+        goto finish;
+    if (replica_gen < old_generation) {
+        status = U1DB_INVALID_GENERATION;
+        goto finish;
+    }
+    if (replica_gen > old_generation)
+        goto finish;
+    if (strcmp(replica_trans_id, old_trans_id) != 0) {
+        status = U1DB_INVALID_TRANSACTION_ID;
+        goto finish;
+    }
+finish:
+    if (old_trans_id != NULL)
+        free(old_trans_id);
     return status;
 }
 
@@ -746,6 +890,26 @@ u1db__put_doc_if_newer(u1database *db, u1db_document *doc, int save_conflict,
     status = lookup_doc(db, doc->doc_id, &stored_doc_rev, &stored_content,
                         &stored_content_len, &statement);
     if (status != SQLITE_OK) { goto finish; }
+    // TODO: u1db__vectorclock_from_str returns NULL if there is an error
+    //       in the vector clock, or if we run out of memory... Probably
+    //       shouldn't be U1DB_NOMEM
+    stored_vc = u1db__vectorclock_from_str(stored_doc_rev);
+    if (stored_vc == NULL) {
+        status = U1DB_NOMEM;
+        goto finish;
+    }
+    new_vc = u1db__vectorclock_from_str(doc->doc_rev);
+    if (new_vc == NULL) {
+        status = U1DB_NOMEM;
+        goto finish;
+    }
+    if (replica_uid != NULL && replica_trans_id != NULL) {
+        status = u1db__validate_source(
+            db, replica_uid, replica_gen, replica_trans_id);
+        if (status != U1DB_OK) {
+            goto finish;
+        }
+    }
     if (stored_doc_rev == NULL) {
         status = U1DB_OK;
         *state = U1DB_INSERTED;
@@ -755,24 +919,22 @@ u1db__put_doc_if_newer(u1database *db, u1db_document *doc, int save_conflict,
         *state = U1DB_CONVERGED;
         store = 0;
     } else {
-        // TODO: u1db__vectorclock_from_str returns NULL if there is an error
-        //       in the vector clock, or if we run out of memory... Probably
-        //       shouldn't be U1DB_NOMEM
-        stored_vc = u1db__vectorclock_from_str(stored_doc_rev);
-        if (stored_vc == NULL) {
-            status = U1DB_NOMEM;
-            goto finish;
-        }
-        new_vc = u1db__vectorclock_from_str(doc->doc_rev);
-        if (new_vc == NULL) {
-            status = U1DB_NOMEM;
-            goto finish;
-        }
         if (u1db__vectorclock_is_newer(new_vc, stored_vc)) {
             // Just take the newer version
+            char *rev = strdup(doc->doc_rev);
+            if (rev == NULL) {
+                status = U1DB_NOMEM;
+                goto finish;
+            }
             store = 1;
             *state = U1DB_INSERTED;
             status = prune_conflicts(db, doc, new_vc);
+            // if the doc's rev has been updated, conflicts were autoresolved
+            if (status == U1DB_OK && strcmp(rev, doc->doc_rev) != 0) {
+                *state = U1DB_SUPERSEDED;
+            }
+            free(rev);
+            if (status != U1DB_OK) { goto finish; }
         } else if (u1db__vectorclock_is_newer(stored_vc, new_vc)) {
             // The existing version is newer than the one supplied
             store = 0;
@@ -816,8 +978,8 @@ u1db__put_doc_if_newer(u1database *db, u1db_document *doc, int save_conflict,
                            (stored_doc_rev != NULL));
     }
     if (status == U1DB_OK && replica_uid != NULL) {
-        status = u1db__set_sync_info(db, replica_uid, replica_gen,
-                                     replica_trans_id);
+        status = u1db__set_replica_gen_and_trans_id(
+            db, replica_uid, replica_gen, replica_trans_id);
     }
     if (status == U1DB_OK && at_gen != NULL) {
         status = u1db__get_generation(db, at_gen);
@@ -941,7 +1103,8 @@ finish:
 
 
 int
-u1db_get_doc(u1database *db, const char *doc_id, u1db_document **doc)
+u1db_get_doc(u1database *db, const char *doc_id, int include_deleted,
+             u1db_document **doc)
 {
     int status = 0, content_len = 0;
     sqlite3_stmt *statement;
@@ -959,12 +1122,17 @@ u1db_get_doc(u1database *db, const char *doc_id, u1db_document **doc)
             *doc = NULL;
             goto finish;
         }
-        *doc = u1db__allocate_document(doc_id, (const char*)doc_rev,
-                                       (const char*)content, 0);
-
-        if (*doc != NULL) {
-            status = lookup_conflict(db, (*doc)->doc_id,
-                                     &((*doc)->has_conflicts));
+        if (content != NULL || include_deleted) {
+            status = u1db__allocate_document(
+                doc_id, (const char*)doc_rev, (const char*)content, 0, doc);
+            if (status != U1DB_OK)
+                goto finish;
+            if (*doc != NULL) {
+                status = lookup_conflict(db, (*doc)->doc_id,
+                                        &((*doc)->has_conflicts));
+            }
+        } else {
+            *doc = NULL;
         }
     } else {
         *doc = NULL;
@@ -976,7 +1144,8 @@ finish:
 
 int
 u1db_get_docs(u1database *db, int n_doc_ids, const char **doc_ids,
-              int check_for_conflicts, void *context, u1db_doc_callback cb)
+              int check_for_conflicts, int include_deleted,
+              void *context, u1db_doc_callback cb)
 {
     int status, i;
     sqlite3_stmt *statement;
@@ -1005,11 +1174,16 @@ u1db_get_docs(u1database *db, int n_doc_ids, const char **doc_ids,
             u1db_document *doc;
             revision = (char *)sqlite3_column_text(statement, 0);
             content = (char *)sqlite3_column_text(statement, 1);
-            doc = u1db__allocate_document(doc_ids[i], revision, content, 0);
-            if (check_for_conflicts) {
-                status = lookup_conflict(db, doc_ids[i], &(doc->has_conflicts));
+            if (content != NULL || include_deleted) {
+                status = u1db__allocate_document(
+                    doc_ids[i], revision, content, 0, &doc);
+                if (status != U1DB_OK)
+                    goto finish;
+                if (check_for_conflicts) {
+                    status = lookup_conflict(db, doc_ids[i], &(doc->has_conflicts));
+                }
+                cb(context, doc);
             }
-            cb(context, doc);
         } else if (status == SQLITE_DONE) {
             // This document doesn't exist
             // TODO: I believe the python implementation returns the Null
@@ -1023,6 +1197,48 @@ u1db_get_docs(u1database *db, int n_doc_ids, const char **doc_ids,
         if (status != SQLITE_DONE) { goto finish; }
         status = sqlite3_reset(statement);
         if (status != SQLITE_OK) { goto finish; }
+    }
+finish:
+    sqlite3_finalize(statement);
+    return status;
+}
+
+int
+u1db_get_all_docs(u1database *db, int include_deleted, int *generation,
+                  void *context, u1db_doc_callback cb)
+{
+    int status;
+    sqlite3_stmt *statement;
+
+    if (db == NULL || cb == NULL) {
+        return U1DB_INVALID_PARAMETER;
+    }
+    status = u1db__get_generation(db, generation);
+    if (status != U1DB_OK)
+        return status;
+    status = sqlite3_prepare_v2(db->sql_handle,
+        "SELECT doc_id, doc_rev, content FROM document", -1, &statement, NULL);
+    if (status != SQLITE_OK) { goto finish; }
+    status = sqlite3_step(statement);
+    while (status == SQLITE_ROW) {
+        const char *doc_id;
+        const char *revision;
+        const char *content;
+        u1db_document *doc;
+        doc_id = (char *)sqlite3_column_text(statement, 0);
+        revision = (char *)sqlite3_column_text(statement, 1);
+        content = (char *)sqlite3_column_text(statement, 2);
+        if (content != NULL || include_deleted) {
+            status = u1db__allocate_document(
+                doc_id, revision, content, 0, &doc);
+            if (status != U1DB_OK)
+                goto finish;
+            cb(context, doc);
+        }
+        status = sqlite3_step(statement);
+    }
+    if (status == SQLITE_DONE) {
+        status = SQLITE_OK;
     }
 finish:
     sqlite3_finalize(statement);
@@ -1133,14 +1349,26 @@ get_last_transaction_id(u1database *db, int *gen, char **trans_id)
         status = U1DB_OK;
         *gen = 0;
         *trans_id = strdup("");
+        if (*trans_id == NULL) {
+            status = U1DB_NOMEM;
+            goto finish;
+        }
     } else if (status == SQLITE_ROW) {
         status = U1DB_OK;
         *gen = sqlite3_column_int(statement, 0);
         tmp = (const char *)sqlite3_column_text(statement, 1);
         if (tmp == NULL) {
             *trans_id = strdup("");
+            if (*trans_id == NULL) {
+                status = U1DB_NOMEM;
+                goto finish;
+            }
         } else {
             *trans_id = strdup(tmp);
+            if (*trans_id == NULL) {
+                status = U1DB_NOMEM;
+                goto finish;
+            }
         }
     }
 finish:
@@ -1280,6 +1508,155 @@ u1db__get_generation(u1database *db, int *generation)
     return status;
 }
 
+int
+u1db__get_document_size_limit(u1database *db, int *limit)
+{
+    int status = U1DB_OK;
+    sqlite3_stmt *statement;
+
+    if (db == NULL || limit == NULL) {
+        return U1DB_INVALID_PARAMETER;
+    }
+    // TODO: make sure we don't do this lookup every time in case the limit
+    // really is 0.
+    if (db->document_size_limit != 0) {
+        *limit = db->document_size_limit;
+        return U1DB_OK;
+    }
+    status = sqlite3_prepare_v2(db->sql_handle,
+        "SELECT value FROM u1db_config WHERE name = 'document_size_limit'", -1,
+        &statement, NULL);
+    if(status != SQLITE_OK) {
+        return status;
+    }
+    status = sqlite3_step(statement);
+    if(status != SQLITE_ROW) {
+        // TODO: Check return for failures
+        sqlite3_finalize(statement);
+        if (status == SQLITE_DONE) {
+            // No document_size_limit set yet
+            *limit = 0;
+            db->document_size_limit = *limit;
+            return U1DB_OK;
+        }
+        return status;
+    }
+    *limit = sqlite3_column_int(statement, 0);
+    status = sqlite3_finalize(statement);
+    if (status != SQLITE_OK) {
+        return status;
+    }
+    db->document_size_limit = *limit;
+    return U1DB_OK;
+}
+
+int
+u1db__get_generation_info(u1database *db, int *generation, char **trans_id)
+{
+    int status;
+    const char *tmp;
+
+    sqlite3_stmt *statement;
+    if (db == NULL || generation == NULL) {
+        return U1DB_INVALID_PARAMETER;
+    }
+    status = sqlite3_prepare_v2(db->sql_handle,
+        "SELECT max(generation), transaction_id FROM transaction_log", -1,
+        &statement, NULL);
+    if (status != SQLITE_OK) {
+        return status;
+    }
+    status = sqlite3_step(statement);
+    if (status == SQLITE_DONE) {
+        // No records, we are at rev 0
+        status = SQLITE_OK;
+        *generation = 0;
+    } else if (status == SQLITE_ROW) {
+        status = SQLITE_OK;
+        *generation = sqlite3_column_int(statement, 0);
+        tmp = (const char *)sqlite3_column_text(statement, 1);
+        if (tmp == NULL) {
+            *trans_id = strdup("");
+            if (*trans_id == NULL) {
+                status = U1DB_NOMEM;
+                goto finish;
+            }
+        } else {
+            *trans_id = strdup(tmp);
+            if (*trans_id == NULL) {
+                status = U1DB_NOMEM;
+                goto finish;
+            }
+        }
+        status = U1DB_OK;
+    }
+finish:
+    sqlite3_finalize(statement);
+    return status;
+}
+
+int
+u1db__get_trans_id_for_gen(u1database *db, int generation,
+                           char **trans_id)
+{
+    int status = U1DB_OK;
+    sqlite3_stmt *statement;
+    const char *tmp;
+
+    if (db == NULL) {
+        return U1DB_INVALID_PARAMETER;
+    }
+    status = sqlite3_prepare_v2(db->sql_handle,
+        "SELECT transaction_id FROM transaction_log WHERE generation = ?", -1,
+        &statement, NULL);
+    if (status != SQLITE_OK) { goto finish; }
+    status = sqlite3_bind_int(statement, 1, generation);
+    if (status != SQLITE_OK) { goto finish; }
+    status = sqlite3_step(statement);
+    if (status == SQLITE_DONE) {
+        status = U1DB_INVALID_GENERATION;
+        goto finish;
+    } else if (status == SQLITE_ROW) {
+        tmp = (const char *)sqlite3_column_text(statement, 0);
+        if (tmp == NULL) {
+            *trans_id = NULL;
+        } else {
+            *trans_id = strdup(tmp);
+            if (*trans_id == NULL) {
+                status = U1DB_NOMEM;
+                goto finish;
+            }
+        }
+        status = U1DB_OK;
+    }
+finish:
+    sqlite3_finalize(statement);
+    return status;
+}
+
+int
+u1db_validate_gen_and_trans_id(u1database *db, int generation,
+                               const char *trans_id)
+{
+    int status = U1DB_OK;
+    char *known_trans_id = NULL;
+
+    if (generation == 0)
+        return status;
+    status = u1db__get_trans_id_for_gen(db, generation, &known_trans_id);
+    if (status != U1DB_OK)
+        goto finish;
+    if (strcmp(trans_id, known_trans_id) == 0) {
+            status = U1DB_OK;
+            goto finish;
+        }
+    status = U1DB_INVALID_TRANSACTION_ID;
+finish:
+    if (known_trans_id != NULL)
+        free(known_trans_id);
+    return status;
+}
+
 char *
 u1db__allocate_doc_id(u1database *db)
 {
@@ -1381,12 +1758,12 @@ u1db__free_table(u1db_table **table)
 
 
 int
-u1db__get_sync_gen_info(u1database *db, const char *replica_uid,
-                        int *generation, char **trans_id)
+u1db__get_replica_gen_and_trans_id(u1database *db, const char *replica_uid,
+                                   int *generation, char **trans_id)
 {
     int status;
     sqlite3_stmt *statement;
-    const char *tmp;
+    const char *tmp = NULL;
 
     if (db == NULL || replica_uid == NULL || generation == NULL
         || trans_id == NULL)
@@ -1413,7 +1790,10 @@ u1db__get_sync_gen_info(u1database *db, const char *replica_uid,
         // Note: We may want to handle the column containing NULL
         tmp = (const char *)sqlite3_column_text(statement, 1);
         if (tmp == NULL) {
-            *trans_id = NULL;
+            *trans_id = strdup("");
+            if (*trans_id == NULL) {
+                status = U1DB_NOMEM;
+            }
         } else {
             *trans_id = strdup(tmp);
             if (*trans_id == NULL) {
@@ -1429,8 +1809,8 @@ finish:
 
 
 int
-u1db__set_sync_info(u1database *db, const char *replica_uid,
-                    int generation, const char *trans_id)
+u1db__set_replica_gen_and_trans_id(u1database *db, const char *replica_uid,
+                                   int generation, const char *trans_id)
 {
     int status;
     sqlite3_stmt *statement;
@@ -1537,7 +1917,7 @@ copy_str_and_len(char **dest, size_t *dest_len, const char *source)
     } else {
         source_len = strlen(source);
     }
-    *dest = (char *) calloc(1, source_len + 1);
+    *dest = (char *)calloc(1, source_len + 1);
     if (*dest == NULL) {
         return 0;
     }
@@ -1546,35 +1926,62 @@ copy_str_and_len(char **dest, size_t *dest_len, const char *source)
     return 1;
 }
 
-u1db_document *
+int
 u1db__allocate_document(const char *doc_id, const char *revision,
-                        const char *content, int has_conflicts)
+                        const char *content, int has_conflicts,
+                        u1db_document **doc)
 {
-    u1db_document *doc = (u1db_document *)(calloc(1, sizeof(u1db_document)));
-    if (doc == NULL) { goto cleanup; }
-    if (!copy_str_and_len(&doc->doc_id, &doc->doc_id_len, doc_id))
-        goto cleanup;
-    if (!copy_str_and_len(&doc->doc_rev, &doc->doc_rev_len, revision))
-        goto cleanup;
-    if (!copy_str_and_len(&doc->json, &doc->json_len, content))
-        goto cleanup;
-    doc->has_conflicts = has_conflicts;
-    return doc;
-cleanup:
+    int status = U1DB_OK;
+    json_object *parsed = NULL;
+
+    *doc = (u1db_document *)(calloc(1, sizeof(u1db_document)));
     if (doc == NULL) {
-        return NULL;
+        status = U1DB_NOMEM;
+        goto finish;
     }
-    if (doc->doc_id != NULL) {
-        free(doc->doc_id);
+    if (content != NULL) {
+        parsed = json_tokener_parse(content);
+        if (parsed == NULL) {
+            status = U1DB_INVALID_JSON;
+            goto finish;
+        }
+        // XXX REALLY?! This is how you signal errors?
+        if ((long)parsed < 0) {
+            status = U1DB_INVALID_JSON;
+            goto finish;
+        }
+        if (!json_object_is_type(parsed, json_type_object)) {
+            status = U1DB_INVALID_JSON;
+            goto finish;
+        }
+
     }
-    if (doc->doc_rev != NULL) {
-        free(doc->doc_id);
+    if (!copy_str_and_len(&(*doc)->doc_id, &(*doc)->doc_id_len, doc_id)) {
+        status = U1DB_NOMEM;
+        goto finish;
     }
-    if (doc->json != NULL) {
-        free(doc->json);
+    if (!copy_str_and_len(&(*doc)->doc_rev, &(*doc)->doc_rev_len, revision)) {
+        status = U1DB_NOMEM;
+        goto finish;
     }
-    free(doc);
-    return NULL;
+    if (!copy_str_and_len(&(*doc)->json, &(*doc)->json_len, content)) {
+        status = U1DB_NOMEM;
+        goto finish;
+    }
+    (*doc)->has_conflicts = has_conflicts;
+finish:
+    if ((long)parsed < 0) {
+        // XXX Parsed was not a json_object at all. haha.
+        u1db_free_doc(doc);
+        return status;
+    }
+    if (parsed != NULL) {
+        json_object_put(parsed);
+    }
+    if (status == U1DB_OK)
+        return status;
+    u1db_free_doc(doc);
+    return status;
 }
 
 void
@@ -1601,26 +2008,58 @@ int
 u1db_doc_set_json(u1db_document *doc, const char *json)
 {
     char *tmp;
+    json_object *parsed = NULL;
     int content_len;
+    int status = U1DB_OK;
     if (doc == NULL || json == NULL) {
-        // TODO: return an error code
-        return 0;
+        return U1DB_INVALID_JSON;
+    }
+    if (json != NULL) {
+        parsed = json_tokener_parse(json);
+        if (parsed == NULL) {
+            status = U1DB_INVALID_JSON;
+            goto finish;
+        }
+        if (!json_object_is_type(parsed, json_type_object)) {
+            status = U1DB_INVALID_JSON;
+            goto finish;
+        }
     }
     // What to do about 0 length content? Is it even valid? Not all platforms
     // support malloc(0)
     content_len = strlen(json);
     tmp = (char*)calloc(1, content_len + 1);
     if (tmp == NULL) {
-        // TODO: return ENOMEM
-        return 0;
+        status = U1DB_NOMEM;
+        goto finish;
     }
     memcpy(tmp, json, content_len);
     free(doc->json);
     doc->json = tmp;
     doc->json_len = content_len;
-    // TODO: Return success
-    return 1;
+finish:
+    if (parsed != NULL)
+        json_object_put(parsed);
+    return status;
 }
+
+
+int
+u1db_doc_get_size(u1db_document *doc)
+{
+    int size = 0;
+    if (doc->json != NULL) {
+        size += strlen(doc->json);
+    }
+    if (doc->doc_id != NULL) {
+        size += strlen(doc->doc_id);
+    }
+    if (doc->doc_rev != NULL) {
+        size += strlen(doc->doc_rev);
+    }
+    return size;
+}
+
 
 int
 u1db__is_doc_id_valid(const char *doc_id)
@@ -1637,7 +2076,7 @@ u1db__is_doc_id_valid(const char *doc_id)
     for (i = 0; i < len; ++i) {
         c = (unsigned char)(doc_id[i]);
         // doc_id cannot contain slashes or characters outside the ascii range
-        if (c == '\\' || c == '/' || c < ' ' || c > '~') {
+        if (!isalnum(c) && c != '.' && c != '%' && c != '-' && c != '_') {
             return U1DB_INVALID_DOC_ID;
         }
     }
@@ -1645,12 +2084,13 @@ u1db__is_doc_id_valid(const char *doc_id)
     return U1DB_OK;
 }
 
+
 int
-u1db_create_index(u1database *db, const char *index_name, int n_expressions,
-                  const char **expressions)
+u1db_create_index_list(u1database *db, const char *index_name,
+                       int n_expressions, const char **expressions)
 {
     int status = U1DB_OK, i = 0;
-    sqlite3_stmt *statement;
+    sqlite3_stmt *statement = NULL;
     const char **unique_expressions;
     int n_unique;
 
@@ -1668,7 +2108,39 @@ u1db_create_index(u1database *db, const char *index_name, int n_expressions,
     }
     status = u1db__find_unique_expressions(db, n_expressions, expressions,
             &n_unique, &unique_expressions);
-    if (status != U1DB_OK) { goto finish; }
+    if (status != U1DB_OK) {
+        goto finish;
+    }
+    status = sqlite3_prepare_v2(db->sql_handle,
+        "SELECT field FROM index_definitions"
+        " WHERE name = ? ORDER BY offset DESC",
+        -1, &statement, NULL);
+    if (status != SQLITE_OK) {
+        goto finish;
+    }
+    status = sqlite3_bind_text(statement, 1, index_name, -1, SQLITE_TRANSIENT);
+    if (status != SQLITE_OK) {
+        goto finish;
+    }
+    status = sqlite3_step(statement);
+    i=0;
+    while (status == SQLITE_ROW) {
+        if (strcmp((const char *)sqlite3_column_text(statement, 0),
+                   expressions[i]) != 0) {
+            status = U1DB_DUPLICATE_INDEX_NAME;
+            goto finish;
+        }
+        status = sqlite3_step(statement);
+        i++;
+    }
+    if (status != SQLITE_DONE) {
+        goto finish;
+    }
+    if (i>0) {
+        status = SQLITE_OK;
+        goto finish;
+    }
+    sqlite3_finalize(statement);
     status = sqlite3_prepare_v2(db->sql_handle,
         "INSERT INTO index_definitions VALUES (?, ?, ?)", -1,
         &statement, NULL);
@@ -1676,13 +2148,19 @@ u1db_create_index(u1database *db, const char *index_name, int n_expressions,
         goto finish;
     }
     status = sqlite3_bind_text(statement, 1, index_name, -1, SQLITE_TRANSIENT);
-    if (status != SQLITE_OK) { goto finish; }
+    if (status != SQLITE_OK) {
+        goto finish;
+    }
     for (i = 0; i < n_expressions; ++i) {
         status = sqlite3_bind_int(statement, 2, i);
-        if (status != SQLITE_OK) { goto finish; }
+        if (status != SQLITE_OK) {
+            goto finish;
+        }
         status = sqlite3_bind_text(statement, 3, expressions[i], -1,
                                    SQLITE_TRANSIENT);
-        if (status != SQLITE_OK) { goto finish; }
+        if (status != SQLITE_OK) {
+            goto finish;
+        }
         status = sqlite3_step(statement);
         if (status != SQLITE_DONE) {
             if (status == SQLITE_CONSTRAINT) {
@@ -1692,7 +2170,9 @@ u1db_create_index(u1database *db, const char *index_name, int n_expressions,
             goto finish;
         }
         status = sqlite3_reset(statement);
-        if (status != SQLITE_OK) { goto finish; }
+        if (status != SQLITE_OK) {
+            goto finish;
+        }
     }
     status = u1db__index_all_docs(db, n_unique, unique_expressions);
 finish:
@@ -1707,6 +2187,34 @@ finish:
     }
     return status;
 }
+
+
+int
+u1db_create_index(u1database *db, const char *index_name, int n_expressions,
+                  ...)
+{
+    int i, status = U1DB_OK;
+    va_list argp;
+    const char **expressions = NULL;
+
+    expressions = (const char **)calloc(n_expressions, sizeof(char*));
+    if (expressions == NULL) {
+        status = U1DB_NOMEM;
+        goto finish;
+    }
+    va_start(argp, n_expressions);
+    for (i = 0; i < n_expressions; ++i) {
+        expressions[i] = va_arg(argp, char *);
+    }
+    status = u1db_create_index_list(
+        db, index_name, n_expressions, expressions);
+finish:
+    if (expressions != NULL)
+        free(expressions);
+    va_end(argp);
+    return status;
+}
+
 
 
 int

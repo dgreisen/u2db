@@ -29,7 +29,23 @@ from u1db.remote import (
     )
 
 
+class TestEncoder(tests.TestCase):
+
+    def test_encode_string(self):
+        self.assertEqual("foo", http_client._encode_query_parameter("foo"))
+
+    def test_encode_true(self):
+        self.assertEqual("true", http_client._encode_query_parameter(True))
+
+    def test_encode_false(self):
+        self.assertEqual("false", http_client._encode_query_parameter(False))
+
+
 class TestHTTPClientBase(tests.TestCaseWithServer):
+
+    def setUp(self):
+        super(TestHTTPClientBase, self).setUp()
+        self.errors = 0
 
     def app(self, environ, start_response):
         if environ['PATH_INFO'].endswith('echo'):
@@ -42,9 +58,40 @@ class TestHTTPClientBase(tests.TestCaseWithServer):
                 content_length = int(environ['CONTENT_LENGTH'])
                 ret['body'] = environ['wsgi.input'].read(content_length)
             return [simplejson.dumps(ret)]
-        elif environ['PATH_INFO'].endswith('error'):
+        elif environ['PATH_INFO'].endswith('error_then_accept'):
+            if self.errors >= 3:
+                start_response(
+                    "200 OK", [('Content-Type', 'application/json')])
+                ret = {}
+                for name in ('REQUEST_METHOD', 'PATH_INFO', 'QUERY_STRING'):
+                    ret[name] = environ[name]
+                if environ['REQUEST_METHOD'] in ('PUT', 'POST'):
+                    ret['CONTENT_TYPE'] = environ['CONTENT_TYPE']
+                    content_length = int(environ['CONTENT_LENGTH'])
+                    ret['body'] = '{"oki": "doki"}'
+                return [simplejson.dumps(ret)]
+            self.errors += 1
             content_length = int(environ['CONTENT_LENGTH'])
-            error = simplejson.loads(environ['wsgi.input'].read(content_length))
+            error = simplejson.loads(
+                environ['wsgi.input'].read(content_length))
+            response = error['response']
+            # In debug mode, wsgiref has an assertion that the status parameter
+            # is a 'str' object. However error['status'] returns a unicode
+            # object.
+            status = str(error['status'])
+            if isinstance(response, unicode):
+                response = str(response)
+            if isinstance(response, str):
+                start_response(status, [('Content-Type', 'text/plain')])
+                return [str(response)]
+            else:
+                start_response(status, [('Content-Type', 'application/json')])
+                return [simplejson.dumps(response)]
+        elif environ['PATH_INFO'].endswith('error'):
+            self.errors += 1
+            content_length = int(environ['CONTENT_LENGTH'])
+            error = simplejson.loads(
+                environ['wsgi.input'].read(content_length))
             response = error['response']
             # In debug mode, wsgiref has an assertion that the status parameter
             # is a 'str' object. However error['status'] returns a unicode
@@ -69,7 +116,8 @@ class TestHTTPClientBase(tests.TestCaseWithServer):
             oauth_server = oauth.OAuthServer(tests.testingOAuthStore)
             oauth_server.add_signature_method(tests.sign_meth_HMAC_SHA1)
             try:
-                consumer, token, params = oauth_server.verify_request(oauth_req)
+                consumer, token, params = oauth_server.verify_request(
+                    oauth_req)
             except oauth.OAuthError, e:
                 start_response("401 Unauthorized",
                                [('Content-Type', 'application/json')])
@@ -85,9 +133,11 @@ class TestHTTPClientBase(tests.TestCaseWithServer):
             srv = simple_server.WSGIServer(host_port, handler)
             srv.set_app(self.app)
             return srv
+
         class req_handler(simple_server.WSGIRequestHandler):
             def log_request(*args):
                 pass  # suppress
+
         return make_server, req_handler, "shutdown", "http"
 
     def getClient(self):
@@ -153,7 +203,8 @@ class TestHTTPClientBase(tests.TestCaseWithServer):
 
     def test__request_json(self):
         cli = self.getClient()
-        res, headers = cli._request_json('POST', ['echo'], {'b': 2}, {'a': 'x'})
+        res, headers = cli._request_json(
+            'POST', ['echo'], {'b': 2}, {'a': 'x'})
         self.assertEqual('application/json', headers['content-type'])
         self.assertEqual({'CONTENT_TYPE': 'application/json',
                           'PATH_INFO': '/dbase/echo',
@@ -187,13 +238,31 @@ class TestHTTPClientBase(tests.TestCaseWithServer):
 
     def test_unavailable_proper(self):
         cli = self.getClient()
+        cli._delays = (0, 0, 0, 0, 0)
         self.assertRaises(errors.Unavailable,
                           cli._request_json, 'POST', ['error'], {},
                           {'status': "503 Service Unavailable",
                            'response': {"error": "unavailable"}})
+        self.assertEqual(5, self.errors)
+
+    def test_unavailable_then_available(self):
+        cli = self.getClient()
+        cli._delays = (0, 0, 0, 0, 0)
+        res, headers = cli._request_json(
+            'POST', ['error_then_accept'], {'b': 2},
+            {'status': "503 Service Unavailable",
+             'response': {"error": "unavailable"}})
+        self.assertEqual('application/json', headers['content-type'])
+        self.assertEqual({'CONTENT_TYPE': 'application/json',
+                          'PATH_INFO': '/dbase/error_then_accept',
+                          'QUERY_STRING': 'b=2',
+                          'body': '{"oki": "doki"}',
+                          'REQUEST_METHOD': 'POST'}, res)
+        self.assertEqual(3, self.errors)
 
     def test_unavailable_random_source(self):
         cli = self.getClient()
+        cli._delays = (0, 0, 0, 0, 0)
         try:
             cli._request_json('POST', ['error'], {},
                               {'status': "503 Service Unavailable",
@@ -204,6 +273,21 @@ class TestHTTPClientBase(tests.TestCaseWithServer):
         self.assertEqual(503, e.status)
         self.assertEqual("random unavailable.", e.message)
         self.assertTrue("content-type" in e.headers)
+        self.assertEqual(5, self.errors)
+
+    def test_document_too_big(self):
+        cli = self.getClient()
+        self.assertRaises(errors.DocumentTooBig,
+                          cli._request_json, 'POST', ['error'], {},
+                          {'status': "403 Forbidden",
+                           'response': {"error": "document too big"}})
+
+    def test_user_quota_exceeded(self):
+        cli = self.getClient()
+        self.assertRaises(errors.UserQuotaExceeded,
+                          cli._request_json, 'POST', ['error'], {},
+                          {'status': "403 Forbidden",
+                           'response': {"error": "user quota exceeded"}})
 
     def test_generic_u1db_error(self):
         cli = self.getClient()
@@ -248,8 +332,9 @@ class TestHTTPClientBase(tests.TestCaseWithServer):
         # oauth does its own internal quoting
         params = {'x': u'\xf0', 'y': "foo"}
         res, headers = cli._request('GET', ['doc', 'oauth', 'foo bar'], params)
-        self.assertEqual(['/dbase/doc/oauth/foo bar', tests.token1.key, params],
-                         simplejson.loads(res))
+        self.assertEqual(
+            ['/dbase/doc/oauth/foo bar', tests.token1.key, params],
+            simplejson.loads(res))
 
     def test_oauth_Unauthorized(self):
         cli = self.getClient()

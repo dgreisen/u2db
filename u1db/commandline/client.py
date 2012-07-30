@@ -78,7 +78,7 @@ class CmdCreate(OneDbCmd):
         if infile is None:
             infile = self.stdin
         db = self._open(database, create=False)
-        doc = db.create_doc(infile.read(), doc_id=doc_id)
+        doc = db.create_doc_from_json(infile.read(), doc_id=doc_id)
         self.stderr.write('id: %s\nrev: %s\n' % (doc.doc_id, doc.rev))
 
 client_commands.register(CmdCreate)
@@ -125,7 +125,11 @@ class CmdGet(OneDbCmd):
     def run(self, database, doc_id, outfile):
         if outfile is None:
             outfile = self.stdout
-        db = self._open(database, create=False)
+        try:
+            db = self._open(database, create=False)
+        except errors.DatabaseDoesNotExist:
+            self.stderr.write("Database does not exist.\n")
+            return 1
         doc = db.get_doc(doc_id)
         if doc is None:
             self.stderr.write('Document not found (id: %s)\n' % (doc_id,))
@@ -133,14 +137,47 @@ class CmdGet(OneDbCmd):
         if doc.is_tombstone():
             outfile.write('[document deleted]\n')
         else:
-            outfile.write(doc.get_json())
+            outfile.write(doc.get_json() + '\n')
         self.stderr.write('rev: %s\n' % (doc.rev,))
         if doc.has_conflicts:
-            # TODO: Probably want to write 'conflicts' or 'conflicted' to
-            # stderr.
-            pass
+            self.stderr.write("Document has conflicts.\n")
 
 client_commands.register(CmdGet)
+
+
+class CmdGetDocConflicts(OneDbCmd):
+    """Get the conflicts from a document"""
+
+    name = 'get-doc-conflicts'
+
+    @classmethod
+    def _populate_subparser(cls, parser):
+        parser.add_argument('database',
+                            help='The local database to query',
+                            metavar='database-path')
+        parser.add_argument('doc_id', help='The document id to retrieve.')
+
+    def run(self, database, doc_id):
+        try:
+            db = self._open(database, False)
+        except errors.DatabaseDoesNotExist:
+            self.stderr.write("Database does not exist.\n")
+            return 1
+        conflicts = db.get_doc_conflicts(doc_id)
+        if not conflicts:
+            if db.get_doc(doc_id) is None:
+                self.stderr.write("Document does not exist.\n")
+                return 1
+        self.stdout.write("[")
+        for i, doc in enumerate(conflicts):
+            if i:
+                self.stdout.write(",")
+            self.stdout.write(simplejson.dumps(dict(rev=doc.rev,
+                                                    content=doc.content),
+                                               indent=4))
+        self.stdout.write("]\n")
+
+client_commands.register(CmdGetDocConflicts)
 
 
 class CmdInitDB(OneDbCmd):
@@ -184,12 +221,65 @@ class CmdPut(OneDbCmd):
     def run(self, database, doc_id, doc_rev, infile):
         if infile is None:
             infile = self.stdin
-        db = self._open(database, create=False)
-        doc = Document(doc_id, doc_rev, infile.read())
-        doc_rev = db.put_doc(doc)
-        self.stderr.write('rev: %s\n' % (doc_rev,))
+        try:
+            db = self._open(database, create=False)
+            doc = Document(doc_id, doc_rev, infile.read())
+            doc_rev = db.put_doc(doc)
+            self.stderr.write('rev: %s\n' % (doc_rev,))
+        except errors.DatabaseDoesNotExist:
+            self.stderr.write("Database does not exist.\n")
+        except errors.RevisionConflict:
+            if db.get_doc(doc_id) is None:
+                self.stderr.write("Document does not exist.\n")
+            else:
+                self.stderr.write("Given revision is not current.\n")
+        except errors.ConflictedDoc:
+            self.stderr.write(
+                "Document has conflicts.\n"
+                "Inspect with get-doc-conflicts, then resolve.\n")
+        else:
+            return
+        return 1
 
 client_commands.register(CmdPut)
+
+
+class CmdResolve(OneDbCmd):
+    """Resolve a conflicted document"""
+
+    name = 'resolve-doc'
+
+    @classmethod
+    def _populate_subparser(cls, parser):
+        parser.add_argument('database',
+                            help='The local or remote database to update',
+                            metavar='database-path-or-url'),
+        parser.add_argument('doc_id', help='The conflicted document id')
+        parser.add_argument('doc_revs', metavar="doc-rev", nargs="+",
+            help='The revisions that the new content supersedes')
+        parser.add_argument('--infile', nargs='?', default=None,
+            help='The filename of the document that will be used for content',
+            type=argparse.FileType('rb'))
+
+    def run(self, database, doc_id, doc_revs, infile):
+        if infile is None:
+            infile = self.stdin
+        try:
+            db = self._open(database, create=False)
+        except errors.DatabaseDoesNotExist:
+            self.stderr.write("Database does not exist.\n")
+            return 1
+        doc = db.get_doc(doc_id)
+        if doc is None:
+            self.stderr.write("Document does not exist.\n")
+            return 1
+        doc.set_json(infile.read())
+        db.resolve_doc(doc, doc_revs)
+        self.stderr.write("rev: %s\n" % db.get_doc(doc_id).rev)
+        if doc.has_conflicts:
+            self.stderr.write("Document still has conflicts.\n")
+
+client_commands.register(CmdResolve)
 
 
 class CmdSync(command.Command):
@@ -238,9 +328,7 @@ class CmdCreateIndex(OneDbCmd):
     def run(self, database, index, expression):
         try:
             db = self._open(database, create=False)
-            if (index, expression) in db.list_indexes():
-                return
-            db.create_index(index, expression)
+            db.create_index(index, *expression)
         except errors.DatabaseDoesNotExist:
             self.stderr.write("Database does not exist.\n")
             return 1
@@ -313,8 +401,9 @@ class CmdGetIndexKeys(OneDbCmd):
     def run(self, database, index):
         try:
             db = self._open(database, create=False)
-            for i in db.get_index_keys(index):
-                self.stdout.write("%s\n" % (i,))
+            for key in db.get_index_keys(index):
+                self.stdout.write("%s\n" % (", ".join(
+                    [i.encode('utf-8') for i in key],)))
         except errors.DatabaseDoesNotExist:
             self.stderr.write("Database does not exist.\n")
         except errors.IndexDoesNotExist:
@@ -344,7 +433,7 @@ class CmdGetFromIndex(OneDbCmd):
     def run(self, database, index, values):
         try:
             db = self._open(database, create=False)
-            docs = db.get_from_index(index, [values])
+            docs = db.get_from_index(index, *values)
         except errors.DatabaseDoesNotExist:
             self.stderr.write("Database does not exist.\n")
         except errors.IndexDoesNotExist:
@@ -378,7 +467,7 @@ class CmdGetFromIndex(OneDbCmd):
                 if v.endswith('*'):
                     break
             # values has at least one element, so i is defined
-            fixed.extend('*'*(len(values)-i-1))
+            fixed.extend('*' * (len(values) - i - 1))
             self.stderr.write(
                 "Invalid query: a star can only be followed by stars.\n"
                 "For example, the following would be valid:\n"
