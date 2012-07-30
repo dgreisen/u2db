@@ -28,8 +28,8 @@ EMPTY_TASK = json.dumps({"title": "", "done": False, "tags": []})
 TAGS_INDEX = 'tags'
 DONE_INDEX = 'done'
 INDEXES = {
-    TAGS_INDEX: 'tags',
-    DONE_INDEX: 'bool(done)',
+    TAGS_INDEX: ['tags'],
+    DONE_INDEX: ['bool(done)'],
 }
 
 TAGS = re.compile('#(\w+)|\[(.+)\]')
@@ -37,8 +37,12 @@ TAGS = re.compile('#(\w+)|\[(.+)\]')
 
 def get_database():
     """Get the path that the database is stored in."""
+
+    # setting document_factory to Task means that any database method that
+    # would return documents, now returns Tasks instead.
     return u1db.open(
-        os.path.join(save_data_path("u1todo"), "cosas.u1db"), create=True)
+        os.path.join(save_data_path("cosas"), "cosas.u1db"), create=True,
+        document_factory=Task)
 
 
 def extract_tags(text):
@@ -62,7 +66,7 @@ class TodoStore(object):
         for name, expression in INDEXES.items():
             if name not in db_indexes:
                 # The index does not yet exist.
-                self.db.create_index(name, expression)
+                self.db.create_index(name, *expression)
                 continue
             if expression == db_indexes[name]:
                 # The index exists and is up to date.
@@ -105,20 +109,20 @@ class TodoStore(object):
                         # documents with all tags.
                         return []
         # Wrap each document in results in a Task object, and return them.
-        return [Task(doc) for doc in results.values()]
+        return results.values()
 
-    def get_task(self, task_id):
+    def get_task(self, doc_id):
         """Get a task from the database."""
-        document = self.db.get_doc(task_id)
-        if document is None:
+        task = self.db.get_doc(doc_id)
+        if task is None:
             # No document with that id exists in the database.
-            raise KeyError("No task with id '%s'." % (task_id,))
-        if document.is_tombstone():
+            raise KeyError("No task with id '%s'." % (doc_id,))
+        if task.is_tombstone():
             # The document id exists, but the document's content was previously
             # deleted.
-            raise KeyError("Task with id %s was deleted." % (task_id,))
+            raise KeyError("Task with id %s was deleted." % (doc_id,))
         # Wrap the document in a Task object and return it.
-        return Task(document)
+        return task
 
     def delete_task(self, task):
         """Delete a task from the database."""
@@ -143,9 +147,9 @@ class TodoStore(object):
         # Store the document in the database. Since we did not set a document
         # id, the database will store it as a new document, and generate
         # a valid id.
-        document = self.db.create_doc_from_json(content)
+        task = self.db.create_doc_from_json(content)
         # Wrap the document in a Task object.
-        return Task(document)
+        return task
 
     def save_task(self, task):
         """Save task to the database."""
@@ -157,55 +161,38 @@ class TodoStore(object):
         # Since the DONE_INDEX indexes anything that has a value in the field
         # "done", and all tasks do (either True or False), it's a good way to
         # get all tasks out of the database.
-        return [Task(doc) for doc in self.db.get_from_index(DONE_INDEX, "*")]
+        return self.db.get_from_index(DONE_INDEX, "*")
 
 
-class Task(object):
+class Task(u1db.Document):
     """A todo item."""
-
-    def __init__(self, document):
-        self._document = document
-
-    @property
-    def task_id(self):
-        """The u1db id of the task."""
-        # Since we won't ever change this, but it's handy for comparing
-        # different Task objects, it's a read only property.
-        return self._document.doc_id
 
     def _get_title(self):
         """Get the task title."""
-        return self._document.content['title']
+        return self.content['title']
 
     def _set_title(self, title):
         """Set the task title."""
-        self._document.content['title'] = title
+        self.content['title'] = title
 
     title = property(_get_title, _set_title, doc="Title of the task.")
 
     def _get_done(self):
         """Get the status of the task."""
-        return self._document.content['done']
+        return self.content['done']
 
     def _set_done(self, value):
         """Set the done status."""
-        self._document.content['done'] = value
+        self.content['done'] = value
 
     done = property(_get_done, _set_done, doc="Done flag.")
 
     def _get_tags(self):
         """Get tags associated with the task."""
-        return self._document.content['tags']
+        return self.content['tags']
 
     def _set_tags(self, tags):
         """Set tags associated with the task."""
-        self._document.content['tags'] = list(set(tags))
+        self.content['tags'] = list(set(tags))
 
     tags = property(_get_tags, _set_tags, doc="Task tags.")
-
-    @property
-    def document(self):
-        """The u1db document representing this task."""
-        # This brings the underlying document's JSON content back into sync
-        # with whatever data the task currently holds.
-        return self._document

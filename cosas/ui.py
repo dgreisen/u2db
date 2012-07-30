@@ -35,12 +35,12 @@ NOT_DONE_COLOR = QtGui.QColor(0, 0, 0)
 WHITE = QtGui.QColor(255, 255, 255)
 TAG_COLORS = [
     (234, 153, 153),
-    (221, 126, 107),
     (249, 203, 156),
     (255, 229, 153),
     (182, 215, 168),
     (162, 196, 201),
     (164, 194, 244),
+    (221, 126, 107),
     (159, 197, 232),
     (180, 167, 214),
     (213, 166, 189)]
@@ -240,14 +240,14 @@ class Main(QtGui.QMainWindow):
 
         """
         # Remove everything from the list.
-        while len(self.todo_list):
-            self.todo_list.takeItem(0)
+        while self.todo_list.topLevelItemCount():
+            self.todo_list.takeTopLevelItem(0)
         # Get the filtered tasks from the database.
         for task in self.store.get_tasks_by_tags(self._tag_filter):
             # Add them to the UI.
             self.add_task(task)
         # Clear the current selection.
-        self.todo_list.setCurrentRow(-1)
+        self.todo_list.setCurrentItem(None)
         self.title_edit.clear()
         self.item = None
 
@@ -306,19 +306,19 @@ class Main(QtGui.QMainWindow):
         # If the task has tags, we add them as filter buttons to the UI, if
         # they are new.
         for tag in task.tags:
-            self.add_tag(task.task_id, tag)
+            self.add_tag(task.doc_id, tag)
         if task.tags:
             item.set_color(self._tag_colors[task.tags[0]]['qcolor'])
         else:
             item.set_color(WHITE)
 
-    def add_tag(self, task_id, tag):
-        """Create a link between the task with id task_id and the tag, and
+    def add_tag(self, doc_id, tag):
+        """Create a link between the task with id doc_id and the tag, and
         add a new button for tag if it was not already there.
 
         """
         # Add the task id to the list of document ids associated with this tag.
-        self._tag_docs[tag].append(task_id)
+        self._tag_docs[tag].append(doc_id)
         # If the list has more than one element the tag button was already
         # present.
         if len(self._tag_docs[tag]) > 1:
@@ -359,15 +359,15 @@ class Main(QtGui.QMainWindow):
         # And add the button to the UI.
         self.buttons_layout.insertWidget(index, button)
 
-    def remove_tag(self, task_id, tag):
-        """Remove the link between the task with id task_id and the tag, and
+    def remove_tag(self, doc_id, tag):
+        """Remove the link between the task with id doc_id and the tag, and
         remove the button for tag if it no longer has any tasks associated with
         it.
 
         """
         # Remove the task id from the list of document ids associated with this
         # tag.
-        self._tag_docs[tag].remove(task_id)
+        self._tag_docs[tag].remove(doc_id)
         # If the list is not empty, we do not remove the button, because there
         # are still tasks that have this tag.
         if self._tag_docs[tag]:
@@ -383,10 +383,10 @@ class Main(QtGui.QMainWindow):
         """Process any changed tags for this item."""
         # Process all removed tags.
         for tag in old_tags - new_tags:
-            self.remove_tag(item.task.task_id, tag)
+            self.remove_tag(item.task.doc_id, tag)
         # Process all tags newly added.
         for tag in new_tags - old_tags:
-            self.add_tag(item.task.task_id, tag)
+            self.add_tag(item.task.doc_id, tag)
         if new_tags:
             item.set_color(self._tag_colors[new_tags[0]]['qcolor'])
             return
