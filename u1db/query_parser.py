@@ -59,19 +59,16 @@ def extract_field(raw_doc, subfields):
     val = raw_doc.get(subfields[0])
     if val is None:
         return []
-    if len(subfields > 0):
+    if len(subfields) > 1:
         if isinstance(val, list):
             results = []
             for item in val:
                 results.extend(extract_field(item, subfields[1:]))
-            subfields = []
             return results
         if isinstance(val, dict):
             return extract_field(val, subfields[1:])
         return []
     if isinstance(val, dict):
-        return []
-    if val is None:
         return []
     if isinstance(val, list):
         # Strip anything in the list that isn't a simple type
