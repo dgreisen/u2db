@@ -123,7 +123,7 @@ class TestSQLitePartialExpandDatabase(tests.TestCase):
         self.db = sqlite_backend.SQLitePartialExpandDatabase(':memory:')
         g = self.db._parse_index_definition('fieldname')
         self.assertIsInstance(g, query_parser.ExtractField)
-        self.assertEqual('fieldname', g.field)
+        self.assertEqual(['fieldname'], g.field)
 
     def test__update_indexes(self):
         self.db = sqlite_backend.SQLitePartialExpandDatabase(':memory:')

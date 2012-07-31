@@ -179,6 +179,11 @@ class TestExtractField(tests.TestCase):
     def test_get_value_list_of_dicts(self):
         self.assertExtractField([], 'foo', {'foo': [{'zap': 'bar'}]})
 
+    def test_get_value_list_of_dicts2(self):
+        self.assertExtractField(
+            ['bar', 'baz'], 'foo.zap',
+            {'foo': [{'zap': 'bar'}, {'zap': 'baz'}]})
+
     def test_get_value_int(self):
         self.assertExtractField([9], 'foo', {'foo': 9})
 
@@ -395,12 +400,12 @@ class TestParser(tests.TestCase):
     def test_parse_field(self):
         getter = self.parse("a")
         self.assertIsInstance(getter, query_parser.ExtractField)
-        self.assertEqual("a", getter.field)
+        self.assertEqual(["a"], getter.field)
 
     def test_parse_dotted_field(self):
         getter = self.parse("a.b")
         self.assertIsInstance(getter, query_parser.ExtractField)
-        self.assertEqual("a.b", getter.field)
+        self.assertEqual(["a", "b"], getter.field)
 
     def test_parse_dotted_field_nothing_after_dot(self):
         self.assertParseError("a.")
@@ -427,12 +432,12 @@ class TestParser(tests.TestCase):
         getter = self.parse("lower(a)")
         self.assertIsInstance(getter, query_parser.Lower)
         self.assertIsInstance(getter.inner, query_parser.ExtractField)
-        self.assertEqual("a", getter.inner.field)
+        self.assertEqual(["a"], getter.inner.field)
 
     def test_parse_all(self):
         getters = self.parse_all(["a", "b"])
         self.assertEqual(2, len(getters))
         self.assertIsInstance(getters[0], query_parser.ExtractField)
-        self.assertEqual("a", getters[0].field)
+        self.assertEqual(["a"], getters[0].field)
         self.assertIsInstance(getters[1], query_parser.ExtractField)
-        self.assertEqual("b", getters[1].field)
+        self.assertEqual(["b"], getters[1].field)

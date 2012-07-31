@@ -1470,6 +1470,26 @@ class DatabaseIndexTests(tests.DatabaseBaseTests):
         self.db.create_index('test-idx', 'sub.foo.bar.baz.qux.fnord')
         self.assertEqual([], self.db.get_from_index('test-idx', '*'))
 
+    def test_nested_traverses_lists(self):
+        # subpath finds dicts in list
+        doc = self.db.create_doc_from_json(
+            '{"foo": [{"zap": "bar"}, {"zap": "baz"}]}')
+        # subpath only finds dicts in list
+        self.db.create_doc_from_json('{"foo": ["zap", "baz"]}')
+        self.db.create_index('test-idx', 'foo.zap')
+        self.assertEqual([doc], self.db.get_from_index('test-idx', 'bar'))
+        self.assertEqual([doc], self.db.get_from_index('test-idx', 'baz'))
+
+    def test_nested_list_traversal(self):
+        # subpath finds dicts in list
+        doc = self.db.create_doc_from_json(
+            '{"foo": [{"zap": [{"qux": "fnord"}, {"qux": "zombo"}]},'
+            '{"zap": "baz"}]}')
+        # subpath only finds dicts in list
+        self.db.create_index('test-idx', 'foo.zap.qux')
+        self.assertEqual([doc], self.db.get_from_index('test-idx', 'fnord'))
+        self.assertEqual([doc], self.db.get_from_index('test-idx', 'zombo'))
+
     def test_index_list1(self):
         self.db.create_index("index", "name")
         content = '{"name": ["foo", "bar"]}'

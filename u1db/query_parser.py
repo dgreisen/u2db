@@ -53,6 +53,29 @@ class StaticGetter(Getter):
         return self.value
 
 
+def extract_field(raw_doc, subfields, index=0):
+    if not isinstance(raw_doc, dict):
+        return []
+    val = raw_doc.get(subfields[index])
+    if val is None:
+        return []
+    if index < len(subfields) - 1:
+        if isinstance(val, list):
+            results = []
+            for item in val:
+                results.extend(extract_field(item, subfields, index + 1))
+            return results
+        if isinstance(val, dict):
+            return extract_field(val, subfields, index + 1)
+        return []
+    if isinstance(val, dict):
+        return []
+    if isinstance(val, list):
+        # Strip anything in the list that isn't a simple type
+        return [v for v in val if not isinstance(v, (dict, list))]
+    return [val]
+
+
 class ExtractField(Getter):
     """Extract a field from the document."""
 
@@ -69,25 +92,10 @@ class ExtractField(Getter):
         :param field: a specifier for the field to return.
             This is either a field name, or a dotted field name.
         """
-        self.field = field
+        self.field = field.split('.')
 
     def get(self, raw_doc):
-        for subfield in self.field.split('.'):
-            if isinstance(raw_doc, dict):
-                raw_doc = raw_doc.get(subfield)
-            else:
-                return []
-        if isinstance(raw_doc, dict):
-            return []
-        if raw_doc is None:
-            result = []
-        elif isinstance(raw_doc, list):
-            # Strip anything in the list that isn't a simple type
-            result = [val for val in raw_doc
-                      if not isinstance(val, (dict, list))]
-        else:
-            result = [raw_doc]
-        return result
+        return extract_field(raw_doc, self.field)
 
 
 class Transformation(Getter):
