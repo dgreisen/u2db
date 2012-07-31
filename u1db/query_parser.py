@@ -59,7 +59,7 @@ def extract_field(raw_doc, subfields, index=0):
     val = raw_doc.get(subfields[index])
     if val is None:
         return []
-    if len(subfields) > 1:
+    if index < len(subfields) - 1:
         if isinstance(val, list):
             results = []
             for item in val:
