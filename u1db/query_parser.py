@@ -56,18 +56,18 @@ class StaticGetter(Getter):
 def extract_field(raw_doc, subfields):
     if not isinstance(raw_doc, dict):
         return []
-    val = raw_doc.get(subfields.pop(0))
+    val = raw_doc.get(subfields[0])
     if val is None:
         return []
-    if subfields:
+    if len(subfields > 0):
         if isinstance(val, list):
             results = []
             for item in val:
-                results.extend(extract_field(item, subfields[:]))
+                results.extend(extract_field(item, subfields[1:]))
             subfields = []
             return results
         if isinstance(val, dict):
-            return extract_field(val, subfields)
+            return extract_field(val, subfields[1:])
         return []
     if isinstance(val, dict):
         return []
@@ -98,7 +98,7 @@ class ExtractField(Getter):
         self.field = field.split('.')
 
     def get(self, raw_doc):
-        return extract_field(raw_doc, self.field[:])
+        return extract_field(raw_doc, self.field)
 
 
 class Transformation(Getter):
