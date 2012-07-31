@@ -53,20 +53,20 @@ class StaticGetter(Getter):
         return self.value
 
 
-def extract_field(raw_doc, subfields):
+def extract_field(raw_doc, subfields, index=0):
     if not isinstance(raw_doc, dict):
         return []
-    val = raw_doc.get(subfields[0])
+    val = raw_doc.get(subfields[index])
     if val is None:
         return []
     if len(subfields) > 1:
         if isinstance(val, list):
             results = []
             for item in val:
-                results.extend(extract_field(item, subfields[1:]))
+                results.extend(extract_field(item, subfields, index + 1))
             return results
         if isinstance(val, dict):
-            return extract_field(val, subfields[1:])
+            return extract_field(val, subfields, index + 1)
         return []
     if isinstance(val, dict):
         return []
