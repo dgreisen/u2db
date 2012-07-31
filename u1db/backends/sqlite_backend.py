@@ -783,6 +783,9 @@ class SQLiteDatabase(CommonBackend):
             c = self._db_handle.cursor()
             c.execute("DELETE FROM index_definitions WHERE name = ?",
                       (index_name,))
+            c.execute(
+                "DELETE FROM document_fields WHERE document_fields.field_name "
+                " NOT IN (SELECT field from index_definitions)")
 
 
 class SQLiteSyncTarget(CommonSyncTarget):

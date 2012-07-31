@@ -12,8 +12,7 @@ CREATE TABLE document (
 CREATE TABLE document_fields (
     doc_id TEXT NOT NULL,
     field_name TEXT NOT NULL,
-    value TEXT,
-    CONSTRAINT doc_id_x_field_name UNIQUE (doc_id, field_name, value) ON CONFLICT IGNORE
+    value TEXT
 );
 CREATE INDEX document_fields_field_value_doc_idx
     ON document_fields(field_name, value, doc_id);
@@ -34,6 +33,10 @@ CREATE TABLE index_definitions (
     offset INT,
     field TEXT,
     CONSTRAINT index_definitions_pkey PRIMARY KEY (name, offset)
+);
+CREATE TABLE index_definitions_fields (
+    index_name TEXT,
+    field_name TEXT
 );
 CREATE TABLE u1db_config (
     name TEXT PRIMARY KEY,
