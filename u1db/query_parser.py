@@ -95,11 +95,10 @@ class ExtractField(Getter):
         :param field: a specifier for the field to return.
             This is either a field name, or a dotted field name.
         """
-        self.field = field
+        self.field = field.split('.')
 
     def get(self, raw_doc):
-        subfields = self.field.split('.')
-        return extract_field(raw_doc, subfields)
+        return extract_field(raw_doc, self.field[:])
 
 
 class Transformation(Getter):
