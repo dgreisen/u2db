@@ -1059,6 +1059,13 @@ class DatabaseIndexTests(tests.DatabaseBaseTests):
         self.db.create_index('test-idx', 'key')
         self.assertEqual(1, len(self.db.get_from_index('test-idx', 'value')))
 
+    def test_delete_index_does_not_remove_fields_from_other_indexes(self):
+        self.db.create_doc_from_json(simple_doc)
+        self.db.create_index('test-idx', 'key')
+        self.db.create_index('test-idx2', 'key')
+        self.db.delete_index('test-idx')
+        self.assertEqual(1, len(self.db.get_from_index('test-idx2', 'value')))
+
     def test_create_index_after_deleting_document(self):
         doc = self.db.create_doc_from_json(simple_doc)
         doc2 = self.db.create_doc_from_json(simple_doc)
