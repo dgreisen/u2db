@@ -2235,6 +2235,15 @@ u1db_delete_index(u1database *db, const char *index_name)
     status = sqlite3_step(statement);
     if (status != SQLITE_DONE) { goto finish; }
     status = SQLITE_OK;
+    sqlite3_finalize(statement);
+    status = sqlite3_prepare_v2(
+        db->sql_handle, "DELETE FROM document_fields WHERE "
+        "document_fields.field_name NOT IN (SELECT field from "
+        "index_definitions)", -1, &statement, NULL);
+    if (status != SQLITE_OK) { goto finish; }
+    status = sqlite3_step(statement);
+    if (status != SQLITE_DONE) { goto finish; }
+    status = SQLITE_OK;
 finish:
     sqlite3_finalize(statement);
     return status;
