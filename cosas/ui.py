@@ -77,6 +77,8 @@ class UITask(QtGui.QTreeWidgetItem):
         super(UITask, self).setData(column, role, value)
 
     def data(self, column, role):
+        if role == QtCore.Qt.EditRole:
+            return self.task.title
         if role == QtCore.Qt.DisplayRole:
             return self.task.title
         if role == QtCore.Qt.FontRole:
@@ -89,7 +91,7 @@ class UITask(QtGui.QTreeWidgetItem):
             return DONE_COLOR if self.task.done else NOT_DONE_COLOR
         if role == QtCore.Qt.CheckStateRole:
             return QtCore.Qt.Checked if self.task.done else QtCore.Qt.Unchecked
-        return QtGui.QTreeWidgetItem.data(self, column, role)
+        return super(UITask, self).data(column, role)
 
     def update_task_text(self, text):
         """Edit an existing todo item."""
