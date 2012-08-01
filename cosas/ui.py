@@ -231,8 +231,8 @@ class Main(QtGui.QMainWindow):
         """Hook up all the signal handlers."""
         # On enter, save the task that was being edited.
         self.title_edit.returnPressed.connect(self.update)
-        self.buttons_toggle.clicked.connect(self.show_buttons)
         self.action_synchronize.triggered.connect(self.open_sync_window)
+        self.buttons_toggle.clicked.connect(self.show_buttons)
 
     def open_sync_window(self):
         window = Sync(self)
@@ -372,7 +372,8 @@ class Main(QtGui.QMainWindow):
         # Look up the button.
         button = self._tag_buttons[tag]
         # Remove it from the ui.
-        self.tag_buttons.removeWidget(button)
+        button.hide()
+        self.buttons_layout.removeWidget(button)
         # And remove the reference.
         del self._tag_buttons[tag]
 
