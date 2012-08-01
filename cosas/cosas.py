@@ -155,7 +155,7 @@ class TodoStore(object):
         """Save task to the database."""
         # Get the u1db document from the task object, and save it to the
         # database.
-        self.db.put_doc(task.document)
+        self.db.put_doc(task)
 
     def get_all_tasks(self):
         # Since the DONE_INDEX indexes anything that has a value in the field

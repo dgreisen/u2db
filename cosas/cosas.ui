@@ -158,45 +158,6 @@ QLineEdit, QTextEdit {
         </layout>
        </item>
        <item>
-        <widget class="QFrame" name="drop_frame">
-         <property name="frameShape">
-          <enum>QFrame::StyledPanel</enum>
-         </property>
-         <property name="frameShadow">
-          <enum>QFrame::Raised</enum>
-         </property>
-         <layout class="QVBoxLayout" name="verticalLayout_6">
-          <item>
-           <widget class="QComboBox" name="tag_list"/>
-          </item>
-          <item>
-           <layout class="QHBoxLayout" name="horizontalLayout">
-            <item>
-             <widget class="QPushButton" name="add_button">
-              <property name="text">
-               <string>&amp;Add to list</string>
-              </property>
-              <property name="flat">
-               <bool>true</bool>
-              </property>
-             </widget>
-            </item>
-            <item>
-             <widget class="QPushButton" name="delete_button">
-              <property name="text">
-               <string>&amp;Delete</string>
-              </property>
-              <property name="flat">
-               <bool>true</bool>
-              </property>
-             </widget>
-            </item>
-           </layout>
-          </item>
-         </layout>
-        </widget>
-       </item>
-       <item>
         <widget class="QTreeWidget" name="todo_list">
          <property name="frameShape">
           <enum>QFrame::StyledPanel</enum>

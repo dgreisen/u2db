@@ -49,13 +49,14 @@ TAG_COLORS = [
 class UITask(QtGui.QTreeWidgetItem):
     """Task list item."""
 
-    def __init__(self, task, parent, store, font):
+    def __init__(self, task, parent, store, font, main_window):
         super(UITask, self).__init__(parent)
         self.task = task
         # If the task is done, check off the list item.
         self.store = store
         self._bg_color = WHITE
         self._font = font
+        self.main_window = main_window
 
     def set_color(self, color):
         self._bg_color = color
@@ -67,6 +68,13 @@ class UITask(QtGui.QTreeWidgetItem):
             else:
                 self.task.done = False
             self.store.save_task(self.task)
+        if role == QtCore.Qt.EditRole:
+            text = unicode(value.toString(), 'utf-8')
+            if not text:
+                # There was no text in the edit field so do nothing.
+                return
+            self.update_task_text(text)
+        super(UITask, self).setData(column, role, value)
 
     def data(self, column, role):
         if role == QtCore.Qt.DisplayRole:
@@ -82,6 +90,21 @@ class UITask(QtGui.QTreeWidgetItem):
         if role == QtCore.Qt.CheckStateRole:
             return QtCore.Qt.Checked if self.task.done else QtCore.Qt.Unchecked
         return QtGui.QTreeWidgetItem.data(self, column, role)
+
+    def update_task_text(self, text):
+        """Edit an existing todo item."""
+        # Change the task's title to the text in the edit field.
+        self.task.title = text
+        # Record the current tags.
+        old_tags = set(self.task.tags) if self.task.tags else set([])
+        # Extract the new tags from the new text.
+        new_tags = set(extract_tags(text))
+        # Check if the tag filter buttons need updating.
+        self.main_window.update_tags(self, old_tags, new_tags)
+        # Set the tags on the task.
+        self.task.tags = list(new_tags)
+        # Save the changed task to the database.
+        self.store.save_task(self.task)
 
 
 class TaskDelegate(QtGui.QStyledItemDelegate):
@@ -170,7 +193,6 @@ class Main(QtGui.QMainWindow):
             os.path.abspath(os.path.dirname(__file__)), 'cosas.ui')
         uic.loadUi(uifile, self)
         # set the model for the treeview
-        self.drop_frame.hide()
         self.buttons_frame.hide()
         # hook up the signals to the signal handlers.
         self.connect_events()
@@ -195,9 +217,6 @@ class Main(QtGui.QMainWindow):
         self.title_edit.clear()
         # Give the edit field focus.
         self.title_edit.setFocus()
-        # Initialize the variable that points to the currently selected list
-        # item.
-        self.item = None
 
     def get_tag_color(self):
         """Get a color number to use for a new tag."""
@@ -210,12 +229,6 @@ class Main(QtGui.QMainWindow):
         """Hook up all the signal handlers."""
         # On enter, save the task that was being edited.
         self.title_edit.returnPressed.connect(self.update)
-        # If a new row in the list is selected, change the currently selected
-        # task, and put its contents in the edit field.
-        self.todo_list.itemDoubleClicked.connect(self.task_double_clicked)
-        # If the checked status of an item in the list changes, change the done
-        # status of the task.
-        # self.todo_list.itemChanged.connect(self.item_changed)
         self.buttons_toggle.clicked.connect(self.show_buttons)
         self.action_synchronize.triggered.connect(self.open_sync_window)
 
@@ -251,36 +264,17 @@ class Main(QtGui.QMainWindow):
         self.title_edit.clear()
         self.item = None
 
-    def item_changed(self, item):
-        """Mark a task as done or not done."""
-        if item.checkState() == QtCore.Qt.Checked:
-            item.task.done = True
-        else:
-            item.task.done = False
-        # Save the task to the database.
-        item.update_strikethrough()
-        item.setText(item.task.title)
-        # Clear the current selection.
-        self.todo_list.setCurrentRow(-1)
-        self.title_edit.clear()
-        self.item = None
-
     def update(self):
         """Either add a new task or update an existing one."""
         text = unicode(self.title_edit.text(), 'utf-8')
         if not text:
             # There was no text in the edit field so do nothing.
             return
-        if self.item is None:
-            # No task was selected, so add a new one.
-            task = self.store.new_task(text, tags=extract_tags(text))
-            self.add_task(task)
-        else:
-            # A task was selected, so update it.
-            self.update_task_text(text)
+        # No task was selected, so add a new one.
+        task = self.store.new_task(text, tags=extract_tags(text))
+        self.add_task(task)
         # Clear the current selection.
         self.title_edit.clear()
-        self.item = None
 
     def delete(self):
         """Delete a todo item."""
@@ -299,7 +293,8 @@ class Main(QtGui.QMainWindow):
         """Add a new todo item."""
         # Wrap the task in a UITask object.
         item = UITask(
-            task, self.todo_list, self.store, self.todo_list.font())
+            task, self.todo_list, self.store, self.todo_list.font(), self)
+        item.setFlags(item.flags() | QtCore.Qt.ItemIsEditable)
         self.todo_list.addTopLevelItem(item)
         if not task.tags:
             return
@@ -388,40 +383,9 @@ class Main(QtGui.QMainWindow):
         for tag in new_tags - old_tags:
             self.add_tag(item.task.doc_id, tag)
         if new_tags:
-            item.set_color(self._tag_colors[new_tags[0]]['qcolor'])
+            item.set_color(self._tag_colors[list(new_tags)[0]]['qcolor'])
             return
         item.set_color(WHITE)
-
-    def update_task_text(self, text):
-        """Edit an existing todo item."""
-        item = self.item
-        task = item.task
-        # Change the task's title to the text in the edit field.
-        task.title = text
-        # Record the current tags.
-        old_tags = set(task.tags) if task.tags else set([])
-        # Extract the new tags from the new text.
-        new_tags = set(extract_tags(text))
-        # Check if the tag filter buttons need updating.
-        self.update_tags(item, old_tags, new_tags)
-        # Set the tags on the task.
-        task.tags = list(new_tags)
-        # disconnect the signal temporarily while we change the title
-        self.todo_list.itemChanged.disconnect(self.item_changed)
-        # Change the text in the UI.
-        item.setText(text)
-        # reconnect the signal after we changed the title
-        self.todo_list.itemChanged.connect(self.item_changed)
-        # Save the changed task to the database.
-        self.store.save_task(task)
-
-    def task_double_clicked(self, task):
-        """Edit item when row changes."""
-        # If a row is selected, show the selected task's title in the edit
-        # field.
-        self.drop_frame.show()
-        self.item = task
-        self.title_edit.setText(self.item.task.title)
 
 
 if __name__ == "__main__":
