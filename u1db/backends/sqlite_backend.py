@@ -781,16 +781,11 @@ class SQLiteDatabase(CommonBackend):
     def delete_index(self, index_name):
         with self._db_handle:
             c = self._db_handle.cursor()
-            c.execute("SELECT DISTINCT field from index_definitions")
-            old_fields = set(r[0] for r in c.fetchall())
             c.execute("DELETE FROM index_definitions WHERE name = ?",
                       (index_name,))
-            c.execute("SELECT DISTINCT field from index_definitions")
-            new_fields = set(r[0] for r in c.fetchall())
-            to_delete = old_fields - new_fields
             c.execute(
                 "DELETE FROM document_fields WHERE document_fields.field_name "
-                " IN ('%s')" % ("', '".join(to_delete),))
+                " NOT IN (SELECT field from index_definitions)")
 
 
 class SQLiteSyncTarget(CommonSyncTarget):

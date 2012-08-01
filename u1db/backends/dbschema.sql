@@ -34,6 +34,7 @@ CREATE TABLE index_definitions (
     field TEXT,
     CONSTRAINT index_definitions_pkey PRIMARY KEY (name, offset)
 );
+create index index_definitions_field on index_definitions(field);
 CREATE TABLE u1db_config (
     name TEXT PRIMARY KEY,
     value TEXT
