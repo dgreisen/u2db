@@ -74,7 +74,7 @@ class TodoStore(object):
             # The index exists but the definition is not what expected, so we
             # delete it and add the proper index expression.
             self.db.delete_index(name)
-            self.db.create_index(name, expression)
+            self.db.create_index(name, *expression)
 
     def tag_task(self, task, tags):
         """Set the tags of a task."""
@@ -126,7 +126,7 @@ class TodoStore(object):
 
     def delete_task(self, task):
         """Delete a task from the database."""
-        self.db.delete_doc(task._document)
+        self.db.delete_doc(task)
 
     def new_task(self, title=None, tags=None):
         """Create a new task document."""

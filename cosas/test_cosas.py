@@ -27,13 +27,14 @@ class TodoStoreTestCase(TestCase):
     def setUp(self):
         super(TodoStoreTestCase, self).setUp()
         self.db = inmemory.InMemoryDatabase("cosas")
+        self.db.set_document_factory(Task)
 
     def test_initialize_db(self):
         """Creates indexes."""
         store = TodoStore(self.db)
         store.initialize_db()
         for key, value in self.db.list_indexes():
-            self.assertEqual(INDEXES[key], value[0])
+            self.assertEqual(INDEXES[key], value)
 
     def test_reinitialize_db(self):
         """Creates indexes."""
@@ -41,13 +42,13 @@ class TodoStoreTestCase(TestCase):
         store.new_task()
         store.initialize_db()
         for key, value in self.db.list_indexes():
-            self.assertEqual(INDEXES[key], value[0])
+            self.assertEqual(INDEXES[key], value)
 
     def test_indexes_are_added(self):
         """New indexes are added when a new store is created."""
         store = TodoStore(self.db)
         store.initialize_db()
-        INDEXES['foo'] = 'bar'
+        INDEXES['foo'] = ['bar']
         self.assertNotIn('foo', dict(self.db.list_indexes()))
         store = TodoStore(self.db)
         store.initialize_db()
@@ -58,7 +59,7 @@ class TodoStoreTestCase(TestCase):
         store = TodoStore(self.db)
         store.initialize_db()
         new_expression = 'newtags'
-        INDEXES[TAGS_INDEX] = new_expression
+        INDEXES[TAGS_INDEX] = [new_expression]
         self.assertNotEqual(
             new_expression, dict(self.db.list_indexes())['tags'])
         store = TodoStore(self.db)
@@ -95,14 +96,14 @@ class TodoStoreTestCase(TestCase):
         tags2 = ['foo', 'sball']
         task2 = store.new_task(tags=tags2)
         self.assertEqual(
-            sorted([task1.task_id, task2.task_id]),
-            sorted([t.task_id for t in store.get_tasks_by_tags(['foo'])]))
+            sorted([task1.doc_id, task2.doc_id]),
+            sorted([t.doc_id for t in store.get_tasks_by_tags(['foo'])]))
         self.assertEqual(
-            [task1.task_id],
-            [t.task_id for t in store.get_tasks_by_tags(['foo', 'bar'])])
+            [task1.doc_id],
+            [t.doc_id for t in store.get_tasks_by_tags(['foo', 'bar'])])
         self.assertEqual(
-            [task2.task_id],
-            [t.task_id for t in store.get_tasks_by_tags(['foo', 'sball'])])
+            [task2.doc_id],
+            [t.doc_id for t in store.get_tasks_by_tags(['foo', 'sball'])])
 
     def test_get_tasks_by_empty_tags(self):
         store = TodoStore(self.db)
@@ -112,8 +113,8 @@ class TodoStoreTestCase(TestCase):
         tags2 = ['foo', 'sball']
         task2 = store.new_task(tags=tags2)
         self.assertEqual(
-            sorted([task1.task_id, task2.task_id]),
-            sorted([t.task_id for t in store.get_tasks_by_tags([])]))
+            sorted([task1.doc_id, task2.doc_id]),
+            sorted([t.doc_id for t in store.get_tasks_by_tags([])]))
 
     def test_tag_task(self):
         """Sets the tags for a task."""
@@ -128,7 +129,7 @@ class TodoStoreTestCase(TestCase):
         store = TodoStore(self.db)
         task = store.new_task()
         self.assertTrue(isinstance(task, Task))
-        self.assertIsNotNone(task.task_id)
+        self.assertIsNotNone(task.doc_id)
 
     def test_new_task_with_title(self):
         """Creates a new task."""
@@ -150,7 +151,7 @@ class TodoStoreTestCase(TestCase):
         task = store.new_task()
         task.title = "This is the title."
         store.save_task(task)
-        task_copy = store.get_task(task.task_id)
+        task_copy = store.get_task(task.doc_id)
         self.assertEqual(task.title, task_copy.title)
 
     def test_get_non_existant_task(self):
@@ -163,7 +164,7 @@ class TodoStoreTestCase(TestCase):
         store = TodoStore(self.db)
         task = store.new_task()
         store.delete_task(task)
-        self.assertRaises(KeyError, store.get_task, task.task_id)
+        self.assertRaises(KeyError, store.get_task, task.doc_id)
 
     def test_get_all_tasks(self):
         store = TodoStore(self.db)
@@ -171,9 +172,9 @@ class TodoStoreTestCase(TestCase):
         task1 = store.new_task()
         task2 = store.new_task()
         task3 = store.new_task()
-        task_ids = [task.task_id for task in store.get_all_tasks()]
+        task_ids = [task.doc_id for task in store.get_all_tasks()]
         self.assertEqual(
-            sorted([task1.task_id, task2.task_id, task3.task_id]),
+            sorted([task1.doc_id, task2.doc_id, task3.doc_id]),
             sorted(task_ids))
 
 
@@ -183,33 +184,29 @@ class TaskTestCase(TestCase):
     def setUp(self):
         super(TaskTestCase, self).setUp()
         self.db = inmemory.InMemoryDatabase("cosas")
+        self.db.set_document_factory(Task)
         self.document = self.db.create_doc_from_json(EMPTY_TASK)
 
     def test_task(self):
         """Initializing a task."""
-        task = Task(self.document)
+        task = self.document
         self.assertEqual("", task.title)
         self.assertEqual([], task.tags)
         self.assertEqual(False, task.done)
 
-    def test_task_id(self):
-        """Task id is set to document id."""
-        task = Task(self.document)
-        self.assertEqual(self.document.doc_id, task.task_id)
-
     def test_set_title(self):
         """Changing the title is persistent."""
-        task = Task(self.document)
+        task = self.document
         title = "new task"
         task.title = title
-        self.assertEqual(title, task._document.content['title'])
+        self.assertEqual(title, task.content['title'])
 
     def test_set_done(self):
         """Changing the done property changes the underlying content."""
-        task = Task(self.document)
-        self.assertEqual(False, task._document.content['done'])
+        task = self.document
+        self.assertEqual(False, task.content['done'])
         task.done = True
-        self.assertEqual(True, task._document.content['done'])
+        self.assertEqual(True, task.content['done'])
 
     def test_extracts_tags(self):
         """Tags are extracted from the item's text."""
@@ -218,11 +215,11 @@ class TaskTestCase(TestCase):
 
     def test_tags(self):
         """Tags property returns a list."""
-        task = Task(self.document)
+        task = self.document
         self.assertEqual([], task.tags)
 
     def set_tags(self):
         """Setting the tags property changes the underlying content."""
-        task = Task(self.document)
+        task = self.document
         task.tags = ["foo", "bar"]
-        self.assertEqual(["foo", "bar"], task._document.content['tags'])
+        self.assertEqual(["foo", "bar"], task.content['tags'])
