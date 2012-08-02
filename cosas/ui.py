@@ -219,6 +219,23 @@ class Main(QtGui.QMainWindow):
         self.title_edit.clear()
         # Give the edit field focus.
         self.title_edit.setFocus()
+        self.editing = False
+
+    def keyPressEvent(self, event):
+        if event.key() == QtCore.Qt.Key_Delete:
+            self.delete()
+            return
+        if event.key() == QtCore.Qt.Key_Return:
+            if not self.editing:
+                self.editing = True
+                self.todo_list.openPersistentEditor(
+                    self.todo_list.currentItem())
+                return
+            else:
+                self.todo_list.closePersistentEditor(
+                    self.todo_list.currentItem())
+                self.editing = False
+        super(Main, self).keyPressEvent(event)
 
     def get_tag_color(self):
         """Get a color number to use for a new tag."""
@@ -281,14 +298,12 @@ class Main(QtGui.QMainWindow):
     def delete(self):
         """Delete a todo item."""
         # Delete the item from the database.
-        row = self.todo_list.currentRow()
-        item = self.todo_list.takeItem(row)
+        index = self.todo_list.indexFromItem(self.todo_list.currentItem())
+        item = self.todo_list.takeTopLevelItem(index.row())
         if item is None:
             return
         self.store.delete_task(item.task)
         # Clear the current selection.
-        self.todo_list.setCurrentRow(-1)
-        self.title_edit.clear()
         self.item = None
 
     def add_task(self, task):
