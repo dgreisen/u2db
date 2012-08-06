@@ -45,7 +45,7 @@ TAG_COLORS = [
     (180, 167, 214),
     (213, 166, 189)]
 U1_URL = 'https://u1db.one.ubuntu.com/~/cosas'
-TIMEOUT = 0.5 * 60 * 60 * 1000  # 30 minutes
+TIMEOUT = 1000 * 0.5 * 20 # 60 * 60  # 30 minutes
 
 
 class UITask(QtGui.QTreeWidgetItem):
@@ -443,6 +443,7 @@ class Main(QtGui.QMainWindow):
             finalize()
 
     def _auto_sync(self):
+        self._scheduled = None
         try:
             self.synchronize(lambda _: None)
         finally:
@@ -455,6 +456,7 @@ class Main(QtGui.QMainWindow):
 
     def stop_auto_sync(self):
         if self._scheduled:
+            print "stopping"
             self._scheduled.stop()
             self._scheduled = None
 
