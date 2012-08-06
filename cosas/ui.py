@@ -45,7 +45,7 @@ TAG_COLORS = [
     (180, 167, 214),
     (213, 166, 189)]
 U1_URL = 'https://u1db.one.ubuntu.com/~/cosas'
-TIMEOUT = 0.5 * 60
+TIMEOUT = 0.5 * 60 * 60  # 30 minutes
 
 
 class UITask(QtGui.QTreeWidgetItem):
