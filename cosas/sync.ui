@@ -7,7 +7,7 @@
     <x>0</x>
     <y>0</y>
     <width>329</width>
-    <height>169</height>
+    <height>200</height>
    </rect>
   </property>
   <property name="windowTitle">
@@ -114,13 +114,24 @@ QLineEdit, QTextEdit {
         </item>
        </layout>
       </item>
+      <item>
+       <layout class="QHBoxLayout" name="horizontalLayout">
+        <item>
+         <widget class="QCheckBox" name="auto_sync">
+          <property name="text">
+           <string>Automatically sync every 30 minutes</string>
+          </property>
+         </widget>
+        </item>
+       </layout>
+      </item>
      </layout>
     </widget>
    </item>
    <item>
     <widget class="QPushButton" name="sync_button">
      <property name="text">
-      <string>Syn&amp;chronize</string>
+      <string>Syn&amp;chronize now</string>
      </property>
     </widget>
    </item>

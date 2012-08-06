@@ -60,7 +60,6 @@ QLineEdit, QTextEdit {
    border: 1px solid rgb(102,102,102);
 }
 
-*[foo=&quot;bar&quot;] {color:red;}
 </string>
   </property>
   <property name="toolButtonStyle">
@@ -212,6 +211,7 @@ QLineEdit, QTextEdit {
    </widget>
    <addaction name="menu_File"/>
   </widget>
+  <widget class="QStatusBar" name="statusBar"/>
   <action name="action_synchronize">
    <property name="text">
     <string>&amp;Synchronize</string>

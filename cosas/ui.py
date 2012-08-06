@@ -44,6 +44,8 @@ TAG_COLORS = [
     (159, 197, 232),
     (180, 167, 214),
     (213, 166, 189)]
+U1_URL = 'https://u1db.one.ubuntu.com/~/cosas'
+TIMEOUT = 0.5 * 60
 
 
 class UITask(QtGui.QTreeWidgetItem):
@@ -131,58 +133,73 @@ class Sync(QtGui.QDialog):
         uifile = os.path.join(
             os.path.abspath(os.path.dirname(__file__)), 'sync.ui')
         uic.loadUi(uifile, self)
-        self.connect_events()
         self.other = other
+        if other.auto_sync:
+            self.auto_sync.setChecked(True)
+        if other.sync_target == U1_URL:
+            self.u1_radio.setChecked(True)
+            self.url_radio.setChecked(False)
+        else:
+            self.url_radio.setChecked(True)
+            self.u1_radio.setChecked(False)
+            self.url_edit.setText(other.sync_target)
+        self.connect_events()
 
     def connect_events(self):
         """Hook up all the signal handlers."""
         self.sync_button.clicked.connect(self.synchronize)
+        self.u1_radio.toggled.connect(self.toggle_u1)
+        self.url_radio.toggled.connect(self.toggle_url)
+        self.auto_sync.toggled.connect(self.toggle_sync)
+        self.url_edit.editingFinished.connect(self.url_changed)
 
-    def get_ubuntuone_credentials(self):
-        cmt = CredentialsManagementTool()
-        return cmt.find_credentials()
+    def enable_button(self, _=None):
+        self.sync_button.setEnabled(True)
 
     def synchronize(self):
         self.sync_button.setEnabled(False)
-        if self.u1_radio.isChecked():
-            d = self.get_ubuntuone_credentials()
-            d.addCallback(self._synchronize)
-        else:
-            # TODO: add ui for entering creds for non u1 servers.
-            self._synchronize()
-
-    def _synchronize(self, creds=None):
-        if self.u1_radio.isChecked():
-            # TODO: not hardcode
-            target = 'https://u1db.one.ubuntu.com/~/cosas'
-        else:
-            target = self.url_edit.text()
-        if target.startswith('http://') or target.startswith('https://'):
-            st = HTTPSyncTarget.connect(target)
-            oauth_creds = {
-                'token_key': creds['token'],
-                'token_secret': creds['token_secret'],
-                'consumer_key': creds['consumer_key'],
-                'consumer_secret': creds['consumer_secret']}
-            if creds:
-                st.set_oauth_credentials(**oauth_creds)
-        else:
-            db = u1db.open(target, create=True)
-            st = db.get_sync_target()
-        syncer = Synchronizer(self.store.db, st)
-        try:
-            syncer.sync()
-        except DatabaseDoesNotExist:
-            # The server does not yet have the database, so create it.
-            if target.startswith('http://') or target.startswith('https://'):
-                db = HTTPDatabase(target)
-                db.set_oauth_credentials(**oauth_creds)
-                db.open(create=True)
-            syncer.sync()
-        self.other.refresh_filter()
+        self.other.synchronize(self.enable_button)
         self.last_synced.setText(
-            '<span style="color:green">%s</span>' % (datetime.now()))
-        self.sync_button.setEnabled(True)
+            '<span style="color:green">%s</span>' % (datetime.now(),))
+
+    def toggle_u1(self, value):
+        if value:
+            self.other.sync_target = U1_URL
+        else:
+            text = unicode(self.url_edit.text(), 'utf-8')
+            if not text:
+                # There was no text in the edit field so do nothing.
+                self.other.sync_target = None
+                return
+        self.other.sync_target = text
+
+    def toggle_url(self, value):
+        if value:
+            text = unicode(self.url_edit.text(), 'utf-8')
+            if not text:
+                # There was no text in the edit field so do nothing.
+                self.other.sync_target = None
+                return
+        else:
+            self.other.sync_target = U1_URL
+        self.other.sync_target = text
+
+    def toggle_sync(self, value):
+        self.other.auto_sync = value
+        if value:
+            self.other.start_auto_sync()
+        else:
+            self.other.stop_auto_sync()
+
+    def url_changed(self):
+        if not self.url_radio.isChecked():
+            return
+        text = unicode(self.url_edit.text(), 'utf-8')
+        if not text:
+            # There was no text in the edit field so do nothing.
+            self.other.sync_target = None
+            return
+        self.other.sync_target = text
 
 
 class Main(QtGui.QMainWindow):
@@ -194,7 +211,6 @@ class Main(QtGui.QMainWindow):
         uifile = os.path.join(
             os.path.abspath(os.path.dirname(__file__)), 'cosas.ui')
         uic.loadUi(uifile, self)
-        # set the model for the treeview
         self.buttons_frame.hide()
         # hook up the signals to the signal handlers.
         self.connect_events()
@@ -220,6 +236,13 @@ class Main(QtGui.QMainWindow):
         # Give the edit field focus.
         self.title_edit.setFocus()
         self.editing = False
+        self.last_synced = None
+        self.sync_target = U1_URL
+        self.auto_sync = False
+        self._scheduled = None
+
+    def update_status_bar(self, message):
+        self.statusBar.showMessage(message)
 
     def keyPressEvent(self, event):
         if event.key() == QtCore.Qt.Key_Delete:
@@ -405,6 +428,56 @@ class Main(QtGui.QMainWindow):
             return
         item.set_color(WHITE)
 
+    def get_ubuntuone_credentials(self):
+        cmt = CredentialsManagementTool()
+        return cmt.find_credentials()
+
+    def synchronize(self, finalize):
+        if self.sync_target == 'https://u1db.one.ubuntu.com/~/cosas':
+            d = self.get_ubuntuone_credentials()
+            d.addCallback(self._synchronize)
+            d.addCallback(finalize)
+        else:
+            # TODO: add ui for entering creds for non u1 servers.
+            self._synchronize()
+            finalize()
+
+    def start_auto_sync(self, _=None):
+        self._scheduled = reactor.callLater(
+            TIMEOUT, self.synchronize, self.start_auto_sync)
+
+    def stop_auto_sync(self):
+        if self._scheduled:
+            self._scheduled.cancel()
+            self._scheduled = None
+
+    def _synchronize(self, creds=None):
+        target = self.sync_target
+        if target.startswith('http://') or target.startswith('https://'):
+            st = HTTPSyncTarget.connect(target)
+            oauth_creds = {
+                'token_key': creds['token'],
+                'token_secret': creds['token_secret'],
+                'consumer_key': creds['consumer_key'],
+                'consumer_secret': creds['consumer_secret']}
+            if creds:
+                st.set_oauth_credentials(**oauth_creds)
+        else:
+            db = u1db.open(target, create=True)
+            st = db.get_sync_target()
+        syncer = Synchronizer(self.store.db, st)
+        try:
+            syncer.sync()
+        except DatabaseDoesNotExist:
+            # The server does not yet have the database, so create it.
+            if target.startswith('http://') or target.startswith('https://'):
+                db = HTTPDatabase(target)
+                db.set_oauth_credentials(**oauth_creds)
+                db.open(create=True)
+            syncer.sync()
+        self.refresh_filter()
+        self.update_status_bar("last synced: %s" % (datetime.now(),))
+
 
 if __name__ == "__main__":
     # TODO: Unfortunately, to be able to use ubuntuone.platform.credentials on
@@ -412,6 +485,9 @@ if __name__ == "__main__":
     from dbus.mainloop.qt import DBusQtMainLoop
     main_loop = DBusQtMainLoop(set_as_default=True)
     app = QtGui.QApplication(sys.argv)
+    import qt4reactor
+    qt4reactor.install()
+    from twisted.internet import reactor
     main = Main()
     main.show()
     app.exec_()
