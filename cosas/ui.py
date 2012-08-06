@@ -446,12 +446,12 @@ class Main(QtGui.QMainWindow):
         try:
             self.synchronize(lambda _: None)
         finally:
-            self._scheduled = QtCore.QTimer.singleShot(
-                TIMEOUT, self._auto_sync)
+            self._scheduled = QtCore.QTimer()
+            self._scheduled.singleShot(TIMEOUT, self._auto_sync)
 
     def start_auto_sync(self):
-        self._scheduled = QtCore.QTimer.singleShot(
-                TIMEOUT, self._auto_sync)
+        self._scheduled = QtCore.QTimer()
+        self._scheduled.singleShot(TIMEOUT, self._auto_sync)
 
     def stop_auto_sync(self):
         if self._scheduled:
