@@ -45,7 +45,7 @@ TAG_COLORS = [
     (180, 167, 214),
     (213, 166, 189)]
 U1_URL = 'https://u1db.one.ubuntu.com/~/cosas'
-TIMEOUT = 0.5 * 60 * 60  # 30 minutes
+TIMEOUT = 0.5 * 60 * 60 * 1000  # 30 minutes
 
 
 class UITask(QtGui.QTreeWidgetItem):
@@ -442,13 +442,20 @@ class Main(QtGui.QMainWindow):
             self._synchronize()
             finalize()
 
-    def start_auto_sync(self, _=None):
-        self._scheduled = reactor.callLater(
-            TIMEOUT, self.synchronize, self.start_auto_sync)
+    def _auto_sync(self):
+        try:
+            self.synchronize(lambda _: None)
+        finally:
+            self._scheduled = QtCore.QTimer.singleShot(
+                TIMEOUT, self._auto_sync)
+
+    def start_auto_sync(self):
+        self._scheduled = QtCore.QTimer.singleShot(
+                TIMEOUT, self._auto_sync)
 
     def stop_auto_sync(self):
         if self._scheduled:
-            self._scheduled.cancel()
+            self._scheduled.stop()
             self._scheduled = None
 
     def _synchronize(self, creds=None):
@@ -485,9 +492,6 @@ if __name__ == "__main__":
     from dbus.mainloop.qt import DBusQtMainLoop
     main_loop = DBusQtMainLoop(set_as_default=True)
     app = QtGui.QApplication(sys.argv)
-    import qt4reactor
-    qt4reactor.install()
-    from twisted.internet import reactor
     main = Main()
     main.show()
     app.exec_()
