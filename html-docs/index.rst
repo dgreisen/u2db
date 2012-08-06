@@ -43,7 +43,7 @@ Choose the implementation you need and get hacking!
  ===================== =========== ================= ==============
  Ubuntu, Windows, OS X Python      SQLite            :ref:`reference-implementation`
  Ubuntu                Vala        SQLite            `lp:shardbridge <http://launchpad.net/shardbridge/>`_
- Ubuntu, Windows, OS X C           SQLite            planned
+ Ubuntu, Windows, OS X C           SQLite            part of `lp:u1db <http://launchpad.net/u1db/>`_
  Web                   JavaScript  localStorage      planned
  Android               Java        SQLite            planned
  iOS                   Objective C SQLite            planned
