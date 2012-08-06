@@ -45,7 +45,7 @@ TAG_COLORS = [
     (180, 167, 214),
     (213, 166, 189)]
 U1_URL = 'https://u1db.one.ubuntu.com/~/cosas'
-TIMEOUT = 1000 * 0.5 * 20 # 60 * 60  # 30 minutes
+TIMEOUT = 1000 * 0.5 * 60 * 60  # 30 minutes
 
 
 class UITask(QtGui.QTreeWidgetItem):
@@ -239,7 +239,7 @@ class Main(QtGui.QMainWindow):
         self.last_synced = None
         self.sync_target = U1_URL
         self.auto_sync = False
-        self._scheduled = None
+        self._timer = QtCore.QTimer()
 
     def update_status_bar(self, message):
         self.statusBar.showMessage(message)
@@ -443,22 +443,18 @@ class Main(QtGui.QMainWindow):
             finalize()
 
     def _auto_sync(self):
-        self._scheduled = None
+        self._timer.stop()
         try:
             self.synchronize(lambda _: None)
         finally:
-            self._scheduled = QtCore.QTimer()
-            self._scheduled.singleShot(TIMEOUT, self._auto_sync)
+            self._timer.start(TIMEOUT)
 
     def start_auto_sync(self):
-        self._scheduled = QtCore.QTimer()
-        self._scheduled.singleShot(TIMEOUT, self._auto_sync)
+        self._timer.timeout.connect(self._auto_sync)
+        self._timer.start(TIMEOUT)
 
     def stop_auto_sync(self):
-        if self._scheduled:
-            print "stopping"
-            self._scheduled.stop()
-            self._scheduled = None
+        self._timer.stop()
 
     def _synchronize(self, creds=None):
         target = self.sync_target
