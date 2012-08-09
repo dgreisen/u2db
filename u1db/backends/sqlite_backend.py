@@ -672,7 +672,12 @@ class SQLiteDatabase(CommonBackend):
             raise dbapi2.OperationalError(str(e) +
                 '\nstatement: %s\nargs: %s\n' % (statement, args))
         res = c.fetchall()
-        return [self._factory(r[0], r[1], r[2]) for r in res]
+        results = []
+        for row in res:
+            doc = self._factory(row[0], row[1], row[2])
+            doc.has_conflicts = row[3] > 0
+            results.append(doc)
+        return results
 
     def _format_range_query(self, definition, start_value, end_value):
         tables = ["document_fields d%d" % i for i in range(len(definition))]
@@ -766,7 +771,12 @@ class SQLiteDatabase(CommonBackend):
             raise dbapi2.OperationalError(str(e) +
                 '\nstatement: %s\nargs: %s\n' % (statement, args))
         res = c.fetchall()
-        return [self._factory(r[0], r[1], r[2]) for r in res]
+        results = []
+        for row in res:
+            doc = self._factory(row[0], row[1], row[2])
+            doc.has_conflicts = row[3] > 0
+            results.append(doc)
+        return results
 
     def get_index_keys(self, index_name):
         c = self._db_handle.cursor()

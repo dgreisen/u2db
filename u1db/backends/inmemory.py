@@ -251,8 +251,7 @@ class InMemoryDatabase(CommonBackend):
         doc_ids = index.lookup(key_values)
         result = []
         for doc_id in doc_ids:
-            doc_rev, doc = self._docs[doc_id]
-            result.append(self._factory(doc_id, doc_rev, doc))
+            result.append(self._get_doc(doc_id, check_for_conflicts=True))
         return result
 
     def get_range_from_index(self, index_name, start_value=None,
@@ -269,8 +268,7 @@ class InMemoryDatabase(CommonBackend):
         doc_ids = index.lookup_range(start_value, end_value)
         result = []
         for doc_id in doc_ids:
-            doc_rev, doc = self._docs[doc_id]
-            result.append(self._factory(doc_id, doc_rev, doc))
+            result.append(self._get_doc(doc_id, check_for_conflicts=True))
         return result
 
     def get_index_keys(self, index_name):
