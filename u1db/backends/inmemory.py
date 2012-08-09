@@ -100,9 +100,9 @@ class InMemoryDatabase(CommonBackend):
             raise errors.InvalidDocId()
         self._check_doc_id(doc.doc_id)
         self._check_doc_size(doc)
-        if self._has_conflicts(doc.doc_id):
+        old_doc = self._get_doc(doc.doc_id, check_for_conflicts=True)
+        if old_doc and old_doc.has_conflicts:
             raise errors.ConflictedDoc()
-        old_doc = self._get_doc(doc.doc_id)
         if old_doc and doc.rev is None and old_doc.is_tombstone():
             new_rev = self._allocate_doc_rev(old_doc.rev)
         else:
@@ -127,23 +127,25 @@ class InMemoryDatabase(CommonBackend):
         self._docs[doc.doc_id] = (doc.rev, doc.get_json())
         self._transaction_log.append((doc.doc_id, trans_id))
 
-    def _get_doc(self, doc_id):
+    def _get_doc(self, doc_id, check_for_conflicts=False):
         try:
             doc_rev, content = self._docs[doc_id]
         except KeyError:
             return None
-        return self._factory(doc_id, doc_rev, content)
+        doc = self._factory(doc_id, doc_rev, content)
+        if check_for_conflicts:
+            doc.has_conflicts = (doc.doc_id in self._conflicts)
+        return doc
 
     def _has_conflicts(self, doc_id):
         return doc_id in self._conflicts
 
     def get_doc(self, doc_id, include_deleted=False):
-        doc = self._get_doc(doc_id)
+        doc = self._get_doc(doc_id, check_for_conflicts=True)
         if doc is None:
             return None
         if doc.is_tombstone() and not include_deleted:
             return None
-        doc.has_conflicts = (doc.doc_id in self._conflicts)
         return doc
 
     def get_all_docs(self, include_deleted=False):

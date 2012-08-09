@@ -292,16 +292,27 @@ class SQLiteDatabase(CommonBackend):
                   " ORDER BY generation")
         return c.fetchall()
 
-    def _get_doc(self, doc_id):
+    def _get_doc(self, doc_id, check_for_conflicts=False):
         """Get just the document content, without fancy handling."""
         c = self._db_handle.cursor()
-        c.execute("SELECT doc_rev, content FROM document WHERE doc_id = ?",
-                  (doc_id,))
+        if check_for_conflicts:
+            c.execute(
+                "SELECT document.doc_rev, document.content, "
+                "count(conflicts.doc_rev) FROM document LEFT OUTER JOIN "
+                "conflicts ON conflicts.doc_id = document.doc_id WHERE "
+                "document.doc_id = ? GROUP BY document.doc_id, "
+                "document.doc_rev, document.content;", (doc_id,))
+        else:
+            c.execute(
+                "SELECT doc_rev, content, 0 FROM document WHERE doc_id = ?",
+                (doc_id,))
         val = c.fetchone()
         if val is None:
             return None
-        doc_rev, content = val
-        return self._factory(doc_id, doc_rev, content)
+        doc_rev, content, conflicts = val
+        doc = self._factory(doc_id, doc_rev, content)
+        doc.has_conflicts = conflicts > 0
+        return doc
 
     def _has_conflicts(self, doc_id):
         c = self._db_handle.cursor()
@@ -314,13 +325,11 @@ class SQLiteDatabase(CommonBackend):
             return True
 
     def get_doc(self, doc_id, include_deleted=False):
-        doc = self._get_doc(doc_id)
+        doc = self._get_doc(doc_id, check_for_conflicts=True)
         if doc is None:
             return None
         if doc.is_tombstone() and not include_deleted:
             return None
-        # TODO: A doc which appears deleted could still have conflicts...
-        doc.has_conflicts = self._has_conflicts(doc.doc_id)
         return doc
 
     def get_all_docs(self, include_deleted=False):
@@ -328,12 +337,18 @@ class SQLiteDatabase(CommonBackend):
         generation = self._get_generation()
         results = []
         c = self._db_handle.cursor()
-        c.execute("SELECT doc_id, doc_rev, content FROM document;")
+        c.execute(
+            "SELECT document.doc_id, document.doc_rev, document.content, "
+            "count(conflicts.doc_rev) FROM document LEFT OUTER JOIN conflicts "
+            "ON conflicts.doc_id = document.doc_id GROUP BY document.doc_id, "
+            "document.doc_rev, document.content;")
         rows = c.fetchall()
-        for doc_id, doc_rev, content in rows:
+        for doc_id, doc_rev, content, conflicts in rows:
             if content is None and not include_deleted:
                 continue
-            results.append(self._factory(doc_id, doc_rev, content))
+            doc = self._factory(doc_id, doc_rev, content)
+            doc.has_conflicts = conflicts > 0
+            results.append(doc)
         return (generation, results)
 
     def put_doc(self, doc):
@@ -342,9 +357,9 @@ class SQLiteDatabase(CommonBackend):
         self._check_doc_id(doc.doc_id)
         self._check_doc_size(doc)
         with self._db_handle:
-            if self._has_conflicts(doc.doc_id):
+            old_doc = self._get_doc(doc.doc_id, check_for_conflicts=True)
+            if old_doc and old_doc.has_conflicts:
                 raise errors.ConflictedDoc()
-            old_doc = self._get_doc(doc.doc_id)
             if old_doc and doc.rev is None and old_doc.is_tombstone():
                 new_rev = self._allocate_doc_rev(old_doc.rev)
             else:
@@ -429,14 +444,14 @@ class SQLiteDatabase(CommonBackend):
 
     def delete_doc(self, doc):
         with self._db_handle:
-            old_doc = self._get_doc(doc.doc_id)
+            old_doc = self._get_doc(doc.doc_id, check_for_conflicts=True)
             if old_doc is None:
                 raise errors.DocumentDoesNotExist
             if old_doc.rev != doc.rev:
                 raise errors.RevisionConflict()
             if old_doc.is_tombstone():
                 raise errors.DocumentAlreadyDeleted
-            if self._has_conflicts(doc.doc_id):
+            if old_doc.has_conflicts:
                 raise errors.ConflictedDoc()
             new_rev = self._allocate_doc_rev(doc.rev)
             doc.rev = new_rev
