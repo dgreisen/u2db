@@ -617,8 +617,7 @@ class SQLiteDatabase(CommonBackend):
         assert value[-1] == '*'
         return value[:-1]
 
-    def get_from_index(self, index_name, *key_values):
-        definition = self._get_index_definition(index_name)
+    def _format_query(self, definition, key_values):
         # First, build the definition. We join the document_fields table
         # against itself, as many times as the 'width' of our definition.
         # We then do a query for each key_value, one-at-a-time.
@@ -636,7 +635,6 @@ class SQLiteDatabase(CommonBackend):
         like_where = [novalue_where[i]
                       + (" AND d%d.value LIKE ? ESCAPE '.'" % (i,))
                       for i in range(len(definition))]
-        c = self._db_handle.cursor()
         is_wildcard = False
         # Merge the lists together, so that:
         # [field1, field2, field3], [val1, val2, val3]
@@ -644,8 +642,6 @@ class SQLiteDatabase(CommonBackend):
         # (field1, val1, field2, val2, field3, val3)
         args = []
         where = []
-        if len(key_values) != len(definition):
-            raise errors.InvalidValueForIndex()
         for idx, (field, value) in enumerate(zip(definition, key_values)):
             args.append(field)
             if value.endswith('*'):
@@ -671,6 +667,14 @@ class SQLiteDatabase(CommonBackend):
                 ', '.join(tables), ' AND '.join(where),
                 ', '.join(
                     ['d%d.value' % i for i in range(len(definition))])))
+        return statement, args
+
+    def get_from_index(self, index_name, *key_values):
+        definition = self._get_index_definition(index_name)
+        if len(key_values) != len(definition):
+            raise errors.InvalidValueForIndex()
+        statement, args = self._format_query(definition, key_values)
+        c = self._db_handle.cursor()
         try:
             c.execute(statement, tuple(args))
         except dbapi2.OperationalError, e:
@@ -679,10 +683,7 @@ class SQLiteDatabase(CommonBackend):
         res = c.fetchall()
         return [self._factory(r[0], r[1], r[2]) for r in res]
 
-    def get_range_from_index(self, index_name, start_value=None,
-                             end_value=None):
-        """Return all documents with key values in the specified range."""
-        definition = self._get_index_definition(index_name)
+    def _format_range_query(self, definition, start_value, end_value):
         tables = ["document_fields d%d" % i for i in range(len(definition))]
         novalue_where = [
             "d.doc_id = d%d.doc_id AND d%d.field_name = ?" % (i, i) for i in
@@ -761,6 +762,14 @@ class SQLiteDatabase(CommonBackend):
                 ' AND '.join(where),
                 ', '.join(
                     ['d%d.value' % i for i in range(len(definition))])))
+        return statement, args
+
+    def get_range_from_index(self, index_name, start_value=None,
+                             end_value=None):
+        """Return all documents with key values in the specified range."""
+        definition = self._get_index_definition(index_name)
+        statement, args = self._format_range_query(
+            definition, start_value, end_value)
         c = self._db_handle.cursor()
         try:
             c.execute(statement, tuple(args))
