@@ -603,15 +603,6 @@ class SQLiteDatabase(CommonBackend):
         return fields
 
     @staticmethod
-    def _transform_glob(value, escape_char='.'):
-        """Transform the given glob value into a valid LIKE statement."""
-        to_escape = [escape_char, '%', '_']
-        for esc in to_escape:
-            value = value.replace(esc, escape_char + esc)
-        assert value[-1] == '*'
-        return value[:-1] + '%'
-
-    @staticmethod
     def _strip_glob(value):
         """Remove the trailing * from a value."""
         assert value[-1] == '*'
@@ -633,7 +624,7 @@ class SQLiteDatabase(CommonBackend):
                        + (" AND d%d.value = ?" % (i,))
                        for i in range(len(definition))]
         like_where = [novalue_where[i]
-                      + (" AND d%d.value LIKE ? ESCAPE '.'" % (i,))
+                      + (" AND d%d.value GLOB ?" % (i,))
                       for i in range(len(definition))]
         is_wildcard = False
         # Merge the lists together, so that:
@@ -654,7 +645,7 @@ class SQLiteDatabase(CommonBackend):
                         # another wildcard
                         raise errors.InvalidGlobbing
                     where.append(like_where[idx])
-                    args.append(self._transform_glob(value))
+                    args.append(value)
                 is_wildcard = True
             else:
                 if is_wildcard:
@@ -693,9 +684,8 @@ class SQLiteDatabase(CommonBackend):
             range(len(definition))]
         like_where = [
             novalue_where[i] + (
-                " AND (d%d.value < ? OR d%d.value LIKE ? ESCAPE '.')" %
-                (i, i))
-            for i in range(len(definition))]
+                " AND (d%d.value < ? OR d%d.value GLOB ?)" % (i, i)) for i in
+            range(len(definition))]
         range_where_lower = [
             novalue_where[i] + (" AND d%d.value >= ?" % (i,)) for i in
             range(len(definition))]
@@ -748,7 +738,7 @@ class SQLiteDatabase(CommonBackend):
                             raise errors.InvalidGlobbing
                         where.append(like_where[idx])
                         args.append(self._strip_glob(value))
-                        args.append(self._transform_glob(value))
+                        args.append(value)
                     is_wildcard = True
                 else:
                     if is_wildcard:
