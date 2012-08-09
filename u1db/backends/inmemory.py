@@ -155,7 +155,9 @@ class InMemoryDatabase(CommonBackend):
         for doc_id, (doc_rev, content) in self._docs.items():
             if content is None and not include_deleted:
                 continue
-            results.append(self._factory(doc_id, doc_rev, content))
+            doc = self._factory(doc_id, doc_rev, content)
+            doc.has_conflicts = self._has_conflicts(doc_id)
+            results.append(doc)
         return (generation, results)
 
     def get_doc_conflicts(self, doc_id):
