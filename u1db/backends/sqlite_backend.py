@@ -653,11 +653,11 @@ class SQLiteDatabase(CommonBackend):
                 where.append(exact_where[idx])
                 args.append(value)
         statement = (
-            "SELECT d.doc_id, d.doc_rev, d.content FROM document d, %s "
-            "WHERE %s ORDER BY %s;" % (
-                ', '.join(tables), ' AND '.join(where),
-                ', '.join(
-                    ['d%d.value' % i for i in range(len(definition))])))
+            "SELECT d.doc_id, d.doc_rev, d.content, count(c.doc_rev) FROM "
+            "document d, %s LEFT OUTER JOIN conflicts c ON c.doc_id = "
+            "d.doc_id WHERE %s GROUP BY d.doc_id, d.doc_rev, d.content ORDER "
+            "BY %s;" % (', '.join(tables), ' AND '.join(where), ', '.join(
+                ['d%d.value' % i for i in range(len(definition))])))
         return statement, args
 
     def get_from_index(self, index_name, *key_values):
@@ -746,12 +746,11 @@ class SQLiteDatabase(CommonBackend):
                     where.append(range_where_upper[idx])
                     args.append(value)
         statement = (
-            "SELECT d.doc_id, d.doc_rev, d.content FROM document d, %s "
-            "WHERE %s ORDER BY %s;" % (
-                ', '.join(tables),
-                ' AND '.join(where),
-                ', '.join(
-                    ['d%d.value' % i for i in range(len(definition))])))
+            "SELECT d.doc_id, d.doc_rev, d.content, count(c.doc_rev) FROM "
+            "document d, %s LEFT OUTER JOIN conflicts c ON c.doc_id = "
+            "d.doc_id WHERE %s GROUP BY d.doc_id, d.doc_rev, d.content ORDER "
+            "BY %s;" % (', '.join(tables), ' AND '.join(where), ', '.join(
+                ['d%d.value' % i for i in range(len(definition))])))
         return statement, args
 
     def get_range_from_index(self, index_name, start_value=None,

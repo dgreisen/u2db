@@ -392,30 +392,36 @@ class TestSQLitePartialExpandDatabase(tests.TestCase):
 
     def test__format_query(self):
         self.assertFormatQueryEquals(
-            "SELECT d.doc_id, d.doc_rev, d.content FROM document d, "
-            "document_fields d0 WHERE d.doc_id = d0.doc_id AND d0.field_name "
-            "= ? AND d0.value = ? ORDER BY d0.value;", ["key1", "a"],
+            "SELECT d.doc_id, d.doc_rev, d.content, count(c.doc_rev) FROM "
+            "document d, document_fields d0 LEFT OUTER JOIN conflicts c ON "
+            "c.doc_id = d.doc_id WHERE d.doc_id = d0.doc_id AND d0.field_name "
+            "= ? AND d0.value = ? GROUP BY d.doc_id, d.doc_rev, d.content "
+            "ORDER BY d0.value;", ["key1", "a"],
             ["key1"], ["a"])
 
     def test__format_query2(self):
         self.assertFormatQueryEquals(
-            'SELECT d.doc_id, d.doc_rev, d.content FROM document d, '
-            'document_fields d0, document_fields d1, document_fields d2 WHERE '
-            'd.doc_id = d0.doc_id AND d0.field_name = ? AND d0.value = ? AND '
-            'd.doc_id = d1.doc_id AND d1.field_name = ? AND d1.value = ? AND '
-            'd.doc_id = d2.doc_id AND d2.field_name = ? AND d2.value = ? '
-            'ORDER BY d0.value, d1.value, d2.value;',
+            'SELECT d.doc_id, d.doc_rev, d.content, count(c.doc_rev) FROM '
+            'document d, document_fields d0, document_fields d1, '
+            'document_fields d2 LEFT OUTER JOIN conflicts c ON c.doc_id = '
+            'd.doc_id WHERE d.doc_id = d0.doc_id AND d0.field_name = ? AND '
+            'd0.value = ? AND d.doc_id = d1.doc_id AND d1.field_name = ? AND '
+            'd1.value = ? AND d.doc_id = d2.doc_id AND d2.field_name = ? AND '
+            'd2.value = ? GROUP BY d.doc_id, d.doc_rev, d.content ORDER BY '
+            'd0.value, d1.value, d2.value;',
             ["key1", "a", "key2", "b", "key3", "c"],
             ["key1", "key2", "key3"], ["a", "b", "c"])
 
     def test__format_query_wildcard(self):
         self.assertFormatQueryEquals(
-            'SELECT d.doc_id, d.doc_rev, d.content FROM document d, '
-            'document_fields d0, document_fields d1, document_fields d2 WHERE '
-            'd.doc_id = d0.doc_id AND d0.field_name = ? AND d0.value = ? AND '
-            'd.doc_id = d1.doc_id AND d1.field_name = ? AND d1.value GLOB ? '
-            'AND d.doc_id = d2.doc_id AND d2.field_name = ? AND d2.value NOT '
-            'NULL ORDER BY d0.value, d1.value, d2.value;',
+            'SELECT d.doc_id, d.doc_rev, d.content, count(c.doc_rev) FROM '
+            'document d, document_fields d0, document_fields d1, '
+            'document_fields d2 LEFT OUTER JOIN conflicts c ON c.doc_id = '
+            'd.doc_id WHERE d.doc_id = d0.doc_id AND d0.field_name = ? AND '
+            'd0.value = ? AND d.doc_id = d1.doc_id AND d1.field_name = ? AND '
+            'd1.value GLOB ? AND d.doc_id = d2.doc_id AND d2.field_name = ? '
+            'AND d2.value NOT NULL GROUP BY d.doc_id, d.doc_rev, d.content '
+            'ORDER BY d0.value, d1.value, d2.value;',
             ["key1", "a", "key2", "b*", "key3"], ["key1", "key2", "key3"],
             ["a", "b*", "*"])
 
@@ -428,52 +434,60 @@ class TestSQLitePartialExpandDatabase(tests.TestCase):
 
     def test__format_range_query(self):
         self.assertFormatRangeQueryEquals(
-            'SELECT d.doc_id, d.doc_rev, d.content FROM document d, '
-            'document_fields d0, document_fields d1, document_fields d2 WHERE '
-            'd.doc_id = d0.doc_id AND d0.field_name = ? AND d0.value >= ? AND '
-            'd.doc_id = d1.doc_id AND d1.field_name = ? AND d1.value >= ? AND '
-            'd.doc_id = d2.doc_id AND d2.field_name = ? AND d2.value >= ? AND '
-            'd.doc_id = d0.doc_id AND d0.field_name = ? AND d0.value <= ? AND '
-            'd.doc_id = d1.doc_id AND d1.field_name = ? AND d1.value <= ? AND '
-            'd.doc_id = d2.doc_id AND d2.field_name = ? AND d2.value <= ? '
-            'ORDER BY d0.value, d1.value, d2.value;',
+            'SELECT d.doc_id, d.doc_rev, d.content, count(c.doc_rev) FROM '
+            'document d, document_fields d0, document_fields d1, '
+            'document_fields d2 LEFT OUTER JOIN conflicts c ON c.doc_id = '
+            'd.doc_id WHERE d.doc_id = d0.doc_id AND d0.field_name = ? AND '
+            'd0.value >= ? AND d.doc_id = d1.doc_id AND d1.field_name = ? AND '
+            'd1.value >= ? AND d.doc_id = d2.doc_id AND d2.field_name = ? AND '
+            'd2.value >= ? AND d.doc_id = d0.doc_id AND d0.field_name = ? AND '
+            'd0.value <= ? AND d.doc_id = d1.doc_id AND d1.field_name = ? AND '
+            'd1.value <= ? AND d.doc_id = d2.doc_id AND d2.field_name = ? AND '
+            'd2.value <= ? GROUP BY d.doc_id, d.doc_rev, d.content ORDER BY '
+            'd0.value, d1.value, d2.value;',
             ['key1', 'a', 'key2', 'b', 'key3', 'c', 'key1', 'p', 'key2', 'q',
              'key3', 'r'],
             ["key1", "key2", "key3"], ["a", "b", "c"], ["p", "q", "r"])
 
     def test__format_range_query_no_start(self):
         self.assertFormatRangeQueryEquals(
-            'SELECT d.doc_id, d.doc_rev, d.content FROM document d, '
-            'document_fields d0, document_fields d1, document_fields d2 WHERE '
-            'd.doc_id = d0.doc_id AND d0.field_name = ? AND d0.value <= ? AND '
-            'd.doc_id = d1.doc_id AND d1.field_name = ? AND d1.value <= ? AND '
-            'd.doc_id = d2.doc_id AND d2.field_name = ? AND d2.value <= ? '
-            'ORDER BY d0.value, d1.value, d2.value;',
+            'SELECT d.doc_id, d.doc_rev, d.content, count(c.doc_rev) FROM '
+            'document d, document_fields d0, document_fields d1, '
+            'document_fields d2 LEFT OUTER JOIN conflicts c ON c.doc_id = '
+            'd.doc_id WHERE d.doc_id = d0.doc_id AND d0.field_name = ? AND '
+            'd0.value <= ? AND d.doc_id = d1.doc_id AND d1.field_name = ? AND '
+            'd1.value <= ? AND d.doc_id = d2.doc_id AND d2.field_name = ? AND '
+            'd2.value <= ? GROUP BY d.doc_id, d.doc_rev, d.content ORDER BY '
+            'd0.value, d1.value, d2.value;',
             ['key1', 'a', 'key2', 'b', 'key3', 'c'],
             ["key1", "key2", "key3"], None, ["a", "b", "c"])
 
     def test__format_range_query_no_end(self):
         self.assertFormatRangeQueryEquals(
-            'SELECT d.doc_id, d.doc_rev, d.content FROM document d, '
-            'document_fields d0, document_fields d1, document_fields d2 WHERE '
-            'd.doc_id = d0.doc_id AND d0.field_name = ? AND d0.value >= ? AND '
-            'd.doc_id = d1.doc_id AND d1.field_name = ? AND d1.value >= ? AND '
-            'd.doc_id = d2.doc_id AND d2.field_name = ? AND d2.value >= ? '
-            'ORDER BY d0.value, d1.value, d2.value;',
+            'SELECT d.doc_id, d.doc_rev, d.content, count(c.doc_rev) FROM '
+            'document d, document_fields d0, document_fields d1, '
+            'document_fields d2 LEFT OUTER JOIN conflicts c ON c.doc_id = '
+            'd.doc_id WHERE d.doc_id = d0.doc_id AND d0.field_name = ? AND '
+            'd0.value >= ? AND d.doc_id = d1.doc_id AND d1.field_name = ? AND '
+            'd1.value >= ? AND d.doc_id = d2.doc_id AND d2.field_name = ? AND '
+            'd2.value >= ? GROUP BY d.doc_id, d.doc_rev, d.content ORDER BY '
+            'd0.value, d1.value, d2.value;',
             ['key1', 'a', 'key2', 'b', 'key3', 'c'],
             ["key1", "key2", "key3"], ["a", "b", "c"], None)
 
     def test__format_range_query_wildcard(self):
         self.assertFormatRangeQueryEquals(
-            'SELECT d.doc_id, d.doc_rev, d.content FROM document d, '
-            'document_fields d0, document_fields d1, document_fields d2 WHERE '
-            'd.doc_id = d0.doc_id AND d0.field_name = ? AND d0.value >= ? AND '
-            'd.doc_id = d1.doc_id AND d1.field_name = ? AND d1.value >= ? AND '
-            'd.doc_id = d2.doc_id AND d2.field_name = ? AND d2.value NOT NULL '
-            'AND d.doc_id = d0.doc_id AND d0.field_name = ? AND d0.value <= ? '
-            'AND d.doc_id = d1.doc_id AND d1.field_name = ? AND (d1.value < ? '
-            'OR d1.value GLOB ?) AND d.doc_id = d2.doc_id AND d2.field_name = '
-            '? AND d2.value NOT NULL ORDER BY d0.value, d1.value, d2.value;',
+            'SELECT d.doc_id, d.doc_rev, d.content, count(c.doc_rev) FROM '
+            'document d, document_fields d0, document_fields d1, '
+            'document_fields d2 LEFT OUTER JOIN conflicts c ON c.doc_id = '
+            'd.doc_id WHERE d.doc_id = d0.doc_id AND d0.field_name = ? AND '
+            'd0.value >= ? AND d.doc_id = d1.doc_id AND d1.field_name = ? AND '
+            'd1.value >= ? AND d.doc_id = d2.doc_id AND d2.field_name = ? AND '
+            'd2.value NOT NULL AND d.doc_id = d0.doc_id AND d0.field_name = ? '
+            'AND d0.value <= ? AND d.doc_id = d1.doc_id AND d1.field_name = ? '
+            'AND (d1.value < ? OR d1.value GLOB ?) AND d.doc_id = d2.doc_id '
+            'AND d2.field_name = ? AND d2.value NOT NULL GROUP BY d.doc_id, '
+            'd.doc_rev, d.content ORDER BY d0.value, d1.value, d2.value;',
             ['key1', 'a', 'key2', 'b', 'key3', 'key1', 'p', 'key2', 'q', 'q*',
              'key3'],
             ["key1", "key2", "key3"], ["a", "b*", "*"], ["p", "q*", "*"])
