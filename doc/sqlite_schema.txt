@@ -397,7 +397,7 @@ Now some comparisons for how long it takes to extract documents from the
 database. We timed a loop that extracted every document from the database,
 one-at-a-time by calling ``get_doc()``. This also has the overhead of checking
 if a given document has conflicts, etc. All currently implementations also
-support ``_get_doc()`` which optionally extracts the content without checking
+support ``_get_doc()`` which extracts the content without (by default) checking
 for conflicts. Further, `Partial Expanded Fields`_ internally has a
 ``_iter_all_docs`` method that it uses when it wants to update the index data.
 This simply streams out the document content, as quickly as SQLite can produce
