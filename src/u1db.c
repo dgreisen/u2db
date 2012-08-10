@@ -1232,7 +1232,7 @@ u1db_get_all_docs(u1database *db, int include_deleted, int *generation,
         doc_id = (char *)sqlite3_column_text(statement, 0);
         revision = (char *)sqlite3_column_text(statement, 1);
         content = (char *)sqlite3_column_text(statement, 2);
-        conflicts = (int)sqlite3_column_int(statement, 3);
+        conflicts = sqlite3_column_int(statement, 3);
         if (content != NULL || include_deleted) {
             status = u1db__allocate_document(
                 doc_id, revision, content, conflicts > 0, &doc);
