@@ -33,6 +33,7 @@ from ubuntuone.platform.credentials import CredentialsManagementTool
 DONE_COLOR = QtGui.QColor(183, 183, 183)
 NOT_DONE_COLOR = QtGui.QColor(0, 0, 0)
 WHITE = QtGui.QColor(255, 255, 255)
+CONFLICT_COLOR = QtGui.QColor(255, 0, 0)
 TAG_COLORS = [
     (234, 153, 153),
     (249, 203, 156),
@@ -64,35 +65,44 @@ class UITask(QtGui.QTreeWidgetItem):
         self._bg_color = color
 
     def setData(self, column, role, value):
-        if role == QtCore.Qt.CheckStateRole:
-            if value == QtCore.Qt.Checked:
-                self.task.done = True
-            else:
-                self.task.done = False
-            self.store.save_task(self.task)
-        if role == QtCore.Qt.EditRole:
-            text = unicode(value.toString(), 'utf-8')
-            if not text:
-                # There was no text in the edit field so do nothing.
-                return
-            self.update_task_text(text)
+        if column == 0:
+            if role == QtCore.Qt.CheckStateRole:
+                if value == QtCore.Qt.Checked:
+                    self.task.done = True
+                else:
+                    self.task.done = False
+                self.store.save_task(self.task)
+            if role == QtCore.Qt.EditRole:
+                text = unicode(value.toString(), 'utf-8')
+                if not text:
+                    # There was no text in the edit field so do nothing.
+                    return
+                self.update_task_text(text)
         super(UITask, self).setData(column, role, value)
 
     def data(self, column, role):
-        if role == QtCore.Qt.EditRole:
-            return self.task.title
-        if role == QtCore.Qt.DisplayRole:
-            return self.task.title
-        if role == QtCore.Qt.FontRole:
-            font = self._font
-            font.setStrikeOut(self.task.done)
-            return font
-        if role == QtCore.Qt.BackgroundRole:
-            return self._bg_color
-        if role == QtCore.Qt.ForegroundRole:
-            return DONE_COLOR if self.task.done else NOT_DONE_COLOR
-        if role == QtCore.Qt.CheckStateRole:
-            return QtCore.Qt.Checked if self.task.done else QtCore.Qt.Unchecked
+        if column == 0:
+            if role == QtCore.Qt.FontRole:
+                font = self._font
+                font.setStrikeOut(self.task.done)
+                return font
+            if role == QtCore.Qt.BackgroundRole:
+                return self._bg_color
+            if role == QtCore.Qt.EditRole:
+                return self.task.title
+            if role == QtCore.Qt.DisplayRole:
+                return self.task.title
+            if role == QtCore.Qt.ForegroundRole:
+                return DONE_COLOR if self.task.done else NOT_DONE_COLOR
+            if role == QtCore.Qt.CheckStateRole:
+                return (
+                    QtCore.Qt.Checked if self.task.done else
+                    QtCore.Qt.Unchecked)
+        elif column == 1:
+            if role == QtCore.Qt.DisplayRole:
+                return '!' and self.task.has_conflicts or ''
+            if role == QtCore.Qt.ForegroundRole:
+                return CONFLICT_COLOR
         return super(UITask, self).data(column, role)
 
     def update_task_text(self, text):
@@ -109,21 +119,6 @@ class UITask(QtGui.QTreeWidgetItem):
         self.task.tags = list(new_tags)
         # Save the changed task to the database.
         self.store.save_task(self.task)
-
-
-class TaskDelegate(QtGui.QStyledItemDelegate):
-    """Delegate for rendering tasks."""
-
-    pen = QtGui.QPen(QtGui.QColor(102, 102, 102), 2, style=QtCore.Qt.DotLine)
-
-    def paint(self, painter, option, index):
-        # Save current state of painter before we modify anything.
-        painter.save()
-        painter.setPen(self.pen)
-        painter.drawRect(option.rect)
-        # Return painter to original stats.
-        painter.restore()
-        super(TaskDelegate, self).paint(painter, option, index)
 
 
 class Sync(QtGui.QDialog):
@@ -221,7 +216,12 @@ class Main(QtGui.QMainWindow):
         # create or update the indexes if they are not up-to-date
         self.store.initialize_db()
         # hook up the delegate
-        self.todo_list.setItemDelegate(TaskDelegate())
+        header = self.todo_list.header()
+        header.setResizeMode(0, 1)  # stretch first column
+        header.setResizeMode(1, 2)  # second column fixed
+        header.setDefaultSectionSize(20)
+
+        header.setStretchLastSection(False)
         # Initialize some variables we will use to keep track of the tags.
         self._tag_docs = defaultdict(list)
         self._tag_buttons = {}
