@@ -114,6 +114,41 @@ class UITask(QtGui.QTreeWidgetItem):
         self.store.save_task(self.task)
 
 
+class Conflicts(QtGui.QDialog):
+
+    def __init__(self, other, conflicts):
+        super(Conflicts, self).__init__()
+        self.selected_doc = None
+        uifile = os.path.join(
+            os.path.abspath(os.path.dirname(__file__)), 'conflicts.ui')
+        uic.loadUi(uifile, self)
+        self.other = other
+        self.revs = []
+        for conflict in conflicts:
+
+            self.revs.append(conflict.rev)
+
+            # XXX: this does not deserve any prizes, but it was the quickest
+            # way I could figure out to use loop variables in a 'closure' and
+            # not just get the last value everywhere.
+            def toggled(value, doc=conflict):
+                if value:
+                    self.selected_doc = doc
+
+            radio = QtGui.QRadioButton(conflict.title)
+            self.conflicts.layout().addWidget(radio)
+            if conflict.done:
+                font = radio.font()
+                font.setStrikeOut(True)
+                radio.setFont(font)
+            radio.toggled.connect(toggled)
+
+    def accept(self):
+        if self.selected_doc:
+            self.other.resolve(self.selected_doc, self.revs)
+        super(Conflicts, self).accept()
+
+
 class Sync(QtGui.QDialog):
 
     def __init__(self, other):
@@ -242,15 +277,18 @@ class Main(QtGui.QMainWindow):
             self.delete()
             return
         if event.key() == QtCore.Qt.Key_Return:
+            current = self.todo_list.currentItem()
+            if current.task.has_conflicts:
+                self.open_conflicts_window(current.task.doc_id)
+                return
             if not self.editing:
                 self.editing = True
-                self.todo_list.openPersistentEditor(
-                    self.todo_list.currentItem())
+                self.todo_list.openPersistentEditor(current)
                 return
             else:
-                self.todo_list.closePersistentEditor(
-                    self.todo_list.currentItem())
+                self.todo_list.closePersistentEditor(current)
                 self.editing = False
+                return
         super(Main, self).keyPressEvent(event)
 
     def get_tag_color(self):
@@ -269,6 +307,11 @@ class Main(QtGui.QMainWindow):
 
     def open_sync_window(self):
         window = Sync(self)
+        window.exec_()
+
+    def open_conflicts_window(self, doc_id):
+        conflicts = self.store.db.get_doc_conflicts(doc_id)
+        window = Conflicts(self, conflicts)
         window.exec_()
 
     def show_buttons(self):
@@ -327,7 +370,8 @@ class Main(QtGui.QMainWindow):
         # Wrap the task in a UITask object.
         item = UITask(
             task, self.todo_list, self.store, self.todo_list.font(), self)
-        item.setFlags(item.flags() | QtCore.Qt.ItemIsEditable)
+        if not task.has_conflicts:
+            item.setFlags(item.flags() | QtCore.Qt.ItemIsEditable)
         self.todo_list.addTopLevelItem(item)
         if not task.tags:
             return
@@ -475,6 +519,10 @@ class Main(QtGui.QMainWindow):
             syncer.sync()
         self.refresh_filter()
         self.update_status_bar("last synced: %s" % (datetime.now(),))
+
+    def resolve(self, doc, revs):
+        self.store.db.resolve_doc(doc, revs)
+        self.refresh_filter()
 
 
 if __name__ == "__main__":

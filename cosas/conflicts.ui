@@ -1,0 +1,139 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ui version="4.0">
+ <class>conflict_dialog</class>
+ <widget class="QDialog" name="conflict_dialog">
+  <property name="windowModality">
+   <enum>Qt::ApplicationModal</enum>
+  </property>
+  <property name="geometry">
+   <rect>
+    <x>0</x>
+    <y>0</y>
+    <width>329</width>
+    <height>205</height>
+   </rect>
+  </property>
+  <property name="windowTitle">
+   <string>conflicts</string>
+  </property>
+  <property name="styleSheet">
+   <string notr="true">QToolButton {
+	background-color: rgb(203,203,203);
+	border: 1px solid rgb(102, 102, 102);
+}
+
+QFrame#drop_frame{
+	border: 0px;
+	border-top: 2px dotted rgb(102,102,102);
+	border-bottom: 2px dotted rgb(102,102,102);
+}
+
+QPushButton {
+	background-color: rgb(61, 133, 198);
+	color: white;
+	border: 2px solid rgb(7, 55, 99);
+	border-radius: 6 6 px;
+	padding: 5 15 5 15 px;
+}
+
+QComboBox {
+	background-color: rgb(204, 204, 204);
+	color: black;
+	border: 2px solid rgb(102,102,102);
+	border-radius: 6 6 px;
+	padding: 5 px;
+}
+
+QFrame#buttons_frame QPushButton {
+	background-color: rgb(204, 204, 204);
+	color: black;
+	border: 2px solid rgb(102,102,102);
+	border-radius: 0px;
+}
+
+QTreeView::item{
+	border: 1px dotted rgb(102, 102, 102);
+	border-top: 0px;
+	background-color: white;
+}
+
+QLineEdit, QTextEdit {
+	background-color: white;
+	border-radius: 0;
+   border: 1px solid rgb(102,102,102);
+}
+
+* {
+	background-color: rgb(239, 239, 239);
+}
+</string>
+  </property>
+  <layout class="QVBoxLayout" name="verticalLayout">
+   <item>
+    <widget class="QGroupBox" name="conflicts">
+     <property name="title">
+      <string>Conflicting versions:</string>
+     </property>
+     <property name="alignment">
+      <set>Qt::AlignLeading|Qt::AlignLeft|Qt::AlignTop</set>
+     </property>
+     <layout class="QVBoxLayout" name="verticalLayout_3"/>
+    </widget>
+   </item>
+   <item>
+    <widget class="QDialogButtonBox" name="buttonBox">
+     <property name="sizePolicy">
+      <sizepolicy hsizetype="Expanding" vsizetype="Fixed">
+       <horstretch>0</horstretch>
+       <verstretch>0</verstretch>
+      </sizepolicy>
+     </property>
+     <property name="orientation">
+      <enum>Qt::Horizontal</enum>
+     </property>
+     <property name="standardButtons">
+      <set>QDialogButtonBox::Cancel|QDialogButtonBox::Ok</set>
+     </property>
+     <property name="centerButtons">
+      <bool>false</bool>
+     </property>
+    </widget>
+   </item>
+  </layout>
+ </widget>
+ <resources/>
+ <connections>
+  <connection>
+   <sender>buttonBox</sender>
+   <signal>accepted()</signal>
+   <receiver>conflict_dialog</receiver>
+   <slot>accept()</slot>
+   <hints>
+    <hint type="sourcelabel">
+     <x>248</x>
+     <y>254</y>
+    </hint>
+    <hint type="destinationlabel">
+     <x>157</x>
+     <y>274</y>
+    </hint>
+   </hints>
+  </connection>
+  <connection>
+   <sender>buttonBox</sender>
+   <signal>rejected()</signal>
+   <receiver>conflict_dialog</receiver>
+   <slot>reject()</slot>
+   <hints>
+    <hint type="sourcelabel">
+     <x>316</x>
+     <y>260</y>
+    </hint>
+    <hint type="destinationlabel">
+     <x>286</x>
+     <y>274</y>
+    </hint>
+   </hints>
+  </connection>
+ </connections>
+</ui>
