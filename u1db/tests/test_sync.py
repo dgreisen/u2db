@@ -816,7 +816,10 @@ class DatabaseSyncTests(tests.DatabaseBaseTests,
         self.assertTransactionLog([doc_id, doc_id], self.db1)
         self.assertGetDoc(self.db1, doc_id, doc2_rev, new_doc, True)
         self.assertGetDoc(self.db2, doc_id, doc2_rev, new_doc, False)
-        self.assertEqual([doc2], self.db1.get_from_index('test-idx', 'altval'))
+        from_idx = self.db1.get_from_index('test-idx', 'altval')[0]
+        self.assertEqual(doc2.doc_id, from_idx.doc_id)
+        self.assertEqual(doc2.rev, from_idx.rev)
+        self.assertTrue(from_idx.has_conflicts)
         self.assertEqual([], self.db1.get_from_index('test-idx', 'value'))
 
     def test_sync_sees_remote_delete_conflicted(self):
@@ -866,7 +869,10 @@ class DatabaseSyncTests(tests.DatabaseBaseTests,
         self.sync(self.db1, self.db2, trace_hook=after_whatschanged)
         self.assertEqual([True], triggered)
         self.assertGetDoc(self.db1, doc_id, doc2_rev2, content2, True)
-        self.assertEqual([doc], self.db1.get_from_index('test-idx', 'altval'))
+        from_idx = self.db1.get_from_index('test-idx', 'altval')[0]
+        self.assertEqual(doc.doc_id, from_idx.doc_id)
+        self.assertEqual(doc.rev, from_idx.rev)
+        self.assertTrue(from_idx.has_conflicts)
         self.assertEqual([], self.db1.get_from_index('test-idx', 'value'))
         self.assertEqual([], self.db1.get_from_index('test-idx', 'localval'))
 

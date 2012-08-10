@@ -30,21 +30,14 @@ from u1db.remote.http_target import HTTPSyncTarget
 from u1db.remote.http_database import HTTPDatabase
 from ubuntuone.platform.credentials import CredentialsManagementTool
 
-DONE_COLOR = QtGui.QColor(183, 183, 183)
-NOT_DONE_COLOR = QtGui.QColor(0, 0, 0)
-WHITE = QtGui.QColor(255, 255, 255)
-CONFLICT_COLOR = QtGui.QColor(255, 0, 0)
+FOREGROUND = QtGui.QColor('#1d1f21')
+DONE = QtGui.QColor('#969896')
+BACKGROUND = '#FFFFFF'
+CONFLICT_COLOR = QtGui.QColor('#A54242')
 TAG_COLORS = [
-    (234, 153, 153),
-    (249, 203, 156),
-    (255, 229, 153),
-    (182, 215, 168),
-    (162, 196, 201),
-    (164, 194, 244),
-    (221, 126, 107),
-    (159, 197, 232),
-    (180, 167, 214),
-    (213, 166, 189)]
+    '#8C9440', '#de935f', '#5F819D', '#85678F',
+    '#5E8D87', '#cc6666', '#b5bd68', '#f0c674',
+    '#81a2be', '#b294bb']
 U1_URL = 'https://u1db.one.ubuntu.com/~/cosas'
 TIMEOUT = 1000 * 0.5 * 60 * 60  # 30 minutes
 
@@ -57,7 +50,7 @@ class UITask(QtGui.QTreeWidgetItem):
         self.task = task
         # If the task is done, check off the list item.
         self.store = store
-        self._bg_color = WHITE
+        self._bg_color = BACKGROUND
         self._font = font
         self.main_window = main_window
 
@@ -81,28 +74,28 @@ class UITask(QtGui.QTreeWidgetItem):
         super(UITask, self).setData(column, role, value)
 
     def data(self, column, role):
+        if role == QtCore.Qt.BackgroundRole:
+            return self._bg_color
+        if role == QtCore.Qt.ForegroundRole:
+            if self.task.has_conflicts:
+                return CONFLICT_COLOR
+            return DONE if self.task.done else FOREGROUND
         if column == 0:
             if role == QtCore.Qt.FontRole:
                 font = self._font
                 font.setStrikeOut(self.task.done)
                 return font
-            if role == QtCore.Qt.BackgroundRole:
-                return self._bg_color
             if role == QtCore.Qt.EditRole:
                 return self.task.title
             if role == QtCore.Qt.DisplayRole:
                 return self.task.title
-            if role == QtCore.Qt.ForegroundRole:
-                return DONE_COLOR if self.task.done else NOT_DONE_COLOR
             if role == QtCore.Qt.CheckStateRole:
                 return (
                     QtCore.Qt.Checked if self.task.done else
                     QtCore.Qt.Unchecked)
         elif column == 1:
             if role == QtCore.Qt.DisplayRole:
-                return '!' and self.task.has_conflicts or ''
-            if role == QtCore.Qt.ForegroundRole:
-                return CONFLICT_COLOR
+                return '!' if self.task.has_conflicts else ''
         return super(UITask, self).data(column, role)
 
     def update_task_text(self, text):
@@ -264,7 +257,7 @@ class Main(QtGui.QMainWindow):
         """Get a color number to use for a new tag."""
         # Remove a color from the list of available ones and return it.
         if not self.colors:
-            return WHITE
+            return BACKGROUND
         return self.colors.pop(0)
 
     def connect_events(self):
@@ -345,7 +338,7 @@ class Main(QtGui.QMainWindow):
         if task.tags:
             item.set_color(self._tag_colors[task.tags[0]]['qcolor'])
         else:
-            item.set_color(WHITE)
+            item.set_color(BACKGROUND)
 
     def add_tag(self, doc_id, tag):
         """Create a link between the task with id doc_id and the tag, and
@@ -361,11 +354,11 @@ class Main(QtGui.QMainWindow):
         # Add a tag filter button for this tag to the UI.
         button = QtGui.QPushButton(tag)
         color = self.get_tag_color()
-        qcolor = QtGui.QColor(*color)
+        qcolor = QtGui.QColor(color)
         self._tag_colors[tag] = {
             'color_tuple': color,
             'qcolor': qcolor}
-        button.setStyleSheet('background-color: rgb(%d, %d, %d)' % color)
+        button.setStyleSheet('background-color: %s' % color)
         button._todo_tag = tag
         # Make the button an on/off button.
         button.setCheckable(True)
@@ -426,7 +419,7 @@ class Main(QtGui.QMainWindow):
         if new_tags:
             item.set_color(self._tag_colors[list(new_tags)[0]]['qcolor'])
             return
-        item.set_color(WHITE)
+        item.set_color(BACKGROUND)
 
     def get_ubuntuone_credentials(self):
         cmt = CredentialsManagementTool()
