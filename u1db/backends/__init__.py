@@ -73,11 +73,10 @@ class CommonBackend(u1db.Database):
         """
         raise NotImplementedError(self._get_generation_info)
 
-    def _get_doc(self, doc_id):
+    def _get_doc(self, doc_id, check_for_conflicts=False):
         """Extract the document from storage.
 
-        This can return None if the document doesn't exist, it should not check
-        if there are any conflicts, etc.
+        This can return None if the document doesn't exist.
         """
         raise NotImplementedError(self._get_doc)
 
@@ -110,11 +109,10 @@ class CommonBackend(u1db.Database):
     def get_docs(self, doc_ids, check_for_conflicts=True,
                  include_deleted=False):
         for doc_id in doc_ids:
-            doc = self._get_doc(doc_id)
+            doc = self._get_doc(
+                doc_id, check_for_conflicts=check_for_conflicts)
             if doc.is_tombstone() and not include_deleted:
                 continue
-            if check_for_conflicts:
-                doc.has_conflicts = self._has_conflicts(doc_id)
             yield doc
 
     def _get_trans_id_for_gen(self, generation):
