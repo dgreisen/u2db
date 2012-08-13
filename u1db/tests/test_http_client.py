@@ -289,6 +289,13 @@ class TestHTTPClientBase(tests.TestCaseWithServer):
                           {'status': "403 Forbidden",
                            'response': {"error": "user quota exceeded"}})
 
+    def test_user_quota_exceeded(self):
+        cli = self.getClient()
+        self.assertRaises(errors.SubscriptionNeeded,
+                          cli._request_json, 'POST', ['error'], {},
+                          {'status': "403 Forbidden",
+                           'response': {"error": "user needs subscription"}})
+
     def test_generic_u1db_error(self):
         cli = self.getClient()
         self.assertRaises(errors.U1DBError,
