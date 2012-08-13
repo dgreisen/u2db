@@ -119,12 +119,14 @@ Note that ``get_docs()`` returns the documents in the order specified.
 Document functions
 ^^^^^^^^^^^^^^^^^^
 
- * create_doc(dictionary, optional_doc_id)
- * put_doc(Document)
- * get_doc(doc_id)
- * get_docs(list_of_doc_ids)
- * delete_doc(Document)
- * whats_changed(generation)
+ * :py:meth:`~u1db.Database.create_doc`
+ * :py:meth:`~u1db.Database.create_doc_from_json`
+ * :py:meth:`~u1db.Database.put_doc`
+ * :py:meth:`~u1db.Database.get_doc`
+ * :py:meth:`~u1db.Database.get_docs`
+ * :py:meth:`~u1db.Database.get_all_docs`
+ * :py:meth:`~u1db.Database.delete_doc`
+ * :py:meth:`~u1db.Database.whats_changed`
 
 Querying
 --------
@@ -292,12 +294,12 @@ with "J", and so will return the documents with ids: 'jw', 'jb', 'jm'.
 Index functions
 ^^^^^^^^^^^^^^^
 
- * create_index(name, index_expression)
- * delete_index(name)
- * get_from_index(name, index_key)
- * get_range_from_index(name, start_key, end_key)
- * get_keys_from_index(name)
- * list_indexes()
+ * :py:meth:`~u1db.Database.create_index`
+ * :py:meth:`~u1db.Database.delete_index`
+ * :py:meth:`~u1db.Database.get_from_index`
+ * :py:meth:`~u1db.Database.get_range_from_index`
+ * :py:meth:`~u1db.Database.get_keys_from_index`
+ * :py:meth:`~u1db.Database.list_indexes`
 
 Synchronizing
 -------------
@@ -332,7 +334,7 @@ to resolve and set the final resolved content.
 Synchronizing functions
 ^^^^^^^^^^^^^^^^^^^^^^^
 
- * sync(URL)
- * get_doc_conflicts(doc_id)
- * resolve_doc(doc, list_of_conflicted_revisions)
+ * :py:meth:`~u1db.Database.sync`
+ * :py:meth:`~u1db.Database.get_doc_conflicts`
+ * :py:meth:`~u1db.Database.resolve_doc`
 
