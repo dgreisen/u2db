@@ -278,7 +278,7 @@ class Main(QtGui.QMainWindow):
             return
         if event.key() == QtCore.Qt.Key_Return:
             current = self.todo_list.currentItem()
-            if current.task.has_conflicts:
+            if current and current.task and current.task.has_conflicts:
                 self.open_conflicts_window(current.task.doc_id)
                 return
             if not self.editing:
