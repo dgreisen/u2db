@@ -1,11 +1,11 @@
 .. _conflicts:
 
-Conflicts, syncing, and revisions
-#################################
+Conflicts, Synchronization, and Revisions
+#########################################
 
 
 Conflicts
--------------
+---------
 
 If two u1dbs are synced, and then the same document is changed in different
 ways in each u1db, and then they are synced again, there will be a *conflict*.
@@ -52,8 +52,49 @@ then sync, and the sync updates that document, then re-putting that document
 with modified content will also fail, because the revision is not the current
 one. This will raise a ``RevisionConflict`` error.
 
+Synchronization
+---------------
+
+Synchronization between two u1db replicas consists of the following steps:
+
+    1. The source replica asks the target replica for the information it has
+       stored about the last time these two replicas were synchronized (If
+       ever.)
+
+    2. The source replica validates that its information regarding the last
+       synchronization is consistent with the target's information, and
+       raises an error if not. (This could happen for instance if one of the
+       replicas was lost and restored from backup, or if a user inadvertently
+       tries to synchronize a copied database.)
+
+    3. The source replica generates a list of changes since the last change the
+       target replica knows of.
+
+    4. The source replica checks what the last change is it knows about on the
+       target replica.
+
+    5. If there have been no changes on either replica that the other side has
+       not seen, the synchronization stops here.
+
+    6. The source replica sends the changed documents to the target, along with
+       what the latest change is that it knows about on the target replica.
+
+    7. The target processes the changed documents, and records the source
+       replica's latest change.
+
+    8. The target responds with the documents that have changes that the source
+       does not yet know about.
+
+    9. The source processes the changed documents, and records the target
+       replica's latest change.
+
+    10. If the source has seen no changes unrelated to the synchroniztion
+        during this whole process, it now sends the target what its latest
+        change is, so that the next synchronization does not have to consider
+        changes that were the result of this one.
+
 Revisions
-----------
+---------
 
 As an app developer, you should treat a ``Document``'s ``revision`` as an
 opaque cookie; do not try and deconstruct it or edit it. It is for your u1db
@@ -102,7 +143,3 @@ by:
      ``rev_resol(r) = max(rev1(r)...revN(r))`` for all ``r`` in ``R``, with ``r != rev_resol``
 
      ``rev_resol(replica_resol) = max(rev1(replica_resol)...revN(replica_resol))+1``
-
-
-Syncing
--------
