@@ -93,6 +93,27 @@ Synchronization between two u1db replicas consists of the following steps:
         change is, so that the next synchronization does not have to consider
         changes that were the result of this one.
 
+The synchronization information stored by the replica for each other replica it
+has ever synchronized with consists of:
+
+    - The replica id of the other replica. (Which should be globally unique
+      identifier to distinguish database replicas from one another.)
+
+    - The last known generation and transaction id of the other replica.
+
+    - The generation and transaction id of *this* replica at the time of the
+      most recent succesfully completed synchronization with the other replica.
+
+The generation is a counter that increases with each change to the database.
+The transaction id is a unique random string that is paired with a particular
+generation to identify cases where one of the replicas has been copied or
+reverted to an earlier state by a restore from backup, and then diverged from
+the known state on the other side of the synchronization.
+
+Implementations are not required to use transaction ids. If they don't they
+should return an empty string when asked for a transaction ids. All
+implementations should accept an empty string as a valid transaction id.
+
 Revisions
 ---------
 
@@ -107,30 +128,30 @@ To keep track of document revisions u1db uses vector versions. Each
 synchronized instance of the same database is called a replica and has a unique
 identifier (``replica uid``) assigned to it (currently the reference
 implementation by default uses UUID4s for that); a revision is a mapping
-between ``replica uids`` and ``edit numbers``: ``rev
-= <replica_uid:edit_num...>``, or using a functional notation
-``rev(replica_uid) = edit_num``. The current concrete format is a string built
-out of each ``replica_uid`` concatenated with ``':'`` and with its edit number
-in decimal, sorted lexicographically by ``replica_uid`` and then all joined
-with ``'|'``, for example: ``'replicaA:1|replicaB:3'`` . Absent ``replica
-uids`` in a revision mapping are implicitly mapped to edit number 0.
+between ``replica uids`` and ``generations``: ``rev
+= <replica_uid:generation...>``, or using a functional notation
+``rev(replica_uid) = generation``. The current concrete format is a string
+built out of each ``replica_uid`` concatenated with ``':'`` and with its
+generation in decimal, sorted lexicographically by ``replica_uid`` and then all
+joined with ``'|'``, for example: ``'replicaA:1|replicaB:3'`` . Absent
+``replica uids`` in a revision mapping are implicitly mapped to generation 0.
 
 The new revision of a document modified locally in a replica, is the
-modification of the old revision where the edit number mapped for the editing
+modification of the old revision where the generation mapped to the editing
 ``replica uid`` is increased by 1.
 
 When syncing one needs to establish whether an incoming revision is newer than
 the current one or in conflict. A revision
 
-``rev1 = <replica_1i:edit_num1i|i=1..n>``
+``rev1 = <replica_1i:generation1i|i=1..n>``
 
 is newer than a different
 
-``rev2 = <replica_2j:edit_num2j|j=1..m>``
+``rev2 = <replica_2j:generation2j|j=1..m>``
 
-if for all ``i=1..n``, ``rev2(replica_1i) <= edit_num1i``
+if for all ``i=1..n``, ``rev2(replica_1i) <= generation1i``
 
-and for all ``j=1..m``, ``rev1(replica_2j) >= edit_num2j``.
+and for all ``j=1..m``, ``rev1(replica_2j) >= generation2j``.
 
 Two revisions which are not equal nor one newer than the other are in conflict.
 
