@@ -96,12 +96,10 @@ Synchronization between two u1db replicas consists of the following steps:
 The synchronization information stored by the replica for each other replica it
 has ever synchronized with consists of:
 
-    - The replica id of the other replica. (Which should be globally unique
+    * The replica id of the other replica. (Which should be globally unique
       identifier to distinguish database replicas from one another.)
-
-    - The last known generation and transaction id of the other replica.
-
-    - The generation and transaction id of *this* replica at the time of the
+    * The last known generation and transaction id of the other replica.
+    * The generation and transaction id of *this* replica at the time of the
       most recent succesfully completed synchronization with the other replica.
 
 The generation is a counter that increases with each change to the database.

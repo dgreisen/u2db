@@ -145,7 +145,7 @@ Given a database with the following documents::
     {"firstname": "Alan", "surname", "Hansen", "position": "defence"} ID ah
     {"firstname": "John", "surname", "Wayne", "position": "filmstar"} ID jw
 
-an index expression of ``["firstname"]`` will create an index that looks
+an index expression of ``"firstname"`` will create an index that looks
 (conceptually) like this
 
  ====================== ===========
@@ -191,9 +191,9 @@ gives the index key "hello", and therefore an entry in the index of
  ========= ======
 
 **Name a list.** If an index expression names a field whose contents is a list
-of strings, the doc will have multiple entries in the index, one per entry in
-the list. So, the index expression ``field.tags`` applied to a document with ID
-"doc2" and content::
+of strings, the document will have multiple entries in the index, one per entry
+in the list. So, the index expression ``field.tags`` applied to a document with
+ID ``doc2`` and content::
 
   {
       "field": {
@@ -209,6 +209,28 @@ gives index entries
  tag1      doc2
  tag2      doc2
  tag3      doc2
+ ========= ======
+
+**Subfields of objects in a list.** If an index expression points at subfields
+of objects in a list, the document will have multiple entries in the index, one
+for each object in the list that specifies the denoted subfield. For instance
+the index expression ``managers.phone_number`` applied to a document
+with doc_id ``doc3`` and content::
+
+  {
+      "department": "department of redundancy department",
+      "managers": [
+        {"name": "Mary", "phone_number": "12345"},
+        {"name": "Katherine"},
+        {"name": "Rob", "phone_number": "54321"}]}
+
+would give index entries:
+
+ ========= ======
+ Index key doc_id
+ ========= ======
+ 12345     doc2
+ 54321     doc2
  ========= ======
 
 **Transformation functions.** An index expression may be wrapped in any number
@@ -227,8 +249,6 @@ Available transformation functions are:
    width.
  * ``bool(index_expression)`` - takes a boolean value and turns it into '0' if
    false and '1' if true.
- * ``is_null(index_expression)`` - True if value is null or not a string or the
-   field is absent, otherwise false
  * ``combine(index_expression1, index_expression2, ...)`` - Combine the values
    of an arbitrary number of sub expressions into a single index.
 
@@ -272,14 +292,15 @@ with "J", and so will return the documents with ids: 'jw', 'jb', 'jm'.
 Index functions
 ^^^^^^^^^^^^^^^
 
- * create_index(name, index_expressions_list)
+ * create_index(name, index_expression)
  * delete_index(name)
- * get_from_index(name, list_of_index_key_tuples)
+ * get_from_index(name, index_key)
+ * get_range_from_index(name, start_key, end_key)
  * get_keys_from_index(name)
  * list_indexes()
 
-Syncing
-#######
+Synchronizing
+#############
 
 U1DB is a syncable database. Any U1DB can be synced with any U1DB server; most
 U1DB implementations are capable of being run as a server. Syncing brings both
@@ -311,7 +332,6 @@ Syncing functions
 ^^^^^^^^^^^^^^^^^
 
  * sync(URL)
- * resolve_doc(self, Document, conflicted_doc_revs)
  * get_doc_conflicts(doc_id)
  * resolve_doc(doc, list_of_conflicted_revisions)
 
