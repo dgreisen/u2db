@@ -111,7 +111,7 @@ reverted to an earlier state by a restore from backup, and then diverged from
 the known state on the other side of the synchronization.
 
 Implementations are not required to use transaction ids. If they don't they
-should return an empty string when asked for a transaction ids. All
+should return an empty string when asked for a transaction id. All
 implementations should accept an empty string as a valid transaction id.
 
 Revisions
@@ -128,7 +128,7 @@ To keep track of document revisions u1db uses vector versions. Each
 synchronized instance of the same database is called a replica and has a unique
 identifier (``replica uid``) assigned to it (currently the reference
 implementation by default uses UUID4s for that); a revision is a mapping
-between ``replica uids`` and ``generations``: ``rev
+between ``replica uids`` and ``generations``, as follows: ``rev
 = <replica_uid:generation...>``, or using a functional notation
 ``rev(replica_uid) = generation``. The current concrete format is a string
 built out of each ``replica_uid`` concatenated with ``':'`` and with its
