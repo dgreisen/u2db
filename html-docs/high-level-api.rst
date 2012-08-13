@@ -9,7 +9,7 @@ need to choose an implementation, and exactly how this API is defined is
 implementation-specific, in order that it fits with the language's conventions.
 
 Document storage and retrieval
-##############################
+------------------------------
 
 U1DB stores documents. A document is a set of nested key-values; basically,
 anything you can express with JSON. Implementations are likely to provide
@@ -17,7 +17,7 @@ a Document object "wrapper" for these documents; exactly how the wrapper works
 is implementation-defined.
 
 Creating and editing documents
-------------------------------
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 To create a document, use ``create_doc()``. Code examples below are
 from :ref:`reference-implementation` in Python.
@@ -80,7 +80,7 @@ Finally, deleting a document is done with ``delete_doc()``.
     None
 
 Retrieving documents
---------------------
+^^^^^^^^^^^^^^^^^^^^
 
 The simplest way to retrieve documents from a u1db is by ``doc_id``.
 
@@ -273,7 +273,7 @@ gives index entries
 
 
 Querying an index
------------------
+^^^^^^^^^^^^^^^^^
 
 Pass an index key or a tuple of index keys (if the index is on multiple fields)
 to ``get_from_index``; the last index key in each tuple (and *only* the last
@@ -300,17 +300,18 @@ Index functions
  * list_indexes()
 
 Synchronizing
-#############
+-------------
 
 U1DB is a syncable database. Any U1DB can be synced with any U1DB server; most
-U1DB implementations are capable of being run as a server. Syncing brings both
-the server and the client up to date with one another; save data into a local
-U1DB whether online or offline, and then sync when online.
+U1DB implementations are capable of being run as a server. Synchronizing brings
+both the server and the client up to date with one another; save data into a
+local U1DB whether online or offline, and then sync when online.
 
 Pass an HTTP URL to sync with that server.
 
-Syncing databases which have been independently changed may produce conflicts.
-Read about the U1DB conflict policy and more about syncing at :ref:`conflicts`.
+Synchronizing databases which have been independently changed may produce
+conflicts.  Read about the U1DB conflict policy and more about synchronizing at
+:ref:`conflicts`.
 
 Running your own U1DB server is implementation-specific.
 :ref:`reference-implementation` is able to be run as a server.
@@ -318,7 +319,7 @@ Running your own U1DB server is implementation-specific.
 Dealing with conflicts
 ----------------------
 
-Syncing a database can result in conflicts; if your user changes the same
+Synchronizing a database can result in conflicts; if your user changes the same
 document in two different places and then syncs again, that document will be
 ''in conflict'', meaning that it has incompatible changes. If this is the case,
 ``doc.has_conflicts`` will be true, and put_doc to a conflicted doc will give
@@ -328,8 +329,8 @@ unconflicted document should look like is obviously specific to the user's
 application; once decided, call ``resolve_doc(doc, list_of_conflicted_revisions)``
 to resolve and set the final resolved content.
 
-Syncing functions
-^^^^^^^^^^^^^^^^^
+Synchronizing functions
+^^^^^^^^^^^^^^^^^^^^^^^
 
  * sync(URL)
  * get_doc_conflicts(doc_id)
