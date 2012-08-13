@@ -1208,6 +1208,7 @@ u1db_get_all_docs(u1database *db, int include_deleted, int *generation,
                   void *context, u1db_doc_callback cb)
 {
     int status;
+    int conflicts;
     sqlite3_stmt *statement;
 
     if (db == NULL || cb == NULL) {
@@ -1217,7 +1218,10 @@ u1db_get_all_docs(u1database *db, int include_deleted, int *generation,
     if (status != U1DB_OK)
         return status;
     status = sqlite3_prepare_v2(db->sql_handle,
-        "SELECT doc_id, doc_rev, content FROM document", -1, &statement, NULL);
+        "SELECT document.doc_id, document.doc_rev, document.content, "
+        "count(conflicts.doc_rev) FROM document LEFT OUTER JOIN conflicts ON "
+        "conflicts.doc_id = document.doc_id GROUP BY document.doc_id, "
+        "document.doc_rev, document.content", -1, &statement, NULL);
     if (status != SQLITE_OK) { goto finish; }
     status = sqlite3_step(statement);
     while (status == SQLITE_ROW) {
@@ -1228,9 +1232,10 @@ u1db_get_all_docs(u1database *db, int include_deleted, int *generation,
         doc_id = (char *)sqlite3_column_text(statement, 0);
         revision = (char *)sqlite3_column_text(statement, 1);
         content = (char *)sqlite3_column_text(statement, 2);
+        conflicts = sqlite3_column_int(statement, 3);
         if (content != NULL || include_deleted) {
             status = u1db__allocate_document(
-                doc_id, revision, content, 0, &doc);
+                doc_id, revision, content, conflicts > 0, &doc);
             if (status != U1DB_OK)
                 goto finish;
             cb(context, doc);

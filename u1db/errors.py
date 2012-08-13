@@ -59,6 +59,12 @@ class UserQuotaExceeded(U1DBError):
     wire_description = "user quota exceeded"
 
 
+class SubscriptionNeeded(U1DBError):
+    """User needs a subscription to be able to use this replica.."""
+
+    wire_description = "user needs subscription"
+
+
 class InvalidTransactionId(U1DBError):
     """Invalid transaction for generation."""
 

@@ -292,16 +292,27 @@ class SQLiteDatabase(CommonBackend):
                   " ORDER BY generation")
         return c.fetchall()
 
-    def _get_doc(self, doc_id):
+    def _get_doc(self, doc_id, check_for_conflicts=False):
         """Get just the document content, without fancy handling."""
         c = self._db_handle.cursor()
-        c.execute("SELECT doc_rev, content FROM document WHERE doc_id = ?",
-                  (doc_id,))
+        if check_for_conflicts:
+            c.execute(
+                "SELECT document.doc_rev, document.content, "
+                "count(conflicts.doc_rev) FROM document LEFT OUTER JOIN "
+                "conflicts ON conflicts.doc_id = document.doc_id WHERE "
+                "document.doc_id = ? GROUP BY document.doc_id, "
+                "document.doc_rev, document.content;", (doc_id,))
+        else:
+            c.execute(
+                "SELECT doc_rev, content, 0 FROM document WHERE doc_id = ?",
+                (doc_id,))
         val = c.fetchone()
         if val is None:
             return None
-        doc_rev, content = val
-        return self._factory(doc_id, doc_rev, content)
+        doc_rev, content, conflicts = val
+        doc = self._factory(doc_id, doc_rev, content)
+        doc.has_conflicts = conflicts > 0
+        return doc
 
     def _has_conflicts(self, doc_id):
         c = self._db_handle.cursor()
@@ -314,13 +325,11 @@ class SQLiteDatabase(CommonBackend):
             return True
 
     def get_doc(self, doc_id, include_deleted=False):
-        doc = self._get_doc(doc_id)
+        doc = self._get_doc(doc_id, check_for_conflicts=True)
         if doc is None:
             return None
         if doc.is_tombstone() and not include_deleted:
             return None
-        # TODO: A doc which appears deleted could still have conflicts...
-        doc.has_conflicts = self._has_conflicts(doc.doc_id)
         return doc
 
     def get_all_docs(self, include_deleted=False):
@@ -328,12 +337,18 @@ class SQLiteDatabase(CommonBackend):
         generation = self._get_generation()
         results = []
         c = self._db_handle.cursor()
-        c.execute("SELECT doc_id, doc_rev, content FROM document;")
+        c.execute(
+            "SELECT document.doc_id, document.doc_rev, document.content, "
+            "count(conflicts.doc_rev) FROM document LEFT OUTER JOIN conflicts "
+            "ON conflicts.doc_id = document.doc_id GROUP BY document.doc_id, "
+            "document.doc_rev, document.content;")
         rows = c.fetchall()
-        for doc_id, doc_rev, content in rows:
+        for doc_id, doc_rev, content, conflicts in rows:
             if content is None and not include_deleted:
                 continue
-            results.append(self._factory(doc_id, doc_rev, content))
+            doc = self._factory(doc_id, doc_rev, content)
+            doc.has_conflicts = conflicts > 0
+            results.append(doc)
         return (generation, results)
 
     def put_doc(self, doc):
@@ -342,9 +357,9 @@ class SQLiteDatabase(CommonBackend):
         self._check_doc_id(doc.doc_id)
         self._check_doc_size(doc)
         with self._db_handle:
-            if self._has_conflicts(doc.doc_id):
+            old_doc = self._get_doc(doc.doc_id, check_for_conflicts=True)
+            if old_doc and old_doc.has_conflicts:
                 raise errors.ConflictedDoc()
-            old_doc = self._get_doc(doc.doc_id)
             if old_doc and doc.rev is None and old_doc.is_tombstone():
                 new_rev = self._allocate_doc_rev(old_doc.rev)
             else:
@@ -429,14 +444,14 @@ class SQLiteDatabase(CommonBackend):
 
     def delete_doc(self, doc):
         with self._db_handle:
-            old_doc = self._get_doc(doc.doc_id)
+            old_doc = self._get_doc(doc.doc_id, check_for_conflicts=True)
             if old_doc is None:
                 raise errors.DocumentDoesNotExist
             if old_doc.rev != doc.rev:
                 raise errors.RevisionConflict()
             if old_doc.is_tombstone():
                 raise errors.DocumentAlreadyDeleted
-            if self._has_conflicts(doc.doc_id):
+            if old_doc.has_conflicts:
                 raise errors.ConflictedDoc()
             new_rev = self._allocate_doc_rev(doc.rev)
             doc.rev = new_rev
@@ -588,22 +603,12 @@ class SQLiteDatabase(CommonBackend):
         return fields
 
     @staticmethod
-    def _transform_glob(value, escape_char='.'):
-        """Transform the given glob value into a valid LIKE statement."""
-        to_escape = [escape_char, '%', '_']
-        for esc in to_escape:
-            value = value.replace(esc, escape_char + esc)
-        assert value[-1] == '*'
-        return value[:-1] + '%'
-
-    @staticmethod
     def _strip_glob(value):
         """Remove the trailing * from a value."""
         assert value[-1] == '*'
         return value[:-1]
 
-    def get_from_index(self, index_name, *key_values):
-        definition = self._get_index_definition(index_name)
+    def _format_query(self, definition, key_values):
         # First, build the definition. We join the document_fields table
         # against itself, as many times as the 'width' of our definition.
         # We then do a query for each key_value, one-at-a-time.
@@ -619,9 +624,8 @@ class SQLiteDatabase(CommonBackend):
                        + (" AND d%d.value = ?" % (i,))
                        for i in range(len(definition))]
         like_where = [novalue_where[i]
-                      + (" AND d%d.value LIKE ? ESCAPE '.'" % (i,))
+                      + (" AND d%d.value GLOB ?" % (i,))
                       for i in range(len(definition))]
-        c = self._db_handle.cursor()
         is_wildcard = False
         # Merge the lists together, so that:
         # [field1, field2, field3], [val1, val2, val3]
@@ -629,8 +633,6 @@ class SQLiteDatabase(CommonBackend):
         # (field1, val1, field2, val2, field3, val3)
         args = []
         where = []
-        if len(key_values) != len(definition):
-            raise errors.InvalidValueForIndex()
         for idx, (field, value) in enumerate(zip(definition, key_values)):
             args.append(field)
             if value.endswith('*'):
@@ -643,7 +645,7 @@ class SQLiteDatabase(CommonBackend):
                         # another wildcard
                         raise errors.InvalidGlobbing
                     where.append(like_where[idx])
-                    args.append(self._transform_glob(value))
+                    args.append(value)
                 is_wildcard = True
             else:
                 if is_wildcard:
@@ -651,23 +653,33 @@ class SQLiteDatabase(CommonBackend):
                 where.append(exact_where[idx])
                 args.append(value)
         statement = (
-            "SELECT d.doc_id, d.doc_rev, d.content FROM document d, %s "
-            "WHERE %s ORDER BY %s;" % (
-                ', '.join(tables), ' AND '.join(where),
-                ', '.join(
-                    ['d%d.value' % i for i in range(len(definition))])))
+            "SELECT d.doc_id, d.doc_rev, d.content, count(c.doc_rev) FROM "
+            "document d, %s LEFT OUTER JOIN conflicts c ON c.doc_id = "
+            "d.doc_id WHERE %s GROUP BY d.doc_id, d.doc_rev, d.content ORDER "
+            "BY %s;" % (', '.join(tables), ' AND '.join(where), ', '.join(
+                ['d%d.value' % i for i in range(len(definition))])))
+        return statement, args
+
+    def get_from_index(self, index_name, *key_values):
+        definition = self._get_index_definition(index_name)
+        if len(key_values) != len(definition):
+            raise errors.InvalidValueForIndex()
+        statement, args = self._format_query(definition, key_values)
+        c = self._db_handle.cursor()
         try:
             c.execute(statement, tuple(args))
         except dbapi2.OperationalError, e:
             raise dbapi2.OperationalError(str(e) +
                 '\nstatement: %s\nargs: %s\n' % (statement, args))
         res = c.fetchall()
-        return [self._factory(r[0], r[1], r[2]) for r in res]
+        results = []
+        for row in res:
+            doc = self._factory(row[0], row[1], row[2])
+            doc.has_conflicts = row[3] > 0
+            results.append(doc)
+        return results
 
-    def get_range_from_index(self, index_name, start_value=None,
-                             end_value=None):
-        """Return all documents with key values in the specified range."""
-        definition = self._get_index_definition(index_name)
+    def _format_range_query(self, definition, start_value, end_value):
         tables = ["document_fields d%d" % i for i in range(len(definition))]
         novalue_where = [
             "d.doc_id = d%d.doc_id AND d%d.field_name = ?" % (i, i) for i in
@@ -677,9 +689,8 @@ class SQLiteDatabase(CommonBackend):
             range(len(definition))]
         like_where = [
             novalue_where[i] + (
-                " AND (d%d.value < ? OR d%d.value LIKE ? ESCAPE '.')" %
-                (i, i))
-            for i in range(len(definition))]
+                " AND (d%d.value < ? OR d%d.value GLOB ?)" % (i, i)) for i in
+            range(len(definition))]
         range_where_lower = [
             novalue_where[i] + (" AND d%d.value >= ?" % (i,)) for i in
             range(len(definition))]
@@ -732,7 +743,7 @@ class SQLiteDatabase(CommonBackend):
                             raise errors.InvalidGlobbing
                         where.append(like_where[idx])
                         args.append(self._strip_glob(value))
-                        args.append(self._transform_glob(value))
+                        args.append(value)
                     is_wildcard = True
                 else:
                     if is_wildcard:
@@ -740,12 +751,19 @@ class SQLiteDatabase(CommonBackend):
                     where.append(range_where_upper[idx])
                     args.append(value)
         statement = (
-            "SELECT d.doc_id, d.doc_rev, d.content FROM document d, %s "
-            "WHERE %s ORDER BY %s;" % (
-                ', '.join(tables),
-                ' AND '.join(where),
-                ', '.join(
-                    ['d%d.value' % i for i in range(len(definition))])))
+            "SELECT d.doc_id, d.doc_rev, d.content, count(c.doc_rev) FROM "
+            "document d, %s LEFT OUTER JOIN conflicts c ON c.doc_id = "
+            "d.doc_id WHERE %s GROUP BY d.doc_id, d.doc_rev, d.content ORDER "
+            "BY %s;" % (', '.join(tables), ' AND '.join(where), ', '.join(
+                ['d%d.value' % i for i in range(len(definition))])))
+        return statement, args
+
+    def get_range_from_index(self, index_name, start_value=None,
+                             end_value=None):
+        """Return all documents with key values in the specified range."""
+        definition = self._get_index_definition(index_name)
+        statement, args = self._format_range_query(
+            definition, start_value, end_value)
         c = self._db_handle.cursor()
         try:
             c.execute(statement, tuple(args))
@@ -753,7 +771,12 @@ class SQLiteDatabase(CommonBackend):
             raise dbapi2.OperationalError(str(e) +
                 '\nstatement: %s\nargs: %s\n' % (statement, args))
         res = c.fetchall()
-        return [self._factory(r[0], r[1], r[2]) for r in res]
+        results = []
+        for row in res:
+            doc = self._factory(row[0], row[1], row[2])
+            doc.has_conflicts = row[3] > 0
+            results.append(doc)
+        return results
 
     def get_index_keys(self, index_name):
         c = self._db_handle.cursor()

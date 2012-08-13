@@ -667,6 +667,15 @@ class LocalDatabaseWithConflictsTests(tests.DatabaseBaseTests):
         self.assertEqual([alt_doc, doc],
                          self.db.get_doc_conflicts(doc.doc_id))
 
+    def test_get_all_docs_sees_conflicts(self):
+        doc = self.db.create_doc_from_json(simple_doc)
+        alt_doc = self.make_document(doc.doc_id, 'alternate:1', nested_doc)
+        self.db._put_doc_if_newer(
+            alt_doc, save_conflict=True, replica_uid='r', replica_gen=1,
+            replica_trans_id='foo')
+        _, docs = self.db.get_all_docs()
+        self.assertTrue(docs[0].has_conflicts)
+
     def test_get_doc_conflicts_unconflicted(self):
         doc = self.db.create_doc_from_json(simple_doc)
         self.assertEqual([], self.db.get_doc_conflicts(doc.doc_id))
@@ -1124,6 +1133,18 @@ class DatabaseIndexTests(tests.DatabaseBaseTests):
              ('value', 'value2-3')],
             sorted(self.db.get_index_keys('test-idx')))
 
+    def test_get_from_index_sees_conflicts(self):
+        doc = self.db.create_doc_from_json(simple_doc)
+        self.db.create_index('test-idx', 'key', 'key2')
+        alt_doc = self.make_document(
+            doc.doc_id, 'alternate:1',
+            '{"key": "value", "key2": ["value2-1", "value2-2", "value2-3"]}')
+        self.db._put_doc_if_newer(
+            alt_doc, save_conflict=True, replica_uid='r', replica_gen=1,
+            replica_trans_id='foo')
+        docs = self.db.get_from_index('test-idx', 'value', 'value2-1')
+        self.assertTrue(docs[0].has_conflicts)
+
     def test_get_index_keys_multi_list_list(self):
         self.db.create_doc_from_json(
             '{"key": "value1-1 value1-2 value1-3", '
@@ -1170,6 +1191,17 @@ class DatabaseIndexTests(tests.DatabaseBaseTests):
         self.assertEqual(
             [doc2, doc1, doc3],
             self.db.get_range_from_index('test-idx', 'value2'))
+
+    def test_get_range_from_index_sees_conflicts(self):
+        doc = self.db.create_doc_from_json(simple_doc)
+        self.db.create_index('test-idx', 'key')
+        alt_doc = self.make_document(
+            doc.doc_id, 'alternate:1', '{"key": "valuedepalue"}')
+        self.db._put_doc_if_newer(
+            alt_doc, save_conflict=True, replica_uid='r', replica_gen=1,
+            replica_trans_id='foo')
+        docs = self.db.get_range_from_index('test-idx', 'a')
+        self.assertTrue(docs[0].has_conflicts)
 
     def test_get_range_from_index_end(self):
         self.db.create_doc_from_json('{"key": "value3"}')

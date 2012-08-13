@@ -174,7 +174,7 @@ QLineEdit, QTextEdit {
           <bool>true</bool>
          </property>
          <property name="columnCount">
-          <number>1</number>
+          <number>2</number>
          </property>
          <property name="topLevelItemCount" stdset="0">
           <number>0</number>
@@ -185,6 +185,11 @@ QLineEdit, QTextEdit {
          <column>
           <property name="text">
            <string>title</string>
+          </property>
+         </column>
+         <column>
+          <property name="text">
+           <string notr="true">2</string>
           </property>
          </column>
         </widget>

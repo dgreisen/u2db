@@ -30,20 +30,14 @@ from u1db.remote.http_target import HTTPSyncTarget
 from u1db.remote.http_database import HTTPDatabase
 from ubuntuone.platform.credentials import CredentialsManagementTool
 
-DONE_COLOR = QtGui.QColor(183, 183, 183)
-NOT_DONE_COLOR = QtGui.QColor(0, 0, 0)
-WHITE = QtGui.QColor(255, 255, 255)
+FOREGROUND = QtGui.QColor('#1d1f21')
+DONE = QtGui.QColor('#969896')
+BACKGROUND = '#FFFFFF'
+CONFLICT_COLOR = QtGui.QColor('#A54242')
 TAG_COLORS = [
-    (234, 153, 153),
-    (249, 203, 156),
-    (255, 229, 153),
-    (182, 215, 168),
-    (162, 196, 201),
-    (164, 194, 244),
-    (221, 126, 107),
-    (159, 197, 232),
-    (180, 167, 214),
-    (213, 166, 189)]
+    '#8C9440', '#de935f', '#5F819D', '#85678F',
+    '#5E8D87', '#cc6666', '#b5bd68', '#f0c674',
+    '#81a2be', '#b294bb']
 U1_URL = 'https://u1db.one.ubuntu.com/~/cosas'
 TIMEOUT = 1000 * 0.5 * 60 * 60  # 30 minutes
 
@@ -56,7 +50,7 @@ class UITask(QtGui.QTreeWidgetItem):
         self.task = task
         # If the task is done, check off the list item.
         self.store = store
-        self._bg_color = WHITE
+        self._bg_color = BACKGROUND
         self._font = font
         self.main_window = main_window
 
@@ -64,35 +58,44 @@ class UITask(QtGui.QTreeWidgetItem):
         self._bg_color = color
 
     def setData(self, column, role, value):
-        if role == QtCore.Qt.CheckStateRole:
-            if value == QtCore.Qt.Checked:
-                self.task.done = True
-            else:
-                self.task.done = False
-            self.store.save_task(self.task)
-        if role == QtCore.Qt.EditRole:
-            text = unicode(value.toString(), 'utf-8')
-            if not text:
-                # There was no text in the edit field so do nothing.
-                return
-            self.update_task_text(text)
+        if column == 0:
+            if role == QtCore.Qt.CheckStateRole:
+                if value == QtCore.Qt.Checked:
+                    self.task.done = True
+                else:
+                    self.task.done = False
+                self.store.save_task(self.task)
+            if role == QtCore.Qt.EditRole:
+                text = unicode(value.toString(), 'utf-8')
+                if not text:
+                    # There was no text in the edit field so do nothing.
+                    return
+                self.update_task_text(text)
         super(UITask, self).setData(column, role, value)
 
     def data(self, column, role):
-        if role == QtCore.Qt.EditRole:
-            return self.task.title
-        if role == QtCore.Qt.DisplayRole:
-            return self.task.title
-        if role == QtCore.Qt.FontRole:
-            font = self._font
-            font.setStrikeOut(self.task.done)
-            return font
         if role == QtCore.Qt.BackgroundRole:
             return self._bg_color
         if role == QtCore.Qt.ForegroundRole:
-            return DONE_COLOR if self.task.done else NOT_DONE_COLOR
-        if role == QtCore.Qt.CheckStateRole:
-            return QtCore.Qt.Checked if self.task.done else QtCore.Qt.Unchecked
+            if self.task.has_conflicts:
+                return CONFLICT_COLOR
+            return DONE if self.task.done else FOREGROUND
+        if column == 0:
+            if role == QtCore.Qt.FontRole:
+                font = self._font
+                font.setStrikeOut(self.task.done)
+                return font
+            if role == QtCore.Qt.EditRole:
+                return self.task.title
+            if role == QtCore.Qt.DisplayRole:
+                return self.task.title
+            if role == QtCore.Qt.CheckStateRole:
+                return (
+                    QtCore.Qt.Checked if self.task.done else
+                    QtCore.Qt.Unchecked)
+        elif column == 1:
+            if role == QtCore.Qt.DisplayRole:
+                return '!' if self.task.has_conflicts else ''
         return super(UITask, self).data(column, role)
 
     def update_task_text(self, text):
@@ -111,19 +114,39 @@ class UITask(QtGui.QTreeWidgetItem):
         self.store.save_task(self.task)
 
 
-class TaskDelegate(QtGui.QStyledItemDelegate):
-    """Delegate for rendering tasks."""
+class Conflicts(QtGui.QDialog):
 
-    pen = QtGui.QPen(QtGui.QColor(102, 102, 102), 2, style=QtCore.Qt.DotLine)
+    def __init__(self, other, conflicts):
+        super(Conflicts, self).__init__()
+        self.selected_doc = None
+        uifile = os.path.join(
+            os.path.abspath(os.path.dirname(__file__)), 'conflicts.ui')
+        uic.loadUi(uifile, self)
+        self.other = other
+        self.revs = []
+        for conflict in conflicts:
 
-    def paint(self, painter, option, index):
-        # Save current state of painter before we modify anything.
-        painter.save()
-        painter.setPen(self.pen)
-        painter.drawRect(option.rect)
-        # Return painter to original stats.
-        painter.restore()
-        super(TaskDelegate, self).paint(painter, option, index)
+            self.revs.append(conflict.rev)
+
+            # XXX: this does not deserve any prizes, but it was the quickest
+            # way I could figure out to use loop variables in a 'closure' and
+            # not just get the last value everywhere.
+            def toggled(value, doc=conflict):
+                if value:
+                    self.selected_doc = doc
+
+            radio = QtGui.QRadioButton(conflict.title)
+            self.conflicts.layout().addWidget(radio)
+            if conflict.done:
+                font = radio.font()
+                font.setStrikeOut(True)
+                radio.setFont(font)
+            radio.toggled.connect(toggled)
+
+    def accept(self):
+        if self.selected_doc:
+            self.other.resolve(self.selected_doc, self.revs)
+        super(Conflicts, self).accept()
 
 
 class Sync(QtGui.QDialog):
@@ -221,7 +244,12 @@ class Main(QtGui.QMainWindow):
         # create or update the indexes if they are not up-to-date
         self.store.initialize_db()
         # hook up the delegate
-        self.todo_list.setItemDelegate(TaskDelegate())
+        header = self.todo_list.header()
+        header.setResizeMode(0, 1)  # stretch first column
+        header.setResizeMode(1, 2)  # second column fixed
+        header.setDefaultSectionSize(20)
+
+        header.setStretchLastSection(False)
         # Initialize some variables we will use to keep track of the tags.
         self._tag_docs = defaultdict(list)
         self._tag_buttons = {}
@@ -249,22 +277,25 @@ class Main(QtGui.QMainWindow):
             self.delete()
             return
         if event.key() == QtCore.Qt.Key_Return:
+            current = self.todo_list.currentItem()
+            if current and current.task and current.task.has_conflicts:
+                self.open_conflicts_window(current.task.doc_id)
+                return
             if not self.editing:
                 self.editing = True
-                self.todo_list.openPersistentEditor(
-                    self.todo_list.currentItem())
+                self.todo_list.openPersistentEditor(current)
                 return
             else:
-                self.todo_list.closePersistentEditor(
-                    self.todo_list.currentItem())
+                self.todo_list.closePersistentEditor(current)
                 self.editing = False
+                return
         super(Main, self).keyPressEvent(event)
 
     def get_tag_color(self):
         """Get a color number to use for a new tag."""
         # Remove a color from the list of available ones and return it.
         if not self.colors:
-            return WHITE
+            return BACKGROUND
         return self.colors.pop(0)
 
     def connect_events(self):
@@ -273,9 +304,20 @@ class Main(QtGui.QMainWindow):
         self.title_edit.returnPressed.connect(self.update)
         self.action_synchronize.triggered.connect(self.open_sync_window)
         self.buttons_toggle.clicked.connect(self.show_buttons)
+        self.todo_list.itemClicked.connect(self.maybe_open_conflicts)
+
+    def maybe_open_conflicts(self, item, column):
+        if not item.task.has_conflicts:
+            return
+        self.open_conflicts_window(item.task.doc_id)
 
     def open_sync_window(self):
         window = Sync(self)
+        window.exec_()
+
+    def open_conflicts_window(self, doc_id):
+        conflicts = self.store.db.get_doc_conflicts(doc_id)
+        window = Conflicts(self, conflicts)
         window.exec_()
 
     def show_buttons(self):
@@ -334,7 +376,8 @@ class Main(QtGui.QMainWindow):
         # Wrap the task in a UITask object.
         item = UITask(
             task, self.todo_list, self.store, self.todo_list.font(), self)
-        item.setFlags(item.flags() | QtCore.Qt.ItemIsEditable)
+        if not task.has_conflicts:
+            item.setFlags(item.flags() | QtCore.Qt.ItemIsEditable)
         self.todo_list.addTopLevelItem(item)
         if not task.tags:
             return
@@ -345,7 +388,7 @@ class Main(QtGui.QMainWindow):
         if task.tags:
             item.set_color(self._tag_colors[task.tags[0]]['qcolor'])
         else:
-            item.set_color(WHITE)
+            item.set_color(BACKGROUND)
 
     def add_tag(self, doc_id, tag):
         """Create a link between the task with id doc_id and the tag, and
@@ -361,11 +404,11 @@ class Main(QtGui.QMainWindow):
         # Add a tag filter button for this tag to the UI.
         button = QtGui.QPushButton(tag)
         color = self.get_tag_color()
-        qcolor = QtGui.QColor(*color)
+        qcolor = QtGui.QColor(color)
         self._tag_colors[tag] = {
             'color_tuple': color,
             'qcolor': qcolor}
-        button.setStyleSheet('background-color: rgb(%d, %d, %d)' % color)
+        button.setStyleSheet('background-color: %s' % color)
         button._todo_tag = tag
         # Make the button an on/off button.
         button.setCheckable(True)
@@ -426,7 +469,7 @@ class Main(QtGui.QMainWindow):
         if new_tags:
             item.set_color(self._tag_colors[list(new_tags)[0]]['qcolor'])
             return
-        item.set_color(WHITE)
+        item.set_color(BACKGROUND)
 
     def get_ubuntuone_credentials(self):
         cmt = CredentialsManagementTool()
@@ -482,6 +525,10 @@ class Main(QtGui.QMainWindow):
             syncer.sync()
         self.refresh_filter()
         self.update_status_bar("last synced: %s" % (datetime.now(),))
+
+    def resolve(self, doc, revs):
+        self.store.db.resolve_doc(doc, revs)
+        self.refresh_filter()
 
 
 if __name__ == "__main__":
