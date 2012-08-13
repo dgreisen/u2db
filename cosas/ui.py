@@ -304,6 +304,12 @@ class Main(QtGui.QMainWindow):
         self.title_edit.returnPressed.connect(self.update)
         self.action_synchronize.triggered.connect(self.open_sync_window)
         self.buttons_toggle.clicked.connect(self.show_buttons)
+        self.todo_list.itemClicked.connect(self.maybe_open_conflicts)
+
+    def maybe_open_conflicts(self, item, column):
+        if not item.task.has_conflicts:
+            return
+        self.open_conflicts_window(item.task.doc_id)
 
     def open_sync_window(self):
         window = Sync(self)
