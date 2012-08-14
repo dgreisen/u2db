@@ -58,7 +58,7 @@ class UITask(QtGui.QTreeWidgetItem):
         self._bg_color = color
 
     def setData(self, column, role, value):
-        if column == 0:
+        if column == 1:
             if role == QtCore.Qt.CheckStateRole:
                 if value == QtCore.Qt.Checked:
                     self.task.done = True
@@ -74,13 +74,13 @@ class UITask(QtGui.QTreeWidgetItem):
         super(UITask, self).setData(column, role, value)
 
     def data(self, column, role):
-        if role == QtCore.Qt.BackgroundRole:
+        if role == QtCore.Qt.BackgroundRole and column == 0:
             return self._bg_color
         if role == QtCore.Qt.ForegroundRole:
             if self.task.has_conflicts:
                 return CONFLICT_COLOR
             return DONE if self.task.done else FOREGROUND
-        if column == 0:
+        if column == 1:
             if role == QtCore.Qt.FontRole:
                 font = self._font
                 font.setStrikeOut(self.task.done)
@@ -93,7 +93,7 @@ class UITask(QtGui.QTreeWidgetItem):
                 return (
                     QtCore.Qt.Checked if self.task.done else
                     QtCore.Qt.Unchecked)
-        elif column == 1:
+        elif column == 2:
             if role == QtCore.Qt.DisplayRole:
                 return '!' if self.task.has_conflicts else ''
         return super(UITask, self).data(column, role)
@@ -245,8 +245,9 @@ class Main(QtGui.QMainWindow):
         self.store.initialize_db()
         # hook up the delegate
         header = self.todo_list.header()
-        header.setResizeMode(0, 1)  # stretch first column
-        header.setResizeMode(1, 2)  # second column fixed
+        header.setResizeMode(0, 2)  # first column fixed
+        header.setResizeMode(1, 1)  # stretch second column
+        header.setResizeMode(2, 2)  # third column fixed
         header.setDefaultSectionSize(20)
 
         header.setStretchLastSection(False)

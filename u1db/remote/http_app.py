@@ -19,7 +19,10 @@
 import functools
 import httplib
 import inspect
-import simplejson
+try:
+    import simplejson as json
+except ImportError:
+    import json  # noqa
 import sys
 import urlparse
 
@@ -121,7 +124,7 @@ def http_method(**control):
 
        JSON deserialize content to arguments:
            w = http_method(content_as_args=True,...)(f)
-           w(self, args, content) => args.update(simplejson.loads(content));
+           w(self, args, content) => args.update(json.loads(content));
                                      f(self, **args)
 
        Support conversions (e.g int):
@@ -154,7 +157,7 @@ def http_method(**control):
             if content is not None:
                 if content_as_args:
                     try:
-                        args.update(simplejson.loads(content))
+                        args.update(json.loads(content))
                     except ValueError:
                         raise BadRequest()
                 else:
@@ -309,7 +312,7 @@ class DocResource(object):
             return
         headers = {
             'x-u1db-rev': doc.rev,
-            'x-u1db-has-conflicts': simplejson.dumps(doc.has_conflicts)
+            'x-u1db-has-conflicts': json.dumps(doc.has_conflicts)
             }
         if doc.is_tombstone():
             self.responder.send_response_json(
@@ -416,7 +419,7 @@ class HTTPResponder(object):
         # xxx version in headers
         if obj_dic is not None:
             self._no_initial_obj = False
-            self._write(simplejson.dumps(obj_dic) + "\r\n")
+            self._write(json.dumps(obj_dic) + "\r\n")
 
     def finish_response(self):
         """finish sending response."""
@@ -424,7 +427,7 @@ class HTTPResponder(object):
 
     def send_response_json(self, status=200, headers={}, **kwargs):
         """send and finish response with json object body from keyword args."""
-        content = simplejson.dumps(kwargs) + "\r\n"
+        content = json.dumps(kwargs) + "\r\n"
         self.send_response_content(content, headers=headers, status=status)
 
     def send_response_content(self, content, status=200, headers={}):
@@ -451,7 +454,7 @@ class HTTPResponder(object):
             self._write('\r\n')
         else:
             self._write(',\r\n')
-        self._write(simplejson.dumps(entry))
+        self._write(json.dumps(entry))
 
     def end_stream(self):
         "end stream (array)."

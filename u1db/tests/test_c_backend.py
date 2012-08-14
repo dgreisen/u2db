@@ -14,7 +14,10 @@
 # You should have received a copy of the GNU Lesser General Public License
 # along with u1db.  If not, see <http://www.gnu.org/licenses/>.
 
-import simplejson
+try:
+    import simplejson as json
+except ImportError:
+    import json  # noqa
 from u1db import (
     Document,
     errors,
@@ -114,7 +117,7 @@ class TestCDatabase(BackendTests):
 
     def test_create_index_list_on_non_ascii_field_name(self):
         self.db = c_backend_wrapper.CDatabase(':memory:')
-        doc = self.db.create_doc_from_json(simplejson.dumps({u'\xe5': 'value'}))
+        doc = self.db.create_doc_from_json(json.dumps({u'\xe5': 'value'}))
         self.db.create_index_list('test-idx', [u'\xe5'])
         self.assertEqual([doc], self.db.get_from_index('test-idx', 'value'))
 
@@ -132,7 +135,7 @@ class TestCDatabase(BackendTests):
 
     def test_wildcard_matches_unicode_value(self):
         self.db = c_backend_wrapper.CDatabase(':memory:')
-        doc = self.db.create_doc_from_json(simplejson.dumps({"key": u"valu\xe5"}))
+        doc = self.db.create_doc_from_json(json.dumps({"key": u"valu\xe5"}))
         self.db.create_index_list('test-idx', ['key'])
         self.assertEqual([doc], self.db.get_from_index('test-idx', '*'))
 
@@ -186,10 +189,14 @@ class TestCDatabase(BackendTests):
 
     def test_get_from_index_list_multi_ordered(self):
         self.db = c_backend_wrapper.CDatabase(':memory:')
-        doc1 = self.db.create_doc_from_json('{"key": "value3", "key2": "value4"}')
-        doc2 = self.db.create_doc_from_json('{"key": "value2", "key2": "value3"}')
-        doc3 = self.db.create_doc_from_json('{"key": "value2", "key2": "value2"}')
-        doc4 = self.db.create_doc_from_json('{"key": "value1", "key2": "value1"}')
+        doc1 = self.db.create_doc_from_json(
+            '{"key": "value3", "key2": "value4"}')
+        doc2 = self.db.create_doc_from_json(
+            '{"key": "value2", "key2": "value3"}')
+        doc3 = self.db.create_doc_from_json(
+            '{"key": "value2", "key2": "value2"}')
+        doc4 = self.db.create_doc_from_json(
+            '{"key": "value1", "key2": "value1"}')
         self.db.create_index('test-idx', 'key', 'key2')
         self.assertEqual(
             [doc4, doc3, doc2, doc1],
