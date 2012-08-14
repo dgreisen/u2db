@@ -21,3 +21,5 @@ Opening returns a ``Database`` object:
 .. autoclass:: u1db.Database
     :members:
 
+.. autoclass:: u1db.Document
+    :members:

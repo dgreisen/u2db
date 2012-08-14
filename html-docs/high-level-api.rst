@@ -9,7 +9,7 @@ need to choose an implementation, and exactly how this API is defined is
 implementation-specific, in order that it fits with the language's conventions.
 
 Document storage and retrieval
-##############################
+------------------------------
 
 U1DB stores documents. A document is a set of nested key-values; basically,
 anything you can express with JSON. Implementations are likely to provide
@@ -17,7 +17,7 @@ a Document object "wrapper" for these documents; exactly how the wrapper works
 is implementation-defined.
 
 Creating and editing documents
-------------------------------
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 To create a document, use ``create_doc()``. Code examples below are
 from :ref:`reference-implementation` in Python.
@@ -80,7 +80,7 @@ Finally, deleting a document is done with ``delete_doc()``.
     None
 
 Retrieving documents
---------------------
+^^^^^^^^^^^^^^^^^^^^
 
 The simplest way to retrieve documents from a u1db is by ``doc_id``.
 
@@ -119,12 +119,14 @@ Note that ``get_docs()`` returns the documents in the order specified.
 Document functions
 ^^^^^^^^^^^^^^^^^^
 
- * create_doc(dictionary, optional_doc_id)
- * put_doc(Document)
- * get_doc(doc_id)
- * get_docs(list_of_doc_ids)
- * delete_doc(Document)
- * whats_changed(generation)
+ * :py:meth:`~u1db.Database.create_doc`
+ * :py:meth:`~u1db.Database.create_doc_from_json`
+ * :py:meth:`~u1db.Database.put_doc`
+ * :py:meth:`~u1db.Database.get_doc`
+ * :py:meth:`~u1db.Database.get_docs`
+ * :py:meth:`~u1db.Database.get_all_docs`
+ * :py:meth:`~u1db.Database.delete_doc`
+ * :py:meth:`~u1db.Database.whats_changed`
 
 Querying
 --------
@@ -145,7 +147,7 @@ Given a database with the following documents::
     {"firstname": "Alan", "surname", "Hansen", "position": "defence"} ID ah
     {"firstname": "John", "surname", "Wayne", "position": "filmstar"} ID jw
 
-an index expression of ``["firstname"]`` will create an index that looks
+an index expression of ``"firstname"`` will create an index that looks
 (conceptually) like this
 
  ====================== ===========
@@ -191,9 +193,9 @@ gives the index key "hello", and therefore an entry in the index of
  ========= ======
 
 **Name a list.** If an index expression names a field whose contents is a list
-of strings, the doc will have multiple entries in the index, one per entry in
-the list. So, the index expression ``field.tags`` applied to a document with ID
-"doc2" and content::
+of strings, the document will have multiple entries in the index, one per entry
+in the list. So, the index expression ``field.tags`` applied to a document with
+ID ``doc2`` and content::
 
   {
       "field": {
@@ -209,6 +211,28 @@ gives index entries
  tag1      doc2
  tag2      doc2
  tag3      doc2
+ ========= ======
+
+**Subfields of objects in a list.** If an index expression points at subfields
+of objects in a list, the document will have multiple entries in the index, one
+for each object in the list that specifies the denoted subfield. For instance
+the index expression ``managers.phone_number`` applied to a document
+with doc_id ``doc3`` and content::
+
+  {
+      "department": "department of redundancy department",
+      "managers": [
+        {"name": "Mary", "phone_number": "12345"},
+        {"name": "Katherine"},
+        {"name": "Rob", "phone_number": "54321"}]}
+
+would give index entries:
+
+ ========= ======
+ Index key doc_id
+ ========= ======
+ 12345     doc2
+ 54321     doc2
  ========= ======
 
 **Transformation functions.** An index expression may be wrapped in any number
@@ -227,8 +251,6 @@ Available transformation functions are:
    width.
  * ``bool(index_expression)`` - takes a boolean value and turns it into '0' if
    false and '1' if true.
- * ``is_null(index_expression)`` - True if value is null or not a string or the
-   field is absent, otherwise false
  * ``combine(index_expression1, index_expression2, ...)`` - Combine the values
    of an arbitrary number of sub expressions into a single index.
 
@@ -253,7 +275,7 @@ gives index entries
 
 
 Querying an index
------------------
+^^^^^^^^^^^^^^^^^
 
 Pass an index key or a tuple of index keys (if the index is on multiple fields)
 to ``get_from_index``; the last index key in each tuple (and *only* the last
@@ -272,24 +294,26 @@ with "J", and so will return the documents with ids: 'jw', 'jb', 'jm'.
 Index functions
 ^^^^^^^^^^^^^^^
 
- * create_index(name, index_expressions_list)
- * delete_index(name)
- * get_from_index(name, list_of_index_key_tuples)
- * get_keys_from_index(name)
- * list_indexes()
+ * :py:meth:`~u1db.Database.create_index`
+ * :py:meth:`~u1db.Database.delete_index`
+ * :py:meth:`~u1db.Database.get_from_index`
+ * :py:meth:`~u1db.Database.get_range_from_index`
+ * :py:meth:`~u1db.Database.get_keys_from_index`
+ * :py:meth:`~u1db.Database.list_indexes`
 
-Syncing
-#######
+Synchronizing
+-------------
 
 U1DB is a syncable database. Any U1DB can be synced with any U1DB server; most
-U1DB implementations are capable of being run as a server. Syncing brings both
-the server and the client up to date with one another; save data into a local
-U1DB whether online or offline, and then sync when online.
+U1DB implementations are capable of being run as a server. Synchronizing brings
+both the server and the client up to date with one another; save data into a
+local U1DB whether online or offline, and then sync when online.
 
 Pass an HTTP URL to sync with that server.
 
-Syncing databases which have been independently changed may produce conflicts.
-Read about the U1DB conflict policy and more about syncing at :ref:`conflicts`.
+Synchronizing databases which have been independently changed may produce
+conflicts.  Read about the U1DB conflict policy and more about synchronizing at
+:ref:`conflicts`.
 
 Running your own U1DB server is implementation-specific.
 :ref:`reference-implementation` is able to be run as a server.
@@ -297,7 +321,7 @@ Running your own U1DB server is implementation-specific.
 Dealing with conflicts
 ----------------------
 
-Syncing a database can result in conflicts; if your user changes the same
+Synchronizing a database can result in conflicts; if your user changes the same
 document in two different places and then syncs again, that document will be
 ''in conflict'', meaning that it has incompatible changes. If this is the case,
 ``doc.has_conflicts`` will be true, and put_doc to a conflicted doc will give
@@ -307,11 +331,10 @@ unconflicted document should look like is obviously specific to the user's
 application; once decided, call ``resolve_doc(doc, list_of_conflicted_revisions)``
 to resolve and set the final resolved content.
 
-Syncing functions
-^^^^^^^^^^^^^^^^^
+Synchronizing functions
+^^^^^^^^^^^^^^^^^^^^^^^
 
- * sync(URL)
- * resolve_doc(self, Document, conflicted_doc_revs)
- * get_doc_conflicts(doc_id)
- * resolve_doc(doc, list_of_conflicted_revisions)
+ * :py:meth:`~u1db.Database.sync`
+ * :py:meth:`~u1db.Database.get_doc_conflicts`
+ * :py:meth:`~u1db.Database.resolve_doc`
 
