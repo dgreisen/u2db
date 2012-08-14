@@ -1229,8 +1229,10 @@ cdef class CDatabase(object):
         handle_status("create_index", status)
 
     def sync(self, url):
+        cdef const_char_ptr c_url
+        c_url = url
         with nogil:
-            status = u1db_sync(self._db, url)
+            status = u1db_sync(self._db, c_url)
         handle_status("sync", status)
 
     def list_indexes(self):
