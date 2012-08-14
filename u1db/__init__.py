@@ -16,7 +16,11 @@
 
 """U1DB"""
 
-import simplejson
+try:
+    import simplejson as json
+except ImportError:
+    import json  # noqa
+
 from u1db.errors import InvalidJSON, InvalidContent
 
 __version_info__ = (0, 1, 0)
@@ -385,31 +389,31 @@ class DocumentBase(object):
 
     :ivar doc_id: Unique identifier for this document.
     :ivar rev:
-    :ivar json: The JSON string for this document.
+    :ivar json_string: The JSON string for this document.
     :ivar has_conflicts: Boolean indicating if this document has conflicts
     """
 
-    def __init__(self, doc_id, rev, json, has_conflicts=False):
+    def __init__(self, doc_id, rev, json_string, has_conflicts=False):
         self.doc_id = doc_id
         self.rev = rev
-        if json is not None:
+        if json_string is not None:
             try:
-                value = simplejson.loads(json)
-            except simplejson.JSONDecodeError:
+                value = json.loads(json_string)
+            except json.JSONDecodeError:
                 raise InvalidJSON
             if not isinstance(value, dict):
                 raise InvalidJSON
-        self._json = json
+        self._json = json_string
         self.has_conflicts = has_conflicts
 
     def same_content_as(self, other):
         """Compare the content of two documents."""
         if self._json:
-            c1 = simplejson.loads(self._json)
+            c1 = json.loads(self._json)
         else:
             c1 = None
         if other._json:
-            c2 = simplejson.loads(other._json)
+            c2 = json.loads(other._json)
         else:
             c2 = None
         return c1 == c2
@@ -463,16 +467,16 @@ class DocumentBase(object):
             size += len(self.doc_id)
         return size
 
-    def set_json(self, json):
+    def set_json(self, json_string):
         """Set the json serialization of this document."""
-        if json is not None:
+        if json_string is not None:
             try:
-                self._content = simplejson.loads(json)
-            except simplejson.JSONDecodeError:
+                value = json.loads(json_string)
+            except json.JSONDecodeError:
                 raise InvalidJSON
-            if not isinstance(self._content, dict):
+            if not isinstance(value, dict):
                 raise InvalidJSON
-        self._json = json
+        self._json = json_string
 
     def make_tombstone(self):
         """Make this document into a tombstone."""
@@ -508,29 +512,26 @@ class Document(DocumentBase):
     def same_content_as(self, other):
         """Compare the content of two documents."""
         if self._json:
-            c1 = simplejson.loads(self._json)
+            c1 = json.loads(self._json)
         else:
             c1 = self._content
         if other._json:
-            c2 = simplejson.loads(other._json)
+            c2 = json.loads(other._json)
         else:
             c2 = other._content
         return c1 == c2
 
     def get_json(self):
         """Get the json serialization of this document."""
-        json = super(Document, self).get_json()
-        if json is not None:
-            return json
+        json_string = super(Document, self).get_json()
+        if json_string is not None:
+            return json_string
         if self._content is not None:
-            return simplejson.dumps(self._content)
+            return json.dumps(self._content)
         return None
 
     def set_json(self, json):
         """Set the json serialization of this document."""
-        # TODO: We convert the json in the superclass to check its validity so
-        # we might as well set _content here directly since the price is
-        # already being paid.
         self._content = None
         super(Document, self).set_json(json)
 
@@ -548,7 +549,7 @@ class Document(DocumentBase):
     def _get_content(self):
         """Get the dictionary representing this document."""
         if self._json is not None:
-            self._content = simplejson.loads(self._json)
+            self._content = json.loads(self._json)
             self._json = None
         if self._content is not None:
             return self._content
@@ -557,7 +558,7 @@ class Document(DocumentBase):
     def _set_content(self, content):
         """Set the dictionary representing this document."""
         try:
-            tmp = simplejson.dumps(content)
+            tmp = json.dumps(content)
         except TypeError:
             raise InvalidContent(
                 "Can not be converted to JSON: %r" % (content,))

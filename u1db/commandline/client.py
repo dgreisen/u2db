@@ -18,7 +18,10 @@
 
 import argparse
 import os
-import simplejson
+try:
+    import simplejson as json
+except ImportError:
+    import json  # noqa
 import sys
 
 from u1db import (
@@ -172,9 +175,8 @@ class CmdGetDocConflicts(OneDbCmd):
         for i, doc in enumerate(conflicts):
             if i:
                 self.stdout.write(",")
-            self.stdout.write(simplejson.dumps(dict(rev=doc.rev,
-                                                    content=doc.content),
-                                               indent=4))
+            self.stdout.write(
+                json.dumps(dict(rev=doc.rev, content=doc.content), indent=4))
         self.stdout.write("]\n")
 
 client_commands.register(CmdGetDocConflicts)
@@ -480,10 +482,10 @@ class CmdGetFromIndex(OneDbCmd):
             for i, doc in enumerate(docs):
                 if i:
                     self.stdout.write(",")
-                self.stdout.write(simplejson.dumps(dict(
-                            id=doc.doc_id,
-                            rev=doc.rev,
-                            content=doc.content), indent=4))
+                self.stdout.write(
+                    json.dumps(
+                        dict(id=doc.doc_id, rev=doc.rev, content=doc.content),
+                        indent=4))
             self.stdout.write("]\n")
             return
         return 1

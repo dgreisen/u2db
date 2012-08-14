@@ -18,7 +18,10 @@
 
 import errno
 import os
-import simplejson
+try:
+    import simplejson as json
+except ImportError:
+    import json  # noqa
 from sqlite3 import dbapi2
 import sys
 import time
@@ -853,7 +856,7 @@ class SQLitePartialExpandDatabase(SQLiteDatabase):
     def _put_and_update_indexes(self, old_doc, doc):
         c = self._db_handle.cursor()
         if doc and not doc.is_tombstone():
-            raw_doc = simplejson.loads(doc.get_json())
+            raw_doc = json.loads(doc.get_json())
         else:
             raw_doc = {}
         if old_doc is not None:
@@ -917,7 +920,7 @@ class SQLitePartialExpandDatabase(SQLiteDatabase):
         for doc_id, doc in self._iter_all_docs():
             if doc is None:
                 continue
-            raw_doc = simplejson.loads(doc)
+            raw_doc = json.loads(doc)
             self._update_indexes(doc_id, raw_doc, getters, c)
 
 SQLiteDatabase.register_implementation(SQLitePartialExpandDatabase)

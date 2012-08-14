@@ -17,7 +17,10 @@
 import cStringIO
 import os
 import sys
-import simplejson
+try:
+    import simplejson as json
+except ImportError:
+    import json  # noqa
 import subprocess
 
 from u1db import (
@@ -253,7 +256,8 @@ class TestCmdGet(TestCaseWithDB):
 
     def setUp(self):
         super(TestCmdGet, self).setUp()
-        self.doc = self.db.create_doc_from_json(tests.simple_doc, doc_id='my-test-doc')
+        self.doc = self.db.create_doc_from_json(
+            tests.simple_doc, doc_id='my-test-doc')
 
     def test_get_simple(self):
         cmd = self.make_command(client.CmdGet)
@@ -292,7 +296,8 @@ class TestCmdGetDocConflicts(TestCaseWithDB):
 
     def setUp(self):
         super(TestCmdGetDocConflicts, self).setUp()
-        self.doc1 = self.db.create_doc_from_json(tests.simple_doc, doc_id='my-doc')
+        self.doc1 = self.db.create_doc_from_json(
+            tests.simple_doc, doc_id='my-doc')
         self.doc2 = self.make_document('my-doc', 'other:1', '{}', False)
         self.db._put_doc_if_newer(
             self.doc2, save_conflict=True, replica_uid='r', replica_gen=1,
@@ -302,17 +307,16 @@ class TestCmdGetDocConflicts(TestCaseWithDB):
         self.db.create_doc_from_json(tests.simple_doc, doc_id='a-doc')
         cmd = self.make_command(client.CmdGetDocConflicts)
         cmd.run(self.db_path, 'a-doc')
-        self.assertEqual([],
-                         simplejson.loads(cmd.stdout.getvalue()))
+        self.assertEqual([], json.loads(cmd.stdout.getvalue()))
         self.assertEqual('', cmd.stderr.getvalue())
 
     def test_get_doc_conflicts_simple(self):
         cmd = self.make_command(client.CmdGetDocConflicts)
         cmd.run(self.db_path, 'my-doc')
-        self.assertEqual([dict(rev=self.doc2.rev, content=self.doc2.content),
-                          dict(rev=self.doc1.rev, content=self.doc1.content),
-                          ],
-                         simplejson.loads(cmd.stdout.getvalue()))
+        self.assertEqual(
+            [dict(rev=self.doc2.rev, content=self.doc2.content),
+             dict(rev=self.doc1.rev, content=self.doc1.content)],
+            json.loads(cmd.stdout.getvalue()))
         self.assertEqual('', cmd.stderr.getvalue())
 
     def test_get_doc_conflicts_no_db(self):
@@ -354,7 +358,8 @@ class TestCmdPut(TestCaseWithDB):
 
     def setUp(self):
         super(TestCmdPut, self).setUp()
-        self.doc = self.db.create_doc_from_json(tests.simple_doc, doc_id='my-test-doc')
+        self.doc = self.db.create_doc_from_json(
+            tests.simple_doc, doc_id='my-test-doc')
 
     def test_put_simple(self):
         cmd = self.make_command(client.CmdPut)
@@ -416,7 +421,8 @@ class TestCmdResolve(TestCaseWithDB):
 
     def setUp(self):
         super(TestCmdResolve, self).setUp()
-        self.doc1 = self.db.create_doc_from_json(tests.simple_doc, doc_id='my-doc')
+        self.doc1 = self.db.create_doc_from_json(
+            tests.simple_doc, doc_id='my-doc')
         self.doc2 = self.make_document('my-doc', 'other:1', '{}', False)
         self.db._put_doc_if_newer(
             self.doc2, save_conflict=True, replica_uid='r', replica_gen=1,
@@ -477,8 +483,10 @@ class TestCmdSync(TestCaseWithDB):
         self.db2 = u1db_open(self.db2_path, create=True)
         self.addCleanup(self.db2.close)
         self.db2._set_replica_uid('test2')
-        self.doc = self.db.create_doc_from_json(tests.simple_doc, doc_id='test-id')
-        self.doc2 = self.db2.create_doc_from_json(tests.nested_doc, doc_id='my-test-id')
+        self.doc = self.db.create_doc_from_json(
+            tests.simple_doc, doc_id='test-id')
+        self.doc2 = self.db2.create_doc_from_json(
+            tests.nested_doc, doc_id='my-test-id')
 
     def test_sync(self):
         cmd = self.make_command(client.CmdSync)
@@ -674,7 +682,7 @@ class TestCmdGetFromIndex(TestCaseWithDB):
         cmd = self.make_command(client.CmdGetFromIndex)
         retval = cmd.run(self.db_path, "index", ["value"])
         self.assertEqual(retval, None)
-        self.assertEqual(sorted(simplejson.loads(cmd.stdout.getvalue())),
+        self.assertEqual(sorted(json.loads(cmd.stdout.getvalue())),
                          sorted([dict(id=doc1.doc_id,
                                       rev=doc1.rev,
                                       content=doc1.content),

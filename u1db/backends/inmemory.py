@@ -16,7 +16,10 @@
 
 """The in-memory Database class for U1DB."""
 
-import simplejson
+try:
+    import simplejson as json
+except ImportError:
+    import json  # noqa
 
 from u1db import (
     Document,
@@ -324,7 +327,7 @@ class InMemoryIndex(object):
 
     def evaluate_json(self, doc):
         """Determine the 'key' after applying this index to the doc."""
-        raw = simplejson.loads(doc)
+        raw = json.loads(doc)
         return self.evaluate(raw)
 
     def evaluate(self, obj):

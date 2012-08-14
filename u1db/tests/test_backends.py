@@ -16,7 +16,10 @@
 
 """The backend class for U1DB. This deals with hiding storage details."""
 
-import simplejson
+try:
+    import simplejson as json
+except ImportError:
+    import json  # noqa
 from u1db import (
     DocumentBase,
     errors,
@@ -144,12 +147,12 @@ class AllDatabaseTests(tests.DatabaseBaseTests, tests.TestCaseWithServer):
         self.assertEqual(doc.rev, new_rev)
 
     def test_put_non_ascii_key(self):
-        content = simplejson.dumps({u'key\xe5': u'val'})
+        content = json.dumps({u'key\xe5': u'val'})
         doc = self.db.create_doc_from_json(content, doc_id='my_doc')
         self.assertGetDoc(self.db, 'my_doc', doc.rev, content, False)
 
     def test_put_non_ascii_value(self):
-        content = simplejson.dumps({'key': u'\xe5'})
+        content = json.dumps({'key': u'\xe5'})
         doc = self.db.create_doc_from_json(content, doc_id='my_doc')
         self.assertGetDoc(self.db, 'my_doc', doc.rev, content, False)
 
@@ -1022,8 +1025,7 @@ class DatabaseIndexTests(tests.DatabaseBaseTests):
                          self.db.list_indexes())
 
     def test_create_index_on_non_ascii_field_name(self):
-        doc = self.db.create_doc_from_json(
-            simplejson.dumps({u'\xe5': 'value'}))
+        doc = self.db.create_doc_from_json(json.dumps({u'\xe5': 'value'}))
         self.db.create_index('test-idx', u'\xe5')
         self.assertEqual([doc], self.db.get_from_index('test-idx', 'value'))
 
@@ -1038,14 +1040,12 @@ class DatabaseIndexTests(tests.DatabaseBaseTests):
         self.assertEqual([doc], self.db.get_from_index('test-idx', 'value'))
 
     def test_wildcard_matches_unicode_value(self):
-        doc = self.db.create_doc_from_json(simplejson.dumps(
-            {"key": u"valu\xe5"}))
+        doc = self.db.create_doc_from_json(json.dumps({"key": u"valu\xe5"}))
         self.db.create_index('test-idx', 'key')
         self.assertEqual([doc], self.db.get_from_index('test-idx', '*'))
 
     def test_retrieve_unicode_value_from_index(self):
-        doc = self.db.create_doc_from_json(simplejson.dumps(
-            {"key": u"valu\xe5"}))
+        doc = self.db.create_doc_from_json(json.dumps({"key": u"valu\xe5"}))
         self.db.create_index('test-idx', 'key')
         self.assertEqual(
             [doc], self.db.get_from_index('test-idx', u"valu\xe5"))
@@ -1812,7 +1812,7 @@ class PythonBackendTests(tests.DatabaseBaseTests):
 
     def setUp(self):
         super(PythonBackendTests, self).setUp()
-        self.simple_doc = simplejson.loads(simple_doc)
+        self.simple_doc = json.loads(simple_doc)
 
     def test_create_doc_with_factory(self):
         self.db.set_document_factory(TestAlternativeDocument)

@@ -17,7 +17,10 @@
 """Tests for HTTPDatabase"""
 
 from oauth import oauth
-import simplejson
+try:
+    import simplejson as json
+except ImportError:
+    import json  # noqa
 from wsgiref import simple_server
 
 from u1db import (
@@ -57,7 +60,7 @@ class TestHTTPClientBase(tests.TestCaseWithServer):
                 ret['CONTENT_TYPE'] = environ['CONTENT_TYPE']
                 content_length = int(environ['CONTENT_LENGTH'])
                 ret['body'] = environ['wsgi.input'].read(content_length)
-            return [simplejson.dumps(ret)]
+            return [json.dumps(ret)]
         elif environ['PATH_INFO'].endswith('error_then_accept'):
             if self.errors >= 3:
                 start_response(
@@ -69,10 +72,10 @@ class TestHTTPClientBase(tests.TestCaseWithServer):
                     ret['CONTENT_TYPE'] = environ['CONTENT_TYPE']
                     content_length = int(environ['CONTENT_LENGTH'])
                     ret['body'] = '{"oki": "doki"}'
-                return [simplejson.dumps(ret)]
+                return [json.dumps(ret)]
             self.errors += 1
             content_length = int(environ['CONTENT_LENGTH'])
-            error = simplejson.loads(
+            error = json.loads(
                 environ['wsgi.input'].read(content_length))
             response = error['response']
             # In debug mode, wsgiref has an assertion that the status parameter
@@ -86,11 +89,11 @@ class TestHTTPClientBase(tests.TestCaseWithServer):
                 return [str(response)]
             else:
                 start_response(status, [('Content-Type', 'application/json')])
-                return [simplejson.dumps(response)]
+                return [json.dumps(response)]
         elif environ['PATH_INFO'].endswith('error'):
             self.errors += 1
             content_length = int(environ['CONTENT_LENGTH'])
-            error = simplejson.loads(
+            error = json.loads(
                 environ['wsgi.input'].read(content_length))
             response = error['response']
             # In debug mode, wsgiref has an assertion that the status parameter
@@ -104,7 +107,7 @@ class TestHTTPClientBase(tests.TestCaseWithServer):
                 return [str(response)]
             else:
                 start_response(status, [('Content-Type', 'application/json')])
-                return [simplejson.dumps(response)]
+                return [json.dumps(response)]
         elif '/oauth' in environ['PATH_INFO']:
             base_url = self.getURL('').rstrip('/')
             oauth_req = oauth.OAuthRequest.from_request(
@@ -121,12 +124,10 @@ class TestHTTPClientBase(tests.TestCaseWithServer):
             except oauth.OAuthError, e:
                 start_response("401 Unauthorized",
                                [('Content-Type', 'application/json')])
-                return [simplejson.dumps({"error": "unauthorized",
+                return [json.dumps({"error": "unauthorized",
                                           "message": e.message})]
             start_response("200 OK", [('Content-Type', 'application/json')])
-            return [simplejson.dumps([environ['PATH_INFO'],
-                                      token.key,
-                                      params])]
+            return [json.dumps([environ['PATH_INFO'], token.key, params])]
 
     def server_def(self):
         def make_server(host_port, handler, state):
@@ -181,17 +182,17 @@ class TestHTTPClientBase(tests.TestCaseWithServer):
                           'PATH_INFO': '/dbase/echo',
                           'QUERY_STRING': '',
                           'body': '{}',
-                          'REQUEST_METHOD': 'PUT'}, simplejson.loads(res))
+                          'REQUEST_METHOD': 'PUT'}, json.loads(res))
 
         res, headers = cli._request('GET', ['doc', 'echo'], {'a': 1})
         self.assertEqual({'PATH_INFO': '/dbase/doc/echo',
                           'QUERY_STRING': 'a=1',
-                          'REQUEST_METHOD': 'GET'}, simplejson.loads(res))
+                          'REQUEST_METHOD': 'GET'}, json.loads(res))
 
         res, headers = cli._request('GET', ['doc', '%FFFF', 'echo'], {'a': 1})
         self.assertEqual({'PATH_INFO': '/dbase/doc/%FFFF/echo',
                           'QUERY_STRING': 'a=1',
-                          'REQUEST_METHOD': 'GET'}, simplejson.loads(res))
+                          'REQUEST_METHOD': 'GET'}, json.loads(res))
 
         res, headers = cli._request('POST', ['echo'], {'b': 2}, 'Body',
                                    'application/x-test')
@@ -199,7 +200,7 @@ class TestHTTPClientBase(tests.TestCaseWithServer):
                           'PATH_INFO': '/dbase/echo',
                           'QUERY_STRING': 'b=2',
                           'body': 'Body',
-                          'REQUEST_METHOD': 'POST'}, simplejson.loads(res))
+                          'REQUEST_METHOD': 'POST'}, json.loads(res))
 
     def test__request_json(self):
         cli = self.getClient()
@@ -289,7 +290,7 @@ class TestHTTPClientBase(tests.TestCaseWithServer):
                           {'status': "403 Forbidden",
                            'response': {"error": "user quota exceeded"}})
 
-    def test_user_quota_exceeded(self):
+    def test_user_needs_subscription(self):
         cli = self.getClient()
         self.assertRaises(errors.SubscriptionNeeded,
                           cli._request_json, 'POST', ['error'], {},
@@ -333,15 +334,15 @@ class TestHTTPClientBase(tests.TestCaseWithServer):
                                   tests.token1.key, tests.token1.secret)
         params = {'x': u'\xf0', 'y': "foo"}
         res, headers = cli._request('GET', ['doc', 'oauth'], params)
-        self.assertEqual(['/dbase/doc/oauth', tests.token1.key, params],
-                         simplejson.loads(res))
+        self.assertEqual(
+            ['/dbase/doc/oauth', tests.token1.key, params], json.loads(res))
 
         # oauth does its own internal quoting
         params = {'x': u'\xf0', 'y': "foo"}
         res, headers = cli._request('GET', ['doc', 'oauth', 'foo bar'], params)
         self.assertEqual(
             ['/dbase/doc/oauth/foo bar', tests.token1.key, params],
-            simplejson.loads(res))
+            json.loads(res))
 
     def test_oauth_Unauthorized(self):
         cli = self.getClient()

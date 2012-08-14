@@ -15,7 +15,6 @@
 # You should have received a copy of the GNU Lesser General Public License
 # along with u1db.  If not, see <http://www.gnu.org/licenses/>.
 
-import os
 import sys
 
 
@@ -23,7 +22,7 @@ def config():
     try:
         from setuptools import setup, Extension, find_packages
     except ImportError:
-        from distutils.core import setup, Extension, find_packages
+        from distutils.core import setup, Extension, find_packages  # noqa
     import u1db
     ext = []
     kwargs = {
@@ -40,7 +39,7 @@ def config():
         "package_data": {'': ["*.sql"]},
         "scripts": ['u1db-client', 'u1db-serve'],
         "ext_modules": ext,
-        "install_requires": ["dirspec", "paste", "simplejson", "routes"],
+        "install_requires": ["dirspec", "paste", "routes"],
         # informational
         "tests_require": ["testtools", "testscenarios", "Cython",
                           "pyOpenSSL"],
@@ -66,7 +65,7 @@ synchronize them with other stores.
     }
     try:
         from Cython.Distutils import build_ext
-    except ImportError, e:
+    except ImportError:
         print "Unable to import Cython, to test the C implementation"
     else:
         kwargs["cmdclass"] = {"build_ext": build_ext}

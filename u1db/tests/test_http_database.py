@@ -17,7 +17,10 @@
 """Tests for HTTPDatabase"""
 
 import inspect
-import simplejson
+try:
+    import simplejson as json
+except ImportError:
+    import json  # noqa
 
 from u1db import (
     errors,
@@ -127,7 +130,7 @@ class TestHTTPDatabaseSimpleOperations(tests.TestCase):
 
     def test_get_doc_deleted_include_deleted(self):
         self.response_val = errors.HTTPError(404,
-                                             simplejson.dumps(
+                                             json.dumps(
                                              {"error": errors.DOCUMENT_DELETED}
                                              ),
                                              {'x-u1db-rev': 'doc-rev-gone',

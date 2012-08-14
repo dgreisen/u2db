@@ -17,7 +17,10 @@
 """Test OAuth wsgi middleware"""
 import paste.fixture
 from oauth import oauth
-import simplejson
+try:
+    import simplejson as json
+except ImportError:
+    import json  # noqa
 import time
 
 from u1db import tests
@@ -33,11 +36,13 @@ class TestAuthMiddleware(tests.TestCase):
     def setUp(self):
         super(TestAuthMiddleware, self).setUp()
         self.got = []
+
         def witness_app(environ, start_response):
             start_response("200 OK", [("content-type", "text/plain")])
             self.got.append((environ['token_key'], environ['PATH_INFO'],
                              environ['QUERY_STRING']))
             return ["ok"]
+
         class MyOAuthMiddleware(OAuthMiddleware):
             get_oauth_data_store = lambda self: tests.testingOAuthStore
 
@@ -45,6 +50,7 @@ class TestAuthMiddleware(tests.TestCase):
                 consumer, token = super(MyOAuthMiddleware, self).verify(
                     environ, oauth_req)
                 environ['token_key'] = token.key
+
         self.oauth_midw = MyOAuthMiddleware(witness_app, BASE_URL)
         self.app = paste.fixture.TestApp(self.oauth_midw)
 
@@ -60,9 +66,9 @@ class TestAuthMiddleware(tests.TestCase):
         resp = self.app.delete(url, expect_errors=True)
         self.assertEqual(401, resp.status)
         self.assertEqual('application/json', resp.header('content-type'))
-        self.assertEqual({"error": "unauthorized",
-                          "message": "Missing OAuth."},
-                         simplejson.loads(resp.body))
+        self.assertEqual(
+            {"error": "unauthorized", "message": "Missing OAuth."},
+            json.loads(resp.body))
 
     def test_oauth_in_query_string(self):
         url = BASE_URL + '/~/foo/doc/doc-id'
@@ -97,7 +103,7 @@ class TestAuthMiddleware(tests.TestCase):
                                expect_errors=True)
         self.assertEqual(401, resp.status)
         self.assertEqual('application/json', resp.header('content-type'))
-        err = simplejson.loads(resp.body)
+        err = json.loads(resp.body)
         self.assertEqual({"error": "unauthorized",
                           "message": err['message']},
                          err)
@@ -155,6 +161,6 @@ class TestAuthMiddleware(tests.TestCase):
         self.oauth_midw.timestamp_threshold = 1
         resp = self.app.delete(oauth_req.to_url(), expect_errors=True)
         self.assertEqual(401, resp.status)
-        err = simplejson.loads(resp.body)
+        err = json.loads(resp.body)
         self.assertIn('Expired timestamp', err['message'])
         self.assertIn('threshold 1', err['message'])
