@@ -1,6 +1,9 @@
 cmake_minimum_required (VERSION 2.6)
 project (u1db)
 
+# Some default CFLAGS
+SET (CMAKE_C_FLAGS "-O2 -g -Wall -Werror")
+
 # Allow specifying the libdir to use for the C library
 SET (LIB_SUFFIX "" CACHE STRING "Define suffix of library directory name.")
 SET (LIB_INSTALL_DIR "lib${LIB_SUFFIX}")
@@ -34,5 +37,5 @@ INSTALL (
 )
 
 install(DIRECTORY ${CMAKE_SOURCE_DIR}/include/u1db DESTINATION include
-    FILES_MATCHING PATTERN "*.h"
+    FILES_MATCHING PATTERN "u1db.h"
 )

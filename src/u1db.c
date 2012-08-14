@@ -195,7 +195,7 @@ int
 u1db_set_document_size_limit(u1database *db, int limit)
 {
     sqlite3_stmt *statement;
-    int status, final_status;
+    int status;
 
     status = sqlite3_prepare_v2(db->sql_handle,
         "INSERT OR REPLACE INTO u1db_config VALUES ('document_size_limit', ?)",
