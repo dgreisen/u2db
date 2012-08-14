@@ -272,7 +272,7 @@ int u1db_doc_get_size(u1db_document *doc);
 /**
  * Synchronize db with the database at url.
  *
- * @param url    A url of a remote database to synchronize with.
+ * @param url    The URL of a remote database to synchronize with.
  */
 int u1db_sync(u1database *db, const char *url);
 
