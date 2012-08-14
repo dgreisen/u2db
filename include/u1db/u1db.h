@@ -269,6 +269,12 @@ int u1db_doc_set_json(u1db_document *doc, const char *json);
  */
 int u1db_doc_get_size(u1db_document *doc);
 
+/**
+ * Synchronize db with the database at url.
+ *
+ * @param url    The URL of a remote database to synchronize with.
+ */
+int u1db_sync(u1database *db, const char *url);
 
 /**
  * Create an index that you can query for matching documents.
