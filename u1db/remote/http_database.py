@@ -16,7 +16,10 @@
 
 """HTTPDatabase to access a remote db over the HTTP API."""
 
-import simplejson
+try:
+    import simplejson as json
+except ImportError:
+    import json  # noqa
 import uuid
 
 from u1db import (
@@ -97,7 +100,7 @@ class HTTPDatabase(http_client.HTTPClientBase, Database):
             else:
                 raise
         doc_rev = headers['x-u1db-rev']
-        has_conflicts = simplejson.loads(headers['x-u1db-has-conflicts'])
+        has_conflicts = json.loads(headers['x-u1db-has-conflicts'])
         doc = self._factory(doc_id, doc_rev, res)
         doc.has_conflicts = has_conflicts
         return doc
@@ -111,7 +114,7 @@ class HTTPDatabase(http_client.HTTPClientBase, Database):
             'GET', ['docs'], {
                 "doc_ids": doc_ids, "include_deleted": include_deleted,
                 "check_for_conflicts": check_for_conflicts})
-        for doc_dict in simplejson.loads(res):
+        for doc_dict in json.loads(res):
             doc = self._factory(
                 doc_dict['doc_id'], doc_dict['doc_rev'], doc_dict['content'])
             doc.has_conflicts = doc_dict['has_conflicts']

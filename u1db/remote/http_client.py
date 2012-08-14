@@ -18,7 +18,10 @@
 
 import httplib
 from oauth import oauth
-import simplejson
+try:
+    import simplejson as json
+except ImportError:
+    import json  # noqa
 import socket
 import ssl
 import sys
@@ -33,7 +36,7 @@ from u1db.remote import (
     http_errors,
     )
 
-from u1db.remote.ssl_match_hostname import (
+from u1db.remote.ssl_match_hostname import (  # noqa
     CertificateError,
     match_hostname,
     )
@@ -137,7 +140,7 @@ class HTTPClientBase(object):
             return body, headers
         elif resp.status in http_errors.ERROR_STATUSES:
             try:
-                respdic = simplejson.loads(body)
+                respdic = json.loads(body)
             except ValueError:
                 pass
             else:
@@ -184,7 +187,7 @@ class HTTPClientBase(object):
                 encoded_params[key] = _encode_query_parameter(value)
             url_query += ('?' + urllib.urlencode(encoded_params))
         if body is not None and not isinstance(body, basestring):
-            body = simplejson.dumps(body)
+            body = json.dumps(body)
             content_type = 'application/json'
         headers = {}
         if content_type:
@@ -203,4 +206,4 @@ class HTTPClientBase(object):
                                                             content_type=None):
         res, headers = self._request(method, url_parts, params, body,
                                      content_type)
-        return simplejson.loads(res), headers
+        return json.loads(res), headers

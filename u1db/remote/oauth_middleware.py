@@ -16,10 +16,12 @@
 """U1DB OAuth authorisation WSGI middleware."""
 import httplib
 from oauth import oauth
-import simplejson
+try:
+    import simplejson as json
+except ImportError:
+    import json  # noqa
 from urllib import quote
 from wsgiref.util import shift_path_info
-import sys
 
 
 sign_meth_HMAC_SHA1 = oauth.OAuthSignatureMethod_HMAC_SHA1()
@@ -47,7 +49,7 @@ class OAuthMiddleware(object):
         err = {"error": description}
         if message:
             err['message'] = message
-        return [simplejson.dumps(err)]
+        return [json.dumps(err)]
 
     def __call__(self, environ, start_response):
         if not environ['PATH_INFO'].startswith('/~/'):

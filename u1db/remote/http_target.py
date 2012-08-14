@@ -16,7 +16,10 @@
 
 """SyncTarget API implementation to a remote HTTP server."""
 
-import simplejson
+try:
+    import simplejson as json
+except ImportError:
+    import json  # noqa
 
 from u1db import (
     Document,
@@ -59,17 +62,17 @@ class HTTPSyncTarget(http_client.HTTPClientBase, SyncTarget):
         data = parts[1:-1]
         if data:
             line, comma = utils.check_and_strip_comma(data[0])
-            res = simplejson.loads(line)
+            res = json.loads(line)
             for entry in data[1:]:
                 if not comma:  # missing in between comma
                     raise BrokenSyncStream
                 line, comma = utils.check_and_strip_comma(entry)
-                entry = simplejson.loads(line)
+                entry = json.loads(line)
                 doc = Document(entry['id'], entry['rev'], entry['content'])
                 return_doc_cb(doc, entry['gen'], entry['trans_id'])
         if parts[-1] != ']':
             try:
-                partdic = simplejson.loads(parts[-1])
+                partdic = json.loads(parts[-1])
             except ValueError:
                 pass
             else:
@@ -93,7 +96,7 @@ class HTTPSyncTarget(http_client.HTTPClientBase, SyncTarget):
         size = 1
 
         def prepare(**dic):
-            entry = comma + '\r\n' + simplejson.dumps(dic)
+            entry = comma + '\r\n' + json.dumps(dic)
             entries.append(entry)
             return len(entry)
 
