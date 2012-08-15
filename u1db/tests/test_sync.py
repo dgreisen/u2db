@@ -1053,7 +1053,11 @@ class TestDbSync(tests.TestCaseWithServer):
         doc1 = self.db.create_doc_from_json(tests.simple_doc)
         doc2 = self.db2.create_doc_from_json(tests.nested_doc)
         db2_url = self.getURL('test2.db')
-        self.db.sync(db2_url)
+        local_gen_before_sync = self.db.sync(db2_url)
+        gen, _, changes = self.db.whats_changed(local_gen_before_sync)
+        self.assertEqual(1, len(changes))
+        self.assertEqual(doc2.doc_id, changes[0][0])
+        self.assertEqual(1, gen - local_gen_before_sync)
         self.assertGetDoc(self.db2, doc1.doc_id, doc1.rev, tests.simple_doc,
                           False)
         self.assertGetDoc(self.db, doc2.doc_id, doc2.rev, tests.nested_doc,
