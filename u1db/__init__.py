@@ -189,12 +189,12 @@ class Database(object):
         Creating an index will block until the expressions have been evaluated
         and the index generated.
 
-        :name: A unique name which can be used as a key prefix
+        :index_name: A unique name which can be used as a key prefix
         :index_expressions: index expressions defining the index information.
             Examples:
-            "fieldname" to index alphabetically sorted on field.
-            "number(fieldname, width)", "lower(fieldname)",
-            "fieldname.subfieldname"
+                "fieldname" to index alphabetically sorted on field.
+                "number(fieldname, width)", "lower(fieldname)",
+                "fieldname.subfieldname"
         """
         raise NotImplementedError(self.create_index)
 
