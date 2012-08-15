@@ -272,9 +272,13 @@ int u1db_doc_get_size(u1db_document *doc);
 /**
  * Synchronize db with the database at url.
  *
- * @param url    The URL of a remote database to synchronize with.
+ * @param url              The URL of a remote database to synchronize with.
+ * @param local_gen (OUT)  The local generation at the start of the sync. This
+ *                         is useful for applications to call whats_changed
+ *                         with to find out which documents were affected by a
+ *                         sync.   
  */
-int u1db_sync(u1database *db, const char *url);
+int u1db_sync(u1database *db, const char *url, int *local_gen);
 
 /**
  * Create an index that you can query for matching documents.

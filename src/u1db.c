@@ -2077,19 +2077,15 @@ u1db__is_doc_id_valid(const char *doc_id)
 }
 
 int
-u1db_sync(u1database *db, const char *url)
+u1db_sync(u1database *db, const char *url, int *local_gen)
 {
     int status = U1DB_OK;
-    int local_gen;
     u1db_sync_target *target = NULL;
     status = u1db__create_http_sync_target(url, &target);
     if (status != U1DB_OK) {
         goto finish;
     }
-    status = u1db__get_generation(db, &local_gen);
-    if (status != U1DB_OK)
-        return status;
-    status = u1db__sync_db_to_target(db, target, &local_gen);
+    status = u1db__sync_db_to_target(db, target, local_gen);
 finish:
     if (target != NULL) {
         u1db__free_sync_target(&target);
