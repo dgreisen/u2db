@@ -1232,7 +1232,7 @@ cdef class CDatabase(object):
 
     def sync(self, url):
         cdef const_char_ptr c_url
-        cdef int local_gen
+        cdef int local_gen = 0
         c_url = url
         with nogil:
             status = u1db_sync(self._db, c_url, &local_gen)
