@@ -600,7 +600,7 @@ u1db__sync_db_to_target(u1database *db, u1db_sync_target *target,
     int local_gen_known_by_target, target_gen_known_by_local;
 
     // fprintf(stderr, "Starting\n");
-    if (db == NULL || target == NULL) {
+    if (db == NULL || target == NULL || local_gen_before_sync == NULL) {
         // fprintf(stderr, "DB, target, or local are NULL\n");
         status = U1DB_INVALID_PARAMETER;
         goto finish;
