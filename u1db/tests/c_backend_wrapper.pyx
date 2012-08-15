@@ -98,7 +98,7 @@ cdef extern from "u1db/u1db.h":
                                   u1db_trans_info_callback cb)
     int u1db_get_doc_conflicts(u1database *db, char *doc_id, void *context,
                                u1db_doc_callback cb)
-    int u1db_sync(u1database *db, const_char_ptr url) nogil
+    int u1db_sync(u1database *db, const_char_ptr url, int *local_gen) nogil
     int u1db_create_index_list(u1database *db, char *index_name,
                                int n_expressions, const_char_ptr *expressions)
     int u1db_create_index(u1database *db, char *index_name, int n_expressions,
@@ -1232,10 +1232,12 @@ cdef class CDatabase(object):
 
     def sync(self, url):
         cdef const_char_ptr c_url
+        cdef int local_gen = 0
         c_url = url
         with nogil:
-            status = u1db_sync(self._db, c_url)
+            status = u1db_sync(self._db, c_url, &local_gen)
         handle_status("sync", status)
+        return local_gen
 
     def list_indexes(self):
         a_list = []

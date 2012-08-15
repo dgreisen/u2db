@@ -484,7 +484,12 @@ class TestSyncCtoHTTPViaC(tests.TestCaseWithServer):
         url = self.getURL('test.db')
         db = c_backend_wrapper.CDatabase(':memory:')
         doc = db.create_doc_from_json(tests.simple_doc)
-        db.sync(url)
+        local_gen_before_sync = db.sync(url)
+        gen, _, changes = db.whats_changed(local_gen_before_sync)
+        self.assertEqual(1, len(changes))
+        self.assertEqual(mem_doc.doc_id, changes[0][0])
+        self.assertEqual(1, gen - local_gen_before_sync)
+        self.assertEqual(1, local_gen_before_sync)
         self.assertGetDoc(mem_db, doc.doc_id, doc.rev, doc.get_json(), False)
         self.assertGetDoc(db, mem_doc.doc_id, mem_doc.rev, mem_doc.get_json(),
                           False)
