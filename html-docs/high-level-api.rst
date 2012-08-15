@@ -301,18 +301,18 @@ Index functions
  * :py:meth:`~u1db.Database.get_keys_from_index`
  * :py:meth:`~u1db.Database.list_indexes`
 
-Synchronizing
+Synchronising
 -------------
 
 U1DB is a syncable database. Any U1DB can be synced with any U1DB server; most
-U1DB implementations are capable of being run as a server. Synchronizing brings
+U1DB implementations are capable of being run as a server. Synchronising brings
 both the server and the client up to date with one another; save data into a
 local U1DB whether online or offline, and then sync when online.
 
 Pass an HTTP URL to sync with that server.
 
-Synchronizing databases which have been independently changed may produce
-conflicts.  Read about the U1DB conflict policy and more about synchronizing at
+Synchronising databases which have been independently changed may produce
+conflicts.  Read about the U1DB conflict policy and more about synchronising at
 :ref:`conflicts`.
 
 Running your own U1DB server is implementation-specific.
@@ -321,7 +321,7 @@ Running your own U1DB server is implementation-specific.
 Dealing with conflicts
 ----------------------
 
-Synchronizing a database can result in conflicts; if your user changes the same
+Synchronising a database can result in conflicts; if your user changes the same
 document in two different places and then syncs again, that document will be
 ''in conflict'', meaning that it has incompatible changes. If this is the case,
 ``doc.has_conflicts`` will be true, and put_doc to a conflicted doc will give
@@ -331,7 +331,7 @@ unconflicted document should look like is obviously specific to the user's
 application; once decided, call ``resolve_doc(doc, list_of_conflicted_revisions)``
 to resolve and set the final resolved content.
 
-Synchronizing functions
+Synchronising functions
 ^^^^^^^^^^^^^^^^^^^^^^^
 
  * :py:meth:`~u1db.Database.sync`
