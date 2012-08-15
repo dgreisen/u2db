@@ -1456,7 +1456,7 @@ def sync_db_to_target(db, target):
     """Sync the data between a CDatabase and a CSyncTarget"""
     cdef CDatabase cdb
     cdef CSyncTarget ctarget
-    cdef int local_gen, status
+    cdef int local_gen = 0, status
 
     cdb = db
     ctarget = target
