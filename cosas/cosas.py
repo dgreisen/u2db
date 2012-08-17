@@ -169,7 +169,7 @@ class Task(u1db.Document):
 
     def _get_title(self):
         """Get the task title."""
-        return self.content['title']
+        return self.content.get('title')
 
     def _set_title(self, title):
         """Set the task title."""
@@ -179,7 +179,7 @@ class Task(u1db.Document):
 
     def _get_done(self):
         """Get the status of the task."""
-        return self.content['done']
+        return self.content.get('done', False)
 
     def _set_done(self, value):
         """Set the done status."""
@@ -189,7 +189,7 @@ class Task(u1db.Document):
 
     def _get_tags(self):
         """Get tags associated with the task."""
-        return self.content['tags']
+        return self.content.setdefault('tags', [])
 
     def _set_tags(self, tags):
         """Set tags associated with the task."""

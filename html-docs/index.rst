@@ -25,6 +25,7 @@ If you're interested in hacking on U1DB itself, read about the
    :maxdepth: 1
 
    quickstart
+   tutorial
    high-level-api
    reference-implementation
    conflicts
