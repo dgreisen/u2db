@@ -1,17 +1,19 @@
 # Copyright 2011-2012 Canonical Ltd.
 #
-# This program is free software: you can redistribute it and/or modify it
-# under the terms of the GNU General Public License version 3, as published
-# by the Free Software Foundation.
+# This file is part of u1db.
 #
-# This program is distributed in the hope that it will be useful, but
-# WITHOUT ANY WARRANTY; without even the implied warranties of
-# MERCHANTABILITY, SATISFACTORY QUALITY, or FITNESS FOR A PARTICULAR
-# PURPOSE.  See the GNU General Public License for more details.
+# u1db is free software: you can redistribute it and/or modify
+# it under the terms of the GNU Lesser General Public License version 3
+# as published by the Free Software Foundation.
 #
-# You should have received a copy of the GNU General Public License along
-# with this program.  If not, see <http://www.gnu.org/licenses/>.
-
+# u1db is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU Lesser General Public License for more details.
+#
+# You should have received a copy of the GNU Lesser General Public License
+# along with u1db.  If not, see <http://www.gnu.org/licenses/>.
+#
 """A Cython wrapper around the C implementation of U1DB Database backend."""
 
 cdef extern from "Python.h":
@@ -96,6 +98,7 @@ cdef extern from "u1db/u1db.h":
                                   u1db_trans_info_callback cb)
     int u1db_get_doc_conflicts(u1database *db, char *doc_id, void *context,
                                u1db_doc_callback cb)
+    int u1db_sync(u1database *db, const_char_ptr url, int *local_gen) nogil
     int u1db_create_index_list(u1database *db, char *index_name,
                                int n_expressions, const_char_ptr *expressions)
     int u1db_create_index(u1database *db, char *index_name, int n_expressions,
@@ -238,10 +241,6 @@ cdef extern from "u1db/u1db_internal.h":
                                     int *my_db_rev)
     int u1db__sync_record_machine_info(u1database *db, char *replica_uid,
                                        int db_rev)
-    int u1db__sync_exchange(u1database *db, char *from_replica_uid,
-                            int from_db_rev, int last_known_rev,
-                            u1db_record *from_records, u1db_record **new_records,
-                            u1db_record **conflict_records)
     int u1db__sync_exchange_seen_ids(u1db_sync_exchange *se, int *n_ids,
                                      const_char_ptr **doc_ids)
     int u1db__format_query(int n_fields, const_char_ptr *values, char **buf,
@@ -1186,25 +1185,6 @@ cdef class CDatabase(object):
             u1db__set_replica_gen_and_trans_id(
                 self._db, replica_uid, generation, trans_id))
 
-    def _sync_exchange(self, docs_info, from_replica_uid, from_machine_rev,
-                       last_known_rev):
-        cdef int status
-        cdef u1db_record *from_records, *next_record
-        cdef u1db_record *new_records, *conflict_records
-
-        from_records = next_record = NULL
-        for doc_id, doc_rev, doc in reversed(docs_info):
-            next_record = u1db__create_record(doc_id, doc_rev, doc)
-            next_record.next = from_records
-            from_records = next_record
-        new_records = conflict_records = NULL
-        status = u1db__sync_exchange(self._db, from_replica_uid,
-            from_machine_rev, last_known_rev,
-            from_records, &new_records, &conflict_records)
-        u1db__free_records(&from_records)
-        if status != U1DB_OK:
-            raise RuntimeError("Failed to _sync_exchange: %d" % (status,))
-
     def create_index_list(self, index_name, index_expressions):
         cdef const_char_ptr *expressions
         cdef int n_expressions
@@ -1249,6 +1229,15 @@ cdef class CDatabase(object):
         else:
             status = U1DB_NOT_IMPLEMENTED
         handle_status("create_index", status)
+
+    def sync(self, url):
+        cdef const_char_ptr c_url
+        cdef int local_gen = 0
+        c_url = url
+        with nogil:
+            status = u1db_sync(self._db, c_url, &local_gen)
+        handle_status("sync", status)
+        return local_gen
 
     def list_indexes(self):
         a_list = []

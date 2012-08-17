@@ -195,7 +195,7 @@ int
 u1db_set_document_size_limit(u1database *db, int limit)
 {
     sqlite3_stmt *statement;
-    int status, final_status;
+    int status;
 
     status = sqlite3_prepare_v2(db->sql_handle,
         "INSERT OR REPLACE INTO u1db_config VALUES ('document_size_limit', ?)",
@@ -1845,19 +1845,6 @@ finish:
 }
 
 
-int
-u1db__sync_exchange(u1database *db, const char *from_replica_uid,
-                    int from_db_rev, int last_known_rev,
-                    u1db_record *from_records, u1db_record **new_records,
-                    u1db_record **conflict_records)
-{
-    if (db == NULL || from_replica_uid == NULL || new_records == NULL
-        || conflict_records == NULL) {
-        return U1DB_INVALID_PARAMETER;
-    }
-    return U1DB_INVALID_PARAMETER;
-}
-
 u1db_record *
 u1db__create_record(const char *doc_id, const char *doc_rev, const char *doc)
 {
@@ -2089,6 +2076,22 @@ u1db__is_doc_id_valid(const char *doc_id)
     return U1DB_OK;
 }
 
+int
+u1db_sync(u1database *db, const char *url, int *local_gen)
+{
+    int status = U1DB_OK;
+    u1db_sync_target *target = NULL;
+    status = u1db__create_http_sync_target(url, &target);
+    if (status != U1DB_OK) {
+        goto finish;
+    }
+    status = u1db__sync_db_to_target(db, target, local_gen);
+finish:
+    if (target != NULL) {
+        u1db__free_sync_target(&target);
+    }
+    return status;
+}
 
 int
 u1db_create_index_list(u1database *db, const char *index_name,

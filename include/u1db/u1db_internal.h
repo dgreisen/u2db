@@ -540,6 +540,11 @@ int u1db__create_oauth_http_sync_target(const char *url,
 
 /**
  * Sync a database with a sync target.
+ *
+ * @param local_gen_before_sync (OUT) Will return the local generation before
+ *                                    before the sync started, which clients
+ *                                    can use to know what was changed during
+ *                                    the sync.
  */
 int u1db__sync_db_to_target(u1database *db, u1db_sync_target *target,
                             int *local_gen_before_sync);

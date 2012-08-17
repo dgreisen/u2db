@@ -85,7 +85,7 @@ command-line client covers the basic operations on a database.
     ~/u1db/trunk$ ./u1db-serve --verbose # run the server, and you can now use http://127.0.0.1:43632/example.u1db as a sync URL
     listening on: 127.0.0.1:43632
 
-Synchronizing to other databases
+Synchronising to other databases
 --------------------------------
 
 .. code-block:: python

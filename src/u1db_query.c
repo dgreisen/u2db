@@ -245,11 +245,12 @@ struct operation
     int arity;
     const int *value_types;
 } OPERATIONS[] = {
-    op_lower, "lower", json_type_string, 1, JUST_EXPRESSION,
-    op_number, "number", json_type_int, 2, EXPRESSION_INTEGER,
-    op_split_words, "split_words", json_type_string, 1, JUST_EXPRESSION,
-    op_bool, "bool", json_type_boolean, 1, JUST_EXPRESSION,
-    op_combine, "combine", json_type_string, -1, JUST_EXPRESSION};
+    { op_lower, "lower", json_type_string, 1, JUST_EXPRESSION },
+    { op_number, "number", json_type_int, 2, EXPRESSION_INTEGER },
+    { op_split_words, "split_words", json_type_string, 1, JUST_EXPRESSION },
+    { op_bool, "bool", json_type_boolean, 1, JUST_EXPRESSION },
+    { op_combine, "combine", json_type_string, -1, JUST_EXPRESSION },
+};
 
 static int
 extract_value(json_object *val, int value_type, string_list *values)
