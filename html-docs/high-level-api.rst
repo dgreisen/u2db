@@ -356,7 +356,7 @@ Index functions
  * :py:meth:`~u1db.Database.delete_index`
  * :py:meth:`~u1db.Database.get_from_index`
  * :py:meth:`~u1db.Database.get_range_from_index`
- * :py:meth:`~u1db.Database.get_keys_from_index`
+ * :py:meth:`~u1db.Database.get_index_keys`
  * :py:meth:`~u1db.Database.list_indexes`
 
 Synchronising
