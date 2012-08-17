@@ -153,7 +153,7 @@ Given a database with the following documents:
 .. testcode ::
 
     import u1db
-    db = u1db.open("mydb5.u1db", create=True)
+    db = u1db.open("mydb6.u1db", create=True)
     jb = db.create_doc({"firstname": "John", "surname": "Barnes", "position": "left wing"})
     jm = db.create_doc({"firstname": "Jan", "surname": "Molby", "position": "midfield"})
     ah = db.create_doc({"firstname": "Alan", "surname": "Hansen", "position": "defence"}) 
@@ -162,14 +162,14 @@ Given a database with the following documents:
 an index expression of ``"firstname"`` will create an index that looks
 (conceptually) like this
 
- ====================== ===========
- index expression value document id
- ====================== ===========
+ ====================== ========
+ index expression value document
+ ====================== ========
  Alan                   ah
  Jan                    jm
  John                   jb
  John                   jw
- ====================== ===========
+ ====================== ========
 
 and that index is created with:
 
@@ -190,67 +190,71 @@ which is then used as the index key.
 
 **Name a field.** A basic index expression is a dot-delimited list of nesting
 fieldnames, so the index expression ``field.sub1.sub2`` applied to a document
-with ID ``doc1`` and content::
+with below content:
 
-  {
-      "field": {
-          "sub1": {
-              "sub2": "hello"
-              "sub3": "not selected"
-          }
-      }
-  }
+.. testcode ::
+
+    import u1db
+    db = u1db.open('mydb7.u1db', create=True)
+    db.create_index('by-subfield', 'field.sub1.sub2')
+    doc1 = db.create_doc({"field": {"sub1": {"sub2": "hello", "sub3": "not selected"}}})
 
 gives the index key "hello", and therefore an entry in the index of
 
- ========= ======
- Index key doc_id
- ========= ======
+ ========= ====
+ Index key doc
+ ========= ====
  hello     doc1
- ========= ======
+ ========= ====
 
 **Name a list.** If an index expression names a field whose contents is a list
 of strings, the document will have multiple entries in the index, one per entry
 in the list. So, the index expression ``field.tags`` applied to a document with
-ID ``doc2`` and content::
+content:
 
-  {
-      "field": {
-          "tags": [ "tag1", "tag2", "tag3" ]
-      }
-  }
+.. testcode ::
+
+    import u1db
+    db = u1db.open('mydb8.u1db', create=True)
+    db.create_index('by-tags', 'field.tags')
+    doc2 = db.create_doc({"field": {"tags": [ "tag1", "tag2", "tag3" ]}})
 
 gives index entries
 
- ========= ======
- Index key doc_id
- ========= ======
+ ========= ====
+ Index key doc
+ ========= ====
  tag1      doc2
  tag2      doc2
  tag3      doc2
- ========= ======
+ ========= ====
 
 **Subfields of objects in a list.** If an index expression points at subfields
 of objects in a list, the document will have multiple entries in the index, one
 for each object in the list that specifies the denoted subfield. For instance
 the index expression ``managers.phone_number`` applied to a document
-with doc_id ``doc3`` and content::
+with content:
 
-  {
-      "department": "department of redundancy department",
-      "managers": [
-        {"name": "Mary", "phone_number": "12345"},
-        {"name": "Katherine"},
-        {"name": "Rob", "phone_number": "54321"}]}
+.. testcode ::
+
+    import u1db
+    db = u1db.open('mydb9.u1db', create=True)
+    db.create_index('by-phone-number', 'managers.phone_number')
+    doc3 = db.create_doc(
+        {"department": "department of redundancy department",
+        "managers": [
+            {"name": "Mary", "phone_number": "12345"},
+            {"name": "Katherine"},
+            {"name": "Rob", "phone_number": "54321"}]})
 
 would give index entries:
 
- ========= ======
- Index key doc_id
- ========= ======
- 12345     doc2
- 54321     doc2
- ========= ======
+ ========= ====
+ Index key doc
+ ========= ====
+ 12345     doc3
+ 54321     doc3
+ ========= ====
 
 **Transformation functions.** An index expression may be wrapped in any number
 of transformation functions. A function transforms the result of the contained
@@ -363,4 +367,8 @@ Synchronising functions
     os.remove(os.path.join(tmp_dir, "mydb3.u1db"))
     os.remove(os.path.join(tmp_dir, "mydb4.u1db"))
     os.remove(os.path.join(tmp_dir, "mydb5.u1db"))
+    os.remove(os.path.join(tmp_dir, "mydb6.u1db"))
+    os.remove(os.path.join(tmp_dir, "mydb7.u1db"))
+    os.remove(os.path.join(tmp_dir, "mydb8.u1db"))
+    os.remove(os.path.join(tmp_dir, "mydb9.u1db"))
     os.rmdir(tmp_dir)
