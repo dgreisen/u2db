@@ -176,6 +176,11 @@ and that index is created with:
 .. testcode ::
 
     db1.create_index("by-firstname", "firstname")
+    print(sorted(db1.get_index_keys('by-firstname')))
+
+.. testoutput ::
+
+    [(u'Alan',), (u'Jan',), (u'John',)]
 
 -- that is, create an index with a name and one or more index expressions.
 (Exactly how to pass the name and the list of index expressions is something
@@ -198,6 +203,11 @@ with below content:
     db = u1db.open('mydb7.u1db', create=True)
     db.create_index('by-subfield', 'field.sub1.sub2')
     doc1 = db.create_doc({"field": {"sub1": {"sub2": "hello", "sub3": "not selected"}}})
+    print(sorted(db.get_index_keys('by-subfield')))
+
+.. testoutput ::
+
+    [(u'hello',)]
 
 gives the index key "hello", and therefore an entry in the index of
 
@@ -218,6 +228,11 @@ content:
     db = u1db.open('mydb8.u1db', create=True)
     db.create_index('by-tags', 'field.tags')
     doc2 = db.create_doc({"field": {"tags": [ "tag1", "tag2", "tag3" ]}})
+    print(sorted(db.get_index_keys('by-tags')))
+
+.. testoutput ::
+
+    [(u'tag1',), (u'tag2',), (u'tag3',)]
 
 gives index entries
 
@@ -246,6 +261,12 @@ with content:
             {"name": "Mary", "phone_number": "12345"},
             {"name": "Katherine"},
             {"name": "Rob", "phone_number": "54321"}]})
+    print(sorted(db.get_index_keys('by-phone-number')))
+
+.. testoutput ::
+
+    [(u'12345',), (u'54321',)]
+
 
 would give index entries:
 
