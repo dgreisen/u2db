@@ -10,11 +10,32 @@ focus on the code that interacts with u1db here.
 Tasks
 -----
 
-First we'll define what we'll actually store in u1db. For a todo list
-application, it makes sense to have each todo item (or task,) be a single
+First we need to define what we'll actually store in u1db. For a todo list
+application, it makes sense to have each todo item or task be a single
 document in the database, so that we can use indexes to find individual tasks
 with specific properties.
 
+We'll subclass Document, and define some properties that we think our tasks
+need to have. There are no schema's in u1db, which means we can always change
+the structure of the underlying json document at a later time. (Though that
+does likely mean we will have to migrate older documents for them to still work
+with the new code.)
+
+Let's give our Task objects a title, a (boolean) done property, and a list of
+tags, so that the json representation of a task would look something like
+this:
+
+.. code-block:: python
+
+    '''
+    {
+     "title": "the task at hand",
+     "done": false,
+     "tags": ["urgent", "priority 1", "today"]
+    }
+    '''
+
+We can define ``Task`` as follows:
 
 .. testcode ::
 
@@ -53,6 +74,12 @@ with specific properties.
 
         tags = property(_get_tags, _set_tags, doc="Task tags.")
 
+As you can see, :py:class:`~u1db.Document` objects come with a .content
+property, which is a Python dictionary. This is where we look up or store all
+data pertaining to the task.
+
+We can now create tasks, set their titles:
+
 .. testcode ::
 
     example_task = Task()
@@ -62,6 +89,8 @@ with specific properties.
 .. testoutput ::
 
     Create a Task class.
+
+their tags:
 
 .. testcode ::
 
@@ -80,6 +109,8 @@ with specific properties.
 
     ['develoment']
 
+and their done status:
+
 .. testcode ::
 
     print(example_task.done)
@@ -96,3 +127,4 @@ with specific properties.
 .. testoutput ::
 
     True
+
