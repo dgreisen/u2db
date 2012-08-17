@@ -153,11 +153,11 @@ Given a database with the following documents:
 .. testcode ::
 
     import u1db
-    db = u1db.open("mydb6.u1db", create=True)
-    jb = db.create_doc({"firstname": "John", "surname": "Barnes", "position": "left wing"})
-    jm = db.create_doc({"firstname": "Jan", "surname": "Molby", "position": "midfield"})
-    ah = db.create_doc({"firstname": "Alan", "surname": "Hansen", "position": "defence"}) 
-    jw = db.create_doc({"firstname": "John", "surname": "Wayne", "position": "filmstar"})
+    db1 = u1db.open("mydb6.u1db", create=True)
+    jb = db1.create_doc({"firstname": "John", "surname": "Barnes", "position": "left wing"})
+    jm = db1.create_doc({"firstname": "Jan", "surname": "Molby", "position": "midfield"})
+    ah = db1.create_doc({"firstname": "Alan", "surname": "Hansen", "position": "defence"}) 
+    jw = db1.create_doc({"firstname": "John", "surname": "Wayne", "position": "filmstar"})
 
 an index expression of ``"firstname"`` will create an index that looks
 (conceptually) like this
@@ -175,7 +175,7 @@ and that index is created with:
 
 .. testcode ::
 
-    db.create_index("by-firstname", "firstname")
+    db1.create_index("by-firstname", "firstname")
 
 -- that is, create an index with a name and one or more index expressions.
 (Exactly how to pass the name and the list of index expressions is something
@@ -265,7 +265,7 @@ index expression: for example, if an expression ``name.firstname`` generates
 Available transformation functions are:
 
  * ``lower(index_expression)`` - lowercase the value
- * ``splitwords(index_expression)`` - split the value on whitespace; will act
+ * ``split_words(index_expression)`` - split the value on whitespace; will act
    like a list and add multiple entries to the index
  * ``number(index_expression, width)`` - takes an integer value, and turns it
    into a string, left padded with zeroes, to make it at least as wide as
@@ -276,23 +276,29 @@ Available transformation functions are:
    of an arbitrary number of sub expressions into a single index.
 
 So, the index expression ``splitwords(lower(field.name))`` applied to
-a document with ID "doc3" and content::
+a document with content:
 
-  {
-      "field": {
-          "name": "Bruce David Grobbelaar"
-      }
-  }
+.. testcode ::
+
+    import u1db
+    db = u1db.open('mydb10.u1db', create=True)
+    db.create_index('by-split-lower', 'split_words(lower(field.name))')
+    doc4 = db.create_doc({"field": {"name": "Bruce David Grobbelaar"}})
+    print(sorted(db.get_index_keys('by-split-lower')))
+
+.. testoutput ::
+
+    [(u'bruce',), (u'david',), (u'grobbelaar',)]
 
 gives index entries
 
- ========== ======
- Index key  doc_id
- ========== ======
+ ========== ====
+ Index key  doc
+ ========== ====
  bruce      doc3
  david      doc3
  grobbelaar doc3
- ========== ======
+ ========== ====
 
 
 Querying an index
@@ -301,16 +307,26 @@ Querying an index
 Pass an index key or a tuple of index keys (if the index is on multiple fields)
 to ``get_from_index``; the last index key in each tuple (and *only* the last
 one) can end with an asterisk, which matches initial substrings. So, querying
-our ``by-firstname`` index from above::
+our ``by-firstname`` index from above:
 
-    get_from_index("by-firstname", "John")
+.. testcode ::
 
+    johns = [d.doc_id for d in db1.get_from_index("by-firstname", "John")]
+    assert(jw.doc_id in johns)
+    assert(jb.doc_id in johns)
+    assert(jm.doc_id not in johns)
 
 will return the documents with ids: 'jw', 'jb'.
 
 ``get_from_index("by_firstname", "J*")`` will match all index keys beginning
 with "J", and so will return the documents with ids: 'jw', 'jb', 'jm'.
 
+.. testcode ::
+
+    js = [d.doc_id for d in db1.get_from_index("by-firstname", "J*")]
+    assert(jw.doc_id in js)
+    assert(jb.doc_id in js)
+    assert(jm.doc_id in js)
 
 Index functions
 ^^^^^^^^^^^^^^^
@@ -371,4 +387,5 @@ Synchronising functions
     os.remove(os.path.join(tmp_dir, "mydb7.u1db"))
     os.remove(os.path.join(tmp_dir, "mydb8.u1db"))
     os.remove(os.path.join(tmp_dir, "mydb9.u1db"))
+    os.remove(os.path.join(tmp_dir, "mydb10.u1db"))
     os.rmdir(tmp_dir)
