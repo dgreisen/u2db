@@ -28,7 +28,7 @@ having conflicts, and must be resolved there:
 
 .. doctest ::
 
-    >>> import u1db, json
+    >>> import u1db
     >>> db1 = u1db.open('mydb1.u1db', create=True)
     >>> db2 = u1db.open('mydb2.u1db', create=True)
     >>> doc1 = db1.create_doc({'came_from':'replica_1'})

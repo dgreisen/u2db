@@ -31,7 +31,7 @@ from :ref:`reference-implementation` in Python.
 
 .. testcode ::
 
-    import json, u1db
+    import u1db
     db = u1db.open("mydb1.u1db", create=True)
     doc = db.create_doc({"key": "value"}, doc_id="testdoc")
     print doc.content
@@ -50,7 +50,7 @@ a particular document.
 
 .. testcode ::
 
-    import json, u1db
+    import u1db
     db = u1db.open("mydb2.u1db", create=True)
     doc1 = db.create_doc({"key1": "value1"}, doc_id="doc1")
     # the next line should fail because it's creating a doc that already exists
@@ -74,7 +74,7 @@ Finally, deleting a document is done with ``delete_doc()``.
 
 .. testcode ::
 
-    import json, u1db
+    import u1db
     db = u1db.open("mydb3.u1db", create=True)
     doc = db.create_doc({"key": "value"})
     db.delete_doc(doc)
@@ -94,7 +94,7 @@ The simplest way to retrieve documents from a u1db is by ``doc_id``.
 
 .. testcode ::
 
-    import json, u1db
+    import u1db
     db = u1db.open("mydb4.u1db", create=True)
     doc = db.create_doc({"key": "value"}, doc_id="testdoc")
     doc1 = db.get_doc("testdoc")
@@ -110,7 +110,7 @@ And it's also possible to retrieve many documents by ``doc_id``.
 
 .. testcode ::
 
-    import json, u1db
+    import u1db
     db = u1db.open("mydb5.u1db", create=True)
     doc1 = db.create_doc({"key": "value"}, doc_id="testdoc1")
     doc2 = db.create_doc({"key": "value"}, doc_id="testdoc2")
