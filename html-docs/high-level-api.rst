@@ -22,10 +22,17 @@ Creating and editing documents
 To create a document, use ``create_doc()``. Code examples below are
 from :ref:`reference-implementation` in Python.
 
+.. testsetup ::
+
+    import os, tempfile
+    old_dir = os.path.realpath('.')
+    tmp_dir = tempfile.mkdtemp()
+    os.chdir(tmp_dir)
+
 .. testcode ::
 
-    import json, u1db
-    db = u1db.open(":memory:", create=True)
+    import u1db
+    db = u1db.open("mydb1.u1db", create=True)
     doc = db.create_doc({"key": "value"}, doc_id="testdoc")
     print doc.content
     print doc.doc_id
@@ -35,6 +42,7 @@ from :ref:`reference-implementation` in Python.
     {'key': 'value'}
     testdoc
 
+
 Editing an *existing* document is done with ``put_doc()``. This is separate
 from ``create_doc()`` so as to avoid accidental overwrites. ``put_doc()`` takes
 a ``Document`` object, because the object encapsulates revision information for
@@ -42,8 +50,8 @@ a particular document.
 
 .. testcode ::
 
-    import json, u1db
-    db = u1db.open(":memory:", create=True)
+    import u1db
+    db = u1db.open("mydb2.u1db", create=True)
     doc1 = db.create_doc({"key1": "value1"}, doc_id="doc1")
     # the next line should fail because it's creating a doc that already exists
     try:
@@ -66,8 +74,8 @@ Finally, deleting a document is done with ``delete_doc()``.
 
 .. testcode ::
 
-    import json, u1db
-    db = u1db.open(":memory:", create=True)
+    import u1db
+    db = u1db.open("mydb3.u1db", create=True)
     doc = db.create_doc({"key": "value"})
     db.delete_doc(doc)
     print db.get_doc(doc.doc_id)
@@ -86,8 +94,8 @@ The simplest way to retrieve documents from a u1db is by ``doc_id``.
 
 .. testcode ::
 
-    import json, u1db
-    db = u1db.open(":memory:", create=True)
+    import u1db
+    db = u1db.open("mydb4.u1db", create=True)
     doc = db.create_doc({"key": "value"}, doc_id="testdoc")
     doc1 = db.get_doc("testdoc")
     print doc1.content
@@ -102,8 +110,8 @@ And it's also possible to retrieve many documents by ``doc_id``.
 
 .. testcode ::
 
-    import json, u1db
-    db = u1db.open(":memory:", create=True)
+    import u1db
+    db = u1db.open("mydb5.u1db", create=True)
     doc1 = db.create_doc({"key": "value"}, doc_id="testdoc1")
     doc2 = db.create_doc({"key": "value"}, doc_id="testdoc2")
     for doc in db.get_docs(["testdoc2","testdoc1"]):
@@ -140,12 +148,16 @@ An index is created from ''index expressions''. An index expression names one
 or more fields in the document. A simple example follows: view many more
 examples here.
 
-Given a database with the following documents::
+Given a database with the following documents:
 
-    {"firstname": "John", "surname", "Barnes", "position": "left wing"} ID jb
-    {"firstname": "Jan", "surname", "Molby", "position": "midfield"} ID jm
-    {"firstname": "Alan", "surname", "Hansen", "position": "defence"} ID ah
-    {"firstname": "John", "surname", "Wayne", "position": "filmstar"} ID jw
+.. testcode ::
+
+    import u1db
+    db = u1db.open("mydb5.u1db", create=True)
+    jb = db.create_doc({"firstname": "John", "surname": "Barnes", "position": "left wing"})
+    jm = db.create_doc({"firstname": "Jan", "surname": "Molby", "position": "midfield"})
+    ah = db.create_doc({"firstname": "Alan", "surname": "Hansen", "position": "defence"}) 
+    jw = db.create_doc({"firstname": "John", "surname": "Wayne", "position": "filmstar"})
 
 an index expression of ``"firstname"`` will create an index that looks
 (conceptually) like this
@@ -159,8 +171,13 @@ an index expression of ``"firstname"`` will create an index that looks
  John                   jw
  ====================== ===========
 
-and that index is created with ``create_index("by-firstname", "firstname")``
--- that is, create an index with a name and a list of index expressions.
+and that index is created with:
+
+.. testcode ::
+
+    db.create_index("by-firstname", "firstname")
+
+-- that is, create an index with a name and one or more index expressions.
 (Exactly how to pass the name and the list of index expressions is something
 specific to each implementation.)
 
@@ -338,3 +355,12 @@ Synchronising functions
  * :py:meth:`~u1db.Database.get_doc_conflicts`
  * :py:meth:`~u1db.Database.resolve_doc`
 
+.. testcleanup ::
+
+    os.chdir(old_dir)
+    os.remove(os.path.join(tmp_dir, "mydb1.u1db"))
+    os.remove(os.path.join(tmp_dir, "mydb2.u1db"))
+    os.remove(os.path.join(tmp_dir, "mydb3.u1db"))
+    os.remove(os.path.join(tmp_dir, "mydb4.u1db"))
+    os.remove(os.path.join(tmp_dir, "mydb5.u1db"))
+    os.rmdir(tmp_dir)
