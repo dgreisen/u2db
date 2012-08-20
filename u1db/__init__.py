@@ -388,7 +388,7 @@ class DocumentBase(object):
     """Container for handling a single document.
 
     :ivar doc_id: Unique identifier for this document.
-    :ivar rev:
+    :ivar rev: The revision identifier of the document.
     :ivar json_string: The JSON string for this document.
     :ivar has_conflicts: Boolean indicating if this document has conflicts
     """
@@ -493,7 +493,7 @@ class Document(DocumentBase):
     """Container for handling a single document.
 
     :ivar doc_id: Unique identifier for this document.
-    :ivar rev:
+    :ivar rev: The revision identifier of the document.
     :ivar json: The JSON string for this document.
     :ivar has_conflicts: Boolean indicating if this document has conflicts
     """
@@ -502,7 +502,7 @@ class Document(DocumentBase):
     # have it but if the language supports dictionaries/hashtables, it makes
     # Documents a lot more user friendly.
 
-    def __init__(self, doc_id, rev, json, has_conflicts=False):
+    def __init__(self, doc_id=None, rev=None, json='{}', has_conflicts=False):
         # TODO: We convert the json in the superclass to check its validity so
         # we might as well set _content here directly since the price is
         # already being paid.
