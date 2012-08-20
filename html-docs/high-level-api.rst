@@ -148,27 +148,41 @@ An index is created from ''index expressions''. An index expression names one
 or more fields in the document. A simple example follows: view many more
 examples here.
 
-Given a database with the following documents::
+Given a database with the following documents:
 
-    {"firstname": "John", "surname", "Barnes", "position": "left wing"} ID jb
-    {"firstname": "Jan", "surname", "Molby", "position": "midfield"} ID jm
-    {"firstname": "Alan", "surname", "Hansen", "position": "defence"} ID ah
-    {"firstname": "John", "surname", "Wayne", "position": "filmstar"} ID jw
+.. testcode ::
+
+    import u1db
+    db1 = u1db.open("mydb6.u1db", create=True)
+    jb = db1.create_doc({"firstname": "John", "surname": "Barnes", "position": "left wing"})
+    jm = db1.create_doc({"firstname": "Jan", "surname": "Molby", "position": "midfield"})
+    ah = db1.create_doc({"firstname": "Alan", "surname": "Hansen", "position": "defence"}) 
+    jw = db1.create_doc({"firstname": "John", "surname": "Wayne", "position": "filmstar"})
 
 an index expression of ``"firstname"`` will create an index that looks
 (conceptually) like this
 
- ====================== ===========
- index expression value document id
- ====================== ===========
+ ====================== ========
+ index expression value document
+ ====================== ========
  Alan                   ah
  Jan                    jm
  John                   jb
  John                   jw
- ====================== ===========
+ ====================== ========
 
-and that index is created with ``create_index("by-firstname", "firstname")``
--- that is, create an index with a name and a list of index expressions.
+and that index is created with:
+
+.. testcode ::
+
+    db1.create_index("by-firstname", "firstname")
+    print(sorted(db1.get_index_keys('by-firstname')))
+
+.. testoutput ::
+
+    [(u'Alan',), (u'Jan',), (u'John',)]
+
+-- that is, create an index with a name and one or more index expressions.
 (Exactly how to pass the name and the list of index expressions is something
 specific to each implementation.)
 
@@ -181,67 +195,87 @@ which is then used as the index key.
 
 **Name a field.** A basic index expression is a dot-delimited list of nesting
 fieldnames, so the index expression ``field.sub1.sub2`` applied to a document
-with ID ``doc1`` and content::
+with below content:
 
-  {
-      "field": {
-          "sub1": {
-              "sub2": "hello"
-              "sub3": "not selected"
-          }
-      }
-  }
+.. testcode ::
+
+    import u1db
+    db = u1db.open('mydb7.u1db', create=True)
+    db.create_index('by-subfield', 'field.sub1.sub2')
+    doc1 = db.create_doc({"field": {"sub1": {"sub2": "hello", "sub3": "not selected"}}})
+    print(sorted(db.get_index_keys('by-subfield')))
+
+.. testoutput ::
+
+    [(u'hello',)]
 
 gives the index key "hello", and therefore an entry in the index of
 
- ========= ======
- Index key doc_id
- ========= ======
+ ========= ====
+ Index key doc
+ ========= ====
  hello     doc1
- ========= ======
+ ========= ====
 
 **Name a list.** If an index expression names a field whose contents is a list
 of strings, the document will have multiple entries in the index, one per entry
 in the list. So, the index expression ``field.tags`` applied to a document with
-ID ``doc2`` and content::
+content:
 
-  {
-      "field": {
-          "tags": [ "tag1", "tag2", "tag3" ]
-      }
-  }
+.. testcode ::
+
+    import u1db
+    db = u1db.open('mydb8.u1db', create=True)
+    db.create_index('by-tags', 'field.tags')
+    doc2 = db.create_doc({"field": {"tags": [ "tag1", "tag2", "tag3" ]}})
+    print(sorted(db.get_index_keys('by-tags')))
+
+.. testoutput ::
+
+    [(u'tag1',), (u'tag2',), (u'tag3',)]
 
 gives index entries
 
- ========= ======
- Index key doc_id
- ========= ======
+ ========= ====
+ Index key doc
+ ========= ====
  tag1      doc2
  tag2      doc2
  tag3      doc2
- ========= ======
+ ========= ====
 
 **Subfields of objects in a list.** If an index expression points at subfields
 of objects in a list, the document will have multiple entries in the index, one
 for each object in the list that specifies the denoted subfield. For instance
 the index expression ``managers.phone_number`` applied to a document
-with doc_id ``doc3`` and content::
+with content:
 
-  {
-      "department": "department of redundancy department",
-      "managers": [
-        {"name": "Mary", "phone_number": "12345"},
-        {"name": "Katherine"},
-        {"name": "Rob", "phone_number": "54321"}]}
+.. testcode ::
+
+    import u1db
+    db = u1db.open('mydb9.u1db', create=True)
+    db.create_index('by-phone-number', 'managers.phone_number')
+    doc3 = db.create_doc(
+        {"department": "department of redundancy department",
+        "managers": [
+            {"name": "Mary", "phone_number": "12345"},
+            {"name": "Katherine"},
+            {"name": "Rob", "phone_number": "54321"}]})
+    print(sorted(db.get_index_keys('by-phone-number')))
+
+.. testoutput ::
+
+    [(u'12345',), (u'54321',)]
+
 
 would give index entries:
 
- ========= ======
- Index key doc_id
- ========= ======
- 12345     doc2
- 54321     doc2
- ========= ======
+ ========= ====
+ Index key doc
+ ========= ====
+ 12345     doc3
+ 54321     doc3
+ ========= ====
 
 **Transformation functions.** An index expression may be wrapped in any number
 of transformation functions. A function transforms the result of the contained
@@ -252,7 +286,7 @@ index expression: for example, if an expression ``name.firstname`` generates
 Available transformation functions are:
 
  * ``lower(index_expression)`` - lowercase the value
- * ``splitwords(index_expression)`` - split the value on whitespace; will act
+ * ``split_words(index_expression)`` - split the value on whitespace; will act
    like a list and add multiple entries to the index
  * ``number(index_expression, width)`` - takes an integer value, and turns it
    into a string, left padded with zeroes, to make it at least as wide as
@@ -263,23 +297,29 @@ Available transformation functions are:
    of an arbitrary number of sub expressions into a single index.
 
 So, the index expression ``splitwords(lower(field.name))`` applied to
-a document with ID "doc3" and content::
+a document with content:
 
-  {
-      "field": {
-          "name": "Bruce David Grobbelaar"
-      }
-  }
+.. testcode ::
+
+    import u1db
+    db = u1db.open('mydb10.u1db', create=True)
+    db.create_index('by-split-lower', 'split_words(lower(field.name))')
+    doc4 = db.create_doc({"field": {"name": "Bruce David Grobbelaar"}})
+    print(sorted(db.get_index_keys('by-split-lower')))
+
+.. testoutput ::
+
+    [(u'bruce',), (u'david',), (u'grobbelaar',)]
 
 gives index entries
 
- ========== ======
- Index key  doc_id
- ========== ======
+ ========== ====
+ Index key  doc
+ ========== ====
  bruce      doc3
  david      doc3
  grobbelaar doc3
- ========== ======
+ ========== ====
 
 
 Querying an index
@@ -288,16 +328,26 @@ Querying an index
 Pass an index key or a tuple of index keys (if the index is on multiple fields)
 to ``get_from_index``; the last index key in each tuple (and *only* the last
 one) can end with an asterisk, which matches initial substrings. So, querying
-our ``by-firstname`` index from above::
+our ``by-firstname`` index from above:
 
-    get_from_index("by-firstname", "John")
+.. testcode ::
 
+    johns = [d.doc_id for d in db1.get_from_index("by-firstname", "John")]
+    assert(jw.doc_id in johns)
+    assert(jb.doc_id in johns)
+    assert(jm.doc_id not in johns)
 
 will return the documents with ids: 'jw', 'jb'.
 
 ``get_from_index("by_firstname", "J*")`` will match all index keys beginning
 with "J", and so will return the documents with ids: 'jw', 'jb', 'jm'.
 
+.. testcode ::
+
+    js = [d.doc_id for d in db1.get_from_index("by-firstname", "J*")]
+    assert(jw.doc_id in js)
+    assert(jb.doc_id in js)
+    assert(jm.doc_id in js)
 
 Index functions
 ^^^^^^^^^^^^^^^
@@ -306,7 +356,7 @@ Index functions
  * :py:meth:`~u1db.Database.delete_index`
  * :py:meth:`~u1db.Database.get_from_index`
  * :py:meth:`~u1db.Database.get_range_from_index`
- * :py:meth:`~u1db.Database.get_keys_from_index`
+ * :py:meth:`~u1db.Database.get_index_keys`
  * :py:meth:`~u1db.Database.list_indexes`
 
 Synchronising
@@ -354,4 +404,9 @@ Synchronising functions
     os.remove(os.path.join(tmp_dir, "mydb3.u1db"))
     os.remove(os.path.join(tmp_dir, "mydb4.u1db"))
     os.remove(os.path.join(tmp_dir, "mydb5.u1db"))
+    os.remove(os.path.join(tmp_dir, "mydb6.u1db"))
+    os.remove(os.path.join(tmp_dir, "mydb7.u1db"))
+    os.remove(os.path.join(tmp_dir, "mydb8.u1db"))
+    os.remove(os.path.join(tmp_dir, "mydb9.u1db"))
+    os.remove(os.path.join(tmp_dir, "mydb10.u1db"))
     os.rmdir(tmp_dir)
