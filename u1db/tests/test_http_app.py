@@ -220,9 +220,6 @@ class TestHTTPMethodDecorator(tests.TestCase):
 
 class TestResource(object):
 
-    max_request_size = 200000
-    max_entry_size = 100000
-
     @http_app.http_method()
     def get(self, a, b):
         self.args = dict(a=a, b=b)
@@ -951,9 +948,6 @@ class TestHTTPAppErrorHandling(tests.TestCase):
         self.state = tests.ServerStateForTests()
 
         class ErroringResource(object):
-
-            max_request_size = 200000
-            max_entry_size = 100000
 
             def post(_, args, content):
                 raise self.exc

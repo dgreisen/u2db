@@ -40,6 +40,11 @@ from u1db.remote import (
     utils,
     )
 
+# maximum allowed request body size
+MAX_REQUEST_SIZE = 15 * 1024 * 1024  # 15Mb
+# maximum allowed entry/line size in request body
+MAX_ENTRY_SIZE = 10 * 1024 * 1024    # 10Mb
+
 
 def parse_bool(expression):
     """Parse boolean querystring parameter."""
@@ -206,11 +211,6 @@ url_to_resource = URLToResource()
 class GlobalResource(object):
     """Global (root) resource."""
 
-    # maximum allowed request body size
-    max_request_size = 15 * 1024 * 1024  # 15Mb
-    # maximum allowed entry/line size in request body
-    max_entry_size = 10 * 1024 * 1024    # 10Mb
-
     url_pattern = "/"
 
     def __init__(self, state, responder):
@@ -224,11 +224,6 @@ class GlobalResource(object):
 @url_to_resource.register
 class DatabaseResource(object):
     """Database resource."""
-
-    # maximum allowed request body size
-    max_request_size = 15 * 1024 * 1024  # 15Mb
-    # maximum allowed entry/line size in request body
-    max_entry_size = 10 * 1024 * 1024    # 10Mb
 
     url_pattern = "/{dbname}"
 
@@ -257,12 +252,6 @@ class DatabaseResource(object):
 class DocsResource(object):
     """Documents resource."""
 
-    # maximum allowed request body size
-    max_request_size = 15 * 1024 * 1024  # 15Mb
-    # maximum allowed entry/line size in request body
-    max_entry_size = 10 * 1024 * 1024    # 10Mb
-
-
     url_pattern = "/{dbname}/docs"
 
     def __init__(self, dbname, state, responder):
@@ -289,11 +278,6 @@ class DocsResource(object):
 @url_to_resource.register
 class DocResource(object):
     """Document resource."""
-
-    # maximum allowed request body size
-    max_request_size = 15 * 1024 * 1024  # 15Mb
-    # maximum allowed entry/line size in request body
-    max_entry_size = 10 * 1024 * 1024    # 10Mb
 
     url_pattern = "/{dbname}/doc/{id:.*}"
 
@@ -495,6 +479,7 @@ class HTTPInvocationByMethodWithBody(object):
         self.resource = resource
         self.environ = environ
 
+
     def _lookup(self, method):
         try:
             return getattr(self.resource, method)
@@ -522,10 +507,14 @@ class HTTPInvocationByMethodWithBody(object):
                 raise BadRequest
             if content_length <= 0:
                 raise BadRequest
-            if content_length > self.resource.max_request_size:
+            max_request_size = getattr(
+                self.resource, 'max_request_size', MAX_REQUEST_SIZE)
+            if content_length > max_request_size:
                 raise BadRequest
+            max_entry_size = getattr(
+                self.resource, 'max_entry_size', MAX_ENTRY_SIZE)
             reader = _FencedReader(self.environ['wsgi.input'], content_length,
-                                   self.resource.max_entry_size)
+                                   max_entry_size)
             content_type = self.environ.get('CONTENT_TYPE')
             if content_type == 'application/json':
                 meth = self._lookup(method)
