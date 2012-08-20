@@ -206,6 +206,11 @@ url_to_resource = URLToResource()
 class GlobalResource(object):
     """Global (root) resource."""
 
+    # maximum allowed request body size
+    max_request_size = 15 * 1024 * 1024  # 15Mb
+    # maximum allowed entry/line size in request body
+    max_entry_size = 10 * 1024 * 1024    # 10Mb
+
     url_pattern = "/"
 
     def __init__(self, state, responder):
@@ -219,6 +224,11 @@ class GlobalResource(object):
 @url_to_resource.register
 class DatabaseResource(object):
     """Database resource."""
+
+    # maximum allowed request body size
+    max_request_size = 15 * 1024 * 1024  # 15Mb
+    # maximum allowed entry/line size in request body
+    max_entry_size = 10 * 1024 * 1024    # 10Mb
 
     url_pattern = "/{dbname}"
 
@@ -247,6 +257,12 @@ class DatabaseResource(object):
 class DocsResource(object):
     """Documents resource."""
 
+    # maximum allowed request body size
+    max_request_size = 15 * 1024 * 1024  # 15Mb
+    # maximum allowed entry/line size in request body
+    max_entry_size = 10 * 1024 * 1024    # 10Mb
+
+
     url_pattern = "/{dbname}/docs"
 
     def __init__(self, dbname, state, responder):
@@ -273,6 +289,11 @@ class DocsResource(object):
 @url_to_resource.register
 class DocResource(object):
     """Document resource."""
+
+    # maximum allowed request body size
+    max_request_size = 15 * 1024 * 1024  # 15Mb
+    # maximum allowed entry/line size in request body
+    max_entry_size = 10 * 1024 * 1024    # 10Mb
 
     url_pattern = "/{dbname}/doc/{id:.*}"
 
@@ -328,6 +349,11 @@ class DocResource(object):
 @url_to_resource.register
 class SyncResource(object):
     """Sync endpoint resource."""
+
+    # maximum allowed request body size
+    max_request_size = 15 * 1024 * 1024  # 15Mb
+    # maximum allowed entry/line size in request body
+    max_entry_size = 10 * 1024 * 1024    # 10Mb
 
     url_pattern = "/{dbname}/sync-from/{source_replica_uid}"
 
@@ -465,11 +491,9 @@ class HTTPResponder(object):
 class HTTPInvocationByMethodWithBody(object):
     """Invoke methods on a resource."""
 
-    def __init__(self, resource, environ, max_request_size, max_entry_size):
+    def __init__(self, resource, environ):
         self.resource = resource
         self.environ = environ
-        self.max_request_size = max_request_size
-        self.max_entry_size = max_entry_size
 
     def _lookup(self, method):
         try:
@@ -498,10 +522,10 @@ class HTTPInvocationByMethodWithBody(object):
                 raise BadRequest
             if content_length <= 0:
                 raise BadRequest
-            if content_length > self.max_request_size:
+            if content_length > self.resource.max_request_size:
                 raise BadRequest
             reader = _FencedReader(self.environ['wsgi.input'], content_length,
-                                   self.max_entry_size)
+                                   self.resource.max_entry_size)
             content_type = self.environ.get('CONTENT_TYPE')
             if content_type == 'application/json':
                 meth = self._lookup(method)
@@ -535,11 +559,6 @@ class HTTPInvocationByMethodWithBody(object):
 
 class HTTPApp(object):
 
-    # maximum allowed request body size
-    max_request_size = 15 * 1024 * 1024  # 15Mb
-    # maximum allowed entry/line size in request body
-    max_entry_size = 10 * 1024 * 1024    # 10Mb
-
     def __init__(self, state):
         self.state = state
 
@@ -556,8 +575,7 @@ class HTTPApp(object):
         self.request_begin(environ)
         try:
             resource = self._lookup_resource(environ, responder)
-            HTTPInvocationByMethodWithBody(
-                resource, environ, self.max_request_size, self.max_entry_size)()
+            HTTPInvocationByMethodWithBody(resource, environ)()
         except errors.U1DBError, e:
             self.request_u1db_error(environ, e)
             status = http_errors.wire_description_to_status.get(
