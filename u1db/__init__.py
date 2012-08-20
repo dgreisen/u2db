@@ -189,12 +189,16 @@ class Database(object):
         Creating an index will block until the expressions have been evaluated
         and the index generated.
 
-        :index_name: A unique name which can be used as a key prefix
-        :index_expressions: index expressions defining the index information.
+        :param index_name: A unique name which can be used as a key prefix
+        :param index_expressions: index expressions defining the index
+            information.
+
             Examples:
-                "fieldname" to index alphabetically sorted on field.
-                "number(fieldname, width)", "lower(fieldname)",
-                "fieldname.subfieldname"
+
+            "fieldname", or "fieldname.subfieldname" to index alphabetically
+            sorted on the contents of a field.
+
+            "number(fieldname, width)", "lower(fieldname)"
         """
         raise NotImplementedError(self.create_index)
 
@@ -202,7 +206,6 @@ class Database(object):
         """Remove a named index.
 
         :param index_name: The name of the index we are removing
-        :return: None
         """
         raise NotImplementedError(self.delete_index)
 
@@ -223,11 +226,11 @@ class Database(object):
         It is also possible to append a '*' to the last supplied value (eg
         'val*', '*', '*' or 'val', 'val*', '*', but not 'val*', 'val', '*')
 
-        :return: List of [Document]
         :param index_name: The index to query
         :param key_values: values to match. eg, if you have
             an index with 3 fields then you would have:
             get_from_index(index_name, val1, val2, val3)
+        :return: List of [Document]
         """
         raise NotImplementedError(self.get_from_index)
 
@@ -244,7 +247,6 @@ class Database(object):
         possible to append a '*' to the last supplied value (eg 'val*', '*',
         '*' or 'val', 'val*', '*', but not 'val*', 'val', '*')
 
-        :return: List of [Document]
         :param index_name: The index to query
         :param start_values: tuples of values that define the lower bound of
             the range. eg, if you have an index with 3 fields then you would
@@ -252,14 +254,15 @@ class Database(object):
         :param end_values: tuples of values that define the upper bound of the
             range. eg, if you have an index with 3 fields then you would have:
             (val1, val2, val3)
+        :return: List of [Document]
         """
         raise NotImplementedError(self.get_range_from_index)
 
     def get_index_keys(self, index_name):
         """Return all keys under which documents are indexed in this index.
 
-        :return: [] A list of tuples of indexed keys.
         :param index_name: The index to query
+        :return: [] A list of tuples of indexed keys.
         """
         raise NotImplementedError(self.get_index_keys)
 
@@ -286,8 +289,6 @@ class Database(object):
         :param doc: A Document with the new content to be inserted.
         :param conflicted_doc_revs: A list of revisions that the new content
             supersedes.
-        :return: None, doc will be updated with the new revision and
-            has_conflict flags.
         """
         raise NotImplementedError(self.resolve_doc)
 
@@ -303,7 +304,14 @@ class Database(object):
         raise NotImplementedError(self.close)
 
     def sync(self, url):
-        """Synchronize documents with remote replica exposed at url."""
+        """Synchronize documents with remote replica exposed at url.
+
+        :param url: the url of the target replica to sync with.
+        :return: local_gen_before_sync The local generation before the
+            synchronisation was performed. This is useful to pass into
+            whatschanged, if an application wants to know which documents were
+            affected by a synchronisation.
+        """
         from u1db.sync import Synchronizer
         from u1db.remote.http_target import HTTPSyncTarget
         return Synchronizer(self, HTTPSyncTarget(url)).sync()
@@ -337,7 +345,6 @@ class Database(object):
         :param other_generation: The generation number for the other replica.
         :param other_transaction_id: The transaction id associated with the
             generation.
-        :return: None
         """
         raise NotImplementedError(self._set_replica_gen_and_trans_id)
 
@@ -588,8 +595,8 @@ class SyncTarget(object):
         :param source_replica_uid: Another replica which we might have
             synchronized with in the past.
         :return: (target_replica_uid, target_replica_generation,
-                  target_trans_id, source_replica_last_known_generation,
-                  source_replica_last_known_transaction_id)
+            target_trans_id, source_replica_last_known_generation,
+            source_replica_last_known_transaction_id)
         """
         raise NotImplementedError(self.get_sync_info)
 
@@ -609,10 +616,9 @@ class SyncTarget(object):
 
         :param source_replica_uid: The identifier for the source replica.
         :param source_replica_generation:
-             The database generation for the source replica.
+            The database generation for the source replica.
         :param source_replica_transaction_id: The transaction id associated
             with the source replica generation.
-        :return: None
         """
         raise NotImplementedError(self.record_sync_info)
 
@@ -646,10 +652,10 @@ class SyncTarget(object):
         :param last_known_trans_id: The last transaction id that the source
             replica knows about this target replica
         :param: return_doc_cb(doc, gen): is a callback
-                used to return documents to the source replica, it will
-                be invoked in turn with Documents that have changed since
-                last_known_generation together with the generation of
-                their last change.
+            used to return documents to the source replica, it will
+            be invoked in turn with Documents that have changed since
+            last_known_generation together with the generation of
+            their last change.
         :return: new_generation - After applying docs_by_generation, this is
             the current generation for this replica
         """

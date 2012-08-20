@@ -19,8 +19,8 @@ is implementation-defined.
 Creating and editing documents
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-To create a document, use ``create_doc()``. Code examples below are
-from :ref:`reference-implementation` in Python.
+To create a document, use :py:meth:`~u1db.Database.create_doc`. Code examples
+below are from :ref:`reference-implementation` in Python.
 
 .. testsetup ::
 
@@ -43,10 +43,11 @@ from :ref:`reference-implementation` in Python.
     testdoc
 
 
-Editing an *existing* document is done with ``put_doc()``. This is separate
-from ``create_doc()`` so as to avoid accidental overwrites. ``put_doc()`` takes
-a ``Document`` object, because the object encapsulates revision information for
-a particular document.
+Editing an *existing* document is done with :py:meth:`~u1db.Database.put_doc`.
+This is separate from :py:meth:`~u1db.Database.create_doc` so as to avoid
+accidental overwrites. :py:meth:`~u1db.Database.put_doc` takes a
+:py:class:`~u1db.Document` object, because the object encapsulates revision
+information for a particular document.
 
 .. testcode ::
 
@@ -70,7 +71,7 @@ a particular document.
     Now editing the doc with the doc object we got back...
     {u'key1': u'edited'}
 
-Finally, deleting a document is done with ``delete_doc()``.
+Finally, deleting a document is done with :py:meth:`~u1db.Database.delete_doc`.
 
 .. testcode ::
 
@@ -382,14 +383,15 @@ Dealing with conflicts
 Synchronising a database can result in conflicts; if your user changes the same
 document in two different places and then syncs again, that document will be
 ''in conflict'', meaning that it has incompatible changes. If this is the case,
-``doc.has_conflicts`` will be true, and put_doc to a conflicted doc will give
-a ``ConflictedDoc`` error. To get a list of conflicted versions of the
-document, do ``get_doc_conflicts(doc_id)``. Deciding what the final
-unconflicted document should look like is obviously specific to the user's
-application; once decided, call ``resolve_doc(doc, list_of_conflicted_revisions)``
-to resolve and set the final resolved content.
+:py:attr:`~u1db.Document.has_conflicts` will be true, and put_doc to a
+conflicted doc will give a ``ConflictedDoc`` error. To get a list of conflicted
+versions of the document, do :py:meth:`~u1db.Database.get_doc_conflicts`.
+Deciding what the final unconflicted document should look like is obviously
+specific to the user's application; once decided, call
+:py:meth:`~u1db.Database.resolve_doc` to resolve and set the final resolved
+content.
 
-Synchronising functions
+Synchronising Functions
 ^^^^^^^^^^^^^^^^^^^^^^^
 
  * :py:meth:`~u1db.Database.sync`

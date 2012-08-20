@@ -16,6 +16,7 @@
 
 """Tests for cosas example application."""
 
+import copy
 from testtools import TestCase
 from cosas import (
     Task, TodoStore, INDEXES, TAGS_INDEX, EMPTY_TASK, extract_tags)
@@ -185,7 +186,7 @@ class TaskTestCase(TestCase):
         super(TaskTestCase, self).setUp()
         self.db = inmemory.InMemoryDatabase("cosas")
         self.db.set_document_factory(Task)
-        self.document = self.db.create_doc_from_json(EMPTY_TASK)
+        self.document = self.db.create_doc(copy.deepcopy(EMPTY_TASK))
 
     def test_task(self):
         """Initializing a task."""

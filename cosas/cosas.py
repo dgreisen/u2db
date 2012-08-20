@@ -16,14 +16,14 @@
 
 """cosas example application."""
 
-import json
 import os
 import re
 import u1db
+import copy
 
 from dirspec.basedir import save_data_path
 
-EMPTY_TASK = json.dumps({"title": "", "done": False, "tags": []})
+EMPTY_TASK = {"title": "", "done": False, "tags": []}
 
 TAGS_INDEX = 'tags'
 DONE_INDEX = 'done'
@@ -37,7 +37,6 @@ TAGS = re.compile('#(\w+)|\[(.+)\]')
 
 def get_database():
     """Get the path that the database is stored in."""
-
     # setting document_factory to Task means that any database method that
     # would return documents, now returns Tasks instead.
     return u1db.open(
@@ -108,7 +107,6 @@ class TodoStore(object):
                         # If results is empty, we're done: there are no
                         # documents with all tags.
                         return []
-        # Wrap each document in results in a Task object, and return them.
         return results.values()
 
     def get_task(self, doc_id):
@@ -121,7 +119,6 @@ class TodoStore(object):
             # The document id exists, but the document's content was previously
             # deleted.
             raise KeyError("Task with id %s was deleted." % (doc_id,))
-        # Wrap the document in a Task object and return it.
         return task
 
     def delete_task(self, task):
@@ -132,22 +129,17 @@ class TodoStore(object):
         """Create a new task document."""
         if tags is None:
             tags = []
-        # We copy the JSON string representing a pristine task with no title
-        # and no tags.
-        content = EMPTY_TASK
+        # We make a fresh copy of a pristine task with no title.
+        content = copy.deepcopy(EMPTY_TASK)
         # If we were passed a title or tags, or both, we set them in the object
         # before storing it in the database.
         if title or tags:
-            # Load the json string into a Python object.
-            content_object = json.loads(content)
-            content_object['title'] = title
-            content_object['tags'] = tags
-            # Convert the Python object back into a JSON string.
-            content = json.dumps(content_object)
+            content['title'] = title
+            content['tags'] = tags
         # Store the document in the database. Since we did not set a document
         # id, the database will store it as a new document, and generate
         # a valid id.
-        task = self.db.create_doc_from_json(content)
+        task = self.db.create_doc(content)
         # Wrap the document in a Task object.
         return task
 
