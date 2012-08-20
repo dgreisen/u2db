@@ -34,6 +34,8 @@ INDEXES = {
 
 TAGS = re.compile('#(\w+)|\[(.+)\]')
 
+get_empty_task = lambda: copy.deepcopy(EMPTY_TASK)
+
 
 def get_database():
     """Get the path that the database is stored in."""
@@ -130,7 +132,7 @@ class TodoStore(object):
         if tags is None:
             tags = []
         # We make a fresh copy of a pristine task with no title.
-        content = copy.deepcopy(EMPTY_TASK)
+        content = get_empty_task()
         # If we were passed a title or tags, or both, we set them in the object
         # before storing it in the database.
         if title or tags:
