@@ -128,6 +128,15 @@ This is all we need the task object to do: as long as we have a way to store
 all its data in the .content dictionary, the super class will take care of
 converting that into JSON so it can be stored in the database.
 
+For convenience, we can create a function that returns a fresh copy of the
+content that would make up an empty task:
+
+.. code-block:: python
+
+    EMPTY_TASK = {"title": "", "done": False, "tags": []}
+
+    get_empty_task = lambda: copy.deepcopy(EMPTY_TASK)
+
 Defining Indexes
 ----------------
 
@@ -290,4 +299,117 @@ takes care of raising appropriate exceptions when a document does not exist or
 has been deleted. (Deleted documents leave a 'tombstone' behind, which is
 necessary to make sure that synchronisation of the database with other replicas
 does the right thing.)
+
+.. code-block:: python
+
+        def new_task(self, title=None, tags=None):
+            """Create a new task document."""
+            if tags is None:
+                tags = []
+            # We make a fresh copy of a pristine task with no title.
+            content = get_empty_task()
+            # If we were passed a title or tags, or both, we set them in the object
+            # before storing it in the database.
+            if title or tags:
+                content['title'] = title
+                content['tags'] = tags
+            # Store the document in the database. Since we did not set a document
+            # id, the database will store it as a new document, and generate
+            # a valid id.
+            return self.db.create_doc(content)
+
+Here we use the convenience function defined above to initialize the content,
+and then set the properties that were passed into ``new_task``. We call
+:py:meth:`~u1db.Database.create_doc` to create a new document from the content.
+This creates the document in the database, assigns it a new unique id (unless
+we pass one in,) and returns a fully initialized Task object. (Since we made
+that the database's factory.)
+
+.. code-block:: python
+
+        def get_all_tasks(self):
+            return self.db.get_from_index(DONE_INDEX, "*")
+
+
+Since the ``DONE_INDEX`` indexes anything that has a value in the field "done",
+and all tasks do (either True or False), it's a good way to get all tasks out
+of the database, especially since it will sort them by done status, so we'll
+get all the active tasks first.
+
+Synchronisation and Conflicts
+-----------------------------
+
+Synchronisation has to be initiated by the application, either periodically,
+while it's running, or by having the user initiate it. Any
+:py:class:`u1db.Database` can be synchronised with any other, either by file
+path or URL. Cosas gives the user the choice between manually synchronising or
+having it happen automatically, every 30 minutes, for as long as it is running.
+
+.. code-block:: python
+
+    from ubuntuone.platform.credentials import CredentialsManagementTool
+
+        def get_ubuntuone_credentials(self):
+            cmt = CredentialsManagementTool()
+            return cmt.find_credentials()
+
+        def _synchronize(self, creds=None):
+            target = self.sync_target
+            if target.startswith('http://') or target.startswith('https://'):
+                st = HTTPSyncTarget.connect(target)
+                oauth_creds = {
+                    'token_key': creds['token'],
+                    'token_secret': creds['token_secret'],
+                    'consumer_key': creds['consumer_key'],
+                    'consumer_secret': creds['consumer_secret']}
+                if creds:
+                    st.set_oauth_credentials(**oauth_creds)
+            else:
+                db = u1db.open(target, create=True)
+                st = db.get_sync_target()
+            syncer = Synchronizer(self.store.db, st)
+            try:
+                syncer.sync()
+            except DatabaseDoesNotExist:
+                # The server does not yet have the database, so create it.
+                if target.startswith('http://') or target.startswith('https://'):
+                    db = HTTPDatabase(target)
+                    db.set_oauth_credentials(**oauth_creds)
+                    db.open(create=True)
+                syncer.sync()
+            # refresh the UI to show changed or new tasks
+            self.refresh_filter()
+
+        def synchronize(self, finalize):
+            if self.sync_target == 'https://u1db.one.ubuntu.com/~/cosas':
+                d = self.get_ubuntuone_credentials()
+                d.addCallback(self._synchronize)
+                d.addCallback(finalize)
+            else:
+                self._synchronize()
+                finalize()
+
+When syncronising over http(s) servers can (and usually will) require OAuth
+authentication. The code above shows how to acquire and pass in the oauth
+credentials for the Ubuntu One server, in case you want your application to
+synchronize with that.
+
+After synchronising with another replica, it is possible that one or more
+conflicts have arisen, if both replicas independently made changes to the same
+document. Your application should probably check for conflicts after every
+synchronisation, and offer the user a way to resolve them.
+
+Look at the Conflicts class in cosas/ui.py to see an example of how this could
+be presented to the user. The idea is that you show the conflicting versions to
+the user, let them pick one, and then call
+:py:meth:`~u1db.Database.resolve_doc` with the preferred version, and all the
+revisions of the conflicting versions it is meant to resolve.
+
+.. code-block:: python
+
+        def resolve(self, doc, revs):
+            self.store.db.resolve_doc(doc, revs)
+            # refresh the UI to show the resolved version
+            self.refresh_filter()
+
 

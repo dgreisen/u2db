@@ -23,7 +23,6 @@ import copy
 
 from dirspec.basedir import save_data_path
 
-EMPTY_TASK = {"title": "", "done": False, "tags": []}
 
 TAGS_INDEX = 'tags'
 DONE_INDEX = 'done'
@@ -33,6 +32,8 @@ INDEXES = {
 }
 
 TAGS = re.compile('#(\w+)|\[(.+)\]')
+
+EMPTY_TASK = {"title": "", "done": False, "tags": []}
 
 get_empty_task = lambda: copy.deepcopy(EMPTY_TASK)
 
@@ -141,9 +142,7 @@ class TodoStore(object):
         # Store the document in the database. Since we did not set a document
         # id, the database will store it as a new document, and generate
         # a valid id.
-        task = self.db.create_doc(content)
-        # Wrap the document in a Task object.
-        return task
+        return self.db.create_doc(content)
 
     def save_task(self, task):
         """Save task to the database."""
