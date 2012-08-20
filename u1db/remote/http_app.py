@@ -40,11 +40,6 @@ from u1db.remote import (
     utils,
     )
 
-# maximum allowed request body size
-MAX_REQUEST_SIZE = 15 * 1024 * 1024  # 15Mb
-# maximum allowed entry/line size in request body
-MAX_ENTRY_SIZE = 10 * 1024 * 1024    # 10Mb
-
 
 def parse_bool(expression):
     """Parse boolean querystring parameter."""
@@ -475,10 +470,13 @@ class HTTPResponder(object):
 class HTTPInvocationByMethodWithBody(object):
     """Invoke methods on a resource."""
 
-    def __init__(self, resource, environ):
+    def __init__(self, resource, environ, parameters):
         self.resource = resource
         self.environ = environ
-
+        self.max_request_size = getattr(
+            resource, 'max_request_size', parameters.max_request_size)
+        self.max_entry_size = getattr(
+            resource, 'max_entry_size', parameters.max_entry_size)
 
     def _lookup(self, method):
         try:
@@ -507,14 +505,10 @@ class HTTPInvocationByMethodWithBody(object):
                 raise BadRequest
             if content_length <= 0:
                 raise BadRequest
-            max_request_size = getattr(
-                self.resource, 'max_request_size', MAX_REQUEST_SIZE)
-            if content_length > max_request_size:
+            if content_length > self.max_request_size:
                 raise BadRequest
-            max_entry_size = getattr(
-                self.resource, 'max_entry_size', MAX_ENTRY_SIZE)
             reader = _FencedReader(self.environ['wsgi.input'], content_length,
-                                   max_entry_size)
+                                   self.max_entry_size)
             content_type = self.environ.get('CONTENT_TYPE')
             if content_type == 'application/json':
                 meth = self._lookup(method)
@@ -548,6 +542,11 @@ class HTTPInvocationByMethodWithBody(object):
 
 class HTTPApp(object):
 
+    # maximum allowed request body size
+    max_request_size = 15 * 1024 * 1024  # 15Mb
+    # maximum allowed entry/line size in request body
+    max_entry_size = 10 * 1024 * 1024    # 10Mb
+
     def __init__(self, state):
         self.state = state
 
@@ -564,7 +563,7 @@ class HTTPApp(object):
         self.request_begin(environ)
         try:
             resource = self._lookup_resource(environ, responder)
-            HTTPInvocationByMethodWithBody(resource, environ)()
+            HTTPInvocationByMethodWithBody(resource, environ, self)()
         except errors.U1DBError, e:
             self.request_u1db_error(environ, e)
             status = http_errors.wire_description_to_status.get(
