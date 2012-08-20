@@ -465,11 +465,11 @@ class HTTPResponder(object):
 class HTTPInvocationByMethodWithBody(object):
     """Invoke methods on a resource."""
 
-    def __init__(self, resource, environ, parameters):
+    def __init__(self, resource, environ, max_request_size, max_entry_size):
         self.resource = resource
         self.environ = environ
-        self.max_request_size = parameters.max_request_size
-        self.max_entry_size = parameters.max_entry_size
+        self.max_request_size = max_request_size
+        self.max_entry_size = max_entry_size
 
     def _lookup(self, method):
         try:
@@ -556,7 +556,8 @@ class HTTPApp(object):
         self.request_begin(environ)
         try:
             resource = self._lookup_resource(environ, responder)
-            HTTPInvocationByMethodWithBody(resource, environ, self)()
+            HTTPInvocationByMethodWithBody(
+                resource, environ, self.max_request_size, self.max_entry_size)()
         except errors.U1DBError, e:
             self.request_u1db_error(environ, e)
             status = http_errors.wire_description_to_status.get(
