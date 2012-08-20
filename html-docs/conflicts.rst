@@ -21,30 +21,59 @@ having conflicts, and must be resolved there:
 
 .. testsetup ::
 
-    import u1db, json
-    db=u1db.open(':memory:', True)
-    docFromA=u1db.Document('test','machineA:1',json.dumps({'camefrom':'machineA'}))
-    db._put_doc_if_newer(docFromA, save_conflict=True, replica_uid='machineA', replica_gen=1)
-    docFromB=u1db.Document('test','machineB:1',json.dumps({'camefrom':'machineB'}))
-    db._put_doc_if_newer(docFromB, save_conflict=True, replica_uid='machineB', replica_gen=1)
+    import os, tempfile
+    old_dir = os.path.realpath('.')
+    tmp_dir = tempfile.mkdtemp()
+    os.chdir(tmp_dir)
 
 .. doctest ::
 
-    >>> docFromB
-    Document(test, machineB:1, conflicted, '{"camefrom": "machineB"}')
-    >>> docFromB.has_conflicts # the document is in conflict
+    >>> import u1db
+    >>> db1 = u1db.open('mydb1.u1db', create=True)
+    >>> db2 = u1db.open('mydb2.u1db', create=True)
+    >>> doc1 = db1.create_doc({'came_from':'replica_1'})
+    >>> doc_id = doc1.doc_id
+    >>> # create a document in database 2 with the same document id.
+    >>> doc2 = db2.create_doc({'came_from':'replica_2'}, doc_id=doc_id)
+    >>> sync_target = db1.get_sync_target()
+    >>> synchronizer = u1db.sync.Synchronizer(db2, sync_target)
+    >>> synchronizer.sync()  # returns the local generation before sync
+    1
+    >>> db1_doc = db1.get_doc(doc_id)
+    >>> db1_doc.content
+    {u'came_from': u'replica_1'}
+    >>> conflicted_doc = db2.get_doc(doc_id)
+    >>> conflicted_doc.content  # the sync target's content wins
+    {u'came_from': u'replica_1'}
+    >>> conflicted_doc.has_conflicts # but the document is in conflict
     True
-    >>> conflicts = db.get_doc_conflicts(docFromB.doc_id)
-    >>> conflicts
-    [Document(test, machineB:1, conflicted, u'{"camefrom": "machineB"}'), Document(test, machineA:1, u'{"camefrom": "machineA"}')]
-    >>> db.resolve_doc(docFromB, [d.rev for d in conflicts]) # resolve in favour of B
-    >>> doc_is_now = db.get_doc("test")
+    >>> conflicts = db2.get_doc_conflicts(doc_id)
+    >>> len(conflicts)  # There are two conflicting versions of the document
+    2
+    >>> db2.resolve_doc(conflicts[1], [d.rev for d in conflicts]) # resolve in favour db2's version
+    >>> doc_is_now = db2.get_doc(doc_id)
     >>> doc_is_now.content # the content has been updated to doc's content
-    {u'camefrom': u'machineB'}
-    >>> db.get_doc_conflicts(docFromB.doc_id)
+    {u'came_from': u'replica_2'}
+    >>> db2.get_doc_conflicts(doc_id)
     []
     >>> doc_is_now.has_conflicts # and is no longer in conflict
     False
+    >>> # synchronize again so that the resolved version ends up in db1
+    >>> synchronizer.sync(sync_target)
+    3
+    >>> db1_doc = db1.get_doc(doc_id)
+    >>> db1_doc.content  # now is identical to db2's version
+    {u'came_from': u'replica_2'}
+    >>> db2_doc = db2.get_doc(doc_id)
+    >>> db2_doc.has_conflicts  # this sync did not create any new conflicts
+    False
+
+.. testcleanup ::
+
+    os.chdir(old_dir)
+    os.remove(os.path.join(tmp_dir, "mydb1.u1db"))
+    os.remove(os.path.join(tmp_dir, "mydb2.u1db"))
+    os.rmdir(tmp_dir)
 
 Note that ``put_doc`` will fail because we got conflicts from a sync, but it
 may also fail for another reason. If you acquire a document before a sync and

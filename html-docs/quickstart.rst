@@ -24,10 +24,17 @@ fetch the latest version, `bzr branch lp:u1db`.
 Starting u1db
 -------------
 
+.. testsetup ::
+
+    import os, tempfile
+    old_dir = os.path.realpath('.')
+    tmp_dir = tempfile.mkdtemp()
+    os.chdir(tmp_dir)
+
 .. doctest ::
 
-    >>> import u1db, tempfile
-    >>> db = u1db.open(":memory:", create=True)
+    >>> import u1db
+    >>> db = u1db.open("mydb.u1db", create=True)
 
     >>> content = {"name": "Alan Hansen"} # create a document
     >>> doc = db.create_doc(content)
@@ -50,6 +57,12 @@ Starting u1db
     >>> names = [item["name"] for item in data]
     >>> sorted(names)
     [u'Ian Rush', u'John Barnes']
+
+.. testcleanup ::
+
+    os.chdir(old_dir)
+    os.remove(os.path.join(tmp_dir, "mydb.u1db"))
+    os.rmdir(tmp_dir)
 
 Running a server
 ----------------
@@ -78,7 +91,7 @@ Synchronising to other databases
 .. code-block:: python
 
     >>> import u1db
-    >>> db = u1db.open(":memory:", create=True)
+    >>> db = u1db.open("mydb", create=True)
     >>> generation = db.sync("http://127.0.0.1:43632/example.u1db")
 
 or from the command line
