@@ -29,96 +29,89 @@ from :ref:`reference-implementation` in Python.
     tmp_dir = tempfile.mkdtemp()
     os.chdir(tmp_dir)
 
-.. testcode ::
+.. doctest ::
 
-    import u1db
-    db = u1db.open("mydb1.u1db", create=True)
-    doc = db.create_doc({"key": "value"}, doc_id="testdoc")
-    print doc.content
-    print doc.doc_id
-
-.. testoutput ::
-
+    >>> import u1db
+    >>> db = u1db.open("mydb1.u1db", create=True)
+    >>> doc = db.create_doc({"key": "value"}, doc_id="testdoc")
+    >>> doc.content
     {'key': 'value'}
-    testdoc
+    >>> doc.doc_id
+    'testdoc'
+
+
 
 
 Editing an *existing* document is done with ``put_doc()``. This is separate
 from ``create_doc()`` so as to avoid accidental overwrites. ``put_doc()`` takes
 a ``Document`` object, because the object encapsulates revision information for
-a particular document.
+a particular document. This revision information must match what is stored in
+the database, so we can make sure you are not overwriting another version
+of the document that you dont know about (eg, new documents that came from
+a background sync while you were editing your copy).
 
-.. testcode ::
+.. doctest ::
 
-    import u1db
-    db = u1db.open("mydb2.u1db", create=True)
-    doc1 = db.create_doc({"key1": "value1"}, doc_id="doc1")
-    # the next line should fail because it's creating a doc that already exists
-    try:
-        doc1fail = db.create_doc({"key1fail": "value1fail"}, doc_id="doc1")
-    except u1db.errors.RevisionConflict:
-        print "There was a conflict when creating the doc!"
-    print "Now editing the doc with the doc object we got back..."
-    doc1.content["key1"] = "edited"
-    db.put_doc(doc1)
-    doc2 = db.get_doc(doc1.doc_id)
-    print doc2.content
+    >>> import u1db
+    >>> db = u1db.open("mydb2.u1db", create=True)
+    >>> doc1 = db.create_doc({"key1": "value1"}, doc_id="doc1")
 
-.. testoutput ::
+    >>> # the next line should fail because it's creating a doc that already exists
+    >>> db.create_doc({"key1fail": "value1fail"}, doc_id="doc1")
+    Traceback (most recent call last):
+        ...
+    RevisionConflict
 
-    There was a conflict when creating the doc!
-    Now editing the doc with the doc object we got back...
+    >>> # Now editing the doc with the doc object we got back...
+    >>> doc1.content["key1"] = "edited"
+    >>> db.put_doc(doc1) # doctest: +ELLIPSIS
+    '...'
+    >>> doc2 = db.get_doc(doc1.doc_id)
+    >>> doc2.content
     {u'key1': u'edited'}
+
 
 Finally, deleting a document is done with ``delete_doc()``.
 
-.. testcode ::
+.. doctest ::
 
-    import u1db
-    db = u1db.open("mydb3.u1db", create=True)
-    doc = db.create_doc({"key": "value"})
-    db.delete_doc(doc)
-    print db.get_doc(doc.doc_id)
-    doc = db.get_doc(doc.doc_id, include_deleted=True)
-    print doc.content
+    >>> import u1db
+    >>> db = u1db.open("mydb3.u1db", create=True)
+    >>> doc = db.create_doc({"key": "value"})
+    >>> db.delete_doc(doc) # doctest: +ELLIPSIS
+    '...'
+    >>> db.get_doc(doc.doc_id)
+    >>> doc = db.get_doc(doc.doc_id, include_deleted=True)
+    >>> doc.content
 
-.. testoutput ::
-
-    None
-    None
 
 Retrieving documents
 ^^^^^^^^^^^^^^^^^^^^
 
 The simplest way to retrieve documents from a u1db is by ``doc_id``.
 
-.. testcode ::
+.. doctest ::
 
-    import u1db
-    db = u1db.open("mydb4.u1db", create=True)
-    doc = db.create_doc({"key": "value"}, doc_id="testdoc")
-    doc1 = db.get_doc("testdoc")
-    print doc1.content
-    print doc1.doc_id
-
-.. testoutput ::
-
+    >>> import u1db
+    >>> db = u1db.open("mydb4.u1db", create=True)
+    >>> doc = db.create_doc({"key": "value"}, doc_id="testdoc")
+    >>> doc1 = db.get_doc("testdoc")
+    >>> doc1.content
     {u'key': u'value'}
-    testdoc
+    >>> doc1.doc_id
+    'testdoc'
+
 
 And it's also possible to retrieve many documents by ``doc_id``.
 
-.. testcode ::
+.. doctest ::
 
-    import u1db
-    db = u1db.open("mydb5.u1db", create=True)
-    doc1 = db.create_doc({"key": "value"}, doc_id="testdoc1")
-    doc2 = db.create_doc({"key": "value"}, doc_id="testdoc2")
-    for doc in db.get_docs(["testdoc2","testdoc1"]):
-        print doc.doc_id
-
-.. testoutput ::
-
+    >>> import u1db
+    >>> db = u1db.open("mydb5.u1db", create=True)
+    >>> doc1 = db.create_doc({"key": "value"}, doc_id="testdoc1")
+    >>> doc2 = db.create_doc({"key": "value"}, doc_id="testdoc2")
+    >>> for doc in db.get_docs(["testdoc2","testdoc1"]):
+    ...     print doc.doc_id
     testdoc2
     testdoc1
 
@@ -150,14 +143,14 @@ examples here.
 
 Given a database with the following documents:
 
-.. testcode ::
+.. doctest ::
 
-    import u1db
-    db1 = u1db.open("mydb6.u1db", create=True)
-    jb = db1.create_doc({"firstname": "John", "surname": "Barnes", "position": "left wing"})
-    jm = db1.create_doc({"firstname": "Jan", "surname": "Molby", "position": "midfield"})
-    ah = db1.create_doc({"firstname": "Alan", "surname": "Hansen", "position": "defence"}) 
-    jw = db1.create_doc({"firstname": "John", "surname": "Wayne", "position": "filmstar"})
+    >>> import u1db
+    >>> db1 = u1db.open("mydb6.u1db", create=True)
+    >>> jb = db1.create_doc({"firstname": "John", "surname": "Barnes", "position": "left wing"})
+    >>> jm = db1.create_doc({"firstname": "Jan", "surname": "Molby", "position": "midfield"})
+    >>> ah = db1.create_doc({"firstname": "Alan", "surname": "Hansen", "position": "defence"})
+    >>> jw = db1.create_doc({"firstname": "John", "surname": "Wayne", "position": "filmstar"})
 
 an index expression of ``"firstname"`` will create an index that looks
 (conceptually) like this
@@ -173,13 +166,10 @@ an index expression of ``"firstname"`` will create an index that looks
 
 and that index is created with:
 
-.. testcode ::
+.. doctest ::
 
-    db1.create_index("by-firstname", "firstname")
-    print(sorted(db1.get_index_keys('by-firstname')))
-
-.. testoutput ::
-
+    >>> db1.create_index("by-firstname", "firstname")
+    >>> sorted(db1.get_index_keys('by-firstname'))
     [(u'Alan',), (u'Jan',), (u'John',)]
 
 -- that is, create an index with a name and one or more index expressions.
@@ -197,16 +187,13 @@ which is then used as the index key.
 fieldnames, so the index expression ``field.sub1.sub2`` applied to a document
 with below content:
 
-.. testcode ::
+.. doctest ::
 
-    import u1db
-    db = u1db.open('mydb7.u1db', create=True)
-    db.create_index('by-subfield', 'field.sub1.sub2')
-    doc1 = db.create_doc({"field": {"sub1": {"sub2": "hello", "sub3": "not selected"}}})
-    print(sorted(db.get_index_keys('by-subfield')))
-
-.. testoutput ::
-
+    >>> import u1db
+    >>> db = u1db.open('mydb7.u1db', create=True)
+    >>> db.create_index('by-subfield', 'field.sub1.sub2')
+    >>> doc1 = db.create_doc({"field": {"sub1": {"sub2": "hello", "sub3": "not selected"}}})
+    >>> db.get_index_keys('by-subfield')
     [(u'hello',)]
 
 gives the index key "hello", and therefore an entry in the index of
@@ -222,16 +209,13 @@ of strings, the document will have multiple entries in the index, one per entry
 in the list. So, the index expression ``field.tags`` applied to a document with
 content:
 
-.. testcode ::
+.. doctest ::
 
-    import u1db
-    db = u1db.open('mydb8.u1db', create=True)
-    db.create_index('by-tags', 'field.tags')
-    doc2 = db.create_doc({"field": {"tags": [ "tag1", "tag2", "tag3" ]}})
-    print(sorted(db.get_index_keys('by-tags')))
-
-.. testoutput ::
-
+    >>> import u1db
+    >>> db = u1db.open('mydb8.u1db', create=True)
+    >>> db.create_index('by-tags', 'field.tags')
+    >>> doc2 = db.create_doc({"field": {"tags": [ "tag1", "tag2", "tag3" ]}})
+    >>> sorted(db.get_index_keys('by-tags'))
     [(u'tag1',), (u'tag2',), (u'tag3',)]
 
 gives index entries
@@ -250,21 +234,18 @@ for each object in the list that specifies the denoted subfield. For instance
 the index expression ``managers.phone_number`` applied to a document
 with content:
 
-.. testcode ::
+.. doctest ::
 
-    import u1db
-    db = u1db.open('mydb9.u1db', create=True)
-    db.create_index('by-phone-number', 'managers.phone_number')
-    doc3 = db.create_doc(
-        {"department": "department of redundancy department",
-        "managers": [
-            {"name": "Mary", "phone_number": "12345"},
-            {"name": "Katherine"},
-            {"name": "Rob", "phone_number": "54321"}]})
-    print(sorted(db.get_index_keys('by-phone-number')))
-
-.. testoutput ::
-
+    >>> import u1db
+    >>> db = u1db.open('mydb9.u1db', create=True)
+    >>> db.create_index('by-phone-number', 'managers.phone_number')
+    >>> doc3 = db.create_doc(
+    ...    {"department": "department of redundancy department",
+    ...    "managers": [
+    ...        {"name": "Mary", "phone_number": "12345"},
+    ...        {"name": "Katherine"},
+    ...        {"name": "Rob", "phone_number": "54321"}]})
+    >>> sorted(db.get_index_keys('by-phone-number'))
     [(u'12345',), (u'54321',)]
 
 
@@ -290,25 +271,22 @@ Available transformation functions are:
    like a list and add multiple entries to the index
  * ``number(index_expression, width)`` - takes an integer value, and turns it
    into a string, left padded with zeroes, to make it at least as wide as
-   width.
+   width; or nothing if the field type is not an integer.
  * ``bool(index_expression)`` - takes a boolean value and turns it into '0' if
-   false and '1' if true.
+   false and '1' if true, or nothing if the field type is not boolean.
  * ``combine(index_expression1, index_expression2, ...)`` - Combine the values
    of an arbitrary number of sub expressions into a single index.
 
 So, the index expression ``splitwords(lower(field.name))`` applied to
 a document with content:
 
-.. testcode ::
+.. doctest ::
 
-    import u1db
-    db = u1db.open('mydb10.u1db', create=True)
-    db.create_index('by-split-lower', 'split_words(lower(field.name))')
-    doc4 = db.create_doc({"field": {"name": "Bruce David Grobbelaar"}})
-    print(sorted(db.get_index_keys('by-split-lower')))
-
-.. testoutput ::
-
+    >>> import u1db
+    >>> db = u1db.open('mydb10.u1db', create=True)
+    >>> db.create_index('by-split-lower', 'split_words(lower(field.name))')
+    >>> doc4 = db.create_doc({"field": {"name": "Bruce David Grobbelaar"}})
+    >>> sorted(db.get_index_keys('by-split-lower'))
     [(u'bruce',), (u'david',), (u'grobbelaar',)]
 
 gives index entries
@@ -330,24 +308,24 @@ to ``get_from_index``; the last index key in each tuple (and *only* the last
 one) can end with an asterisk, which matches initial substrings. So, querying
 our ``by-firstname`` index from above:
 
-.. testcode ::
+.. doctest ::
 
-    johns = [d.doc_id for d in db1.get_from_index("by-firstname", "John")]
-    assert(jw.doc_id in johns)
-    assert(jb.doc_id in johns)
-    assert(jm.doc_id not in johns)
+    >>> johns = [d.doc_id for d in db1.get_from_index("by-firstname", "John")]
+    >>> assert(jw.doc_id in johns)
+    >>> assert(jb.doc_id in johns)
+    >>> assert(jm.doc_id not in johns)
 
 will return the documents with ids: 'jw', 'jb'.
 
 ``get_from_index("by_firstname", "J*")`` will match all index keys beginning
 with "J", and so will return the documents with ids: 'jw', 'jb', 'jm'.
 
-.. testcode ::
+.. doctest ::
 
-    js = [d.doc_id for d in db1.get_from_index("by-firstname", "J*")]
-    assert(jw.doc_id in js)
-    assert(jb.doc_id in js)
-    assert(jm.doc_id in js)
+    >>> js = [d.doc_id for d in db1.get_from_index("by-firstname", "J*")]
+    >>> assert(jw.doc_id in js)
+    >>> assert(jb.doc_id in js)
+    >>> assert(jm.doc_id in js)
 
 Index functions
 ^^^^^^^^^^^^^^^

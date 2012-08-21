@@ -11,9 +11,9 @@ Getting u1db
 Download
 ^^^^^^^^
 
-This is the recommended version of u1db to use for your Python application.
-
 Download the latest release from `the U1DB download page <http://launchpad.net/u1db/+download>`_.
+
+This is the recommended version of u1db to use for your Python application.
 
 Use from source control
 ^^^^^^^^^^^^^^^^^^^^^^^
@@ -43,10 +43,15 @@ Starting u1db
     >>> doc.content = {"name": "Alan Hansen", "position": "defence"} # update the document's content
     >>> rev = db.put_doc(doc)
 
-    >>> content = {"name": "John Barnes", "position": "forward"} # create more documents
+    >>> content = {"name": "John Barnes", "position": "defence"} # create more documents
     >>> doc2 = db.create_doc(content)
+
+    >>> doc2.content["position"] = "forward"
+    >>> db.put_doc(doc2) #doctest:+ELLIPSIS
+    '...'
+
     >>> content = {"name": "Ian Rush", "position": "forward"}
-    >>> doc2 = db.create_doc(content)
+    >>> doc3 = db.create_doc(content)
 
     >>> db.create_index("by-position", "position") # create an index by passing a field name
 

@@ -80,51 +80,36 @@ data pertaining to the task.
 
 We can now create tasks, set their titles:
 
-.. testcode ::
+.. doctest ::
 
-    example_task = Task()
-    example_task.title = "Create a Task class."
-    print(example_task.title)
-
-.. testoutput ::
-
-    Create a Task class.
+    >>> example_task = Task()
+    >>> example_task.title = "Create a Task class."
+    >>> example_task.title
+    'Create a Task class.'
 
 their tags:
 
-.. testcode ::
+.. doctest ::
 
-    print(example_task.tags)
-
-.. testoutput ::
-
+    >>> example_task.tags
     []
 
-.. testcode ::
+.. doctest ::
 
-    example_task.tags = ['develoment']
-    print(example_task.tags)
-
-.. testoutput ::
-
+    >>> example_task.tags = ['develoment']
+    >>> example_task.tags
     ['develoment']
 
 and their done status:
 
-.. testcode ::
+.. doctest ::
 
-    print(example_task.done)
-
-.. testoutput ::
-
+    >>> example_task.done
     False
 
-.. testcode ::
+.. doctest ::
 
-    example_task.done = True
-    print(example_task.done)
-
-.. testoutput ::
-
+    >>> example_task.done = True
+    >>> example_task.done
     True
 
