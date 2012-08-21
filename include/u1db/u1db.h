@@ -14,6 +14,8 @@
  *
  * You should have received a copy of the GNU Lesser General Public License
  * along with u1db.  If not, see <http://www.gnu.org/licenses/>.
+ *
+ * @file u1db.h
  */
 
 #ifndef _U1DB_H_
