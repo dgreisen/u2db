@@ -367,12 +367,11 @@ class TestHTTPInvocationByMethodWithBody(tests.TestCase):
                    'CONTENT_LENGTH': '10000',
                    'CONTENT_TYPE': 'text/plain'}
 
-        class params:
-            max_request_size = 5000
-            max_entry_size = sys.maxint  # we don't get to use this
+        resource.max_request_size = 5000
+        resource.max_entry_size = sys.maxint  # we don't get to use this
 
         invoke = http_app.HTTPInvocationByMethodWithBody(resource, environ,
-                                                         params)
+                                                         parameters)
         self.assertRaises(http_app.BadRequest, invoke)
 
     def test_bad_request_no_content_length(self):
@@ -405,27 +404,30 @@ class TestHTTPInvocationByMethodWithBody(tests.TestCase):
         self.assertRaises(http_app.BadRequest, invoke)
 
     def test_bad_request_unsupported_method_get_like(self):
+        resource = TestResource()
         environ = {'QUERY_STRING': '', 'REQUEST_METHOD': 'DELETE'}
-        invoke = http_app.HTTPInvocationByMethodWithBody(None, environ,
+        invoke = http_app.HTTPInvocationByMethodWithBody(resource, environ,
                                                          parameters)
         self.assertRaises(http_app.BadRequest, invoke)
 
     def test_bad_request_unsupported_method_put_like(self):
+        resource = TestResource()
         environ = {'QUERY_STRING': '', 'REQUEST_METHOD': 'PUT',
                    'wsgi.input': StringIO.StringIO('{}'),
                    'CONTENT_LENGTH': '2',
                    'CONTENT_TYPE': 'application/json'}
-        invoke = http_app.HTTPInvocationByMethodWithBody(None, environ,
+        invoke = http_app.HTTPInvocationByMethodWithBody(resource, environ, 
                                                          parameters)
         self.assertRaises(http_app.BadRequest, invoke)
 
     def test_bad_request_unsupported_method_put_like_multi_json(self):
+        resource = TestResource()
         body = '{}\r\n{}\r\n'
         environ = {'QUERY_STRING': '', 'REQUEST_METHOD': 'POST',
                    'wsgi.input': StringIO.StringIO(body),
                    'CONTENT_LENGTH': str(len(body)),
                    'CONTENT_TYPE': 'application/x-u1db-multi-json'}
-        invoke = http_app.HTTPInvocationByMethodWithBody(None, environ,
+        invoke = http_app.HTTPInvocationByMethodWithBody(resource, environ, 
                                                          parameters)
         self.assertRaises(http_app.BadRequest, invoke)
 
@@ -824,8 +826,8 @@ class TestHTTPApp(tests.TestCase):
         self.assertEqual([('replica', 10), ('replica', 11)], gens)
 
     def test_sync_exchange_send_entry_too_large(self):
-        self.http_app.max_request_size = 20000
-        self.http_app.max_entry_size = 10000
+        self.patch(http_app.SyncResource, 'max_request_size', 20000)
+        self.patch(http_app.SyncResource, 'max_entry_size', 10000)
         entries = {
             10: {'id': 'doc-here', 'rev': 'replica:1', 'content':
                  '{"value": "%s"}' % ('H' * 11000), 'gen': 10},

@@ -329,6 +329,11 @@ class DocResource(object):
 class SyncResource(object):
     """Sync endpoint resource."""
 
+    # maximum allowed request body size
+    max_request_size = 15 * 1024 * 1024  # 15Mb
+    # maximum allowed entry/line size in request body
+    max_entry_size = 10 * 1024 * 1024    # 10Mb
+
     url_pattern = "/{dbname}/sync-from/{source_replica_uid}"
 
     # pluggable
@@ -468,8 +473,10 @@ class HTTPInvocationByMethodWithBody(object):
     def __init__(self, resource, environ, parameters):
         self.resource = resource
         self.environ = environ
-        self.max_request_size = parameters.max_request_size
-        self.max_entry_size = parameters.max_entry_size
+        self.max_request_size = getattr(
+            resource, 'max_request_size', parameters.max_request_size)
+        self.max_entry_size = getattr(
+            resource, 'max_entry_size', parameters.max_entry_size)
 
     def _lookup(self, method):
         try:

@@ -524,11 +524,13 @@ class Main(QtGui.QMainWindow):
                 db.set_oauth_credentials(**oauth_creds)
                 db.open(create=True)
             syncer.sync()
+        # refresh the UI to show changed or new tasks
         self.refresh_filter()
         self.update_status_bar("last synced: %s" % (datetime.now(),))
 
     def resolve(self, doc, revs):
         self.store.db.resolve_doc(doc, revs)
+        # refresh the UI to show the resolved version
         self.refresh_filter()
 
 
