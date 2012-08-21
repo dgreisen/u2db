@@ -163,7 +163,17 @@ both of the indexes defined above only index a single field.)
 The ``tags`` index will index any document that has a top level field ``tags``
 and index its value. Our tasks will have a list value under ``tags`` which
 means that u1db will index each task for each of the values in the list in this
-index.
+index. So a task with the following content:
+
+.. code-block:: python
+
+    {
+        "title": "Buy sausages and vimto",
+        "tags": ["shopping", "food"],
+        "done": false
+    }
+
+Would be indexed under both ``"food"`` and ``"shopping"``.
 
 The ``done`` index will index any document that has a boolean value in a top
 level field with the name ``done``.
@@ -389,7 +399,7 @@ having it happen automatically, every 30 minutes, for as long as it is running.
                 self._synchronize()
                 finalize()
 
-When syncronising over http(s) servers can (and usually will) require OAuth
+When synchronising over http(s), servers can (and usually will) require OAuth
 authentication. The code above shows how to acquire and pass in the oauth
 credentials for the Ubuntu One server, in case you want your application to
 synchronize with that.

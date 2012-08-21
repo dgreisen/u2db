@@ -19,8 +19,11 @@ is implementation-defined.
 Creating and editing documents
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-To create a document, use :py:meth:`~u1db.Database.create_doc`. Code examples
-below are from :ref:`reference-implementation` in Python.
+To create a document, use :py:meth:`~u1db.Database.create_doc` or
+:py:meth:`~u1db.Database.create_doc_from_json`. Code examples below are from
+:ref:`reference-implementation` in Python. :py:meth:`~u1db.Database.create_doc`
+takes a dictionary-like object, and 
+:py:meth:`~u1db.Database.create_doc_from_json` a JSON string.
 
 .. testsetup ::
 
@@ -43,7 +46,50 @@ below are from :ref:`reference-implementation` in Python.
     testdoc
 
 
-Editing an *existing* document is done with :py:meth:`~u1db.Database.put_doc`.
+Retrieving documents
+^^^^^^^^^^^^^^^^^^^^
+
+The simplest way to retrieve documents from a u1db is by calling
+:py:meth:`~u1db.Database.get_doc` with a ``doc_id``. This will return a
+:py:class:`~u1db.Document` object [#]_.
+
+.. testcode ::
+
+    import u1db
+    db = u1db.open("mydb4.u1db", create=True)
+    doc = db.create_doc({"key": "value"}, doc_id="testdoc")
+    doc1 = db.get_doc("testdoc")
+    print doc1.content
+    print doc1.doc_id
+
+.. testoutput ::
+
+    {u'key': u'value'}
+    testdoc
+
+And it's also possible to retrieve many documents by ``doc_id``.
+
+.. testcode ::
+
+    import u1db
+    db = u1db.open("mydb5.u1db", create=True)
+    doc1 = db.create_doc({"key": "value"}, doc_id="testdoc1")
+    doc2 = db.create_doc({"key": "value"}, doc_id="testdoc2")
+    for doc in db.get_docs(["testdoc2","testdoc1"]):
+        print doc.doc_id
+
+.. testoutput ::
+
+    testdoc2
+    testdoc1
+
+Note that :py:meth:`u1db.Database.get_docs` returns the documents in the order
+specified.
+
+Editing existing documents
+^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+Storing an *existing* document is done with :py:meth:`~u1db.Database.put_doc`.
 This is separate from :py:meth:`~u1db.Database.create_doc` so as to avoid
 accidental overwrites. :py:meth:`~u1db.Database.put_doc` takes a
 :py:class:`~u1db.Document` object, because the object encapsulates revision
@@ -87,43 +133,6 @@ Finally, deleting a document is done with :py:meth:`~u1db.Database.delete_doc`.
 
     None
     None
-
-Retrieving documents
-^^^^^^^^^^^^^^^^^^^^
-
-The simplest way to retrieve documents from a u1db is by ``doc_id``.
-
-.. testcode ::
-
-    import u1db
-    db = u1db.open("mydb4.u1db", create=True)
-    doc = db.create_doc({"key": "value"}, doc_id="testdoc")
-    doc1 = db.get_doc("testdoc")
-    print doc1.content
-    print doc1.doc_id
-
-.. testoutput ::
-
-    {u'key': u'value'}
-    testdoc
-
-And it's also possible to retrieve many documents by ``doc_id``.
-
-.. testcode ::
-
-    import u1db
-    db = u1db.open("mydb5.u1db", create=True)
-    doc1 = db.create_doc({"key": "value"}, doc_id="testdoc1")
-    doc2 = db.create_doc({"key": "value"}, doc_id="testdoc2")
-    for doc in db.get_docs(["testdoc2","testdoc1"]):
-        print doc.doc_id
-
-.. testoutput ::
-
-    testdoc2
-    testdoc1
-
-Note that ``get_docs()`` returns the documents in the order specified.
 
 Document functions
 ^^^^^^^^^^^^^^^^^^
@@ -397,6 +406,10 @@ Synchronising Functions
  * :py:meth:`~u1db.Database.sync`
  * :py:meth:`~u1db.Database.get_doc_conflicts`
  * :py:meth:`~u1db.Database.resolve_doc`
+
+.. [#] Alternatively if a factory function was passed into
+    :py:func:`u1db.open`, :py:meth:`~u1db.Database.get_doc` will return
+    whatever type of object the factory function returns.
 
 .. testcleanup ::
 
