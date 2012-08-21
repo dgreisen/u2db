@@ -18,7 +18,7 @@
 
 from testtools import TestCase
 from cosas import (
-    Task, TodoStore, INDEXES, TAGS_INDEX, EMPTY_TASK, extract_tags)
+    Task, TodoStore, INDEXES, TAGS_INDEX, get_empty_task, extract_tags)
 from u1db.backends import inmemory
 
 
@@ -185,7 +185,7 @@ class TaskTestCase(TestCase):
         super(TaskTestCase, self).setUp()
         self.db = inmemory.InMemoryDatabase("cosas")
         self.db.set_document_factory(Task)
-        self.document = self.db.create_doc_from_json(EMPTY_TASK)
+        self.document = self.db.create_doc(get_empty_task())
 
     def test_task(self):
         """Initializing a task."""
