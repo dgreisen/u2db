@@ -19,8 +19,11 @@ is implementation-defined.
 Creating and editing documents
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-To create a document, use ``create_doc()``. Code examples below are
-from :ref:`reference-implementation` in Python.
+To create a document, use :py:meth:`~u1db.Database.create_doc` or
+:py:meth:`~u1db.Database.create_doc_from_json`. Code examples below are from
+:ref:`reference-implementation` in Python. :py:meth:`~u1db.Database.create_doc`
+takes a dictionary-like object, and 
+:py:meth:`~u1db.Database.create_doc_from_json` a JSON string.
 
 .. testsetup ::
 
@@ -43,54 +46,12 @@ from :ref:`reference-implementation` in Python.
     testdoc
 
 
-Editing an *existing* document is done with ``put_doc()``. This is separate
-from ``create_doc()`` so as to avoid accidental overwrites. ``put_doc()`` takes
-a ``Document`` object, because the object encapsulates revision information for
-a particular document.
-
-.. testcode ::
-
-    import u1db
-    db = u1db.open("mydb2.u1db", create=True)
-    doc1 = db.create_doc({"key1": "value1"}, doc_id="doc1")
-    # the next line should fail because it's creating a doc that already exists
-    try:
-        doc1fail = db.create_doc({"key1fail": "value1fail"}, doc_id="doc1")
-    except u1db.errors.RevisionConflict:
-        print "There was a conflict when creating the doc!"
-    print "Now editing the doc with the doc object we got back..."
-    doc1.content["key1"] = "edited"
-    db.put_doc(doc1)
-    doc2 = db.get_doc(doc1.doc_id)
-    print doc2.content
-
-.. testoutput ::
-
-    There was a conflict when creating the doc!
-    Now editing the doc with the doc object we got back...
-    {u'key1': u'edited'}
-
-Finally, deleting a document is done with ``delete_doc()``.
-
-.. testcode ::
-
-    import u1db
-    db = u1db.open("mydb3.u1db", create=True)
-    doc = db.create_doc({"key": "value"})
-    db.delete_doc(doc)
-    print db.get_doc(doc.doc_id)
-    doc = db.get_doc(doc.doc_id, include_deleted=True)
-    print doc.content
-
-.. testoutput ::
-
-    None
-    None
-
 Retrieving documents
 ^^^^^^^^^^^^^^^^^^^^
 
-The simplest way to retrieve documents from a u1db is by ``doc_id``.
+The simplest way to retrieve documents from a u1db is by calling
+:py:meth:`~u1db.Database.get_doc` with a ``doc_id``. This will return a
+:py:class:`~u1db.Document` object [#]_.
 
 .. testcode ::
 
@@ -122,7 +83,56 @@ And it's also possible to retrieve many documents by ``doc_id``.
     testdoc2
     testdoc1
 
-Note that ``get_docs()`` returns the documents in the order specified.
+Note that :py:meth:`u1db.Database.get_docs` returns the documents in the order
+specified.
+
+Editing existing documents
+^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+Storing an *existing* document is done with :py:meth:`~u1db.Database.put_doc`.
+This is separate from :py:meth:`~u1db.Database.create_doc` so as to avoid
+accidental overwrites. :py:meth:`~u1db.Database.put_doc` takes a
+:py:class:`~u1db.Document` object, because the object encapsulates revision
+information for a particular document.
+
+.. testcode ::
+
+    import u1db
+    db = u1db.open("mydb2.u1db", create=True)
+    doc1 = db.create_doc({"key1": "value1"}, doc_id="doc1")
+    # the next line should fail because it's creating a doc that already exists
+    try:
+        doc1fail = db.create_doc({"key1fail": "value1fail"}, doc_id="doc1")
+    except u1db.errors.RevisionConflict:
+        print "There was a conflict when creating the doc!"
+    print "Now editing the doc with the doc object we got back..."
+    doc1.content["key1"] = "edited"
+    db.put_doc(doc1)
+    doc2 = db.get_doc(doc1.doc_id)
+    print doc2.content
+
+.. testoutput ::
+
+    There was a conflict when creating the doc!
+    Now editing the doc with the doc object we got back...
+    {u'key1': u'edited'}
+
+Finally, deleting a document is done with :py:meth:`~u1db.Database.delete_doc`.
+
+.. testcode ::
+
+    import u1db
+    db = u1db.open("mydb3.u1db", create=True)
+    doc = db.create_doc({"key": "value"})
+    db.delete_doc(doc)
+    print db.get_doc(doc.doc_id)
+    doc = db.get_doc(doc.doc_id, include_deleted=True)
+    print doc.content
+
+.. testoutput ::
+
+    None
+    None
 
 Document functions
 ^^^^^^^^^^^^^^^^^^
@@ -382,19 +392,24 @@ Dealing with conflicts
 Synchronising a database can result in conflicts; if your user changes the same
 document in two different places and then syncs again, that document will be
 ''in conflict'', meaning that it has incompatible changes. If this is the case,
-``doc.has_conflicts`` will be true, and put_doc to a conflicted doc will give
-a ``ConflictedDoc`` error. To get a list of conflicted versions of the
-document, do ``get_doc_conflicts(doc_id)``. Deciding what the final
-unconflicted document should look like is obviously specific to the user's
-application; once decided, call ``resolve_doc(doc, list_of_conflicted_revisions)``
-to resolve and set the final resolved content.
+:py:attr:`~u1db.Document.has_conflicts` will be true, and put_doc to a
+conflicted doc will give a ``ConflictedDoc`` error. To get a list of conflicted
+versions of the document, do :py:meth:`~u1db.Database.get_doc_conflicts`.
+Deciding what the final unconflicted document should look like is obviously
+specific to the user's application; once decided, call
+:py:meth:`~u1db.Database.resolve_doc` to resolve and set the final resolved
+content.
 
-Synchronising functions
+Synchronising Functions
 ^^^^^^^^^^^^^^^^^^^^^^^
 
  * :py:meth:`~u1db.Database.sync`
  * :py:meth:`~u1db.Database.get_doc_conflicts`
  * :py:meth:`~u1db.Database.resolve_doc`
+
+.. [#] Alternatively if a factory function was passed into
+    :py:func:`u1db.open`, :py:meth:`~u1db.Database.get_doc` will return
+    whatever type of object the factory function returns.
 
 .. testcleanup ::
 
