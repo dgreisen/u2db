@@ -141,6 +141,100 @@ Implementations are not required to use transaction ids. If they don't they
 should return an empty string when asked for a transaction id. All
 implementations should accept an empty string as a valid transaction id.
 
+Synchronisation Over HTTP
+-------------------------
+
+Synchronisation over HTTP is tuned to minimize the number of request/response
+round trips. The anatomy of a full synchronisation over HTTP is as follows:
+
+    1. The application wishing to synchronise sends the following GET request
+       to the server::
+
+            GET /thedb/sync-from/my_replica_uid
+
+       Where ``thedb`` is the name of the database to be synchronised, and
+       ``my_replica_uid`` is the replica id of the application's (i.e. the
+       local, or synchronisation source) database.
+
+    2. The target responds with a JSON document that looks like this::
+
+            {
+                "target_replica_uid": "other_replica_uid",
+                "target_replica_generation": 12,
+                "target_replica_transaction_id": "T-sdkfj92292j",
+                "source_replica_uid": "my_replica_uid",
+                "source_replica_generation": 23,
+                "source_transaction_id": "T-39299sdsfla8"
+            }
+
+       With all the information it has stored for the most recent
+       synchronisation between itself and this particular source replica. In
+       this case it tells us that the synchronisation target believes that when
+       it and the source were last synchronised, the target was at generation
+       12 and the source at generation 23.
+
+    3. If source and target agree on the above information, the source now
+       starts a streaming POST request to the same URL::
+
+            POST /thedb/sync-from/my_replica_uid
+
+       The request is of MIME type ``application/x-u1db-sync-stream``, which is
+       a subset of JSON. The format is a JSON array with a JSON object on each
+       line, followed by a comma and a carriage return and a newline, like
+       this::
+
+            [\r\n
+            {json_object},\r\n
+            ...
+            ]
+
+       The first object contains the following information::
+
+            {"last_known_generation": 12, "last_known_trans_id": "T-39299sdsfla8"},\r\n
+
+       and then for each document that it has changes for that are more recent
+       than generation 23, it sends, on a single line, followed by a comma and
+       a newline character, the following JSON object::
+
+            {"id": "mydocid", "rev": "my_replica_uid:4", "content": "{}", "generation": 48, "trans_id": "T-88djlahhhd"},\r\n
+
+       Note that content contains a JSON encoded representation of the
+       document's content (which in this case is empty).
+
+       The server reads and processes these lines one by one. Note that each
+       such JSON document includes the generation and transaction id of the
+       change. This means that when the synchronisation is ever interrupted,
+       the source can resume by starting at the last generation that was
+       successfully synchronised.
+
+    4. After it gets to the end of the request, the server responds with a
+       status 200 and starts streaming a response, also of MIME type
+       ``application/x-u1db-sync-stream``, which starts as follows::
+
+            [\r\n
+            {"new_generation": 15, "new_transaction_id": "T-999j3jjsfl"},\r\n
+
+       which tells the source what the target's new generation and transaction
+       id are, now that it processed the changes it received from the source.
+       Then it starts streaming  *its* changes since its last generation that
+       was synced (12 in this case,) in exactly the same format as the source
+       did in step 3.
+
+    5. When the source has processed all the changes it received from the
+       target, *and* it detects that there have been no changes to its database
+       since the start of the synchronisation that were not a direct result
+       *of* the synchronisation, it now performs a final PUT request, to inform
+       the target of its new generation and transaction id, so that the next
+       synchronisation can start there, rather than with the generation the
+       source was at when this synchronisation started::
+
+            PUT /thedb/sync-from/my_replica_uid
+
+       With the content::
+
+            {"generation": 53, "transaction_id": "T-camcmls92"}
+
+
 Revisions
 ---------
 
