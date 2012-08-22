@@ -54,6 +54,10 @@ add_custom_target(check
     DEPENDS build-inplace doctests
 )
 
+add_custom_target(cdocs
+    COMMAND doxygen html-docs/doxygen.conf
+)
+
 add_custom_target(build-inplace
     COMMAND python setup.py build_ext -i -f -I ${CMAKE_SOURCE_DIR}/include
     DEPENDS ReplicatePythonSourceTree u1db

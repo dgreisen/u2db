@@ -407,4 +407,12 @@ revisions of the conflicting versions it is meant to resolve.
             # refresh the UI to show the resolved version
             self.refresh_filter()
 
+Full Cosas Documentation and Source Code 
+----------------------------------------
+
+.. automodule:: cosas.cosas
+    :members:
+
+.. automodule:: cosas.ui
+    :members:
 
