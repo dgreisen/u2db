@@ -174,15 +174,29 @@ round trips. The anatomy of a full synchronisation over HTTP is as follows:
        12 and the source at generation 23.
 
     3. If source and target agree on the above information, the source now
-       starts the following streaming POST request::
+       starts a streaming POST request to the same URL::
 
-            POST /thedb/sync-from/my_replica_uid?last_known_generation=12&last_known_trans_id="T-39299sdsfla8"
+            POST /thedb/sync-from/my_replica_uid
+
+       The request is of MIME type ``application/x-u1db-sync-stream``, which is
+       a subset of JSON. The format is a JSON array with a JSON object on each
+       line, followed by a comma and a carriage return and a newline, like
+       this::
+
+            [\r\n
+            {json_object},\r\n
+            ...
+            ]
+
+       The first object contains the following information::
+
+            {"last_known_generation": 12, "last_known_trans_id": "T-39299sdsfla8"},\r\n
 
        and then for each document that it has changes for that are more recent
        than generation 23, it sends, on a single line, followed by a comma and
-       a newline character, the following JSON document::
+       a newline character, the following JSON object::
 
-            {"id": "mydocid", "rev": "my_replica_uid:4", "content": "{}", "generation": 48, "trans_id": "T-88djlahhhd"},
+            {"id": "mydocid", "rev": "my_replica_uid:4", "content": "{}", "generation": 48, "trans_id": "T-88djlahhhd"},\r\n
 
        Note that content contains a JSON encoded representation of the
        document's content (which in this case is empty).
@@ -194,16 +208,17 @@ round trips. The anatomy of a full synchronisation over HTTP is as follows:
        successfully synchronised.
 
     4. After it gets to the end of the request, the server responds with a
-       status 200 and starts streaming a response of type
-       ``application/x-u1db-sync-stream``, which starts with a line like::
+       status 200 and starts streaming a response, also of MIME type
+       ``application/x-u1db-sync-stream``, which starts as follows::
 
-            {"new_generation": 15, "new_transaction_id": "T-999j3jjsfl"},
+            [\r\n
+            {"new_generation": 15, "new_transaction_id": "T-999j3jjsfl"},\r\n
 
        which tells the source what the target's new generation and transaction
        id are, now that it processed the changes it received from the source.
        Then it starts streaming  *its* changes since its last generation that
        was synced (12 in this case,) in exactly the same format as the source
-       did in step 3. 
+       did in step 3.
 
     5. When the source has processed all the changes it received from the
        target, *and* it detects that there have been no changes to its database
@@ -213,7 +228,11 @@ round trips. The anatomy of a full synchronisation over HTTP is as follows:
        synchronisation can start there, rather than with the generation the
        source was at when this synchronisation started::
 
-            PUT /thedb/sync-from/my_replica_uid?generation=53&transaction_id="T-camcmls92"
+            PUT /thedb/sync-from/my_replica_uid
+
+       With the content::
+
+            {"generation": 53, "transaction_id": "T-camcmls92"}
 
 
 Revisions
