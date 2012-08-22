@@ -133,9 +133,9 @@ has ever synchronised with consists of:
 
 Any change to any document in a database constitutes a transaction. Each
 transaction increases the database generation by 1, and u1db implementations
-can assign a transaction id, which is meant to be a unique random string paired
-with each generation, that can be used to detect the case where replica A and
-replica B have previously synchronised at generation N, and subsequently
+should [#]_ assign a transaction id, which is meant to be a unique random string
+paired with each generation, that can be used to detect the case where replica
+A and replica B have previously synchronised at generation N, and subsequently
 replica B is somehow reverted to an earlier generation (say, a restore from
 backup, or somebody made a copy of the database file of replica B at generation
 < N, and tries to synchronise that), and then new changes are made to it.  It
@@ -144,9 +144,6 @@ random unique transaction ids will allow replica A to detect this situation,
 and refuse to synchronise to prevent data loss. (Lesson to be learned from
 this: do not copy databases around, that is what synchronisation is for.)
 
-Implementations are not required to use transaction ids. If they don't they
-should return an empty string when asked for a transaction id. All
-implementations should accept an empty string as a valid transaction id.
 
 Synchronisation Over HTTP
 -------------------------
@@ -293,3 +290,10 @@ by:
      ``rev_resol(r) = max(rev1(r)...revN(r))`` for all ``r`` in ``R``, with ``r != rev_resol``
 
      ``rev_resol(replica_resol) = max(rev1(replica_resol)...revN(replica_resol))+1``
+
+.. [#] Implementations are not required to use transaction ids. If they don't
+       they should return an empty string when asked for a transaction id. All
+       implementations should accept an empty string as a valid transaction id.
+       We suggest to implement transaction ids where possible though, since
+       omitting them can lead to data loss in scenarios like the ones described
+       above.
