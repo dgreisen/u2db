@@ -87,8 +87,8 @@ Synchronisation
 Synchronisation between two u1db replicas consists of the following steps:
 
     1. The source replica asks the target replica for the information it has
-       stored about the last time these two replicas were synchronised (If
-       ever.)
+       stored about the last time these two replicas were synchronised (if
+       ever).
 
     2. The source replica validates that its information regarding the last
        synchronisation is consistent with the target's information, and
@@ -137,10 +137,12 @@ can assign a transaction id, which is meant to be a unique random string paired
 with each generation, that can be used to detect the case where replica A and
 replica B have previously synchronised at generation N, and subsequently
 replica B is somehow reverted to an earlier generation (say, a restore from
-backup), and then new changes are made to it.  It could end up at generation N
-again, but with completely different data.  Having random unique transaction
-ids will allow replica A to detect this situation, and refuse to synchronise to
-prevent data loss.
+backup, or somebody made a copy of the database file of replica B at generation
+< N, and tries to synchronise that), and then new changes are made to it.  It
+could end up at generation N again, but with completely different data.  Having
+random unique transaction ids will allow replica A to detect this situation,
+and refuse to synchronise to prevent data loss. (Lesson to be learned from
+this: do not copy databases around, that is what synchronisation is for.)
 
 Implementations are not required to use transaction ids. If they don't they
 should return an empty string when asked for a transaction id. All
@@ -223,7 +225,7 @@ round trips. The anatomy of a full synchronisation over HTTP is as follows:
        which tells the source what the target's new generation and transaction
        id are, now that it processed the changes it received from the source.
        Then it starts streaming  *its* changes since its last generation that
-       was synced (12 in this case,) in exactly the same format (and order) as
+       was synced (12 in this case), in exactly the same format (and order) as
        the source did in step 3.
 
     5. When the source has processed all the changes it received from the
