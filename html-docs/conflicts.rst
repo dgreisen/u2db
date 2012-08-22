@@ -291,6 +291,8 @@ by:
 
      ``rev_resol(replica_resol) = max(rev1(replica_resol)...revN(replica_resol))+1``
 
+.. rubric:: footnotes
+
 .. [#] Implementations are not required to use transaction ids. If they don't
        they should return an empty string when asked for a transaction id. All
        implementations should accept an empty string as a valid transaction id.
