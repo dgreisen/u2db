@@ -381,6 +381,8 @@ Synchronising Functions
  * :py:meth:`~u1db.Database.get_doc_conflicts`
  * :py:meth:`~u1db.Database.resolve_doc`
 
+.. rubric:: footnotes
+
 .. [#] Alternatively if a factory function was passed into
     :py:func:`u1db.open`, :py:meth:`~u1db.Database.get_doc` will return
     whatever type of object the factory function returns.

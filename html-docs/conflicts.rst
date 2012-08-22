@@ -87,8 +87,8 @@ Synchronisation
 Synchronisation between two u1db replicas consists of the following steps:
 
     1. The source replica asks the target replica for the information it has
-       stored about the last time these two replicas were synchronised (If
-       ever.)
+       stored about the last time these two replicas were synchronised (if
+       ever).
 
     2. The source replica validates that its information regarding the last
        synchronisation is consistent with the target's information, and
@@ -131,15 +131,19 @@ has ever synchronised with consists of:
     * The generation and transaction id of *this* replica at the time of the
       most recent succesfully completed synchronisation with the other replica.
 
-The generation is a counter that increases with each change to the database.
-The transaction id is a unique random string that is paired with a particular
-generation to identify cases where one of the replicas has been copied or
-reverted to an earlier state by a restore from backup, and then diverged from
-the known state on the other side of the synchronisation.
+Any change to any document in a database constitutes a transaction. Each
+transaction increases the database generation by 1, and u1db implementations
+should [#]_ assign a transaction id, which is meant to be a unique random string
+paired with each generation, that can be used to detect the case where replica
+A and replica B have previously synchronised at generation N, and subsequently
+replica B is somehow reverted to an earlier generation (say, a restore from
+backup, or somebody made a copy of the database file of replica B at generation
+< N, and tries to synchronise that), and then new changes are made to it.  It
+could end up at generation N again, but with completely different data.  Having
+random unique transaction ids will allow replica A to detect this situation,
+and refuse to synchronise to prevent data loss. (Lesson to be learned from
+this: do not copy databases around, that is what synchronisation is for.)
 
-Implementations are not required to use transaction ids. If they don't they
-should return an empty string when asked for a transaction id. All
-implementations should accept an empty string as a valid transaction id.
 
 Synchronisation Over HTTP
 -------------------------
@@ -193,8 +197,9 @@ round trips. The anatomy of a full synchronisation over HTTP is as follows:
             {"last_known_generation": 12, "last_known_trans_id": "T-39299sdsfla8"},\r\n
 
        and then for each document that it has changes for that are more recent
-       than generation 23, it sends, on a single line, followed by a comma and
-       a newline character, the following JSON object::
+       than generation 23, ordered by generation in ascending order, it sends,
+       on a single line, followed by a comma and a newline character, the
+       following JSON object::
 
             {"id": "mydocid", "rev": "my_replica_uid:4", "content": "{}", "generation": 48, "trans_id": "T-88djlahhhd"},\r\n
 
@@ -217,8 +222,8 @@ round trips. The anatomy of a full synchronisation over HTTP is as follows:
        which tells the source what the target's new generation and transaction
        id are, now that it processed the changes it received from the source.
        Then it starts streaming  *its* changes since its last generation that
-       was synced (12 in this case,) in exactly the same format as the source
-       did in step 3.
+       was synced (12 in this case), in exactly the same format (and order) as
+       the source did in step 3.
 
     5. When the source has processed all the changes it received from the
        target, *and* it detects that there have been no changes to its database
@@ -245,34 +250,34 @@ implementation's use. You can therefore ignore the rest of this section.
 If you are writing a new u1db implementation, understanding revisions is
 important, and this is where you find out about them.
 
-To keep track of document revisions u1db uses vector versions. Each
+To keep track of document revisions u1db uses vector clocks. Each
 synchronised instance of the same database is called a replica and has a unique
 identifier (``replica uid``) assigned to it (currently the reference
 implementation by default uses UUID4s for that); a revision is a mapping
-between ``replica uids`` and ``generations``, as follows: ``rev
-= <replica_uid:generation...>``, or using a functional notation
-``rev(replica_uid) = generation``. The current concrete format is a string
+between ``replica uids`` and ``revisions``, as follows: ``rev
+= <replica_uid:revision...>``, or using a functional notation
+``rev(replica_uid) = revision``. The current concrete format is a string
 built out of each ``replica_uid`` concatenated with ``':'`` and with its
-generation in decimal, sorted lexicographically by ``replica_uid`` and then all
+revision in decimal, sorted lexicographically by ``replica_uid`` and then all
 joined with ``'|'``, for example: ``'replicaA:1|replicaB:3'`` . Absent
-``replica uids`` in a revision mapping are implicitly mapped to generation 0.
+``replica uids`` in a revision mapping are implicitly mapped to revison 0.
 
 The new revision of a document modified locally in a replica, is the
-modification of the old revision where the generation mapped to the editing
+modification of the old revision where the revision mapped to the editing
 ``replica uid`` is increased by 1.
 
 When syncing one needs to establish whether an incoming revision is newer than
 the current one or in conflict. A revision
 
-``rev1 = <replica_1i:generation1i|i=1..n>``
+``rev1 = <replica_1i:revision1i|i=1..n>``
 
 is newer than a different
 
-``rev2 = <replica_2j:generation2j|j=1..m>``
+``rev2 = <replica_2j:revision2j|j=1..m>``
 
-if for all ``i=1..n``, ``rev2(replica_1i) <= generation1i``
+if for all ``i=1..n``, ``rev2(replica_1i) <= revision1i``
 
-and for all ``j=1..m``, ``rev1(replica_2j) >= generation2j``.
+and for all ``j=1..m``, ``rev1(replica_2j) >= revision2j``.
 
 Two revisions which are not equal nor one newer than the other are in conflict.
 
@@ -285,3 +290,12 @@ by:
      ``rev_resol(r) = max(rev1(r)...revN(r))`` for all ``r`` in ``R``, with ``r != rev_resol``
 
      ``rev_resol(replica_resol) = max(rev1(replica_resol)...revN(replica_resol))+1``
+
+.. rubric:: footnotes
+
+.. [#] Implementations are not required to use transaction ids. If they don't
+       they should return an empty string when asked for a transaction id. All
+       implementations should accept an empty string as a valid transaction id.
+       We suggest to implement transaction ids where possible though, since
+       omitting them can lead to data loss in scenarios like the ones described
+       above.
