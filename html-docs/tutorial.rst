@@ -238,7 +238,7 @@ or updated.
             """Get all tags in use in the entire database."""
             return [key[0] for key in self.db.get_index_keys(TAGS_INDEX)]
 
-The py:meth:`~u1db.Database.get_index_keys` method gets a list of all indexed
+The :py:meth:`~u1db.Database.get_index_keys` method gets a list of all indexed
 *values* from an index. In this case it will give us a list of all tags that
 have been used in the database, which can be useful if we want to present them
 in the user interface of our application.
