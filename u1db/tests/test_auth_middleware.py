@@ -26,15 +26,89 @@ import time
 from u1db import tests
 
 from u1db.remote.oauth_middleware import OAuthMiddleware
+from u1db.remote.basic_auth_middleware import BasicAuthMiddleware
 
 
-BASE_URL = 'https://u1db.net'
+BASE_URL = 'https://example.net'
 
 
-class TestAuthMiddleware(tests.TestCase):
+class TestBasicAuthMiddleware(tests.TestCase):
 
     def setUp(self):
-        super(TestAuthMiddleware, self).setUp()
+        super(TestBasicAuthMiddleware, self).setUp()
+        self.got = []
+
+        def witness_app(environ, start_response):
+            start_response("200 OK", [("content-type", "text/plain")])
+            self.got.append((environ['user_id'], environ['PATH_INFO'],
+                             environ['QUERY_STRING']))
+            return ["ok"]
+
+        class MyAuthMiddleware(BasicAuthMiddleware):
+
+            def verify(self, user, password):
+                if user != "correct_user":
+                    return False
+                if password != "correct_password":
+                    return False
+                return True
+
+        self.auth_midw = MyAuthMiddleware(witness_app, BASE_URL)
+        self.app = paste.fixture.TestApp(self.auth_midw)
+
+    def test_expect_tilde(self):
+        url = BASE_URL + '/foo/doc/doc-id'
+        resp = self.app.delete(url, expect_errors=True)
+        self.assertEqual(400, resp.status)
+        self.assertEqual('application/json', resp.header('content-type'))
+        self.assertEqual('{"error": "bad request"}', resp.body)
+
+    def test_missing_auth(self):
+        url = BASE_URL + '/~/foo/doc/doc-id'
+        resp = self.app.delete(url, expect_errors=True)
+        self.assertEqual(401, resp.status)
+        self.assertEqual('application/json', resp.header('content-type'))
+        self.assertEqual(
+            {"error": "unauthorized",
+             "message": "Missing Basic Authentication."},
+            json.loads(resp.body))
+
+    def test_correct_auth(self):
+        user = "correct_user"
+        password = "correct_password"
+        params = {'old_rev': 'old-rev'}
+        url = BASE_URL + '/~/foo/doc/doc-id?%s' % (
+            '&'.join("%s=%s" % (k, v) for k, v in params.items()))
+        auth = '%s:%s' % (user, password)
+        headers = {
+            'Authorization': 'Basic %s' % (auth.encode('base64'),)}
+        resp = self.app.delete(url, headers=headers)
+        self.assertEqual(200, resp.status)
+        self.assertEqual(
+            [('correct_user', '/foo/doc/doc-id', 'old_rev=old-rev')], self.got)
+
+    def test_incorrect_auth(self):
+        user = "correct_user"
+        password = "incorrect_password"
+        params = {'old_rev': 'old-rev'}
+        url = BASE_URL + '/~/foo/doc/doc-id?%s' % (
+            '&'.join("%s=%s" % (k, v) for k, v in params.items()))
+        auth = '%s:%s' % (user, password)
+        headers = {
+            'Authorization': 'Basic %s' % (auth.encode('base64'),)}
+        resp = self.app.delete(url, headers=headers)
+        self.assertEqual(401, resp.status)
+        self.assertEqual('application/json', resp.header('content-type'))
+        self.assertEqual(
+            {"error": "unauthorized",
+             "message": "Incorrect password or login."},
+            json.loads(resp.body))
+
+
+class TestOAuthMiddleware(tests.TestCase):
+
+    def setUp(self):
+        super(TestOAuthMiddleware, self).setUp()
         self.got = []
 
         def witness_app(environ, start_response):
