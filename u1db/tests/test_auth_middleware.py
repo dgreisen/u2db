@@ -96,7 +96,7 @@ class TestBasicAuthMiddleware(tests.TestCase):
         auth = '%s:%s' % (user, password)
         headers = {
             'Authorization': 'Basic %s' % (auth.encode('base64'),)}
-        resp = self.app.delete(url, headers=headers)
+        resp = self.app.delete(url, headers=headers, expect_errors=True)
         self.assertEqual(401, resp.status)
         self.assertEqual('application/json', resp.header('content-type'))
         self.assertEqual(
