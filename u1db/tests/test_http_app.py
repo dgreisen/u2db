@@ -716,6 +716,13 @@ class TestHTTPApp(tests.TestCase):
         self.assertEqual(
             {"error": "missing document ids"}, json.loads(resp.body))
 
+    def test_get_docs_empty_doc_ids(self):
+        resp = self.app.get('/db0/docs?doc_ids=', expect_errors=True)
+        self.assertEqual(400, resp.status)
+        self.assertEqual('application/json', resp.header('content-type'))
+        self.assertEqual(
+            {"error": "missing document ids"}, json.loads(resp.body))
+
     def test_get_docs_percent(self):
         doc1 = self.db0.create_doc_from_json('{"x": 1}', doc_id='doc%1')
         doc2 = self.db0.create_doc_from_json('{"x": 1}', doc_id='doc2')
