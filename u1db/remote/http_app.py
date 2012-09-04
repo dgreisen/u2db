@@ -163,7 +163,7 @@ def http_method(**control):
                 else:
                     args["content"] = content
             if not (required_args <= set(args) <= all_args):
-                raise BadRequest()
+                raise BadRequest("Missing required arguments.")
             for name, conv in conversions:
                 if name not in args:
                     continue
@@ -257,6 +257,8 @@ class DocsResource(object):
                  include_deleted=parse_bool)
     def get(self, doc_ids=None, check_for_conflicts=True,
             include_deleted=False):
+        if doc_ids is None:
+            raise errors.MissingDocIds
         docs = self.db.get_docs(doc_ids, include_deleted=include_deleted)
         self.responder.content_type = 'application/json'
         self.responder.start_response(200)
