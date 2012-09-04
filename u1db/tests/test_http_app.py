@@ -416,7 +416,7 @@ class TestHTTPInvocationByMethodWithBody(tests.TestCase):
                    'wsgi.input': StringIO.StringIO('{}'),
                    'CONTENT_LENGTH': '2',
                    'CONTENT_TYPE': 'application/json'}
-        invoke = http_app.HTTPInvocationByMethodWithBody(resource, environ, 
+        invoke = http_app.HTTPInvocationByMethodWithBody(resource, environ,
                                                          parameters)
         self.assertRaises(http_app.BadRequest, invoke)
 
@@ -427,7 +427,7 @@ class TestHTTPInvocationByMethodWithBody(tests.TestCase):
                    'wsgi.input': StringIO.StringIO(body),
                    'CONTENT_LENGTH': str(len(body)),
                    'CONTENT_TYPE': 'application/x-u1db-multi-json'}
-        invoke = http_app.HTTPInvocationByMethodWithBody(resource, environ, 
+        invoke = http_app.HTTPInvocationByMethodWithBody(resource, environ,
                                                          parameters)
         self.assertRaises(http_app.BadRequest, invoke)
 
@@ -708,6 +708,20 @@ class TestHTTPApp(tests.TestCase):
             {"content": '{"x": 1}', "doc_rev": "db0:1", "doc_id": "doc2",
              "has_conflicts": False}]
         self.assertEqual(expected, json.loads(resp.body))
+
+    def test_get_docs_missing_doc_ids(self):
+        resp = self.app.get('/db0/docs', expect_errors=True)
+        self.assertEqual(400, resp.status)
+        self.assertEqual('application/json', resp.header('content-type'))
+        self.assertEqual(
+            {"error": "missing document ids"}, json.loads(resp.body))
+
+    def test_get_docs_empty_doc_ids(self):
+        resp = self.app.get('/db0/docs?doc_ids=', expect_errors=True)
+        self.assertEqual(400, resp.status)
+        self.assertEqual('application/json', resp.header('content-type'))
+        self.assertEqual(
+            {"error": "missing document ids"}, json.loads(resp.body))
 
     def test_get_docs_percent(self):
         doc1 = self.db0.create_doc_from_json('{"x": 1}', doc_id='doc%1')

@@ -42,9 +42,15 @@ class InvalidContent(U1DBError):
 
 
 class InvalidDocId(U1DBError):
-    """A document was tried with an invalid document identifier."""
+    """A document was requested with an invalid document identifier."""
 
     wire_description = "invalid document id"
+
+
+class MissingDocIds(U1DBError):
+    """Needs document ids."""
+
+    wire_description = "missing document ids"
 
 
 class DocumentTooBig(U1DBError):
