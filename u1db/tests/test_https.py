@@ -7,7 +7,6 @@ import sys
 from paste import httpserver
 
 from u1db import (
-    errors,
     tests,
     )
 from u1db.remote import (
@@ -21,7 +20,7 @@ from u1db.remote import (
 def oauth_https_server_def():
     def make_server(host_port, handler, state):
         app = http_app.HTTPApp(state)
-        application = oauth_middleware.OAuthMiddleware(app, None)
+        application = oauth_middleware.OAuthMiddleware(app, None, prefix='/~/')
         application.get_oauth_data_store = lambda: tests.testingOAuthStore
         from OpenSSL import SSL
         cert_file = os.path.join(os.path.dirname(__file__), 'testing-certs',
@@ -36,8 +35,6 @@ def oauth_https_server_def():
                                         handler,
                                         ssl_context=ssl_context
                                         )
-        # workaround apparent interface mismatch
-        orig_shutdown_request = srv.shutdown_request
 
         def shutdown_request(req):
             req.shutdown()
@@ -68,7 +65,7 @@ class TestHttpSyncTargetHttpsSupport(tests.TestCaseWithServer):
 
     def setUp(self):
         try:
-            import OpenSSL
+            import OpenSSL  # noqa
         except ImportError:
             self.skipTest("Requires pyOpenSSL")
         self.cacert_pem = os.path.join(os.path.dirname(__file__),
@@ -96,7 +93,7 @@ class TestHttpSyncTargetHttpsSupport(tests.TestCaseWithServer):
         self.startServer()
         # don't print expected traceback server-side
         self.server.handle_error = lambda req, cli_addr: None
-        db = self.request_state._create_database('test')
+        self.request_state._create_database('test')
         remote_target = self.getSyncTarget('localhost', 'test')
         try:
             remote_target.record_sync_info('other-id', 2, 'T-id')
@@ -110,11 +107,12 @@ class TestHttpSyncTargetHttpsSupport(tests.TestCaseWithServer):
             self.skipTest(
                 "XXX certificate verification happens on linux only for now")
         self.startServer()
-        db = self.request_state._create_database('test')
+        self.request_state._create_database('test')
         self.patch(http_client, 'CA_CERTS', self.cacert_pem)
         remote_target = self.getSyncTarget('127.0.0.1', 'test')
-        self.assertRaises(http_client.CertificateError,
-                          remote_target.record_sync_info, 'other-id', 2, 'T-id')
+        self.assertRaises(
+            http_client.CertificateError, remote_target.record_sync_info,
+            'other-id', 2, 'T-id')
 
 
 load_tests = tests.load_with_scenarios

@@ -53,7 +53,7 @@ class TestBasicAuthMiddleware(tests.TestCase):
                     return False
                 return True
 
-        self.auth_midw = MyAuthMiddleware(witness_app, BASE_URL)
+        self.auth_midw = MyAuthMiddleware(witness_app, BASE_URL, prefix="/~/")
         self.app = paste.fixture.TestApp(self.auth_midw)
 
     def test_expect_tilde(self):
@@ -125,7 +125,8 @@ class TestOAuthMiddleware(tests.TestCase):
                     environ, oauth_req)
                 environ['token_key'] = token.key
 
-        self.oauth_midw = MyOAuthMiddleware(witness_app, BASE_URL)
+        self.oauth_midw = MyOAuthMiddleware(
+            witness_app, BASE_URL, prefix='/~/')
         self.app = paste.fixture.TestApp(self.oauth_midw)
 
     def test_expect_tilde(self):

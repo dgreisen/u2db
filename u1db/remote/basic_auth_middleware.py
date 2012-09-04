@@ -25,9 +25,10 @@ from wsgiref.util import shift_path_info
 class BasicAuthMiddleware(object):
     """U1DB Basic Auth Authorisation WSGI middleware."""
 
-    def __init__(self, app, base_url):
+    def __init__(self, app, base_url, prefix):
         self.app = app
         self.base_url = base_url
+        self.prefix = prefix
 
     def _error(self, start_response, status, description, message=None):
         start_response("%d %s" % (status, httplib.responses[status]),
@@ -38,7 +39,7 @@ class BasicAuthMiddleware(object):
         return [json.dumps(err)]
 
     def __call__(self, environ, start_response):
-        if not environ['PATH_INFO'].startswith('/~/'):
+        if self.prefix and not environ['PATH_INFO'].startswith(self.prefix):
             return self._error(start_response, 400, "bad request")
         headers = {}
         auth = environ.get('HTTP_AUTHORIZATION')
