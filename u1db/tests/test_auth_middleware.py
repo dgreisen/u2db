@@ -135,6 +135,42 @@ class TestOAuthMiddlewareDefaultPrefix(tests.TestCase):
         self.assertEqual('application/json', resp.header('content-type'))
         self.assertEqual('{"error": "bad request"}', resp.body)
 
+    def test_oauth_in_header(self):
+        url = BASE_URL + '/~/foo/doc/doc-id'
+        params = {'old_rev': 'old-rev'}
+        oauth_req = oauth.OAuthRequest.from_consumer_and_token(
+            tests.consumer2,
+            tests.token2,
+            parameters=params,
+            http_url=url,
+            http_method='DELETE'
+            )
+        url = oauth_req.get_normalized_http_url() + '?' + (
+            '&'.join("%s=%s" % (k, v) for k, v in params.items()))
+        oauth_req.sign_request(tests.sign_meth_HMAC_SHA1,
+                               tests.consumer2, tests.token2)
+        resp = self.app.delete(url, headers=oauth_req.to_header())
+        self.assertEqual(200, resp.status)
+        self.assertEqual([(tests.token2.key,
+                           '/foo/doc/doc-id', 'old_rev=old-rev')], self.got)
+
+    def test_oauth_in_query_string(self):
+        url = BASE_URL + '/~/foo/doc/doc-id'
+        params = {'old_rev': 'old-rev'}
+        oauth_req = oauth.OAuthRequest.from_consumer_and_token(
+            tests.consumer1,
+            tests.token1,
+            parameters=params,
+            http_url=url,
+            http_method='DELETE'
+            )
+        oauth_req.sign_request(tests.sign_meth_HMAC_SHA1,
+                               tests.consumer1, tests.token1)
+        resp = self.app.delete(oauth_req.to_url())
+        self.assertEqual(200, resp.status)
+        self.assertEqual([(tests.token1.key,
+                           '/foo/doc/doc-id', 'old_rev=old-rev')], self.got)
+
 
 class TestOAuthMiddleware(tests.TestCase):
 
