@@ -25,9 +25,8 @@ from wsgiref.util import shift_path_info
 class BasicAuthMiddleware(object):
     """U1DB Basic Auth Authorisation WSGI middleware."""
 
-    def __init__(self, app, base_url, prefix):
+    def __init__(self, app, prefix):
         self.app = app
-        self.base_url = base_url
         self.prefix = prefix
 
     def _error(self, start_response, status, description, message=None):
@@ -41,11 +40,8 @@ class BasicAuthMiddleware(object):
     def __call__(self, environ, start_response):
         if self.prefix and not environ['PATH_INFO'].startswith(self.prefix):
             return self._error(start_response, 400, "bad request")
-        headers = {}
         auth = environ.get('HTTP_AUTHORIZATION')
-        if auth:
-            headers['Authorization'] = auth
-        else:
+        if not auth:
             return self._error(start_response, 401, "unauthorized",
                                "Missing Basic Authentication.")
         scheme, encoded = auth.split(None, 1)
@@ -54,7 +50,7 @@ class BasicAuthMiddleware(object):
                 start_response, 401, "unauthorized",
                 "Missing Basic Authentication")
         user, password = encoded.decode('base64').split(':', 1)
-        if not self.verify(user, password):
+        if not self.verify_user(user, password):
             return self._error(
                 start_response, 401, "unauthorized",
                 "Incorrect password or login.")

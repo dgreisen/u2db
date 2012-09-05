@@ -46,17 +46,17 @@ class TestBasicAuthMiddleware(tests.TestCase):
 
         class MyAuthMiddleware(BasicAuthMiddleware):
 
-            def verify(self, user, password):
+            def verify_user(self, user, password):
                 if user != "correct_user":
                     return False
                 if password != "correct_password":
                     return False
                 return True
 
-        self.auth_midw = MyAuthMiddleware(witness_app, BASE_URL, prefix="/~/")
+        self.auth_midw = MyAuthMiddleware(witness_app, prefix="/pfx/")
         self.app = paste.fixture.TestApp(self.auth_midw)
 
-    def test_expect_tilde(self):
+    def test_expect_prefix(self):
         url = BASE_URL + '/foo/doc/doc-id'
         resp = self.app.delete(url, expect_errors=True)
         self.assertEqual(400, resp.status)
@@ -64,7 +64,7 @@ class TestBasicAuthMiddleware(tests.TestCase):
         self.assertEqual('{"error": "bad request"}', resp.body)
 
     def test_missing_auth(self):
-        url = BASE_URL + '/~/foo/doc/doc-id'
+        url = BASE_URL + '/pfx/foo/doc/doc-id'
         resp = self.app.delete(url, expect_errors=True)
         self.assertEqual(401, resp.status)
         self.assertEqual('application/json', resp.header('content-type'))
@@ -77,7 +77,7 @@ class TestBasicAuthMiddleware(tests.TestCase):
         user = "correct_user"
         password = "correct_password"
         params = {'old_rev': 'old-rev'}
-        url = BASE_URL + '/~/foo/doc/doc-id?%s' % (
+        url = BASE_URL + '/pfx/foo/doc/doc-id?%s' % (
             '&'.join("%s=%s" % (k, v) for k, v in params.items()))
         auth = '%s:%s' % (user, password)
         headers = {
@@ -91,7 +91,7 @@ class TestBasicAuthMiddleware(tests.TestCase):
         user = "correct_user"
         password = "incorrect_password"
         params = {'old_rev': 'old-rev'}
-        url = BASE_URL + '/~/foo/doc/doc-id?%s' % (
+        url = BASE_URL + '/pfx/foo/doc/doc-id?%s' % (
             '&'.join("%s=%s" % (k, v) for k, v in params.items()))
         auth = '%s:%s' % (user, password)
         headers = {
@@ -103,6 +103,37 @@ class TestBasicAuthMiddleware(tests.TestCase):
             {"error": "unauthorized",
              "message": "Incorrect password or login."},
             json.loads(resp.body))
+
+
+class TestOAuthMiddlewareDefaultPrefix(tests.TestCase):
+    def setUp(self):
+
+        super(TestOAuthMiddlewareDefaultPrefix, self).setUp()
+        self.got = []
+
+        def witness_app(environ, start_response):
+            start_response("200 OK", [("content-type", "text/plain")])
+            self.got.append((environ['token_key'], environ['PATH_INFO'],
+                             environ['QUERY_STRING']))
+            return ["ok"]
+
+        class MyOAuthMiddleware(OAuthMiddleware):
+            get_oauth_data_store = lambda self: tests.testingOAuthStore
+
+            def verify(self, environ, oauth_req):
+                consumer, token = super(MyOAuthMiddleware, self).verify(
+                    environ, oauth_req)
+                environ['token_key'] = token.key
+
+        self.oauth_midw = MyOAuthMiddleware(witness_app, BASE_URL)
+        self.app = paste.fixture.TestApp(self.oauth_midw)
+
+    def test_expect_tilde(self):
+        url = BASE_URL + '/foo/doc/doc-id'
+        resp = self.app.delete(url, expect_errors=True)
+        self.assertEqual(400, resp.status)
+        self.assertEqual('application/json', resp.header('content-type'))
+        self.assertEqual('{"error": "bad request"}', resp.body)
 
 
 class TestOAuthMiddleware(tests.TestCase):
@@ -126,10 +157,10 @@ class TestOAuthMiddleware(tests.TestCase):
                 environ['token_key'] = token.key
 
         self.oauth_midw = MyOAuthMiddleware(
-            witness_app, BASE_URL, prefix='/~/')
+            witness_app, BASE_URL, prefix='/pfx/')
         self.app = paste.fixture.TestApp(self.oauth_midw)
 
-    def test_expect_tilde(self):
+    def test_expect_prefix(self):
         url = BASE_URL + '/foo/doc/doc-id'
         resp = self.app.delete(url, expect_errors=True)
         self.assertEqual(400, resp.status)
@@ -137,7 +168,7 @@ class TestOAuthMiddleware(tests.TestCase):
         self.assertEqual('{"error": "bad request"}', resp.body)
 
     def test_missing_oauth(self):
-        url = BASE_URL + '/~/foo/doc/doc-id'
+        url = BASE_URL + '/pfx/foo/doc/doc-id'
         resp = self.app.delete(url, expect_errors=True)
         self.assertEqual(401, resp.status)
         self.assertEqual('application/json', resp.header('content-type'))
@@ -146,7 +177,7 @@ class TestOAuthMiddleware(tests.TestCase):
             json.loads(resp.body))
 
     def test_oauth_in_query_string(self):
-        url = BASE_URL + '/~/foo/doc/doc-id'
+        url = BASE_URL + '/pfx/foo/doc/doc-id'
         params = {'old_rev': 'old-rev'}
         oauth_req = oauth.OAuthRequest.from_consumer_and_token(
             tests.consumer1,
@@ -163,7 +194,7 @@ class TestOAuthMiddleware(tests.TestCase):
                            '/foo/doc/doc-id', 'old_rev=old-rev')], self.got)
 
     def test_oauth_invalid(self):
-        url = BASE_URL + '/~/foo/doc/doc-id'
+        url = BASE_URL + '/pfx/foo/doc/doc-id'
         params = {'old_rev': 'old-rev'}
         oauth_req = oauth.OAuthRequest.from_consumer_and_token(
             tests.consumer1,
@@ -184,7 +215,7 @@ class TestOAuthMiddleware(tests.TestCase):
                          err)
 
     def test_oauth_in_header(self):
-        url = BASE_URL + '/~/foo/doc/doc-id'
+        url = BASE_URL + '/pfx/foo/doc/doc-id'
         params = {'old_rev': 'old-rev'}
         oauth_req = oauth.OAuthRequest.from_consumer_and_token(
             tests.consumer2,
@@ -203,7 +234,7 @@ class TestOAuthMiddleware(tests.TestCase):
                            '/foo/doc/doc-id', 'old_rev=old-rev')], self.got)
 
     def test_oauth_plain_text(self):
-        url = BASE_URL + '/~/foo/doc/doc-id'
+        url = BASE_URL + '/pfx/foo/doc/doc-id'
         params = {'old_rev': 'old-rev'}
         oauth_req = oauth.OAuthRequest.from_consumer_and_token(
             tests.consumer1,
@@ -220,7 +251,7 @@ class TestOAuthMiddleware(tests.TestCase):
                            '/foo/doc/doc-id', 'old_rev=old-rev')], self.got)
 
     def test_oauth_timestamp_threshold(self):
-        url = BASE_URL + '/~/foo/doc/doc-id'
+        url = BASE_URL + '/pfx/foo/doc/doc-id'
         params = {'old_rev': 'old-rev'}
         oauth_req = oauth.OAuthRequest.from_consumer_and_token(
             tests.consumer1,
