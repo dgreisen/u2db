@@ -35,9 +35,10 @@ class OAuthMiddleware(object):
     # from arrival time
     timestamp_threshold = 300
 
-    def __init__(self, app, base_url):
+    def __init__(self, app, base_url, prefix='/~/'):
         self.app = app
         self.base_url = base_url
+        self.prefix = prefix
 
     def get_oauth_data_store(self):
         """Provide a oauth.OAuthDataStore."""
@@ -52,7 +53,7 @@ class OAuthMiddleware(object):
         return [json.dumps(err)]
 
     def __call__(self, environ, start_response):
-        if not environ['PATH_INFO'].startswith('/~/'):
+        if self.prefix and not environ['PATH_INFO'].startswith(self.prefix):
             return self._error(start_response, 400, "bad request")
         headers = {}
         if 'HTTP_AUTHORIZATION' in environ:

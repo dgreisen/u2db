@@ -130,7 +130,7 @@ def oauth_http_server_def():
 
     def make_server(host_port, handler, state):
         app = http_app.HTTPApp(state)
-        application = oauth_middleware.OAuthMiddleware(app, None)
+        application = oauth_middleware.OAuthMiddleware(app, None, prefix='/~/')
         application.get_oauth_data_store = lambda: tests.testingOAuthStore
         srv = simple_server.WSGIServer(host_port, handler)
         # patch the value in
