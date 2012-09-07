@@ -45,12 +45,12 @@ add_custom_target(doctests
 )
 
 add_custom_target(check-nodoc
-    COMMAND python -m testtools.run discover
+    COMMAND U1DB_TEST=1 python -m testtools.run discover
     DEPENDS build-inplace
 )
 
 add_custom_target(check
-    COMMAND python -m testtools.run discover
+    COMMAND U1DB_TEST=1 python -m testtools.run discover
     DEPENDS build-inplace doctests
 )
 
@@ -69,17 +69,17 @@ add_custom_target(build-debug
 )
 
 add_custom_target(check-valgrind
-    COMMAND valgrind --tool=memcheck --suppressions=${CMAKE_SOURCE_DIR}/custom.supp python-dbg -m testtools.run discover
+    COMMAND U1DB_TEST=1 valgrind --tool=memcheck --suppressions=${CMAKE_SOURCE_DIR}/custom.supp python-dbg -m testtools.run discover
     DEPENDS build-debug
 )
 
 add_custom_target(check-valgrind-leaks
-    COMMAND valgrind --tool=memcheck --suppressions=${CMAKE_SOURCE_DIR}/custom.supp --track-origins=yes --num-callers=40 --leak-resolution=high --leak-check=full python-dbg -m testtools.run discover
+    COMMAND U1DB_TEST=1 valgrind --tool=memcheck --suppressions=${CMAKE_SOURCE_DIR}/custom.supp --track-origins=yes --num-callers=40 --leak-resolution=high --leak-check=full python-dbg -m testtools.run discover
     DEPENDS build-debug
 )
 
 add_custom_target(check-verbose
-    COMMAND python -c \"import unittest, sys\; from testtools import run\; run.TestProgram(argv=sys.argv, testRunner=unittest.TextTestRunner(verbosity=2), stdout=sys.stdout)\" discover
+    COMMAND U1DB_TEST=1 python -c \"import unittest, sys\; from testtools import run\; run.TestProgram(argv=sys.argv, testRunner=unittest.TextTestRunner(verbosity=2), stdout=sys.stdout)\" discover
     DEPENDS build-inplace
 )
 
