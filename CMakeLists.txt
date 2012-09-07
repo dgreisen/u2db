@@ -45,13 +45,13 @@ add_custom_target(doctests
 )
 
 add_custom_target(check-nodoc
-    COMMAND U1DB_TEST=1 python -m testtools.run discover
-    DEPENDS build-inplace
+    COMMAND python -m testtools.run discover
+    DEPENDS build-inplace-for-tests
 )
 
 add_custom_target(check
-    COMMAND U1DB_TEST=1 python -m testtools.run discover
-    DEPENDS build-inplace doctests
+    COMMAND python -m testtools.run discover
+    DEPENDS build-inplace-for-tests doctests
 )
 
 add_custom_target(cdocs
@@ -68,19 +68,28 @@ add_custom_target(build-debug
     DEPENDS ReplicatePythonSourceTree u1db
 )
 
+add_custom_target(build-inplace-for-tests
+    COMMAND U1DB_TEST=1 python setup.py build_ext -i -f -I ${CMAKE_SOURCE_DIR}/include
+    DEPENDS ReplicatePythonSourceTree u1db
+)
+
+add_custom_target(build-debug-for-tests
+    COMMAND U1DB_TEST=1 python-dbg setup.py build_ext -i -f -I ${CMAKE_SOURCE_DIR}/include
+    DEPENDS ReplicatePythonSourceTree u1db
+)
 add_custom_target(check-valgrind
-    COMMAND U1DB_TEST=1 valgrind --tool=memcheck --suppressions=${CMAKE_SOURCE_DIR}/custom.supp python-dbg -m testtools.run discover
-    DEPENDS build-debug
+    COMMAND valgrind --tool=memcheck --suppressions=${CMAKE_SOURCE_DIR}/custom.supp python-dbg -m testtools.run discover
+    DEPENDS build-debug-for-tests
 )
 
 add_custom_target(check-valgrind-leaks
-    COMMAND U1DB_TEST=1 valgrind --tool=memcheck --suppressions=${CMAKE_SOURCE_DIR}/custom.supp --track-origins=yes --num-callers=40 --leak-resolution=high --leak-check=full python-dbg -m testtools.run discover
-    DEPENDS build-debug
+    COMMAND valgrind --tool=memcheck --suppressions=${CMAKE_SOURCE_DIR}/custom.supp --track-origins=yes --num-callers=40 --leak-resolution=high --leak-check=full python-dbg -m testtools.run discover
+    DEPENDS build-debug-for-tests
 )
 
 add_custom_target(check-verbose
     COMMAND U1DB_TEST=1 python -c \"import unittest, sys\; from testtools import run\; run.TestProgram(argv=sys.argv, testRunner=unittest.TextTestRunner(verbosity=2), stdout=sys.stdout)\" discover
-    DEPENDS build-inplace
+    DEPENDS build-inplace-for-tests
 )
 
 add_custom_target(html-docs
