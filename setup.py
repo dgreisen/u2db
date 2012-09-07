@@ -15,6 +15,7 @@
 # You should have received a copy of the GNU Lesser General Public License
 # along with u1db.  If not, see <http://www.gnu.org/licenses/>.
 
+import os
 import sys
 
 
@@ -63,31 +64,32 @@ This allows you to get, retrieve, index, and update JSON documents, and
 synchronize them with other stores.
 """
     }
-    try:
-        from Cython.Distutils import build_ext
-    except ImportError:
-        print "Unable to import Cython, to test the C implementation"
-    else:
-        kwargs["cmdclass"] = {"build_ext": build_ext}
-        extra_libs = []
-        extra_defines = []
-        if sys.platform == 'win32':
-            # Used for the random number generator
-            extra_libs.append('advapi32')
-            extra_libs.append('libcurl_imp')
-            extra_libs.append('libeay32')
-            extra_defines = [('_CRT_SECURE_NO_WARNINGS', 1)]
+    if "U1DB_TEST" in os.environ:
+        try:
+            from Cython.Distutils import build_ext
+        except ImportError:
+            print "Unable to import Cython, to test the C implementation"
         else:
-            extra_libs.append('curl')
-        extra_libs.append('json')
-        ext.append(Extension(
-            "u1db.tests.c_backend_wrapper",
-            ["u1db/tests/c_backend_wrapper.pyx"],
-            include_dirs=['include'],
-            library_dirs=["src"],
-            libraries=['u1db', 'sqlite3', 'oauth'] + extra_libs,
-            define_macros=[] + extra_defines,
-            ))
+            kwargs["cmdclass"] = {"build_ext": build_ext}
+            extra_libs = []
+            extra_defines = []
+            if sys.platform == 'win32':
+                # Used for the random number generator
+                extra_libs.append('advapi32')
+                extra_libs.append('libcurl_imp')
+                extra_libs.append('libeay32')
+                extra_defines = [('_CRT_SECURE_NO_WARNINGS', 1)]
+            else:
+                extra_libs.append('curl')
+            extra_libs.append('json')
+            ext.append(Extension(
+                "u1db.tests.c_backend_wrapper",
+                ["u1db/tests/c_backend_wrapper.pyx"],
+                include_dirs=['include'],
+                library_dirs=["src"],
+                libraries=['u1db', 'sqlite3', 'oauth'] + extra_libs,
+                define_macros=[] + extra_defines,
+                ))
     setup(**kwargs)
 
 if __name__ == "__main__":
