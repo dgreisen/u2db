@@ -26,7 +26,7 @@ import time
 from u1db import tests
 
 from u1db.remote.oauth_middleware import OAuthMiddleware
-from u1db.remote.basic_auth_middleware import BasicAuthMiddleware
+from u1db.remote.basic_auth_middleware import BasicAuthMiddleware, Unauthorized
 
 
 BASE_URL = 'https://example.net'
@@ -40,18 +40,16 @@ class TestBasicAuthMiddleware(tests.TestCase):
 
         def witness_app(environ, start_response):
             start_response("200 OK", [("content-type", "text/plain")])
-            self.got.append((environ['user_id'], environ['PATH_INFO'],
-                             environ['QUERY_STRING']))
+            self.got.append((environ['PATH_INFO'], environ['QUERY_STRING']))
             return ["ok"]
 
         class MyAuthMiddleware(BasicAuthMiddleware):
 
             def verify_user(self, user, password):
                 if user != "correct_user":
-                    return False
+                    raise Unauthorized
                 if password != "correct_password":
-                    return False
-                return True
+                    raise Unauthorized
 
         self.auth_midw = MyAuthMiddleware(witness_app, prefix="/pfx/")
         self.app = paste.fixture.TestApp(self.auth_midw)
@@ -84,8 +82,7 @@ class TestBasicAuthMiddleware(tests.TestCase):
             'Authorization': 'Basic %s' % (auth.encode('base64'),)}
         resp = self.app.delete(url, headers=headers)
         self.assertEqual(200, resp.status)
-        self.assertEqual(
-            [('correct_user', '/foo/doc/doc-id', 'old_rev=old-rev')], self.got)
+        self.assertEqual([('/foo/doc/doc-id', 'old_rev=old-rev')], self.got)
 
     def test_incorrect_auth(self):
         user = "correct_user"
