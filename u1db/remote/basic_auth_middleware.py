@@ -55,7 +55,7 @@ class BasicAuthMiddleware(object):
                 "Missing Basic Authentication")
         user, password = encoded.decode('base64').split(':', 1)
         try:
-            self.verify_user(user, password)
+            self.verify_user(environ, user, password)
         except Unauthorized:
             return self._error(
                 start_response, 401, "unauthorized",
@@ -64,5 +64,5 @@ class BasicAuthMiddleware(object):
         shift_path_info(environ)
         return self.app(environ, start_response)
 
-    def verify_user(self, username, password):
+    def verify_user(self, environ, username, password):
         raise NotImplementedError(self.verify_user)
