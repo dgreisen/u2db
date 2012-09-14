@@ -22,6 +22,10 @@ except ImportError:
 from wsgiref.util import shift_path_info
 
 
+class Unauthorized(Exception):
+    """User authorization failed."""
+
+
 class BasicAuthMiddleware(object):
     """U1DB Basic Auth Authorisation WSGI middleware."""
 
@@ -50,14 +54,15 @@ class BasicAuthMiddleware(object):
                 start_response, 401, "unauthorized",
                 "Missing Basic Authentication")
         user, password = encoded.decode('base64').split(':', 1)
-        if not self.verify_user(user, password):
+        try:
+            self.verify_user(environ, user, password)
+        except Unauthorized:
             return self._error(
                 start_response, 401, "unauthorized",
                 "Incorrect password or login.")
         del environ['HTTP_AUTHORIZATION']
-        environ['user_id'] = user
         shift_path_info(environ)
         return self.app(environ, start_response)
 
-    def verify_user(self, username, password):
+    def verify_user(self, environ, username, password):
         raise NotImplementedError(self.verify_user)
