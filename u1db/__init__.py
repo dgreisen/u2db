@@ -77,7 +77,7 @@ class Database(object):
         """
         raise NotImplementedError(self.set_document_size_limit)
 
-    def whats_changed(self, old_generation):
+    def whats_changed(self, old_generation=0):
         """Return a list of documents that have changed since old_generation.
         This allows APPS to only store a db generation before going
         'offline', and then when coming back online they can use this
