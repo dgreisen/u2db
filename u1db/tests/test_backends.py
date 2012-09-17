@@ -364,19 +364,19 @@ class LocalDatabaseTests(tests.DatabaseBaseTests):
         self.assertRaises(errors.InvalidDocId, self.db.put_doc, doc)
 
     def test_get_all_docs_empty(self):
-        self.assertEqual([], self.db.get_all_docs()[1])
+        self.assertEqual([], list(self.db.get_all_docs())[1])
 
     def test_get_all_docs(self):
         doc1 = self.db.create_doc_from_json(simple_doc)
         doc2 = self.db.create_doc_from_json(nested_doc)
         self.assertEqual(
-            sorted([doc1, doc2]), sorted(self.db.get_all_docs()[1]))
+            sorted([doc1, doc2]), sorted(list(self.db.get_all_docs())[1]))
 
     def test_get_all_docs_exclude_deleted(self):
         doc1 = self.db.create_doc_from_json(simple_doc)
         doc2 = self.db.create_doc_from_json(nested_doc)
         self.db.delete_doc(doc2)
-        self.assertEqual([doc1], self.db.get_all_docs()[1])
+        self.assertEqual([doc1], list(self.db.get_all_docs())[1])
 
     def test_get_all_docs_include_deleted(self):
         doc1 = self.db.create_doc_from_json(simple_doc)
@@ -384,12 +384,12 @@ class LocalDatabaseTests(tests.DatabaseBaseTests):
         self.db.delete_doc(doc2)
         self.assertEqual(
             sorted([doc1, doc2]),
-            sorted(self.db.get_all_docs(include_deleted=True)[1]))
+            sorted(list(self.db.get_all_docs(include_deleted=True))[1]))
 
     def test_get_all_docs_generation(self):
         self.db.create_doc_from_json(simple_doc)
         self.db.create_doc_from_json(nested_doc)
-        self.assertEqual(2, self.db.get_all_docs()[0])
+        self.assertEqual(2, list(self.db.get_all_docs())[0])
 
     def test_simple_put_doc_if_newer(self):
         doc = self.make_document('my-doc-id', 'test:1', simple_doc)
@@ -676,7 +676,7 @@ class LocalDatabaseWithConflictsTests(tests.DatabaseBaseTests):
         self.db._put_doc_if_newer(
             alt_doc, save_conflict=True, replica_uid='r', replica_gen=1,
             replica_trans_id='foo')
-        _, docs = self.db.get_all_docs()
+        _, docs = list(self.db.get_all_docs())
         self.assertTrue(docs[0].has_conflicts)
 
     def test_get_doc_conflicts_unconflicted(self):
@@ -1837,7 +1837,7 @@ class PythonBackendTests(tests.DatabaseBaseTests):
         self.db.set_document_factory(TestAlternativeDocument)
         self.db.create_doc(self.simple_doc)
         self.assertTrue(isinstance(
-            self.db.get_all_docs()[1][0], TestAlternativeDocument))
+            list(self.db.get_all_docs())[1][0], TestAlternativeDocument))
 
     def test_get_docs_conflicted_with_factory(self):
         self.db.set_document_factory(TestAlternativeDocument)
