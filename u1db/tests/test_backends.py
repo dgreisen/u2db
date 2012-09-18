@@ -168,6 +168,12 @@ class AllDatabaseTests(tests.DatabaseBaseTests, tests.TestCaseWithServer):
         doc = self.make_document(r'\b', None, simple_doc)
         self.assertRaises(errors.InvalidDocId, self.db.put_doc, doc)
 
+    def test_put_doc_url_quoting_is_fine(self):
+        doc_id = "%2F%2Ffoo%2Fbar"
+        doc = self.make_document(doc_id, None, simple_doc)
+        new_rev = self.db.put_doc(doc)
+        self.assertGetDoc(self.db, doc_id, new_rev, simple_doc, False)
+
     def test_put_doc_refuses_non_existing_old_rev(self):
         doc = self.make_document('doc-id', 'test:4', simple_doc)
         self.assertRaises(errors.RevisionConflict, self.db.put_doc, doc)
@@ -436,6 +442,8 @@ class LocalDatabaseTests(tests.DatabaseBaseTests):
         v2 = vectorclock.VectorClockRev(doc2.rev)
         self.assertTrue(v2.is_newer(vectorclock.VectorClockRev("whatever:1")))
         self.assertTrue(v2.is_newer(vectorclock.VectorClockRev(rev)))
+        # strictly newer locally
+        self.assertTrue(rev not in doc2.rev)
 
     def test_put_doc_if_newer_already_converged(self):
         orig_doc = '{"new": "doc"}'
@@ -953,6 +961,7 @@ class LocalDatabaseWithConflictsTests(tests.DatabaseBaseTests):
         rev_a3 = vectorclock.VectorClockRev('test:3')
         rev_a1b1 = vectorclock.VectorClockRev('test:1|other:1')
         self.assertTrue(rev.is_newer(rev_a3))
+        self.assertTrue('test:4' in doc.rev) # locally increased
         self.assertTrue(rev.is_newer(rev_a1b1))
 
     def test_put_doc_if_newer_autoresolve_4(self):
@@ -978,6 +987,7 @@ class LocalDatabaseWithConflictsTests(tests.DatabaseBaseTests):
         rev_a3 = vectorclock.VectorClockRev('test:3')
         rev_a1b1 = vectorclock.VectorClockRev('test:1|other:1')
         self.assertTrue(rev.is_newer(rev_a3))
+        self.assertTrue('test:4' in doc.rev) # locally increased
         self.assertTrue(rev.is_newer(rev_a1b1))
 
     def test_put_refuses_to_update_conflicted(self):
