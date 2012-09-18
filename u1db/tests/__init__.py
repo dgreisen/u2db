@@ -22,6 +22,11 @@ import socket
 import tempfile
 import threading
 
+try:
+    import simplejson as json
+except ImportError:
+    import json  # noqa
+
 from oauth import oauth
 from sqlite3 import dbapi2
 from StringIO import StringIO
@@ -95,10 +100,13 @@ class TestCase(testtools.TestCase):
             database, however the rest can be returned in any order.
         """
         if conflicts:
+            conflicts = [(rev, (json.loads(cont) if isinstance(cont, basestring)
+                           else cont)) for (rev, cont) in conflicts]
             conflicts = conflicts[:1] + sorted(conflicts[1:])
         actual = db.get_doc_conflicts(doc_id)
         if actual:
-            actual = [(doc.rev, doc.get_json()) for doc in actual]
+            actual = [(doc.rev, (json.loads(doc.get_json())
+                   if doc.get_json() is not None else None)) for doc in actual]
             actual = actual[:1] + sorted(actual[1:])
         self.assertEqual(conflicts, actual)
 
