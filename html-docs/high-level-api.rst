@@ -122,18 +122,17 @@ Finally, deleting a document is done with :py:meth:`~u1db.Database.delete_doc`.
     >>> doc = db.get_doc(doc.doc_id, include_deleted=True)
     >>> doc.content
 
-
 Document functions
 ^^^^^^^^^^^^^^^^^^
 
- * :py:meth:`~u1db.Database.create_doc`
- * :py:meth:`~u1db.Database.create_doc_from_json`
- * :py:meth:`~u1db.Database.put_doc`
- * :py:meth:`~u1db.Database.get_doc`
- * :py:meth:`~u1db.Database.get_docs`
- * :py:meth:`~u1db.Database.get_all_docs`
- * :py:meth:`~u1db.Database.delete_doc`
- * :py:meth:`~u1db.Database.whats_changed`
+* :py:meth:`~u1db.Database.create_doc`
+* :py:meth:`~u1db.Database.create_doc_from_json`
+* :py:meth:`~u1db.Database.put_doc`
+* :py:meth:`~u1db.Database.get_doc`
+* :py:meth:`~u1db.Database.get_docs`
+* :py:meth:`~u1db.Database.get_all_docs`
+* :py:meth:`~u1db.Database.delete_doc`
+* :py:meth:`~u1db.Database.whats_changed`
 
 Querying
 --------
@@ -161,14 +160,14 @@ Given a database with the following documents:
 an index expression of ``"firstname"`` will create an index that looks
 (conceptually) like this
 
- ====================== ========
- index expression value document
- ====================== ========
- Alan                   ah
- Jan                    jm
- John                   jb
- John                   jw
- ====================== ========
+====================== ========
+index expression value document
+====================== ========
+Alan                   ah
+Jan                    jm
+John                   jb
+John                   jw
+====================== ========
 
 and that index is created with:
 
@@ -204,11 +203,11 @@ with below content:
 
 gives the index key "hello", and therefore an entry in the index of
 
- ========= ====
- Index key doc
- ========= ====
- hello     doc1
- ========= ====
+========= ====
+Index key doc
+========= ====
+hello     doc1
+========= ====
 
 **Name a list.** If an index expression names a field whose contents is a list
 of strings, the document will have multiple entries in the index, one per entry
@@ -226,13 +225,13 @@ content:
 
 gives index entries
 
- ========= ====
- Index key doc
- ========= ====
- tag1      doc2
- tag2      doc2
- tag3      doc2
- ========= ====
+========= ====
+Index key doc
+========= ====
+tag1      doc2
+tag2      doc2
+tag3      doc2
+========= ====
 
 **Subfields of objects in a list.** If an index expression points at subfields
 of objects in a list, the document will have multiple entries in the index, one
@@ -257,12 +256,12 @@ with content:
 
 would give index entries:
 
- ========= ====
- Index key doc
- ========= ====
- 12345     doc3
- 54321     doc3
- ========= ====
+========= ====
+Index key doc
+========= ====
+12345     doc3
+54321     doc3
+========= ====
 
 **Transformation functions.** An index expression may be wrapped in any number
 of transformation functions. A function transforms the result of the contained
@@ -272,16 +271,16 @@ index expression: for example, if an expression ``name.firstname`` generates
 
 Available transformation functions are:
 
- * ``lower(index_expression)`` - lowercase the value
- * ``split_words(index_expression)`` - split the value on whitespace; will act
-   like a list and add multiple entries to the index
- * ``number(index_expression, width)`` - takes an integer value, and turns it
-   into a string, left padded with zeroes, to make it at least as wide as
-   width; or nothing if the field type is not an integer.
- * ``bool(index_expression)`` - takes a boolean value and turns it into '0' if
-   false and '1' if true, or nothing if the field type is not boolean.
- * ``combine(index_expression1, index_expression2, ...)`` - Combine the values
-   of an arbitrary number of sub expressions into a single index.
+* ``lower(index_expression)`` - lowercase the value
+* ``split_words(index_expression)`` - split the value on whitespace; will act
+  like a list and add multiple entries to the index
+* ``number(index_expression, width)`` - takes an integer value, and turns it
+  into a string, left padded with zeroes, to make it at least as wide as
+  width; or nothing if the field type is not an integer.
+* ``bool(index_expression)`` - takes a boolean value and turns it into '0' if
+  false and '1' if true, or nothing if the field type is not boolean.
+* ``combine(index_expression1, index_expression2, ...)`` - Combine the values
+  of an arbitrary number of sub expressions into a single index.
 
 So, the index expression ``splitwords(lower(field.name))`` applied to
 a document with content:
@@ -297,13 +296,13 @@ a document with content:
 
 gives index entries
 
- ========== ====
- Index key  doc
- ========== ====
- bruce      doc3
- david      doc3
- grobbelaar doc3
- ========== ====
+========== ====
+Index key  doc
+========== ====
+bruce      doc3
+david      doc3
+grobbelaar doc3
+========== ====
 
 
 Querying an index
@@ -336,12 +335,12 @@ with "J", and so will return the documents with ids: 'jw', 'jb', 'jm'.
 Index functions
 ^^^^^^^^^^^^^^^
 
- * :py:meth:`~u1db.Database.create_index`
- * :py:meth:`~u1db.Database.delete_index`
- * :py:meth:`~u1db.Database.get_from_index`
- * :py:meth:`~u1db.Database.get_range_from_index`
- * :py:meth:`~u1db.Database.get_index_keys`
- * :py:meth:`~u1db.Database.list_indexes`
+* :py:meth:`~u1db.Database.create_index`
+* :py:meth:`~u1db.Database.delete_index`
+* :py:meth:`~u1db.Database.get_from_index`
+* :py:meth:`~u1db.Database.get_range_from_index`
+* :py:meth:`~u1db.Database.get_index_keys`
+* :py:meth:`~u1db.Database.list_indexes`
 
 Synchronising
 -------------
@@ -377,9 +376,9 @@ content.
 Synchronising Functions
 ^^^^^^^^^^^^^^^^^^^^^^^
 
- * :py:meth:`~u1db.Database.sync`
- * :py:meth:`~u1db.Database.get_doc_conflicts`
- * :py:meth:`~u1db.Database.resolve_doc`
+* :py:meth:`~u1db.Database.sync`
+* :py:meth:`~u1db.Database.get_doc_conflicts`
+* :py:meth:`~u1db.Database.resolve_doc`
 
 .. rubric:: footnotes
 
