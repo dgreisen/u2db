@@ -35,7 +35,7 @@ If you're interested in hacking on U1DB itself, read about the
 .. _implementations:
 
 Implementations
-###############
+---------------
 
 Choose the implementation you need and get hacking!
 
@@ -54,7 +54,7 @@ iOS                   Objective C SQLite            planned
 
 
 Indices and tables
-##################
+==================
 
 * :ref:`genindex`
 * :ref:`modindex`
