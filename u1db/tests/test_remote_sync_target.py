@@ -72,6 +72,12 @@ class TestParsingSyncStream(tests.TestCase):
                           '[\r\n{}\r\n{"id": "i", "rev": "r", '
                           '"content": "c", "gen": 3}\r\n]', None)
 
+    def test_no_entries(self):
+        tgt = http_target.HTTPSyncTarget("http://foo/foo")
+
+        self.assertRaises(errors.BrokenSyncStream,
+                          tgt._parse_sync_stream, "[\r\n]", None)
+
     def test_extra_comma(self):
         tgt = http_target.HTTPSyncTarget("http://foo/foo")
 
