@@ -60,6 +60,7 @@ class HTTPSyncTarget(http_client.HTTPClientBase, SyncTarget):
         if not parts or parts[0] != '[':
             raise BrokenSyncStream
         data = parts[1:-1]
+        comma = False
         if data:
             line, comma = utils.check_and_strip_comma(data[0])
             res = json.loads(line)
@@ -79,7 +80,7 @@ class HTTPSyncTarget(http_client.HTTPClientBase, SyncTarget):
                 if isinstance(partdic, dict):
                     self._error(partdic)
             raise BrokenSyncStream
-        if comma:  # bad extra comma
+        if not data or comma:  # no entries or bad extra comma
             raise BrokenSyncStream
         return res
 
