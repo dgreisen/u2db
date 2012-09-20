@@ -51,6 +51,8 @@ class HTTPSyncTarget(http_client.HTTPClientBase, SyncTarget):
     def record_sync_info(self, source_replica_uid, source_replica_generation,
                          source_transaction_id):
         self._ensure_connection()
+        if self._trace_hook:  # for tests
+            self._trace_hook('record_sync_info')
         self._request_json('PUT', ['sync-from', source_replica_uid], {},
                               {'generation': source_replica_generation,
                                'transaction_id': source_transaction_id})
@@ -88,6 +90,8 @@ class HTTPSyncTarget(http_client.HTTPClientBase, SyncTarget):
                       last_known_generation, last_known_trans_id,
                       return_doc_cb):
         self._ensure_connection()
+        if self._trace_hook:  # for tests
+            self._trace_hook('sync_exchange')
         url = '%s/sync-from/%s' % (self._url.path, source_replica_uid)
         self._conn.putrequest('POST', url)
         self._conn.putheader('content-type', 'application/x-u1db-sync-stream')
@@ -120,3 +124,9 @@ class HTTPSyncTarget(http_client.HTTPClientBase, SyncTarget):
         res = self._parse_sync_stream(data, return_doc_cb)
         data = None
         return res['new_generation'], res['new_transaction_id']
+
+    # for tests
+    _trace_hook = None
+
+    def _set_trace_hook_shallow(self, cb):
+        self._trace_hook = cb

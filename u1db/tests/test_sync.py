@@ -24,6 +24,7 @@ from u1db import (
     sync,
     tests,
     vectorclock,
+    SyncTarget,
     )
 from u1db.backends import (
     inmemory,
@@ -400,9 +401,30 @@ class DatabaseSyncTargetTests(tests.DatabaseBaseTests,
                           ],
                          called)
 
+    def test__set_trace_hook_shallow(self):
+        if (self.st._set_trace_hook_shallow == self.st._set_trace_hook
+            or self.st._set_trace_hook_shallow.im_func ==
+               SyncTarget._set_trace_hook_shallow.im_func):
+            self.skipTest("pointless as shallow hook same as full.")
 
-def sync_via_synchronizer(test, db_source, db_target, trace_hook=None):
+        called = []
+
+        def cb(state):
+            called.append(state)
+
+        self.st._set_trace_hook_shallow(cb)
+        self.st.sync_exchange([], 'replica', 0, None, self.receive_doc)
+        self.st.record_sync_info('replica', 0, 'T-sid')
+        self.assertEqual(['sync_exchange',
+                          'record_sync_info',
+                          ],
+                         called)
+
+
+def sync_via_synchronizer(test, db_source, db_target, trace_hook=None,
+                          trace_hook_shallow=None):
     target = db_target.get_sync_target()
+    trace_hook = trace_hook or trace_hook_shallow
     if trace_hook:
         target._set_trace_hook(trace_hook)
     return sync.Synchronizer(db_source, target).sync()
@@ -448,11 +470,13 @@ def copy_database_for_http_test(test, db):
 
 
 def sync_via_synchronizer_and_http(test, db_source, db_target,
-                                   trace_hook=None):
+                                   trace_hook=None, trace_hook_shallow=None):
     if trace_hook:
-        test.skipTest("trace_hook unsupported over http")
+        test.skipTest("full trace hook unsupported over http")
     path = test._http_at[db_target]
     target = http_target.HTTPSyncTarget.connect(test.getURL(path))
+    if trace_hook_shallow:
+        target._set_trace_hook_shallow(trace_hook_shallow)
     return sync.Synchronizer(db_source, target).sync()
 
 
@@ -467,8 +491,10 @@ sync_scenarios.append(('pyhttp', {
 
 if tests.c_backend_wrapper is not None:
     # TODO: We should hook up sync tests with an HTTP target
-    def sync_via_c_sync(test, db_source, db_target, trace_hook=None):
+    def sync_via_c_sync(test, db_source, db_target, trace_hook=None,
+                        trace_hook_shallow=None):
         target = db_target.get_sync_target()
+        trace_hook = trace_hook or trace_hook_shallow
         if trace_hook:
             target._set_trace_hook(trace_hook)
         return tests.c_backend_wrapper.sync_db_to_target(db_source, target)
@@ -488,8 +514,10 @@ class DatabaseSyncTests(tests.DatabaseBaseTests,
     scenarios = sync_scenarios
     do_sync = None                 # set by scenarios
 
-    def sync(self, db_source, db_target, trace_hook=None):
-        return self.do_sync(self, db_source, db_target, trace_hook)
+    def sync(self, db_source, db_target, trace_hook=None,
+             trace_hook_shallow=None):
+        return self.do_sync(self, db_source, db_target, trace_hook,
+                            trace_hook_shallow)
 
     def setUp(self):
         super(DatabaseSyncTests, self).setUp()
@@ -761,7 +789,7 @@ class DatabaseSyncTests(tests.DatabaseBaseTests,
                 return
             self.fail('SyncTarget.record_sync_info was called')
         self.assertEqual(1, self.sync(self.db1, self.db2,
-                                      trace_hook=no_record_sync_info))
+                                      trace_hook_shallow=no_record_sync_info))
         self.assertEqual(
             1,
             self.db2._get_replica_gen_and_trans_id(self.db1._replica_uid)[0])
@@ -977,7 +1005,7 @@ class DatabaseSyncTests(tests.DatabaseBaseTests,
         def put_hook(state):
             self.fail("Tracehook triggered for %s" % (state,))
 
-        self.sync(self.db1, self.db2, trace_hook=put_hook)
+        self.sync(self.db1, self.db2, trace_hook_shallow=put_hook)
 
     def test_sync_detects_rollback_in_source(self):
         self.db1.create_doc_from_json(tests.simple_doc, doc_id='doc1')
