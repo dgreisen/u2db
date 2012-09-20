@@ -873,6 +873,8 @@ cdef class CSyncTarget(object):
         handle_status("_set_trace_hook",
             self._st._set_trace_hook(self._st, <void*>cb, _trace_hook))
 
+    _set_trace_hook_shallow = _set_trace_hook
+
 
 cdef class CDatabase(object):
     """A thin wrapper/shim to interact with the C implementation.

@@ -671,3 +671,13 @@ class SyncTarget(object):
         :param cb: A callable that takes cb(state)
         """
         raise NotImplementedError(self._set_trace_hook)
+
+    def _set_trace_hook_shallow(self, cb):
+        """Set a callback that will be invoked to trace database actions.
+
+        Similar to _set_trace_hook, for implementations that don't offer
+        state changes from the inner working of sync_exchange().
+
+        :param cb: A callable that takes cb(state)
+        """
+        self._set_trace_hook(cb)
