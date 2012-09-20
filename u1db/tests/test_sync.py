@@ -136,9 +136,11 @@ class DatabaseSyncTargetTests(tests.DatabaseBaseTests,
         self.other_changes.append(
             (doc.doc_id, doc.rev, doc.get_json(), gen, trans_id))
 
-    def set_trace_hook(self, callback):
+    def set_trace_hook(self, callback, shallow=False):
+        setter = (self.st._set_trace_hook if not shallow else
+                  self.st._set_trace_hook_shallow)
         try:
-            self.st._set_trace_hook(callback)
+            setter(callback)
         except NotImplementedError:
             self.skipTest("%s does not implement _set_trace_hook"
                           % (self.st.__class__.__name__,))
@@ -405,20 +407,24 @@ class DatabaseSyncTargetTests(tests.DatabaseBaseTests,
         if (self.st._set_trace_hook_shallow == self.st._set_trace_hook
             or self.st._set_trace_hook_shallow.im_func ==
                SyncTarget._set_trace_hook_shallow.im_func):
-            self.skipTest("pointless as shallow hook same as full.")
+            # shallow same as full
+            expected = ['before whats_changed',
+                        'after whats_changed',
+                        'before get_docs',
+                        'record_sync_info',
+                        ]
+        else:
+            expected = ['sync_exchange', 'record_sync_info']
 
         called = []
 
         def cb(state):
             called.append(state)
 
-        self.st._set_trace_hook_shallow(cb)
+        self.set_trace_hook(cb, shallow=True)
         self.st.sync_exchange([], 'replica', 0, None, self.receive_doc)
         self.st.record_sync_info('replica', 0, 'T-sid')
-        self.assertEqual(['sync_exchange',
-                          'record_sync_info',
-                          ],
-                         called)
+        self.assertEqual(expected, called)
 
 
 def sync_via_synchronizer(test, db_source, db_target, trace_hook=None,
