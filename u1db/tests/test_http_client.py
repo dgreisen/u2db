@@ -21,7 +21,6 @@ try:
     import simplejson as json
 except ImportError:
     import json  # noqa
-from wsgiref import simple_server
 
 from u1db import (
     errors,
