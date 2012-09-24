@@ -32,7 +32,7 @@ from u1db.remote import (
     http_target,
     )
 from u1db.tests.test_remote_sync_target import (
-    http_server_def,
+    make_http_app,
 )
 
 
@@ -189,7 +189,7 @@ class TestHTTPDatabaseSimpleOperations(tests.TestCase):
 
 class TestHTTPDatabaseIntegration(tests.TestCaseWithServer):
 
-    server_def = staticmethod(http_server_def)
+    make_app_with_state = staticmethod(make_http_app)
 
     def setUp(self):
         super(TestHTTPDatabaseIntegration, self).setUp()

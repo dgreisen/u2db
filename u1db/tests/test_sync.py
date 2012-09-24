@@ -34,8 +34,8 @@ from u1db.remote import (
     )
 
 from u1db.tests.test_remote_sync_target import (
-    http_server_def,
-    oauth_http_server_def,
+    make_http_app,
+    make_oauth_http_app,
     )
 
 simple_doc = tests.simple_doc
@@ -83,10 +83,10 @@ def _make_c_db_and_oauth_http_target(test, path='~/test'):
 target_scenarios = [
     ('local', {'create_db_and_target': _make_local_db_and_target}),
     ('http', {'create_db_and_target': _make_local_db_and_http_target,
-              'server_def': http_server_def}),
+              'make_app_with_state': make_http_app}),
     ('oauth_http', {'create_db_and_target':
                     _make_local_db_and_oauth_http_target,
-                    'server_def': oauth_http_server_def}),
+                    'make_app_with_state': make_oauth_http_app}),
     ]
 
 c_db_scenarios = [
@@ -99,13 +99,13 @@ c_db_scenarios = [
                 'make_database_for_test': tests.make_c_database_for_test,
                 'copy_database_for_test': tests.copy_c_database_for_test,
                 'make_document_for_test': tests.make_c_document_for_test,
-                'server_def': http_server_def,
+                'make_app_with_state': make_http_app,
                 'whitebox': False}),
     ('oauth_http,c', {'create_db_and_target': _make_c_db_and_oauth_http_target,
                       'make_database_for_test': tests.make_c_database_for_test,
                       'copy_database_for_test': tests.copy_c_database_for_test,
                       'make_document_for_test': tests.make_c_document_for_test,
-                      'server_def': oauth_http_server_def,
+                      'make_app_with_state': make_oauth_http_app,
                       'whitebox': False}),
     ]
 
@@ -490,7 +490,7 @@ sync_scenarios.append(('pyhttp', {
     'make_database_for_test': make_database_for_http_test,
     'copy_database_for_test': copy_database_for_http_test,
     'make_document_for_test': tests.make_document_for_test,
-    'server_def': http_server_def,
+    'make_app_with_state': make_http_app,
     'do_sync': sync_via_synchronizer_and_http
     }))
 
@@ -1155,7 +1155,7 @@ class DatabaseSyncTests(tests.DatabaseBaseTests,
 class TestDbSync(tests.TestCaseWithServer):
     """Test db.sync remote sync shortcut"""
 
-    server_def = staticmethod(http_server_def)
+    make_app_with_state = staticmethod(make_http_app)
 
     def setUp(self):
         super(TestDbSync, self).setUp()
@@ -1181,7 +1181,7 @@ class TestDbSync(tests.TestCaseWithServer):
 class TestRemoteSyncIntegration(tests.TestCaseWithServer):
     """Integration tests for the most common sync scenario local -> remote"""
 
-    server_def = staticmethod(http_server_def)
+    make_app_with_state = staticmethod(make_http_app)
 
     def setUp(self):
         super(TestRemoteSyncIntegration, self).setUp()

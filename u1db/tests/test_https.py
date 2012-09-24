@@ -10,18 +10,17 @@ from u1db import (
     tests,
     )
 from u1db.remote import (
-    http_app,
     http_client,
     http_target,
-    oauth_middleware,
+    )
+
+from u1db.tests.test_remote_sync_target import (
+    make_oauth_http_app,
     )
 
 
-def oauth_https_server_def():
-    def make_server(host_port, handler, state):
-        app = http_app.HTTPApp(state)
-        application = oauth_middleware.OAuthMiddleware(app, None, prefix='/~/')
-        application.get_oauth_data_store = lambda: tests.testingOAuthStore
+def https_server_def():
+    def make_server(host_port, application):
         from OpenSSL import SSL
         cert_file = os.path.join(os.path.dirname(__file__), 'testing-certs',
                                  'testing.cert')
@@ -30,9 +29,8 @@ def oauth_https_server_def():
         ssl_context = SSL.Context(SSL.SSLv23_METHOD)
         ssl_context.use_privatekey_file(key_file)
         ssl_context.use_certificate_chain_file(cert_file)
-        srv = httpserver.WSGIServerBase(application,
-                                        host_port,
-                                        handler,
+        srv = httpserver.WSGIServerBase(application, host_port,
+                                        httpserver.WSGIHandler,
                                         ssl_context=ssl_context
                                         )
 
@@ -43,7 +41,7 @@ def oauth_https_server_def():
         srv.shutdown_request = shutdown_request
         application.base_url = "https://localhost:%s" % srv.server_address[1]
         return srv
-    return make_server, httpserver.WSGIHandler, "shutdown", "https"
+    return make_server, "shutdown", "https"
 
 
 def oauth_https_sync_target(test, host, path):
@@ -57,9 +55,10 @@ def oauth_https_sync_target(test, host, path):
 class TestHttpSyncTargetHttpsSupport(tests.TestCaseWithServer):
 
     scenarios = [
-        ('oauth_https', {'server_def': oauth_https_server_def,
-                        'make_document_for_test': tests.make_document_for_test,
-                        'sync_target': oauth_https_sync_target
+        ('oauth_https', {'server_def': https_server_def,
+                         'make_app_with_state': make_oauth_http_app,
+                         'make_document_for_test': tests.make_document_for_test,
+                         'sync_target': oauth_https_sync_target
                          }),
         ]
 

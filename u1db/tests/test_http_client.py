@@ -129,17 +129,8 @@ class TestHTTPClientBase(tests.TestCaseWithServer):
             start_response("200 OK", [('Content-Type', 'application/json')])
             return [json.dumps([environ['PATH_INFO'], token.key, params])]
 
-    def server_def(self):
-        def make_server(host_port, handler, state):
-            srv = simple_server.WSGIServer(host_port, handler)
-            srv.set_app(self.app)
-            return srv
-
-        class req_handler(simple_server.WSGIRequestHandler):
-            def log_request(*args):
-                pass  # suppress
-
-        return make_server, req_handler, "shutdown", "http"
+    def make_app(self):
+        return self.app
 
     def getClient(self):
         self.startServer()
