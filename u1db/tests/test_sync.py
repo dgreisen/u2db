@@ -521,12 +521,17 @@ class DatabaseSyncTests(tests.DatabaseBaseTests,
     do_sync = None                 # set by scenarios
 
     def create_database(self, replica_uid, sync_role=None):
-        if replica_uid != 'test':
-            assert sync_role
-        db = self.make_database_for_test(self, replica_uid)
+        if replica_uid == 'test' and sync_role is None:
+            # created up the chain by base class but unused
+            return None
+        db = self.create_database_for_role(replica_uid, sync_role)
         if sync_role:
             self._use_tracking[db] = (replica_uid, sync_role)
         return db
+
+    def create_database_for_role(self, replica_uid, sync_role):
+        # hook point for reuse
+        return  super(DatabaseSyncTests, self).create_database(replica_uid)
 
     def copy_database(self, db, sync_role=None):
         # DO NOT COPY OR REUSE THIS CODE OUTSIDE TESTS: COPYING U1DB DATABASES
@@ -534,7 +539,7 @@ class DatabaseSyncTests(tests.DatabaseBaseTests,
         # THAT WE CORRECTLY DETECT IT HAPPENING SO THAT WE CAN RAISE ERRORS
         # RATHER THAN CORRUPT USER DATA. USE SYNC INSTEAD, OR WE WILL SEND
         # NINJA TO YOUR HOUSE.
-        db_copy = self.copy_database_for_test(self, db)
+        db_copy = super(DatabaseSyncTests, self).copy_database(db)
         name, orig_sync_role = self._use_tracking[db]
         self._use_tracking[db_copy] = (name + '(copy)', sync_role
                                        or orig_sync_role)
