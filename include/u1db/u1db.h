@@ -312,7 +312,8 @@ typedef union _u1db_creds u1db_creds;
  * Synchronize db with the database at url.
  *
  * @param url              The URL of a remote database to synchronize with.
- * @param creds            NULL or a u1db_creds* pointing for example to
+ * @param creds            NULL or a u1db_creds* pointing with the proper
+ *                         casting for example to
  *                         struct u1db_oauth_creds oauth_creds = {
  *                             U1DB_OAUTH_AUTH,
  *                             "consumer_key",
@@ -326,7 +327,7 @@ typedef union _u1db_creds u1db_creds;
  *                         with to find out which documents were affected by a
  *                         sync.
  */
-int u1db_sync(u1database *db, const char *url, const u1db_creds *creds, 
+int u1db_sync(u1database *db, const char *url, const u1db_creds *creds,
 	      int *local_gen);
 
 
