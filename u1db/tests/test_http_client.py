@@ -132,9 +132,9 @@ class TestHTTPClientBase(tests.TestCaseWithServer):
     def make_app(self):
         return self.app
 
-    def getClient(self):
+    def getClient(self, **kwds):
         self.startServer()
-        return http_client.HTTPClientBase(self.getURL('dbase'))
+        return http_client.HTTPClientBase(self.getURL('dbase'), **kwds)
 
     def test_construct(self):
         self.startServer()
@@ -334,6 +334,24 @@ class TestHTTPClientBase(tests.TestCaseWithServer):
         self.assertEqual(
             ['/dbase/doc/oauth/foo bar', tests.token1.key, params],
             json.loads(res))
+
+    def test_oauth_ctr_creds(self):
+        cli = self.getClient(creds={'oauth': {
+            'consumer_key': tests.consumer1.key,
+            'consumer_secret': tests.consumer1.secret,
+            'token_key': tests.token1.key,
+            'token_secret': tests.token1.secret,
+            }})
+        params = {'x': u'\xf0', 'y': "foo"}
+        res, headers = cli._request('GET', ['doc', 'oauth'], params)
+        self.assertEqual(
+            ['/dbase/doc/oauth', tests.token1.key, params], json.loads(res))
+
+    def test_unknown_creds(self):
+        self.assertRaises(errors.UnknownAuthMethod,
+                          self.getClient, creds={'foo': {}})
+        self.assertRaises(errors.UnknownAuthMethod,
+                          self.getClient, creds={})
 
     def test_oauth_Unauthorized(self):
         cli = self.getClient()

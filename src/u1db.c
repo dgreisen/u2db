@@ -2077,11 +2077,25 @@ u1db__is_doc_id_valid(const char *doc_id)
 }
 
 int
-u1db_sync(u1database *db, const char *url, int *local_gen)
+u1db_sync(u1database *db, const char *url, const u1db_creds *creds,
+          int *local_gen)
 {
     int status = U1DB_OK;
     u1db_sync_target *target = NULL;
-    status = u1db__create_http_sync_target(url, &target);
+    if (creds != NULL) {
+        if (creds->_generic.auth_kind != U1DB_OAUTH_AUTH) {
+            return U1DB_UNKNOWN_AUTH_METHOD;
+        }
+        const struct u1db_oauth_creds *oauth_creds = &creds->oauth;
+        status = u1db__create_oauth_http_sync_target(url,
+                                                 oauth_creds->consumer_key,
+                                                 oauth_creds->consumer_secret,
+                                                 oauth_creds->token_key,
+                                                 oauth_creds->token_secret,
+                                                 &target);
+    } else {
+        status = u1db__create_http_sync_target(url, &target);
+    }
     if (status != U1DB_OK) {
         goto finish;
     }

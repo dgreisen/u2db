@@ -98,16 +98,25 @@ class HTTPClientBase(object):
     # 0 is there to not wait after the final try fails.
     _delays = (1, 1, 2, 4, 0)
 
-    def __init__(self, url):
+    def __init__(self, url, creds=None):
         self._url = urlparse.urlsplit(url)
         self._conn = None
-        self._oauth_creds = None
+        self._creds = {}
+        if creds is not None:
+            if len(creds) != 1:
+                raise errors.UnknownAuthMethod()
+            auth_meth, credentials = creds.items()[0]
+            try:
+                set_creds = getattr(self, 'set_%s_credentials' % auth_meth)
+            except AttributeError:
+                raise errors.UnknownAuthMethod(auth_meth)
+            set_creds(**credentials)
 
     def set_oauth_credentials(self, consumer_key, consumer_secret,
                               token_key, token_secret):
-        self._oauth_creds = (
+        self._creds = {'oauth': (
             oauth.OAuthConsumer(consumer_key, consumer_secret),
-            oauth.OAuthToken(token_key, token_secret))
+            oauth.OAuthToken(token_key, token_secret))}
 
     def _ensure_connection(self):
         if self._conn is not None:
@@ -151,8 +160,8 @@ class HTTPClientBase(object):
         raise errors.HTTPError(resp.status, body, headers)
 
     def _sign_request(self, method, url_query, params):
-        if self._oauth_creds:
-            consumer, token = self._oauth_creds
+        if 'oauth' in self._creds:
+            consumer, token = self._creds['oauth']
             full_url = "%s://%s%s" % (self._url.scheme, self._url.netloc,
                                       url_query)
             oauth_req = oauth.OAuthRequest.from_consumer_and_token(

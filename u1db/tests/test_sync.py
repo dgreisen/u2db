@@ -1155,19 +1155,54 @@ class DatabaseSyncTests(tests.DatabaseBaseTests,
 class TestDbSync(tests.TestCaseWithServer):
     """Test db.sync remote sync shortcut"""
 
-    make_app_with_state = staticmethod(make_http_app)
+    scenarios = [
+        ('py-http', {
+            'make_app_with_state': make_http_app,
+            'make_database_for_test': tests.make_memory_database_for_test,
+            }),
+        ('c-http', {
+            'make_app_with_state': make_http_app,
+            'make_database_for_test': tests.make_c_database_for_test
+            }),
+        ('py-oauth-http', {
+            'make_app_with_state': make_oauth_http_app,
+            'make_database_for_test': tests.make_memory_database_for_test,
+            'oauth': True
+            }),
+        ('c-oauth-http', {
+            'make_app_with_state': make_oauth_http_app,
+            'make_database_for_test': tests.make_c_database_for_test,
+            'oauth': True
+            }),
+        ]
+
+    oauth = False
+
+    def do_sync(self):
+        if self.oauth:
+            path = '~/test2.db'
+            extra = dict(creds={'oauth': {
+                'consumer_key': tests.consumer1.key,
+                'consumer_secret': tests.consumer1.secret,
+                'token_key': tests.token1.key,
+                'token_secret': tests.token1.secret
+                }})
+        else:
+            path = 'test2.db'
+            extra = {}
+        target_url = self.getURL(path)
+        return self.db.sync(target_url, **extra)
 
     def setUp(self):
         super(TestDbSync, self).setUp()
         self.startServer()
-        self.db = inmemory.InMemoryDatabase('test1')
+        self.db = self.make_database_for_test(self, 'test1')
         self.db2 = self.request_state._create_database('test2.db')
 
     def test_db_sync(self):
         doc1 = self.db.create_doc_from_json(tests.simple_doc)
         doc2 = self.db2.create_doc_from_json(tests.nested_doc)
-        db2_url = self.getURL('test2.db')
-        local_gen_before_sync = self.db.sync(db2_url)
+        local_gen_before_sync = self.do_sync()
         gen, _, changes = self.db.whats_changed(local_gen_before_sync)
         self.assertEqual(1, len(changes))
         self.assertEqual(doc2.doc_id, changes[0][0])

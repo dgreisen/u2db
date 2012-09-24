@@ -57,6 +57,14 @@ cdef extern from "u1db/u1db.h":
         char *index_name
         int num_fields
         char **fields
+    cdef struct u1db_oauth_creds:
+        int auth_kind
+        char *consumer_key
+        char *consumer_secret
+        char *token_key
+        char *token_secret
+    ctypedef union u1db_creds
+    ctypedef u1db_creds* const_u1db_creds_ptr "const u1db_creds *"
 
     ctypedef char* const_char_ptr "const char*"
     ctypedef int (*u1db_doc_callback)(void *context, u1db_document *doc)
@@ -98,7 +106,8 @@ cdef extern from "u1db/u1db.h":
                                   u1db_trans_info_callback cb)
     int u1db_get_doc_conflicts(u1database *db, char *doc_id, void *context,
                                u1db_doc_callback cb)
-    int u1db_sync(u1database *db, const_char_ptr url, int *local_gen) nogil
+    int u1db_sync(u1database *db, const_char_ptr url,
+                  const_u1db_creds_ptr creds, int *local_gen) nogil
     int u1db_create_index_list(u1database *db, char *index_name,
                                int n_expressions, const_char_ptr *expressions)
     int u1db_create_index(u1database *db, char *index_name, int n_expressions,
@@ -151,6 +160,8 @@ cdef extern from "u1db/u1db.h":
     int U1DB_SUPERSEDED
     int U1DB_CONVERGED
     int U1DB_CONFLICTED
+
+    int U1DB_OAUTH_AUTH
 
     void u1db_free_doc(u1db_document **doc)
     int u1db_doc_set_json(u1db_document *doc, char *json)
@@ -1232,12 +1243,21 @@ cdef class CDatabase(object):
             status = U1DB_NOT_IMPLEMENTED
         handle_status("create_index", status)
 
-    def sync(self, url):
+    def sync(self, url, creds=None):
         cdef const_char_ptr c_url
         cdef int local_gen = 0
+        cdef u1db_oauth_creds _oauth_creds
+        cdef u1db_creds *_creds = NULL
         c_url = url
+        if creds is not None:
+            _oauth_creds.auth_kind = U1DB_OAUTH_AUTH
+            _oauth_creds.consumer_key = creds['oauth']['consumer_key']
+            _oauth_creds.consumer_secret = creds['oauth']['consumer_secret']
+            _oauth_creds.token_key = creds['oauth']['token_key']
+            _oauth_creds.token_secret = creds['oauth']['token_secret']
+            _creds = <u1db_creds *>&_oauth_creds
         with nogil:
-            status = u1db_sync(self._db, c_url, &local_gen)
+            status = u1db_sync(self._db, c_url, _creds, &local_gen)
         handle_status("sync", status)
         return local_gen
 
