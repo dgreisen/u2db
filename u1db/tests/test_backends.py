@@ -31,8 +31,8 @@ simple_doc = tests.simple_doc
 nested_doc = tests.nested_doc
 
 from u1db.tests.test_remote_sync_target import (
-    http_server_def,
-    oauth_http_server_def,
+    make_http_app,
+    make_oauth_http_app,
 )
 
 from u1db.remote import (
@@ -89,13 +89,13 @@ class AllDatabaseTests(tests.DatabaseBaseTests, tests.TestCaseWithServer):
         ('http', {'make_database_for_test': make_http_database_for_test,
                   'copy_database_for_test': copy_http_database_for_test,
                   'make_document_for_test': tests.make_document_for_test,
-                  'server_def': http_server_def}),
+                  'make_app_with_state': make_http_app}),
         ('oauth_http', {'make_database_for_test':
                         make_oauth_http_database_for_test,
                         'copy_database_for_test':
                         copy_oauth_http_database_for_test,
                         'make_document_for_test': tests.make_document_for_test,
-                        'server_def': oauth_http_server_def})
+                        'make_app_with_state': make_oauth_http_app})
         ] + tests.C_DATABASE_SCENARIOS
 
     def test_close(self):

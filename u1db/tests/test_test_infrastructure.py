@@ -25,12 +25,15 @@ from u1db import (
 
 class TestTestCaseWithServer(tests.TestCaseWithServer):
 
+    def make_app(self):
+        return "app"
+
     @staticmethod
     def server_def():
-        def make_server(host_port, handler, state):
-            return simple_server.WSGIServer(host_port, handler)
-        return (make_server, simple_server.WSGIRequestHandler,
-                "shutdown", "http")
+        def make_server(host_port, application):
+            assert application == "app"
+            return simple_server.WSGIServer(host_port, None)
+        return (make_server, "shutdown", "http")
 
     def test_getURL(self):
         self.startServer()

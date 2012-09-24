@@ -499,9 +499,8 @@ class TestCmdSync(TestCaseWithDB):
 
 class TestCmdSyncRemote(tests.TestCaseWithServer, TestCaseWithDB):
 
-    @staticmethod
-    def server_def():
-        return test_remote_sync_target.http_server_def()
+    make_app_with_state = \
+                        staticmethod(test_remote_sync_target.make_http_app)
 
     def setUp(self):
         super(TestCmdSyncRemote, self).setUp()
@@ -875,10 +874,10 @@ class TestHTTPIntegration(tests.TestCaseWithServer, RunMainHelper):
     """Meant to test the cases where commands operate over http."""
 
     def server_def(self):
-        def make_server(host_port, handler, _state):
+        def make_server(host_port, _application):
             return serve.make_server(host_port[0], host_port[1],
                                      self.working_dir)
-        return make_server, None, "shutdown", "http"
+        return make_server, "shutdown", "http"
 
     def setUp(self):
         super(TestHTTPIntegration, self).setUp()

@@ -16,9 +16,7 @@
 
 """Tests for the remote sync targets"""
 
-from wsgiref import simple_server
 import cStringIO
-#from paste import httpserver
 
 from u1db import (
     errors,
@@ -108,47 +106,19 @@ class TestParsingSyncStream(tests.TestCase):
                           '[\r\n{"error": "?"}\r\n', None)
 
 
-def http_server_def():
-
-    def make_server(host_port, handler, state):
-        application = http_app.HTTPApp(state)
-        srv = simple_server.WSGIServer(host_port, handler)
-        srv.set_app(application)
-        #srv = httpserver.WSGIServerBase(application,
-        #                                host_port,
-        #                                handler
-        #                                )
-        return srv
-
-    class req_handler(simple_server.WSGIRequestHandler):
-        def log_request(*args):
-            pass  # suppress
-
-    #rh = httpserver.WSGIHandler
-    return make_server, req_handler, "shutdown", "http"
+def make_http_app(state):
+    return http_app.HTTPApp(state)
 
 
 def http_sync_target(test, path):
     return http_target.HTTPSyncTarget(test.getURL(path))
 
 
-def oauth_http_server_def():
-
-    def make_server(host_port, handler, state):
-        app = http_app.HTTPApp(state)
-        application = oauth_middleware.OAuthMiddleware(app, None, prefix='/~/')
-        application.get_oauth_data_store = lambda: tests.testingOAuthStore
-        srv = simple_server.WSGIServer(host_port, handler)
-        # patch the value in
-        application.base_url = "http://%s:%s" % srv.server_address
-        srv.set_app(application)
-        return srv
-
-    class req_handler(simple_server.WSGIRequestHandler):
-        def log_request(*args):
-            pass  # suppress
-
-    return make_server, req_handler, "shutdown", "http"
+def make_oauth_http_app(state):
+    app = http_app.HTTPApp(state)
+    application = oauth_middleware.OAuthMiddleware(app, None, prefix='/~/')
+    application.get_oauth_data_store = lambda: tests.testingOAuthStore
+    return application
 
 
 def oauth_http_sync_target(test, path):
@@ -161,10 +131,10 @@ def oauth_http_sync_target(test, path):
 class TestRemoteSyncTargets(tests.TestCaseWithServer):
 
     scenarios = [
-        ('http', {'server_def': http_server_def,
+        ('http', {'make_app_with_state': make_http_app,
                   'make_document_for_test': tests.make_document_for_test,
                   'sync_target': http_sync_target}),
-        ('oauth_http', {'server_def': oauth_http_server_def,
+        ('oauth_http', {'make_app_with_state': make_oauth_http_app,
                         'make_document_for_test': tests.make_document_for_test,
                         'sync_target': oauth_http_sync_target}),
         ]

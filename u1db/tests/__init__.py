@@ -27,6 +27,8 @@ try:
 except ImportError:
     import json  # noqa
 
+from wsgiref import simple_server
+
 from oauth import oauth
 from sqlite3 import dbapi2
 from StringIO import StringIO
@@ -340,9 +342,32 @@ class TestCaseWithServer(TestCase):
 
     @staticmethod
     def server_def():
-        # should return (ServerClass, RequestHandlerClass,
-        #                "shutdown method name", "url_scheme")
-        raise NotImplementedError(TestCaseWithServer.server_def)
+        # hook point
+        # should return (ServerClass, "shutdown method name", "url_scheme")
+        class _RequestHandler(simple_server.WSGIRequestHandler):
+            def log_request(*args):
+                pass  # suppress
+
+        def make_server(host_port, application):
+            assert application, "forgot to override make_app(_with_state)?"
+            srv = simple_server.WSGIServer(host_port, _RequestHandler)
+            # patch the value in if it's None
+            if getattr(application, 'base_url', 1) is None:
+                application.base_url = "http://%s:%s" % srv.server_address
+            srv.set_app(application)
+            return srv
+
+        return make_server, "shutdown", "http"
+
+    @staticmethod
+    def make_app_with_state(state):
+        # hook point
+        return None
+
+    def make_app(self):
+        # potential hook point
+        self.request_state = ServerStateForTests()
+        return self.make_app_with_state(self.request_state)
 
     def setUp(self):
         super(TestCaseWithServer, self).setUp()
@@ -352,13 +377,11 @@ class TestCaseWithServer(TestCase):
     def url_scheme(self):
         return self.server_def()[-1]
 
-    def startServer(self, other_request_handler=None):
+    def startServer(self):
         server_def = self.server_def()
-        server_class, request_handler, shutdown_meth, _ = server_def
-        request_handler = other_request_handler or request_handler
-        self.request_state = ServerStateForTests()
-        self.server = server_class(('127.0.0.1', 0), request_handler,
-                                   self.request_state)
+        server_class, shutdown_meth, _ = server_def
+        application = self.make_app()
+        self.server = server_class(('127.0.0.1', 0), application)
         self.server_thread = threading.Thread(target=self.server.serve_forever,
                                               kwargs=dict(poll_interval=0.01))
         self.server_thread.start()

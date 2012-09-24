@@ -25,8 +25,8 @@ from u1db import (
     )
 from u1db.tests import c_backend_wrapper, c_backend_error
 from u1db.tests.test_remote_sync_target import (
-    http_server_def,
-    oauth_http_server_def,
+    make_http_app,
+    make_oauth_http_app
     )
 
 
@@ -416,7 +416,7 @@ class TestCHTTPSyncTarget(BackendTests):
 
 class TestSyncCtoHTTPViaC(tests.TestCaseWithServer):
 
-    server_def = staticmethod(http_server_def)
+    make_app_with_state = staticmethod(make_http_app)
 
     def setUp(self):
         super(TestSyncCtoHTTPViaC, self).setUp()
@@ -497,7 +497,7 @@ class TestSyncCtoHTTPViaC(tests.TestCaseWithServer):
 
 class TestSyncCtoOAuthHTTPViaC(tests.TestCaseWithServer):
 
-    server_def = staticmethod(oauth_http_server_def)
+    make_app_with_state = staticmethod(make_oauth_http_app)
 
     def setUp(self):
         super(TestSyncCtoOAuthHTTPViaC, self).setUp()
