@@ -303,10 +303,19 @@ class Database(object):
         """Release any resources associated with this database."""
         raise NotImplementedError(self.close)
 
-    def sync(self, url):
+    def sync(self, url, creds=None):
         """Synchronize documents with remote replica exposed at url.
 
         :param url: the url of the target replica to sync with.
+        :param creds: optional dictionary giving credentials
+            to authorize the operation with the server. For using OAuth
+            the form of creds is:
+                {'oauth': {
+                 'consumer_key': ...,
+                 'consumer_secret': ...,
+                 'token_key': ...,
+                 'token_secret': ...
+                }}
         :return: local_gen_before_sync The local generation before the
             synchronisation was performed. This is useful to pass into
             whatschanged, if an application wants to know which documents were
@@ -314,7 +323,7 @@ class Database(object):
         """
         from u1db.sync import Synchronizer
         from u1db.remote.http_target import HTTPSyncTarget
-        return Synchronizer(self, HTTPSyncTarget(url)).sync()
+        return Synchronizer(self, HTTPSyncTarget(url, creds=creds)).sync()
 
     def _get_replica_gen_and_trans_id(self, other_replica_uid):
         """Return the last known generation and transaction id for the other db

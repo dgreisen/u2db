@@ -79,6 +79,7 @@ typedef int (*u1db_trans_info_callback)(void *context, const char *doc_id,
 #define U1DB_DOCUMENT_TOO_BIG -23
 #define U1DB_USER_QUOTA_EXCEEDED -24
 #define U1DB_NO_TERM -25
+#define U1DB_UNKNOWN_AUTH_METHOD -26
 #define U1DB_INTERNAL_ERROR -999
 
 // Used by put_doc_if_newer
@@ -271,16 +272,64 @@ int u1db_doc_set_json(u1db_document *doc, const char *json);
  */
 int u1db_doc_get_size(u1db_document *doc);
 
+
+/* Structures to hold authorization credentials */
+struct _u1db_generic_creds {
+    int auth_kind;
+    char *_creds[4];
+};
+
+
+/** Structure to hold OAuth credentials
+ *
+ *  @see u1db_sync()
+ */
+struct u1db_oauth_creds {
+    int auth_kind; /* must be set to U1DB_OAUTH_AUTH */
+    char *consumer_key;
+    char *consumer_secret;
+    char *token_key;
+    char *token_secret;
+};
+
+
+#define U1DB_OAUTH_AUTH 1
+
+
+union _u1db_creds {
+    struct _u1db_generic_creds _generic;
+    struct u1db_oauth_creds oauth;
+};
+
+/** Type for casting the creds pointer parameter of u1db_sync()
+ *
+ * @see u1db_sync()
+ */
+typedef union _u1db_creds u1db_creds;
+
+
 /**
  * Synchronize db with the database at url.
  *
  * @param url              The URL of a remote database to synchronize with.
+ * @param creds            NULL or a u1db_creds* pointing with the proper
+ *                         casting for example to
+ *                         struct u1db_oauth_creds oauth_creds = {
+ *                             U1DB_OAUTH_AUTH,
+ *                             "consumer_key",
+ *                             "consumer_secret",
+ *                             "token_key",
+ *                             "token_secret"
+ *                         }
+ *                         for OAuth.
  * @param local_gen (OUT)  The local generation at the start of the sync. This
  *                         is useful for applications to call whats_changed
  *                         with to find out which documents were affected by a
- *                         sync.   
+ *                         sync.
  */
-int u1db_sync(u1database *db, const char *url, int *local_gen);
+int u1db_sync(u1database *db, const char *url, const u1db_creds *creds,
+	      int *local_gen);
+
 
 /**
  * Create an index that you can query for matching documents.

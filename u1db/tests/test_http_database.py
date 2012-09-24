@@ -184,7 +184,19 @@ class TestHTTPDatabaseSimpleOperations(tests.TestCase):
                                       tests.consumer1.secret,
                                       tests.token1.key, tests.token1.secret)
         st = self.db.get_sync_target()
-        self.assertEqual(self.db._oauth_creds, st._oauth_creds)
+        self.assertEqual(self.db._creds, st._creds)
+
+
+class TestHTTPDatabaseCtrWithCreds(tests.TestCase):
+
+    def test_ctr_with_creds(self):
+        db1 = http_database.HTTPDatabase('http://dbs/db', creds={'oauth': {
+            'consumer_key': tests.consumer1.key,
+            'consumer_secret': tests.consumer1.secret,
+            'token_key': tests.token1.key,
+            'token_secret': tests.token1.secret
+            }})
+        self.assertIn('oauth',  db1._creds)
 
 
 class TestHTTPDatabaseIntegration(tests.TestCaseWithServer):

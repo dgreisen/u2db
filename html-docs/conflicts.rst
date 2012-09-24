@@ -59,7 +59,7 @@ having conflicts, and must be resolved there:
     >>> doc_is_now.has_conflicts # and is no longer in conflict
     False
     >>> # synchronize again so that the resolved version ends up in db1
-    >>> synchronizer.sync(sync_target)
+    >>> synchronizer.sync()
     3
     >>> db1_doc = db1.get_doc(doc_id)
     >>> db1_doc.content  # now is identical to db2's version

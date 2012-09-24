@@ -23,10 +23,7 @@ import sys
 from PyQt4 import QtGui, QtCore, uic
 
 from cosas import TodoStore, get_database, extract_tags
-import u1db
 from u1db.errors import DatabaseDoesNotExist
-from u1db.sync import Synchronizer
-from u1db.remote.http_target import HTTPSyncTarget
 from u1db.remote.http_database import HTTPDatabase
 from ubuntuone.platform.credentials import CredentialsManagementTool
 
@@ -502,28 +499,20 @@ class Main(QtGui.QMainWindow):
 
     def _synchronize(self, creds=None):
         target = self.sync_target
-        if target.startswith('http://') or target.startswith('https://'):
-            st = HTTPSyncTarget.connect(target)
-            oauth_creds = {
+        assert target.startswith('http://') or target.startswith('https://')
+        if creds is not None:  # convert into expected form
+            creds = {'oauth': {
                 'token_key': creds['token'],
                 'token_secret': creds['token_secret'],
                 'consumer_key': creds['consumer_key'],
-                'consumer_secret': creds['consumer_secret']}
-            if creds:
-                st.set_oauth_credentials(**oauth_creds)
-        else:
-            db = u1db.open(target, create=True)
-            st = db.get_sync_target()
-        syncer = Synchronizer(self.store.db, st)
+                'consumer_secret': creds['consumer_secret']
+                }}
         try:
-            syncer.sync()
+            self.store.db.sync(target, creds=creds)
         except DatabaseDoesNotExist:
-            # The server does not yet have the database, so create it.
-            if target.startswith('http://') or target.startswith('https://'):
-                db = HTTPDatabase(target)
-                db.set_oauth_credentials(**oauth_creds)
-                db.open(create=True)
-            syncer.sync()
+            db = HTTPDatabase(target, creds=creds)
+            db.open(create=True)
+            self.store.db.sync(target, creds=creds)
         # refresh the UI to show changed or new tasks
         self.refresh_filter()
         self.update_status_bar("last synced: %s" % (datetime.now(),))

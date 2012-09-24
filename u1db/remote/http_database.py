@@ -41,8 +41,8 @@ DOCUMENT_DELETED_STATUS = http_errors.wire_description_to_status[
 class HTTPDatabase(http_client.HTTPClientBase, Database):
     """Implement the Database API to a remote HTTP server."""
 
-    def __init__(self, url, document_factory=None):
-        super(HTTPDatabase, self).__init__(url)
+    def __init__(self, url, document_factory=None, creds=None):
+        super(HTTPDatabase, self).__init__(url, creds=creds)
         self._factory = document_factory or Document
 
     def set_document_factory(self, factory):
@@ -139,5 +139,5 @@ class HTTPDatabase(http_client.HTTPClientBase, Database):
 
     def get_sync_target(self):
         st = http_target.HTTPSyncTarget(self._url.geturl())
-        st._oauth_creds = self._oauth_creds
+        st._creds = self._creds
         return st
