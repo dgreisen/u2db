@@ -839,6 +839,38 @@ class TestHTTPApp(tests.TestCase):
         self.assertEqual('', bits[3])
         self.assertEqual([('replica', 10), ('replica', 11)], gens)
 
+    def test_sync_exchange_send_ensure(self):
+        entries = {
+            10: {'id': 'doc-here', 'rev': 'replica:1', 'content':
+                 '{"value": "here"}', 'gen': 10, 'trans_id': 'T-sid'},
+            11: {'id': 'doc-here2', 'rev': 'replica:1', 'content':
+                 '{"value": "here2"}', 'gen': 11, 'trans_id': 'T-sed'}
+            }
+
+        args = dict(last_known_generation=0, ensure=True)
+        body = ("[\r\n" +
+                "%s,\r\n" % json.dumps(args) +
+                "%s,\r\n" % json.dumps(entries[10]) +
+                "%s\r\n" % json.dumps(entries[11]) +
+                "]\r\n")
+        resp = self.app.post('/dbnew/sync-from/replica',
+                            params=body,
+                            headers={'content-type':
+                                     'application/x-u1db-sync-stream'})
+        self.assertEqual(200, resp.status)
+        self.assertEqual('application/x-u1db-sync-stream',
+                         resp.header('content-type'))
+        bits = resp.body.split('\r\n')
+        self.assertEqual('[', bits[0])
+        dbnew = self.state.open_database("dbnew")
+        last_trans_id = dbnew._get_transaction_log()[-1][1]
+        self.assertEqual({'new_generation': 2,
+                          'new_transaction_id': last_trans_id,
+                          'replica_uid': dbnew._replica_uid},
+                         json.loads(bits[1]))
+        self.assertEqual(']', bits[2])
+        self.assertEqual('', bits[3])
+
     def test_sync_exchange_send_entry_too_large(self):
         self.patch(http_app.SyncResource, 'max_request_size', 20000)
         self.patch(http_app.SyncResource, 'max_entry_size', 10000)

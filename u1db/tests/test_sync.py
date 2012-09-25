@@ -1178,9 +1178,9 @@ class TestDbSync(tests.TestCaseWithServer):
 
     oauth = False
 
-    def do_sync(self):
+    def do_sync(self, target_name):
         if self.oauth:
-            path = '~/test2.db'
+            path = '~/' + target_name
             extra = dict(creds={'oauth': {
                 'consumer_key': tests.consumer1.key,
                 'consumer_secret': tests.consumer1.secret,
@@ -1188,7 +1188,7 @@ class TestDbSync(tests.TestCaseWithServer):
                 'token_secret': tests.token1.secret
                 }})
         else:
-            path = 'test2.db'
+            path = target_name
             extra = {}
         target_url = self.getURL(path)
         return self.db.sync(target_url, **extra)
@@ -1202,7 +1202,7 @@ class TestDbSync(tests.TestCaseWithServer):
     def test_db_sync(self):
         doc1 = self.db.create_doc_from_json(tests.simple_doc)
         doc2 = self.db2.create_doc_from_json(tests.nested_doc)
-        local_gen_before_sync = self.do_sync()
+        local_gen_before_sync = self.do_sync('test2.db')
         gen, _, changes = self.db.whats_changed(local_gen_before_sync)
         self.assertEqual(1, len(changes))
         self.assertEqual(doc2.doc_id, changes[0][0])
@@ -1211,6 +1211,22 @@ class TestDbSync(tests.TestCaseWithServer):
                           False)
         self.assertGetDoc(self.db, doc2.doc_id, doc2.rev, tests.nested_doc,
                           False)
+
+    def test_db_sync_autocreate(self):
+        doc1 = self.db.create_doc_from_json(tests.simple_doc)
+        local_gen_before_sync = self.do_sync('test3.db')
+        gen, _, changes = self.db.whats_changed(local_gen_before_sync)
+        self.assertEqual(0, gen - local_gen_before_sync)
+        db3 = self.request_state.open_database('test3.db')
+        gen, _, changes = db3.whats_changed()
+        self.assertEqual(1, len(changes))
+        self.assertEqual(doc1.doc_id, changes[0][0])
+        self.assertGetDoc(db3, doc1.doc_id, doc1.rev, tests.simple_doc,
+                          False)
+        t_gen, _ = self.db._get_replica_gen_and_trans_id('test3.db')
+        s_gen, _ = db3._get_replica_gen_and_trans_id('test1')
+        self.assertEqual(1, t_gen)
+        self.assertEqual(1, s_gen)
 
 
 class TestRemoteSyncIntegration(tests.TestCaseWithServer):

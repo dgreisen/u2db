@@ -57,7 +57,7 @@ class HTTPSyncTarget(http_client.HTTPClientBase, SyncTarget):
                               {'generation': source_replica_generation,
                                'transaction_id': source_transaction_id})
 
-    def _parse_sync_stream(self, data, return_doc_cb):
+    def _parse_sync_stream(self, data, return_doc_cb, ensure_callback=None):
         parts = data.splitlines()  # one at a time
         if not parts or parts[0] != '[':
             raise BrokenSyncStream
@@ -66,6 +66,8 @@ class HTTPSyncTarget(http_client.HTTPClientBase, SyncTarget):
         if data:
             line, comma = utils.check_and_strip_comma(data[0])
             res = json.loads(line)
+            if ensure_callback and 'replica_uid' in res:
+                ensure_callback(res['replica_uid'])
             for entry in data[1:]:
                 if not comma:  # missing in between comma
                     raise BrokenSyncStream
@@ -88,7 +90,7 @@ class HTTPSyncTarget(http_client.HTTPClientBase, SyncTarget):
 
     def sync_exchange(self, docs_by_generations, source_replica_uid,
                       last_known_generation, last_known_trans_id,
-                      return_doc_cb):
+                      return_doc_cb, ensure_callback=None):
         self._ensure_connection()
         if self._trace_hook:  # for tests
             self._trace_hook('sync_exchange')
@@ -108,7 +110,8 @@ class HTTPSyncTarget(http_client.HTTPClientBase, SyncTarget):
         comma = ''
         size += prepare(
             last_known_generation=last_known_generation,
-            last_known_trans_id=last_known_trans_id)
+            last_known_trans_id=last_known_trans_id,
+            ensure=ensure_callback is not None)
         comma = ','
         for doc, gen, trans_id in docs_by_generations:
             size += prepare(id=doc.doc_id, rev=doc.rev, content=doc.get_json(),
@@ -121,7 +124,7 @@ class HTTPSyncTarget(http_client.HTTPClientBase, SyncTarget):
             self._conn.send(entry)
         entries = None
         data, _ = self._response()
-        res = self._parse_sync_stream(data, return_doc_cb)
+        res = self._parse_sync_stream(data, return_doc_cb, ensure_callback)
         data = None
         return res['new_generation'], res['new_transaction_id']
 

@@ -344,12 +344,16 @@ class SyncResource(object):
     def __init__(self, dbname, source_replica_uid, state, responder):
         self.source_replica_uid = source_replica_uid
         self.responder = responder
-        self.db = state.open_database(dbname)
-        self.target = self.db.get_sync_target()
+        self.state = state
+        self.dbname = dbname
+        self.replica_uid = None
+
+    def get_target(self):
+        return self.state.open_database(self.dbname).get_sync_target()
 
     @http_method()
     def get(self):
-        result = self.target.get_sync_info(self.source_replica_uid)
+        result = self.get_target().get_sync_info(self.source_replica_uid)
         self.responder.send_response_json(
             target_replica_uid=result[0], target_replica_generation=result[1],
             target_replica_transaction_id=result[2],
@@ -360,19 +364,25 @@ class SyncResource(object):
     @http_method(generation=int,
                  content_as_args=True, no_query=True)
     def put(self, generation, transaction_id):
-        self.target.record_sync_info(self.source_replica_uid, generation,
-                                     transaction_id)
+        self.get_target().record_sync_info(self.source_replica_uid,
+                                           generation,
+                                           transaction_id)
         self.responder.send_response_json(ok=True)
 
     # Implements the same logic as LocalSyncTarget.sync_exchange
 
     @http_method(last_known_generation=int, last_known_trans_id=none_or_str,
                  content_as_args=True)
-    def post_args(self, last_known_generation, last_known_trans_id=None):
-        self.db.validate_gen_and_trans_id(
+    def post_args(self, last_known_generation, last_known_trans_id=None,
+                  ensure=False):
+        if ensure:
+            db, self.replica_uid = self.state.ensure_database(self.dbname)
+        else:
+            db = self.state.open_database(self.dbname)
+        db.validate_gen_and_trans_id(
             last_known_generation, last_known_trans_id)
         self.sync_exch = self.sync_exchange_class(
-            self.db, self.source_replica_uid, last_known_generation)
+            db, self.source_replica_uid, last_known_generation)
 
     @http_method(content_as_args=True)
     def post_stream_entry(self, id, rev, content, gen, trans_id):
@@ -390,8 +400,11 @@ class SyncResource(object):
         self.responder.content_type = 'application/x-u1db-sync-stream'
         self.responder.start_response(200)
         self.responder.start_stream(),
-        self.responder.stream_entry({"new_generation": new_gen,
-                     "new_transaction_id": self.sync_exch.new_trans_id})
+        header = {"new_generation": new_gen,
+                     "new_transaction_id": self.sync_exch.new_trans_id}
+        if self.replica_uid is not None:
+            header['replica_uid'] = self.replica_uid
+        self.responder.stream_entry(header)
         self.sync_exch.return_docs(send_doc)
         self.responder.end_stream()
         self.responder.finish_response()

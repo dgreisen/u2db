@@ -293,9 +293,10 @@ class ServerStateForTests(server_state.ServerState):
 
     def ensure_database(self, path):
         try:
-            return self.open_database(path)
+            db =  self.open_database(path)
         except errors.DatabaseDoesNotExist:
-            return self._create_database(path)
+            db = self._create_database(path)
+        return db, db._replica_uid
 
     def _copy_database(self, db):
         # DO NOT COPY OR REUSE THIS CODE OUTSIDE TESTS: COPYING U1DB DATABASES

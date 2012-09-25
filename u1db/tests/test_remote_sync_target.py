@@ -286,5 +286,29 @@ class TestRemoteSyncTargets(tests.TestCaseWithServer):
             (doc.doc_id, doc.rev, '{"value": "there"}', 1),
             other_changes[0][:-1])
 
+    def test_sync_exchange_send_ensure_callback(self):
+        self.startServer()
+        remote_target = self.getSyncTarget('test')
+        other_docs = []
+        replica_uid_box = []
+
+        def receive_doc(doc):
+            other_docs.append((doc.doc_id, doc.rev, doc.get_json()))
+
+        def ensure_cb(replica_uid):
+            replica_uid_box.append(replica_uid)
+
+        doc = self.make_document('doc-here', 'replica:1', '{"value": "here"}')
+        new_gen, trans_id = remote_target.sync_exchange(
+            [(doc, 10, 'T-sid')], 'replica', last_known_generation=0,
+            last_known_trans_id=None, return_doc_cb=receive_doc,
+            ensure_callback=ensure_cb)
+        self.assertEqual(1, new_gen)
+        db = self.request_state.open_database('test')
+        self.assertEqual(1, len(replica_uid_box))
+        self.assertEqual(db._replica_uid, replica_uid_box[0])
+        self.assertGetDoc(
+            db, 'doc-here', 'replica:1', '{"value": "here"}', False)
+
 
 load_tests = tests.load_with_scenarios

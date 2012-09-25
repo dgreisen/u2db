@@ -303,7 +303,7 @@ class Database(object):
         """Release any resources associated with this database."""
         raise NotImplementedError(self.close)
 
-    def sync(self, url, creds=None):
+    def sync(self, url, creds=None, autocreate=True):
         """Synchronize documents with remote replica exposed at url.
 
         :param url: the url of the target replica to sync with.
@@ -316,6 +316,7 @@ class Database(object):
                  'token_key': ...,
                  'token_secret': ...
                 }}
+        :param autocreate: ask the target to create the db if non-existent.
         :return: local_gen_before_sync The local generation before the
             synchronisation was performed. This is useful to pass into
             whatschanged, if an application wants to know which documents were
@@ -323,7 +324,8 @@ class Database(object):
         """
         from u1db.sync import Synchronizer
         from u1db.remote.http_target import HTTPSyncTarget
-        return Synchronizer(self, HTTPSyncTarget(url, creds=creds)).sync()
+        return Synchronizer(self, HTTPSyncTarget(url, creds=creds)).sync(
+            autocreate=autocreate)
 
     def _get_replica_gen_and_trans_id(self, other_replica_uid):
         """Return the last known generation and transaction id for the other db
@@ -633,7 +635,7 @@ class SyncTarget(object):
 
     def sync_exchange(self, docs_by_generation, source_replica_uid,
                       last_known_generation, last_known_trans_id,
-                      return_doc_cb):
+                      return_doc_cb, ensure_callback=None):
         """Incorporate the documents sent from the source replica.
 
         This is not meant to be called by client code directly, but is used as
@@ -665,6 +667,9 @@ class SyncTarget(object):
             be invoked in turn with Documents that have changed since
             last_known_generation together with the generation of
             their last change.
+        :param: ensure_callback(replica_uid): if set the target may create
+            the target db if not yet existent, the callback can then
+            be used to inform of the created db replica uid.
         :return: new_generation - After applying docs_by_generation, this is
             the current generation for this replica
         """
