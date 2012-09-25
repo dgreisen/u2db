@@ -866,7 +866,7 @@ finalize_and_send_temp_file(u1db_sync_target *st, FILE *temp_fd,
     }
     if (status != U1DB_OK) { goto finish; }
     if (http_code != 200 && http_code != 201) {
-        printf("broken 0\n");
+        //printf("broken 0\n");
         status = U1DB_BROKEN_SYNC_STREAM;
         goto finish;
     }
@@ -896,34 +896,34 @@ process_response(u1db_sync_target *st, void *context, u1db_doc_gen_callback cb,
 
     json = json_tokener_parse(response);
     if (json == NULL || !json_object_is_type(json, json_type_array)) {
-        printf("broken 1, response: %s\n", response);
+	//printf("broken 1, response: %s\n", response);
         status = U1DB_BROKEN_SYNC_STREAM;
         goto finish;
     }
     doc_count = json_object_array_length(json);
     if (doc_count < 1) {
         // the first response is the new_generation info, so it must exist
-        printf("broken 2\n");
+        //printf("broken 2\n");
         status = U1DB_BROKEN_SYNC_STREAM;
         goto finish;
     }
     obj = json_object_array_get_idx(json, 0);
     attr = json_object_object_get(obj, "new_generation");
     if (attr == NULL) {
-        printf("broken 3\n");
+        //printf("broken 3\n");
         status = U1DB_BROKEN_SYNC_STREAM;
         goto finish;
     }
     *target_gen = json_object_get_int(attr);
     attr = json_object_object_get(obj, "new_transaction_id");
     if (attr == NULL) {
-        printf("broken 4\n");
+        //printf("broken 4\n");
         status = U1DB_BROKEN_SYNC_STREAM;
         goto finish;
     }
     tmp = json_object_get_string(attr);
     if (tmp == NULL) {
-        printf("broken 5\n");
+        //printf("broken 5\n");
         status = U1DB_BROKEN_SYNC_STREAM;
         goto finish;
     }
