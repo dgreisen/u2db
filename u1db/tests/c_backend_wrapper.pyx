@@ -205,14 +205,16 @@ cdef extern from "u1db/u1db_internal.h":
                              u1db_document **docs, int *generations,
                              const_char_ptr *trans_ids,
                              int *target_gen, char **target_trans_id,
-                             void *context, u1db_doc_gen_callback cb) nogil
+                             void *context, u1db_doc_gen_callback cb,
+                             void *ensure_callback) nogil
         int (*sync_exchange_doc_ids)(u1db_sync_target *st,
                                      u1database *source_db, int n_doc_ids,
                                      const_char_ptr *doc_ids, int *generations,
                                      const_char_ptr *trans_ids,
                                      int *target_gen, char **target_trans_id,
                                      void *context,
-                                     u1db_doc_gen_callback cb) nogil
+                                     u1db_doc_gen_callback cb,
+                                     void *ensure_callback) nogil
         int (*get_sync_exchange)(u1db_sync_target *st,
                                  char *source_replica_uid,
                                  int last_known_source_gen,
@@ -811,7 +813,7 @@ cdef class CSyncTarget(object):
                 status = self._st.sync_exchange_doc_ids(self._st, sdb._db,
                     num_doc_ids, doc_ids, generations, trans_ids,
                     &target_gen, &target_trans_id,
-                    <void*>return_doc_cb, return_doc_cb_wrapper)
+                    <void*>return_doc_cb, return_doc_cb_wrapper, NULL)
             handle_status("sync_exchange_doc_ids", status)
             if target_trans_id != NULL:
                 res_trans_id = target_trans_id
@@ -828,7 +830,7 @@ cdef class CSyncTarget(object):
 
     def sync_exchange(self, docs_by_generations, source_replica_uid,
                       last_known_generation, last_known_trans_id,
-                      return_doc_cb):
+                      return_doc_cb, ensure_callback=None):
         cdef CDocument cur_doc
         cdef u1db_document **docs = NULL
         cdef int *generations = NULL
@@ -864,7 +866,7 @@ cdef class CSyncTarget(object):
                 status = self._st.sync_exchange(
                     self._st, c_source_replica_uid, count, docs, generations,
                     trans_ids, &target_gen, &target_trans_id,
-                    <void *>return_doc_cb, return_doc_cb_wrapper)
+                    <void *>return_doc_cb, return_doc_cb_wrapper, NULL)
             handle_status("sync_exchange", status)
         finally:
             if docs != NULL:

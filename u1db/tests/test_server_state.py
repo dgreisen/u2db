@@ -70,8 +70,9 @@ class TestServerState(tests.TestCase):
         self.state.set_workingdir(tempdir)
         path = tempdir + '/test.db'
         self.assertFalse(os.path.exists(path))
-        db = self.state.ensure_database('test.db')
+        db, replica_uid = self.state.ensure_database('test.db')
         self.assertIsInstance(db, sqlite_backend.SQLitePartialExpandDatabase)
+        self.assertEqual(db._replica_uid, replica_uid)
         self.assertTrue(os.path.exists(path))
         db2 = self.state.open_database('test.db')
         self.assertIsInstance(db2, sqlite_backend.SQLitePartialExpandDatabase)
@@ -80,7 +81,7 @@ class TestServerState(tests.TestCase):
         tempdir = self.createTempDir()
         self.state.set_workingdir(tempdir)
         path = tempdir + '/test.db'
-        db = self.state.ensure_database('test.db')
+        db, _ = self.state.ensure_database('test.db')
         db.close()
         self.state.delete_database('test.db')
         self.assertFalse(os.path.exists(path))

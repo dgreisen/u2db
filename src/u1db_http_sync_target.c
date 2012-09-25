@@ -62,7 +62,8 @@ static int st_http_sync_exchange(u1db_sync_target *st,
                                  u1db_document **docs, int *generations,
                                  const char **trans_ids, int *target_gen,
                                  char **target_trans_id, void *context,
-                                 u1db_doc_gen_callback cb);
+                                 u1db_doc_gen_callback cb,
+                                 u1db__ensure_callback ensure_callback);
 static int st_http_sync_exchange_doc_ids(u1db_sync_target *st,
                                          u1database *source_db, int n_doc_ids,
                                          const char **doc_ids,
@@ -70,7 +71,8 @@ static int st_http_sync_exchange_doc_ids(u1db_sync_target *st,
                                          const char **trans_ids,
                                          int *target_gen,
                                          char **target_trans_id, void *context,
-                                         u1db_doc_gen_callback cb);
+                                         u1db_doc_gen_callback cb,
+                                         u1db__ensure_callback ensure_callback);
 static void st_http_finalize_sync_exchange(u1db_sync_target *st,
                                u1db_sync_exchange **exchange);
 static int st_http_set_trace_hook(u1db_sync_target *st,
@@ -794,7 +796,7 @@ make_tempfile(char tmpname[1024])
 
 static int
 init_temp_file(char tmpname[], FILE **temp_fd, int target_gen,
-               char *target_trans_id)
+               char *target_trans_id, int ensure)
 {
     int status = U1DB_OK;
     *temp_fd = make_tempfile(tmpname);
@@ -809,8 +811,16 @@ init_temp_file(char tmpname[], FILE **temp_fd, int target_gen,
     // determine Content-Length before we start uploading the data.
     fprintf(
         *temp_fd,
-        "[\r\n{\"last_known_generation\": %d, \"last_known_trans_id\": \"%s\"}",
+        "[\r\n{\"last_known_generation\": %d, \"last_known_trans_id\": \"%s\"",
         target_gen, target_trans_id);
+    if (ensure) {
+        fprintf(
+            *temp_fd,
+            ", \"ensure\": true");
+    }
+    fprintf(
+        *temp_fd,
+        "}");
 finish:
     return status;
 }
@@ -866,7 +876,7 @@ finalize_and_send_temp_file(u1db_sync_target *st, FILE *temp_fd,
     }
     if (status != U1DB_OK) { goto finish; }
     if (http_code != 200 && http_code != 201) {
-        printf("broken 0\n");
+        //printf("broken 0\n");
         status = U1DB_BROKEN_SYNC_STREAM;
         goto finish;
     }
@@ -883,7 +893,8 @@ finish:
 
 static int
 process_response(u1db_sync_target *st, void *context, u1db_doc_gen_callback cb,
-                 char *response, int *target_gen, char **target_trans_id)
+                 u1db__ensure_callback ensure_callback, char *response,
+                 int *target_gen, char **target_trans_id)
 {
     int status = U1DB_OK;
     int i, doc_count;
@@ -893,37 +904,38 @@ process_response(u1db_sync_target *st, void *context, u1db_doc_gen_callback cb,
     int gen;
     const char *trans_id = NULL;
     u1db_document *doc;
+    const char *replica_uid = NULL;
 
     json = json_tokener_parse(response);
     if (json == NULL || !json_object_is_type(json, json_type_array)) {
-        printf("broken 1, response: %s\n", response);
+        //printf("broken 1, response: %s\n", response);
         status = U1DB_BROKEN_SYNC_STREAM;
         goto finish;
     }
     doc_count = json_object_array_length(json);
     if (doc_count < 1) {
         // the first response is the new_generation info, so it must exist
-        printf("broken 2\n");
+        //printf("broken 2\n");
         status = U1DB_BROKEN_SYNC_STREAM;
         goto finish;
     }
     obj = json_object_array_get_idx(json, 0);
     attr = json_object_object_get(obj, "new_generation");
     if (attr == NULL) {
-        printf("broken 3\n");
+        //printf("broken 3\n");
         status = U1DB_BROKEN_SYNC_STREAM;
         goto finish;
     }
     *target_gen = json_object_get_int(attr);
     attr = json_object_object_get(obj, "new_transaction_id");
     if (attr == NULL) {
-        printf("broken 4\n");
+        //printf("broken 4\n");
         status = U1DB_BROKEN_SYNC_STREAM;
         goto finish;
     }
     tmp = json_object_get_string(attr);
     if (tmp == NULL) {
-        printf("broken 5\n");
+        //printf("broken 5\n");
         status = U1DB_BROKEN_SYNC_STREAM;
         goto finish;
     }
@@ -931,6 +943,23 @@ process_response(u1db_sync_target *st, void *context, u1db_doc_gen_callback cb,
     if (*target_trans_id == NULL) {
         status = U1DB_NOMEM;
         goto finish;
+    }
+
+    if (ensure_callback) {
+        attr = json_object_object_get(obj, "replica_uid");
+        if (attr != NULL) {
+            tmp = json_object_get_string(attr);
+            if (tmp == NULL) {
+                status = U1DB_BROKEN_SYNC_STREAM;
+                goto finish;
+            }
+            replica_uid = strdup(tmp);
+            if (*target_trans_id == NULL) {
+                status = U1DB_NOMEM;
+                goto finish;
+            }
+            ensure_callback(context, replica_uid);
+        }
     }
 
     for (i = 1; i < doc_count; ++i) {
@@ -989,7 +1018,8 @@ st_http_sync_exchange(u1db_sync_target *st, const char *source_replica_uid,
                       int n_docs, u1db_document **docs, int *generations,
                       const char **trans_ids, int *target_gen,
                       char **target_trans_id, void *context,
-                      u1db_doc_gen_callback cb)
+                      u1db_doc_gen_callback cb,
+                      u1db__ensure_callback ensure_callback)
 {
     int status, i;
     FILE *temp_fd = NULL;
@@ -1004,7 +1034,8 @@ st_http_sync_exchange(u1db_sync_target *st, const char *source_replica_uid,
     if (n_docs > 0 && (docs == NULL || generations == NULL)) {
         return U1DB_INVALID_PARAMETER;
     }
-    status = init_temp_file(tmpname, &temp_fd, *target_gen, *target_trans_id);
+    status = init_temp_file(tmpname, &temp_fd, *target_gen, *target_trans_id,
+                            ensure_callback != NULL);
     if (status != U1DB_OK) { goto finish; }
     for (i = 0; i < n_docs; ++i) {
         status = doc_to_tempfile(
@@ -1013,7 +1044,8 @@ st_http_sync_exchange(u1db_sync_target *st, const char *source_replica_uid,
     }
     status = finalize_and_send_temp_file(st, temp_fd, source_replica_uid, &req);
     if (status != U1DB_OK) { goto finish; }
-    status = process_response(st, context, cb, req.body_buffer, target_gen,
+    status = process_response(st, context, cb, ensure_callback,
+                              req.body_buffer, target_gen,
                               target_trans_id);
 finish:
     cleanup_temp_files(tmpname, temp_fd, &req);
@@ -1058,7 +1090,8 @@ st_http_sync_exchange_doc_ids(u1db_sync_target *st, u1database *source_db,
                               int n_doc_ids, const char **doc_ids,
                               int *generations, const char **trans_ids,
                               int *target_gen, char **target_trans_id,
-                              void *context, u1db_doc_gen_callback cb)
+                              void *context, u1db_doc_gen_callback cb,
+                              u1db__ensure_callback ensure_callback)
 {
     int status;
     FILE *temp_fd = NULL;
@@ -1077,7 +1110,8 @@ st_http_sync_exchange_doc_ids(u1db_sync_target *st, u1database *source_db,
     }
     status = u1db_get_replica_uid(source_db, &source_replica_uid);
     if (status != U1DB_OK) { goto finish; }
-    status = init_temp_file(tmpname, &temp_fd, *target_gen, *target_trans_id);
+    status = init_temp_file(tmpname, &temp_fd, *target_gen, *target_trans_id,
+                            ensure_callback != NULL);
     if (status != U1DB_OK) { goto finish; }
     state.num = n_doc_ids;
     state.generations = generations;
@@ -1088,7 +1122,8 @@ st_http_sync_exchange_doc_ids(u1db_sync_target *st, u1database *source_db,
     if (status != U1DB_OK) { goto finish; }
     status = finalize_and_send_temp_file(st, temp_fd, source_replica_uid, &req);
     if (status != U1DB_OK) { goto finish; }
-    status = process_response(st, context, cb, req.body_buffer, target_gen,
+    status = process_response(st, context, cb, ensure_callback,
+                              req.body_buffer, target_gen,
                               target_trans_id);
 finish:
     cleanup_temp_files(tmpname, temp_fd, &req);
