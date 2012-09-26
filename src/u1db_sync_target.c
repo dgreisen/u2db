@@ -36,14 +36,14 @@ static int st_sync_exchange(u1db_sync_target *st,
                             const char **trans_ids, int *target_gen,
                             char **target_trans_id, void *context,
                             u1db_doc_gen_callback cb,
-                            u1db__ensure_callback ensure_callback);
+                            const char **autocreated_replica_uid);
 static int st_sync_exchange_doc_ids(u1db_sync_target *st,
                                     u1database *source_db, int n_doc_ids,
                                     const char **doc_ids, int *generations,
                                     const char **trans_ids, int *target_gen,
                                     char **target_trans_id, void *context,
                                     u1db_doc_gen_callback cb,
-                                    u1db__ensure_callback ensure_callback);
+                                    const char **autocreated_replica_uid);
 static int st_get_sync_exchange(u1db_sync_target *st,
                          const char *source_replica_uid,
                          int source_gen,
@@ -479,12 +479,6 @@ return_doc_to_insert_from_target(void *context, u1db_document *doc, int gen,
     return status;
 }
 
-static void ensure_callback(void *context, const char *replica_uid) {
-   struct _return_doc_state *state;
-   state = (struct _return_doc_state *)context;
-   state->target_uid = replica_uid;
-}
-
 
 static int
 get_and_insert_docs(u1database *source_db, u1db_sync_exchange *se,
@@ -512,7 +506,7 @@ st_sync_exchange(u1db_sync_target *st, const char *source_replica_uid,
                  const char **trans_ids, int *target_gen,
                  char **target_trans_id, void *context,
                  u1db_doc_gen_callback cb,
-                 u1db__ensure_callback ensure_callback)
+                 const char **autocreated_replica_uid)
 {
     int status, i;
 
@@ -554,7 +548,7 @@ st_sync_exchange_doc_ids(u1db_sync_target *st, u1database *source_db,
         int n_doc_ids, const char **doc_ids, int *generations,
         const char **trans_ids, int *target_gen, char **target_trans_id,
         void *context, u1db_doc_gen_callback cb,
-        u1db__ensure_callback ensure_callback)
+        const char **autocreated_replica_uid)
 {
     int status;
     const char *source_replica_uid = NULL;
@@ -608,7 +602,7 @@ u1db__sync_db_to_target(u1database *db, u1db_sync_target *target,
     char *target_trans_id = NULL;
     int target_gen, local_gen;
     int local_gen_known_by_target, target_gen_known_by_local;
-    u1db__ensure_callback ensure= NULL;
+    int request_ensure = 0;
 
     // fprintf(stderr, "Starting\n");
     if (db == NULL || target == NULL || local_gen_before_sync == NULL) {
@@ -637,7 +631,7 @@ u1db__sync_db_to_target(u1database *db, u1db_sync_target *target,
             status = U1DB_NOMEM;
             goto finish;
         }
-        ensure = ensure_callback;
+        request_ensure = 1;
     } else if (status != U1DB_OK) { goto finish; }
     status = u1db_validate_gen_and_trans_id(
         db, local_gen_known_by_target, local_trans_id_known_by_target);
@@ -684,12 +678,13 @@ u1db__sync_db_to_target(u1database *db, u1db_sync_target *target,
         (const char**)to_send_state.doc_ids_to_return,
         to_send_state.gen_for_doc_ids, to_send_state.trans_ids_for_doc_ids,
         &target_gen_known_by_local, &target_trans_id_known_by_local,
-        &return_doc_state, return_doc_to_insert_from_target, ensure);
-    if (ensure != NULL) {
+        &return_doc_state, return_doc_to_insert_from_target,
+        request_ensure?&return_doc_state.target_uid:NULL);
+    if (request_ensure) {
         if (return_doc_state.target_uid != NULL) {
             target_uid = return_doc_state.target_uid;
         } else {
-            ensure = NULL;
+            request_ensure = 0;
         }
     }
     if (status != U1DB_OK) { goto finish; }
@@ -713,7 +708,7 @@ u1db__sync_db_to_target(u1database *db, u1db_sync_target *target,
         if (status != U1DB_OK) { goto finish; }
     }
 finish:
-    if (ensure != NULL && target_uid != NULL) {
+    if (request_ensure && target_uid != NULL) {
         free((void *)target_uid);
     }
     if (local_trans_id != NULL) {

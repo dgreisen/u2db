@@ -63,7 +63,7 @@ static int st_http_sync_exchange(u1db_sync_target *st,
                                  const char **trans_ids, int *target_gen,
                                  char **target_trans_id, void *context,
                                  u1db_doc_gen_callback cb,
-                                 u1db__ensure_callback ensure_callback);
+                                 const char **autocreated_replica_uid);
 static int st_http_sync_exchange_doc_ids(u1db_sync_target *st,
                                          u1database *source_db, int n_doc_ids,
                                          const char **doc_ids,
@@ -72,7 +72,7 @@ static int st_http_sync_exchange_doc_ids(u1db_sync_target *st,
                                          int *target_gen,
                                          char **target_trans_id, void *context,
                                          u1db_doc_gen_callback cb,
-                                         u1db__ensure_callback ensure_callback);
+                                         const char **autocreated_replica_uid);
 static void st_http_finalize_sync_exchange(u1db_sync_target *st,
                                u1db_sync_exchange **exchange);
 static int st_http_set_trace_hook(u1db_sync_target *st,
@@ -893,7 +893,7 @@ finish:
 
 static int
 process_response(u1db_sync_target *st, void *context, u1db_doc_gen_callback cb,
-                 u1db__ensure_callback ensure_callback, char *response,
+                 const char **autocreated_replica_uid, char *response,
                  int *target_gen, char **target_trans_id)
 {
     int status = U1DB_OK;
@@ -945,7 +945,7 @@ process_response(u1db_sync_target *st, void *context, u1db_doc_gen_callback cb,
         goto finish;
     }
 
-    if (ensure_callback) {
+    if (autocreated_replica_uid != NULL) {
         attr = json_object_object_get(obj, "replica_uid");
         if (attr != NULL) {
             tmp = json_object_get_string(attr);
@@ -958,7 +958,7 @@ process_response(u1db_sync_target *st, void *context, u1db_doc_gen_callback cb,
                 status = U1DB_NOMEM;
                 goto finish;
             }
-            ensure_callback(context, replica_uid);
+            *autocreated_replica_uid = replica_uid;
         }
     }
 
@@ -1019,7 +1019,7 @@ st_http_sync_exchange(u1db_sync_target *st, const char *source_replica_uid,
                       const char **trans_ids, int *target_gen,
                       char **target_trans_id, void *context,
                       u1db_doc_gen_callback cb,
-                      u1db__ensure_callback ensure_callback)
+                      const char **autocreated_replica_uid)
 {
     int status, i;
     FILE *temp_fd = NULL;
@@ -1035,7 +1035,7 @@ st_http_sync_exchange(u1db_sync_target *st, const char *source_replica_uid,
         return U1DB_INVALID_PARAMETER;
     }
     status = init_temp_file(tmpname, &temp_fd, *target_gen, *target_trans_id,
-                            ensure_callback != NULL);
+                            autocreated_replica_uid != NULL);
     if (status != U1DB_OK) { goto finish; }
     for (i = 0; i < n_docs; ++i) {
         status = doc_to_tempfile(
@@ -1044,7 +1044,7 @@ st_http_sync_exchange(u1db_sync_target *st, const char *source_replica_uid,
     }
     status = finalize_and_send_temp_file(st, temp_fd, source_replica_uid, &req);
     if (status != U1DB_OK) { goto finish; }
-    status = process_response(st, context, cb, ensure_callback,
+    status = process_response(st, context, cb, autocreated_replica_uid,
                               req.body_buffer, target_gen,
                               target_trans_id);
 finish:
@@ -1091,7 +1091,7 @@ st_http_sync_exchange_doc_ids(u1db_sync_target *st, u1database *source_db,
                               int *generations, const char **trans_ids,
                               int *target_gen, char **target_trans_id,
                               void *context, u1db_doc_gen_callback cb,
-                              u1db__ensure_callback ensure_callback)
+                              const char **autocreated_replica_uid)
 {
     int status;
     FILE *temp_fd = NULL;
@@ -1111,7 +1111,7 @@ st_http_sync_exchange_doc_ids(u1db_sync_target *st, u1database *source_db,
     status = u1db_get_replica_uid(source_db, &source_replica_uid);
     if (status != U1DB_OK) { goto finish; }
     status = init_temp_file(tmpname, &temp_fd, *target_gen, *target_trans_id,
-                            ensure_callback != NULL);
+                            autocreated_replica_uid != NULL);
     if (status != U1DB_OK) { goto finish; }
     state.num = n_doc_ids;
     state.generations = generations;
@@ -1122,7 +1122,7 @@ st_http_sync_exchange_doc_ids(u1db_sync_target *st, u1database *source_db,
     if (status != U1DB_OK) { goto finish; }
     status = finalize_and_send_temp_file(st, temp_fd, source_replica_uid, &req);
     if (status != U1DB_OK) { goto finish; }
-    status = process_response(st, context, cb, ensure_callback,
+    status = process_response(st, context, cb, autocreated_replica_uid,
                               req.body_buffer, target_gen,
                               target_trans_id);
 finish:

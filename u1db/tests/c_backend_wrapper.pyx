@@ -838,6 +838,7 @@ cdef class CSyncTarget(object):
         cdef char *target_trans_id = NULL
         cdef char *c_source_replica_uid = NULL
         cdef int i, count, status, target_gen
+        assert ensure_callback is None  # interface difference
 
         self._check()
         assert self._st.sync_exchange != NULL, "sync_exchange is NULL?"
