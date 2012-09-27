@@ -358,12 +358,7 @@ having it happen automatically, every 30 minutes, for as long as it is running.
                     'consumer_key': creds['consumer_key'],
                     'consumer_secret': creds['consumer_secret']
                     }}
-            try:
-                self.store.db.sync(target, creds=creds)
-            except DatabaseDoesNotExist:
-                db = HTTPDatabase(target, creds=creds)
-                db.open(create=True)
-                self.store.db.sync(target, creds=creds)
+            self.store.db.sync(target, creds=creds)
             # refresh the UI to show changed or new tasks
             self.refresh_filter()
 

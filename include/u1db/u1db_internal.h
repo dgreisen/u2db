@@ -112,18 +112,23 @@ struct _u1db_sync_target {
      *                      database from the returned document stream.
      * @param target_trans_id (IN/OUT) This is associated with the generation
      *                        of the target that the source has seen. Will be
-     *                        filled in with the final generation of the
+     *                        filled in with the final transaction id of the
      *                        target. Note the value passed in and the value
      *                        returned should be freed by the caller.
      * @param context   Passed to cb.
      * @param cb        After sending the requested documents, we read the
      *                  response stream. For each document in the stream, we
      *                  will trigger a callback.
+     * @param: autocreated_replica_uid  (OUT) If not NULL the target may create
+     *                                  the target db if not yet existent,
+     *                                  in which case it is filled back with
+     *                                  the created db replica uid.
      */
     int (*sync_exchange_doc_ids)(u1db_sync_target *st, u1database *source_db,
             int n_doc_ids, const char **doc_ids, int *generations,
             const char **trans_ids, int *target_gen, char **target_trans_id,
-            void *context, u1db_doc_gen_callback cb);
+            void *context, u1db_doc_gen_callback cb,
+            const char **autocreated_replica_uid);
 
     /**
      * Same as sync_exchange, only using document objects.
@@ -133,7 +138,8 @@ struct _u1db_sync_target {
                          u1db_document **docs, int *generations,
                          const char **trans_ids, int *target_gen,
                          char **target_trans_id, void *context,
-                         u1db_doc_gen_callback cb);
+                         u1db_doc_gen_callback cb,
+                         const char **autocreated_replica_uid);
     /**
      * Create a sync_exchange state object.
      *
