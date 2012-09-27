@@ -1155,6 +1155,15 @@ class DatabaseIndexTests(tests.DatabaseBaseTests):
         docs = self.db.get_from_index('test-idx', 'value', 'value2-1')
         self.assertTrue(docs[0].has_conflicts)
 
+    def test_get_from_index_wilcard_vs_non_wildcard(self):
+        docs = {}
+        for v in ('a', 'b', 'b1', 'b2', 'c', 'c1', 'c2', 'd'):
+            docs[v] = self.db.create_doc_from_json(json.dumps({"key": v}))
+        self.db.create_index('test-idx', 'key')
+        self.assertEqual([docs['c']], self.db.get_from_index('test-idx', 'c'))
+        self.assertEqual([docs['c'], docs['c1'], docs['c2']],
+                         self.db.get_from_index('test-idx', 'c*'))
+
     def test_get_index_keys_multi_list_list(self):
         self.db.create_doc_from_json(
             '{"key": "value1-1 value1-2 value1-3", '
@@ -1346,6 +1355,17 @@ class DatabaseIndexTests(tests.DatabaseBaseTests):
         self.assertEqual(
             [doc4, doc3, doc2],
             self.db.get_range_from_index('test-idx', None, ('value2', '*')))
+
+    def test_get_wilcard_range_vs_non_wildcard(self):
+        docs = {}
+        for v in ('a', 'b', 'b1', 'b2', 'c', 'c1', 'c2', 'd'):
+            docs[v] = self.db.create_doc_from_json(json.dumps({"key": v}))
+        self.db.create_index('test-idx', 'key')
+        self.assertEqual([docs['b'], docs['b1'], docs['b2'], docs['c']],
+                         self.db.get_range_from_index('test-idx', 'b', 'c'))
+        self.assertEqual([docs['b'], docs['b1'], docs['b2'], docs['c'],
+                          docs['c1'], docs['c2']],
+                         self.db.get_range_from_index('test-idx', 'b', 'c*'))
 
     def test_get_range_from_index_illegal_wildcard_order(self):
         self.db.create_index('test-idx', 'k1', 'k2')
