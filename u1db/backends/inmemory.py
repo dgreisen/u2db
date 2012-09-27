@@ -240,7 +240,10 @@ class InMemoryDatabase(CommonBackend):
         self._indexes[index_name] = index
 
     def delete_index(self, index_name):
-        del self._indexes[index_name]
+        try:
+            del self._indexes[index_name]
+        except KeyError:
+            pass
 
     def list_indexes(self):
         definitions = []
