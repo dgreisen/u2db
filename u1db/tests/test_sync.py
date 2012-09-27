@@ -1003,6 +1003,17 @@ class DatabaseSyncTests(tests.DatabaseBaseTests,
         self.assertGetDocIncludeDeleted(
             self.db3, doc_id, deleted_rev, None, False)
 
+    def test_sync_propagates_deletes_2(self):
+        self.db1 = self.create_database('test1', 'source')
+        self.db2 = self.create_database('test2', 'target')
+        doc1 = self.db1.create_doc_from_json('{"a": "1"}', doc_id='the-doc')
+        self.sync(self.db1, self.db2)
+        doc1_2 = self.db2.get_doc('the-doc')
+        self.db2.delete_doc(doc1_2)
+        self.sync(self.db1, self.db2)
+        self.assertGetDocIncludeDeleted(
+            self.db1, 'the-doc', doc1_2.rev, None, False)
+
     def test_sync_propagates_resolution(self):
         self.db1 = self.create_database('test1', 'both')
         self.db2 = self.create_database('test2', 'both')
