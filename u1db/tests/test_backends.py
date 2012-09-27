@@ -1098,6 +1098,9 @@ class DatabaseIndexTests(tests.DatabaseBaseTests):
         self.db.delete_index('test-idx')
         self.assertEqual([], self.db.list_indexes())
 
+    def test_delete_index_does_not_fail_if_no_index(self):
+        self.db.delete_index('foo')
+
     def test_create_adds_to_index(self):
         self.db.create_index('test-idx', 'key')
         doc = self.db.create_doc_from_json(simple_doc)
