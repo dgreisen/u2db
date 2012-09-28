@@ -215,6 +215,13 @@ class AllDatabaseTests(tests.DatabaseBaseTests, tests.TestCaseWithServer):
             new_vc.is_newer(deleted_vc),
             "%s does not supersede %s" % (doc2.rev, deleted_doc.rev))
 
+    def test_delete_doesnt_open_the_door_to_random_revs(self):
+        doc = self.db.create_doc_from_json(simple_doc, doc_id='my_doc_id')
+        self.db.delete_doc(doc)
+        rand_rev_doc = self.make_document('my_doc_id', 'other:3', '{}')
+        self.assertRaises(errors.RevisionConflict, self.db.put_doc,
+                          rand_rev_doc)
+
     def test_get_doc_after_put(self):
         doc = self.db.create_doc_from_json(simple_doc, doc_id='my_doc_id')
         self.assertGetDoc(self.db, 'my_doc_id', doc.rev, simple_doc, False)
