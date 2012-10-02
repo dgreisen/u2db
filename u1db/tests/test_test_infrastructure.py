@@ -32,8 +32,9 @@ class TestTestCaseWithServer(tests.TestCaseWithServer):
     def server_def():
         def make_server(host_port, application):
             assert application == "app"
-            return simple_server.WSGIServer(host_port, None)
-        return (make_server, "shutdown", "http")
+            srv =simple_server.WSGIServer(host_port, None)
+            return srv, "http://%s:%s" % srv.server_address
+        return (make_server, "shutdown")
 
     def test_getURL(self):
         self.startServer()

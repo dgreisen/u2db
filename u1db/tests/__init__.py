@@ -344,7 +344,8 @@ class TestCaseWithServer(TestCase):
     @staticmethod
     def server_def():
         # hook point
-        # should return (ServerClass, "shutdown method name", "url_scheme")
+        # should return (make_server() -> (server, base_url),
+        #                "shutdown method name")
         class _RequestHandler(simple_server.WSGIRequestHandler):
             def log_request(*args):
                 pass  # suppress
@@ -352,13 +353,11 @@ class TestCaseWithServer(TestCase):
         def make_server(host_port, application):
             assert application, "forgot to override make_app(_with_state)?"
             srv = simple_server.WSGIServer(host_port, _RequestHandler)
-            # patch the value in if it's None
-            if getattr(application, 'base_url', 1) is None:
-                application.base_url = "http://%s:%s" % srv.server_address
+            base_url = "http://%s:%s" % srv.server_address
             srv.set_app(application)
-            return srv
+            return srv, base_url
 
-        return make_server, "shutdown", "http"
+        return make_server, "shutdown"
 
     @staticmethod
     def make_app_with_state(state):
@@ -374,15 +373,15 @@ class TestCaseWithServer(TestCase):
         super(TestCaseWithServer, self).setUp()
         self.server = self.server_thread = None
 
-    @property
-    def url_scheme(self):
-        return self.server_def()[-1]
-
     def startServer(self):
         server_def = self.server_def()
-        server_class, shutdown_meth, _ = server_def
+        server_maker, shutdown_meth = server_def
         application = self.make_app()
-        self.server = server_class(('127.0.0.1', 0), application)
+        self.server, self.base_url = server_maker(('127.0.0.1', 0),
+                                                  application)
+        # patch the value in if it's None
+        if getattr(application, 'base_url', 1) is None:
+            application.base_url = self.base_url
         self.server_thread = threading.Thread(target=self.server.serve_forever,
                                               kwargs=dict(poll_interval=0.01))
         self.server_thread.start()
@@ -390,10 +389,9 @@ class TestCaseWithServer(TestCase):
         self.addCleanup(getattr(self.server, shutdown_meth))
 
     def getURL(self, path=None):
-        host, port = self.server.server_address
         if path is None:
             path = ''
-        return '%s://%s:%s/%s' % (self.url_scheme, host, port, path)
+        return '%s/%s' % (self.base_url, path)
 
 
 def socket_pair():

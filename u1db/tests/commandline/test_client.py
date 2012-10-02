@@ -875,9 +875,10 @@ class TestHTTPIntegration(tests.TestCaseWithServer, RunMainHelper):
 
     def server_def(self):
         def make_server(host_port, _application):
-            return serve.make_server(host_port[0], host_port[1],
-                                     self.working_dir)
-        return make_server, "shutdown", "http"
+            srv = serve.make_server(host_port[0], host_port[1],
+                                    self.working_dir)
+            return srv, "http://%s:%d" % srv.server_address
+        return make_server, "shutdown"
 
     def setUp(self):
         super(TestHTTPIntegration, self).setUp()
