@@ -277,6 +277,18 @@ class TestHTTPInvocationByMethodWithBody(tests.TestCase):
         self.assertEqual({'a': '1'}, resource.args)
         self.assertEqual('{"body": true}', resource.content)
 
+    def test_put_json_charset_accepted_ignored(self):
+        resource = TestResource()
+        body = '{"body": true}'
+        environ = {'QUERY_STRING': 'a=1', 'REQUEST_METHOD': 'PUT',
+                   'wsgi.input': StringIO.StringIO(body),
+                   'CONTENT_LENGTH': str(len(body)),
+                   'CONTENT_TYPE': 'application/json ; charset="utf-8"'}
+        invoke = http_app.HTTPInvocationByMethodWithBody(resource, environ,
+                                                         parameters)
+        res = invoke()
+        self.assertEqual('{"body": true}', resource.content)
+
     def test_put_sync_stream(self):
         resource = TestResource()
         body = (

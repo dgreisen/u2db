@@ -524,7 +524,8 @@ class HTTPInvocationByMethodWithBody(object):
                 raise BadRequest
             reader = _FencedReader(self.environ['wsgi.input'], content_length,
                                    self.max_entry_size)
-            content_type = self.environ.get('CONTENT_TYPE')
+            content_type = self.environ.get('CONTENT_TYPE', '')
+            content_type = content_type.split(';', 1)[0].strip()
             if content_type == 'application/json':
                 meth = self._lookup(method)
                 body = reader.read_chunk(sys.maxint)
