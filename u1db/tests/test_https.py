@@ -39,9 +39,8 @@ def https_server_def():
             srv.close_request(req)
 
         srv.shutdown_request = shutdown_request
-        application.base_url = "https://localhost:%s" % srv.server_address[1]
-        return srv
-    return make_server, "shutdown", "https"
+        return srv, "https://localhost:%s" % srv.server_address[1]
+    return make_server, "shutdown"
 
 
 def oauth_https_sync_target(test, host, path):

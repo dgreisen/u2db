@@ -143,9 +143,8 @@ class TestHTTPClientBase(tests.TestCaseWithServer):
         self.assertIs(None, cli._conn)
 
     def test_parse_url(self):
-        cli = http_client.HTTPClientBase(
-                                     '%s://127.0.0.1:12345/' % self.url_scheme)
-        self.assertEqual(self.url_scheme, cli._url.scheme)
+        cli = http_client.HTTPClientBase('http://127.0.0.1:12345/')
+        self.assertEqual('http', cli._url.scheme)
         self.assertEqual('127.0.0.1', cli._url.hostname)
         self.assertEqual(12345, cli._url.port)
         self.assertEqual('/', cli._url.path)
