@@ -2,7 +2,7 @@ Getting started
 ===============
 
 The easiest way to get started is to use "setup.py install", preferably
-in a virtualenv (although that's up to you). 
+in a virtualenv (although that's up to you).
 
 
 Using the database interface
