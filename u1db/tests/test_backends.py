@@ -83,20 +83,23 @@ class TestAlternativeDocument(DocumentBase):
     """A (not very) alternative implementation of Document."""
 
 
+ALL_SCENARIOS = tests.LOCAL_DATABASES_SCENARIOS + [
+    ('http', {'make_database_for_test': make_http_database_for_test,
+              'copy_database_for_test': copy_http_database_for_test,
+              'make_document_for_test': tests.make_document_for_test,
+              'make_app_with_state': make_http_app}),
+    ('oauth_http', {'make_database_for_test':
+                    make_oauth_http_database_for_test,
+                    'copy_database_for_test':
+                    copy_oauth_http_database_for_test,
+                    'make_document_for_test': tests.make_document_for_test,
+                    'make_app_with_state': make_oauth_http_app})
+    ] + tests.C_DATABASE_SCENARIOS
+
+
 class AllDatabaseTests(tests.DatabaseBaseTests, tests.TestCaseWithServer):
 
-    scenarios = tests.LOCAL_DATABASES_SCENARIOS + [
-        ('http', {'make_database_for_test': make_http_database_for_test,
-                  'copy_database_for_test': copy_http_database_for_test,
-                  'make_document_for_test': tests.make_document_for_test,
-                  'make_app_with_state': make_http_app}),
-        ('oauth_http', {'make_database_for_test':
-                        make_oauth_http_database_for_test,
-                        'copy_database_for_test':
-                        copy_oauth_http_database_for_test,
-                        'make_document_for_test': tests.make_document_for_test,
-                        'make_app_with_state': make_oauth_http_app})
-        ] + tests.C_DATABASE_SCENARIOS
+    scenarios = ALL_SCENARIOS
 
     def test_close(self):
         self.db.close()
@@ -338,9 +341,38 @@ class AllDatabaseTests(tests.DatabaseBaseTests, tests.TestCaseWithServer):
         self.assertGetDoc(self.db, doc.doc_id, doc.rev, nested_doc, False)
 
 
+peculiar_json1 = '{  "a": 1 ,\n  "b": 2}'
+peculiar_json2 = '{"a": 1,"b":2}'
+peculiar_json3 = '{"a": 1,"b":2,\n"c":  3}'
+
+
+class OptionalJSONPreservationlDatabaseTests(tests.DatabaseBaseTests,
+                                           tests.TestCaseWithServer):
+
+    scenarios = ALL_SCENARIOS
+
+    def test_preserve_json_create_doc_from_json(self):
+        doc = self.db.create_doc_from_json(peculiar_json1)
+        doc1 = self.db.get_doc(doc.doc_id)
+        self.assertEqual(peculiar_json1, doc1.get_json())
+
+    def test_preserve_json_put_doc(self):
+        doc = self.make_document('doc-id', None, peculiar_json1)
+        doc = self.db.put_doc(doc)
+        doc1 = self.db.get_doc('doc-id')
+        self.assertEqual(peculiar_json1, doc1.get_json())
+        doc1.set_json(peculiar_json2)
+        self.db.put_doc(doc1)
+        doc2 = self.db.get_doc('doc-id')
+        self.assertEqual(peculiar_json2, doc2.get_json())
+
+
+LOCAL_SCENARIOS = tests.LOCAL_DATABASES_SCENARIOS + tests.C_DATABASE_SCENARIOS
+
+
 class DocumentSizeTests(tests.DatabaseBaseTests):
 
-    scenarios = tests.LOCAL_DATABASES_SCENARIOS + tests.C_DATABASE_SCENARIOS
+    scenarios = LOCAL_SCENARIOS
 
     def test_put_doc_refuses_oversized_documents(self):
         self.db.set_document_size_limit(1)
@@ -364,7 +396,7 @@ class DocumentSizeTests(tests.DatabaseBaseTests):
 
 class LocalDatabaseTests(tests.DatabaseBaseTests):
 
-    scenarios = tests.LOCAL_DATABASES_SCENARIOS + tests.C_DATABASE_SCENARIOS
+    scenarios = LOCAL_SCENARIOS
 
     def test_create_doc_different_ids_diff_db(self):
         doc1 = self.db.create_doc_from_json(simple_doc)
@@ -607,9 +639,47 @@ class LocalDatabaseTests(tests.DatabaseBaseTests):
                          self.db.whats_changed(2))
 
 
+class LocalDatabaseOptionalJSONPreservationTests(tests.DatabaseBaseTests):
+
+    scenarios = LOCAL_SCENARIOS
+
+    def test_preserve_json_put_doc_if_newer(self):
+        doc = self.make_document('doc-id', 'other:1', peculiar_json1)
+        self.db._put_doc_if_newer(doc, save_conflict=False,
+                                  replica_uid="other", replica_gen=1)
+        doc1 = self.db.get_doc('doc-id')
+        self.assertEqual(peculiar_json1, doc1.get_json())
+        doc1 = self.make_document('doc-id', 'other:2', peculiar_json2)
+        self.db._put_doc_if_newer(doc1, save_conflict=False,
+                                  replica_uid="other", replica_gen=2)
+        doc2 = self.db.get_doc('doc-id')
+        self.assertEqual(peculiar_json2, doc2.get_json())
+
+    def test_preserve_json_put_doc_if_newer_autoresolve_json(self):
+        doc = self.make_document('doc-id', None, peculiar_json1)
+        self.db.put_doc(doc)
+        doc1 = self.make_document('doc-id', 'other:1', peculiar_json1)
+        self.db._put_doc_if_newer(doc1, save_conflict=False,
+                                  replica_uid="other", replica_gen=1)
+        doc2 = self.db.get_doc('doc-id')
+        self.assertEqual(peculiar_json1, doc2.get_json())
+
+    def test_preserve_json_put_doc_if_newer_autoresolve_content(self):
+        if self.db.__class__.__name__ == 'CDatabase':
+            self.skipTest("the C implementation atm uses string "
+                          "equivalence only")
+        doc = self.make_document('doc-id', None, peculiar_json1)
+        self.db.put_doc(doc)
+        doc1 = self.make_document('doc-id', 'other:1', peculiar_json2)
+        self.db._put_doc_if_newer(doc1, save_conflict=False,
+                                  replica_uid="other", replica_gen=1)
+        doc2 = self.db.get_doc('doc-id')
+        self.assertEqual(peculiar_json2, doc2.get_json())
+
+
 class LocalDatabaseValidateGenNTransIdTests(tests.DatabaseBaseTests):
 
-    scenarios = tests.LOCAL_DATABASES_SCENARIOS + tests.C_DATABASE_SCENARIOS
+    scenarios = LOCAL_SCENARIOS
 
     def test_validate_gen_and_trans_id(self):
         self.db.create_doc_from_json(simple_doc)
@@ -633,7 +703,7 @@ class LocalDatabaseValidateGenNTransIdTests(tests.DatabaseBaseTests):
 
 class LocalDatabaseValidateSourceGenTests(tests.DatabaseBaseTests):
 
-    scenarios = tests.LOCAL_DATABASES_SCENARIOS + tests.C_DATABASE_SCENARIOS
+    scenarios = LOCAL_SCENARIOS
 
     def test_validate_source_gen_and_trans_id_same(self):
         self.db._set_replica_gen_and_trans_id('other', 1, 'T-sid')
@@ -653,7 +723,7 @@ class LocalDatabaseValidateSourceGenTests(tests.DatabaseBaseTests):
 class LocalDatabaseWithConflictsTests(tests.DatabaseBaseTests):
     # test supporting/functionality around storing conflicts
 
-    scenarios = tests.LOCAL_DATABASES_SCENARIOS + tests.C_DATABASE_SCENARIOS
+    scenarios = LOCAL_SCENARIOS
 
     def test_get_docs_conflicted(self):
         doc1 = self.db.create_doc_from_json(simple_doc)
@@ -1019,9 +1089,29 @@ class LocalDatabaseWithConflictsTests(tests.DatabaseBaseTests):
         self.assertRaises(errors.ConflictedDoc, self.db.delete_doc, doc2)
 
 
+class LocalDatabaseWithConflictsJSONPreservationTests(tests.DatabaseBaseTests):
+    # test supporting/functionality around storing conflicts
+
+    scenarios = LOCAL_SCENARIOS
+
+    def test_json_preservation_put_doc_if_newer_save_conflicted(self):
+        doc1 = self.db.create_doc_from_json(peculiar_json1)
+        # Document is inserted as a conflict
+        doc2 = self.make_document(doc1.doc_id, 'alternate:1',
+                                  peculiar_json3)
+        state, _ = self.db._put_doc_if_newer(
+            doc2, save_conflict=True, replica_uid='r', replica_gen=1,
+            replica_trans_id='foo')
+        self.assertEqual('conflicted', state)
+        # check json in db
+        conflicts = self.db.get_doc_conflicts(doc1.doc_id)
+        self.assertEqual(peculiar_json3, conflicts[0].get_json())
+        self.assertEqual(peculiar_json1, conflicts[1].get_json())
+
+
 class DatabaseIndexTests(tests.DatabaseBaseTests):
 
-    scenarios = tests.LOCAL_DATABASES_SCENARIOS + tests.C_DATABASE_SCENARIOS
+    scenarios = LOCAL_SCENARIOS
 
     def assertParseError(self, definition):
         self.db.create_doc_from_json(nested_doc)
