@@ -1859,6 +1859,9 @@ class PythonBackendTests(tests.DatabaseBaseTests):
         doc = self.db.create_doc(self.simple_doc, doc_id='my_doc_id')
         self.assertTrue(isinstance(doc, TestAlternativeDocument))
 
+    def test_create_doc_with_invalid_content(self):
+        self.assertRaises(errors.InvalidContent, self.db.create_doc, "{}")
+
     def test_get_doc_after_put_with_factory(self):
         doc = self.db.create_doc(self.simple_doc, doc_id='my_doc_id')
         self.db.set_document_factory(TestAlternativeDocument)

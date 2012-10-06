@@ -88,6 +88,8 @@ class CommonBackend(u1db.Database):
         raise NotImplementedError(self._has_conflicts)
 
     def create_doc(self, content, doc_id=None):
+        if not isinstance(content, dict):
+            raise errors.InvalidContent
         json_string = json.dumps(content)
         if doc_id is None:
             doc_id = self._allocate_doc_id()
