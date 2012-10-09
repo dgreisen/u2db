@@ -1086,6 +1086,9 @@ u1db__format_range_query(int n_fields, const char **start_values,
     if (n_fields < 1) {
         return U1DB_INVALID_PARAMETER;
     }
+    // Had to up the buf_size to prevent segfaults. Probably add_to_buf needs
+    // to be smarter about increasing storage when needed (i.e. do it *before*
+    // writing to the buffer, rather than after.)
     buf_size = 100 + (1 + n_fields) * 100;
     // The first field is treated specially
     cur = (char*)calloc(buf_size, 1);
