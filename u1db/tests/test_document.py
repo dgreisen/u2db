@@ -124,6 +124,14 @@ class TestPyDocument(tests.TestCase):
         doc_b.content['key'] = 'value'
         self.assertFalse(doc_a.same_content_as(doc_b))
 
+    def test_same_content_as_tombstone(self):
+        doc_a = self.make_document('a', 'b', '{"foo": "bar"}')
+        doc_b = self.make_document('d', 'e', '{"baz": "qux"}')
+        doc_a.make_tombstone()
+        doc_b.make_tombstone()
+        self.assertTrue(doc_a.same_content_as(doc_b))
+        self.assertTrue(doc_b.same_content_as(doc_a))
+
     def test_same_content_as_json_order(self):
         doc_a = self.make_document(
             'a', 'b', '{"key1": "val1", "key2": "val2"}')
