@@ -80,6 +80,7 @@ typedef int (*u1db_trans_info_callback)(void *context, const char *doc_id,
 #define U1DB_USER_QUOTA_EXCEEDED -24
 #define U1DB_NO_TERM -25
 #define U1DB_UNKNOWN_AUTH_METHOD -26
+#define U1DB_INVALID_REPLICA_UID -27
 #define U1DB_INTERNAL_ERROR -999
 
 // Used by put_doc_if_newer

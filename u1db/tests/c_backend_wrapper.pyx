@@ -152,6 +152,7 @@ cdef extern from "u1db/u1db.h":
     int U1DB_INVALID_GENERATION
     int U1DB_INVALID_TRANSACTION_ID
     int U1DB_INVALID_TRANSFORMATION_FUNCTION
+    int U1DB_INVALID_REPLICA_UID
     int U1DB_UNKNOWN_OPERATION
     int U1DB_INTERNAL_ERROR
     int U1DB_TARGET_UNAVAILABLE
@@ -618,6 +619,8 @@ cdef handle_status(context, int status):
         raise errors.IndexDoesNotExist
     if status == U1DB_INVALID_GENERATION:
         raise errors.InvalidGeneration
+    if status == U1DB_INVALID_REPLICA_UID:
+        raise errors.InvalidReplicaUID
     if status == U1DB_INVALID_TRANSACTION_ID:
         raise errors.InvalidTransactionId
     if status == U1DB_TARGET_UNAVAILABLE:

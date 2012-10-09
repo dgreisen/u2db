@@ -531,7 +531,7 @@ class DatabaseSyncTests(tests.DatabaseBaseTests,
 
     def create_database_for_role(self, replica_uid, sync_role):
         # hook point for reuse
-        return  super(DatabaseSyncTests, self).create_database(replica_uid)
+        return super(DatabaseSyncTests, self).create_database(replica_uid)
 
     def copy_database(self, db, sync_role=None):
         # DO NOT COPY OR REUSE THIS CODE OUTSIDE TESTS: COPYING U1DB DATABASES
@@ -1006,7 +1006,7 @@ class DatabaseSyncTests(tests.DatabaseBaseTests,
     def test_sync_propagates_deletes_2(self):
         self.db1 = self.create_database('test1', 'source')
         self.db2 = self.create_database('test2', 'target')
-        doc1 = self.db1.create_doc_from_json('{"a": "1"}', doc_id='the-doc')
+        self.db1.create_doc_from_json('{"a": "1"}', doc_id='the-doc')
         self.sync(self.db1, self.db2)
         doc1_2 = self.db2.get_doc('the-doc')
         self.db2.delete_doc(doc1_2)
@@ -1091,6 +1091,13 @@ class DatabaseSyncTests(tests.DatabaseBaseTests,
             self.fail("Tracehook triggered for %s" % (state,))
 
         self.sync(self.db1, self.db2, trace_hook_shallow=put_hook)
+
+    def test_sync_detects_identical_replica_uid(self):
+        self.db1 = self.create_database('test1', 'source')
+        self.db2 = self.create_database('test1', 'target')
+        self.db1.create_doc_from_json(tests.simple_doc, doc_id='doc1')
+        self.assertRaises(
+            errors.InvalidReplicaUID, self.sync, self.db1, self.db2)
 
     def test_sync_detects_rollback_in_source(self):
         self.db1 = self.create_database('test1', 'source')

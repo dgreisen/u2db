@@ -34,6 +34,7 @@ wire_description_to_status = dict([
     (errors.DocumentAlreadyDeleted.wire_description, 404),
     (errors.RevisionConflict.wire_description, 409),
     (errors.InvalidGeneration.wire_description, 409),
+    (errors.InvalidReplicaUID.wire_description, 409),
     (errors.InvalidTransactionId.wire_description, 409),
     (errors.Unavailable.wire_description, 503),
 # without matching exception
