@@ -388,6 +388,14 @@ int u1db__allocate_document(const char *doc_id, const char *revision,
                             u1db_document **result);
 
 /**
+ * Process a SQLITE row into a document and call the callback.
+ */
+int u1db__process_doc(u1database *db, sqlite3_stmt *statement,
+                      const char *doc_id, int check_for_conflicts,
+                      int include_deleted, void *context,
+                      u1db_doc_callback cb);
+
+/**
  * Generate a unique id.
  *
  * @param uuid A buffer to put the id, must be 32 bytes long.

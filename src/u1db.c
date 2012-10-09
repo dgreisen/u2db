@@ -502,14 +502,46 @@ lookup_conflict(u1database *db, const char *doc_id, int *has_conflict)
     if (status == SQLITE_ROW) {
         // fprintf(stderr, "\nFound conflict for %s\n", doc_id);
         *has_conflict = 1;
-        status = SQLITE_OK;
+        status = U1DB_OK;
     } else if (status == SQLITE_DONE) {
         // fprintf(stderr, "\nNo conflict for %s\n", doc_id);
-        status = SQLITE_OK;
+        status = U1DB_OK;
         *has_conflict = 0;
     }
 finish:
     sqlite3_finalize(statement);
+    return status;
+}
+
+
+int
+u1db__process_doc(u1database *db, sqlite3_stmt *statement, const char *doc_id,
+                  int check_for_conflicts, int include_deleted, void *context,
+                  u1db_doc_callback cb)
+{
+    int status = U1DB_OK;
+    const char *revision;
+    const char *content;
+    u1db_document *doc;
+    if (doc_id == NULL) {
+        doc_id = (char *)sqlite3_column_text(statement, 0);
+        revision = (char *)sqlite3_column_text(statement, 1);
+        content = (char *)sqlite3_column_text(statement, 2);
+    } else {
+        revision = (char *)sqlite3_column_text(statement, 0);
+        content = (char *)sqlite3_column_text(statement, 1);
+    }
+    if (content != NULL || include_deleted) {
+        status = u1db__allocate_document(
+            doc_id, revision, content, 0, &doc);
+        if (status != U1DB_OK)
+            goto finish;
+        if (check_for_conflicts) {
+            status = lookup_conflict(db, doc_id, &(doc->has_conflicts));
+        }
+        cb(context, doc);
+    }
+finish:
     return status;
 }
 
@@ -588,7 +620,7 @@ u1db_put_doc(u1database *db, u1db_document *doc)
         return status;
     }
     status = lookup_conflict(db, doc->doc_id, &conflicted);
-    if (status != SQLITE_OK) { goto finish; }
+    if (status != U1DB_OK) { goto finish; }
     if (conflicted) {
         status = U1DB_CONFLICTED;
         goto finish;
@@ -689,8 +721,6 @@ u1db_get_doc_conflicts(u1database *db, const char *doc_id, void *context,
 {
     int status = U1DB_OK;
     sqlite3_stmt *statement;
-    u1db_document *cur_doc;
-    const char *doc_rev, *content;
 
     if (db == NULL || doc_id == NULL || cb == NULL) {
         return U1DB_INVALID_PARAMETER;
@@ -711,27 +741,14 @@ u1db_get_doc_conflicts(u1database *db, const char *doc_id, void *context,
         }
     }
     while (status == SQLITE_ROW) {
-        doc_rev = (const char*)sqlite3_column_text(statement, 0);
-        if (sqlite3_column_type(statement, 1) == SQLITE_NULL) {
-            content = NULL;
-        } else {
-            content = (const char*)sqlite3_column_text(statement, 1);
-        }
-        status = u1db__allocate_document(
-            doc_id, doc_rev, content, 0, &cur_doc);
-        if (status != U1DB_OK)
+        status = u1db__process_doc(db, statement, doc_id, 0, 1, context, cb);
+        if (status != U1DB_OK) {
             goto finish;
-        if (cur_doc == NULL) {
-            // fprintf(stderr, "Failed to allocate_document\n");
-            status = U1DB_NOMEM;
-        } else {
-            // fprintf(stderr, "Invoking cb for %s, %s\n", doc_id, doc_rev);
-            cb(context, cur_doc);
-            status = sqlite3_step(statement);
         }
+        status = sqlite3_step(statement);
     }
     if (status == SQLITE_DONE) {
-        status = SQLITE_OK;
+        status = U1DB_OK;
     }
 finish:
     sqlite3_finalize(statement);
@@ -1169,20 +1186,11 @@ u1db_get_docs(u1database *db, int n_doc_ids, const char **doc_ids,
         status = sqlite3_step(statement);
         if (status == SQLITE_ROW) {
             // We have a document
-            const char *revision;
-            const char *content;
-            u1db_document *doc;
-            revision = (char *)sqlite3_column_text(statement, 0);
-            content = (char *)sqlite3_column_text(statement, 1);
-            if (content != NULL || include_deleted) {
-                status = u1db__allocate_document(
-                    doc_ids[i], revision, content, 0, &doc);
-                if (status != U1DB_OK)
-                    goto finish;
-                if (check_for_conflicts) {
-                    status = lookup_conflict(db, doc_ids[i], &(doc->has_conflicts));
-                }
-                cb(context, doc);
+            status = u1db__process_doc(
+                db, statement, doc_ids[i], check_for_conflicts,
+                include_deleted, context, cb);
+            if (status != U1DB_OK) {
+                goto finish;
             }
         } else if (status == SQLITE_DONE) {
             // This document doesn't exist
@@ -1225,20 +1233,11 @@ u1db_get_all_docs(u1database *db, int include_deleted, int *generation,
     if (status != SQLITE_OK) { goto finish; }
     status = sqlite3_step(statement);
     while (status == SQLITE_ROW) {
-        const char *doc_id;
-        const char *revision;
-        const char *content;
-        u1db_document *doc;
-        doc_id = (char *)sqlite3_column_text(statement, 0);
-        revision = (char *)sqlite3_column_text(statement, 1);
-        content = (char *)sqlite3_column_text(statement, 2);
         conflicts = sqlite3_column_int(statement, 3);
-        if (content != NULL || include_deleted) {
-            status = u1db__allocate_document(
-                doc_id, revision, content, conflicts > 0, &doc);
-            if (status != U1DB_OK)
-                goto finish;
-            cb(context, doc);
+        status = u1db__process_doc(
+            db, statement, NULL, conflicts > 0, include_deleted, context, cb);
+        if (status != U1DB_OK) {
+            goto finish;
         }
         status = sqlite3_step(statement);
     }
@@ -1310,7 +1309,7 @@ u1db_delete_doc(u1database *db, u1db_document *doc)
         goto finish;
     }
     status = lookup_conflict(db, doc->doc_id, &conflicted);
-    if (status != SQLITE_OK) { goto finish; }
+    if (status != U1DB_OK) { goto finish; }
     if (doc->has_conflicts) {
         status = U1DB_CONFLICTED;
         goto finish;
