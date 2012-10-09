@@ -633,6 +633,10 @@ u1db__sync_db_to_target(u1database *db, u1db_sync_target *target,
         }
         request_ensure = 1;
     } else if (status != U1DB_OK) { goto finish; }
+    if (target_uid != NULL && strcmp(local_uid, target_uid) == 0) {
+        status = U1DB_INVALID_REPLICA_UID;
+        goto finish;
+    }
     status = u1db_validate_gen_and_trans_id(
         db, local_gen_known_by_target, local_trans_id_known_by_target);
     if (status != U1DB_OK) { goto finish; }

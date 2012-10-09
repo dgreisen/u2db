@@ -106,10 +106,14 @@ class Synchronizer(object):
             self.target_replica_uid = None
             target_gen, target_trans_id = 0, ''
             target_my_gen, target_my_trans_id = 0, ''
+
             def ensure_callback(replica_uid):
                 self.target_replica_uid = replica_uid
+
         else:
             ensure_callback = None
+        if self.target_replica_uid == self.source._replica_uid:
+            raise errors.InvalidReplicaUID
         # validate the generation and transaction id the target knows about us
         self.source.validate_gen_and_trans_id(
             target_my_gen, target_my_trans_id)
