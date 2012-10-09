@@ -124,7 +124,7 @@ class TestPyDocument(tests.TestCase):
         doc_b.content['key'] = 'value'
         self.assertFalse(doc_a.same_content_as(doc_b))
 
-    def test_same_content_as(self):
+    def test_same_content_as_tombstone(self):
         doc_a = self.make_document('a', 'b', '{"foo": "bar"}')
         doc_b = self.make_document('d', 'e', '{"baz": "qux"}')
         doc_a.make_tombstone()
