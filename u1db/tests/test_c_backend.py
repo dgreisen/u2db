@@ -239,20 +239,23 @@ class TestCDatabase(BackendTests):
 
     def test__format_query(self):
         self.assertFormatQueryEquals(
-            "SELECT d0.doc_id FROM document_fields d0"
+            "SELECT doc.doc_id, doc.doc_rev, doc.content FROM document_fields"
+            " d0 INNER JOIN document doc ON doc.doc_id = d0.doc_id"
             " WHERE d0.field_name = ? AND d0.value = ? ORDER BY d0.value",
             [0], ["1"])
         self.assertFormatQueryEquals(
-            "SELECT d0.doc_id"
-            " FROM document_fields d0, document_fields d1"
+            "SELECT doc.doc_id, doc.doc_rev, doc.content FROM document_fields"
+            " d0, document_fields d1"
+            " INNER JOIN document doc ON doc.doc_id = d0.doc_id"
             " WHERE d0.field_name = ? AND d0.value = ?"
             " AND d0.doc_id = d1.doc_id"
             " AND d1.field_name = ? AND d1.value = ?"
             " ORDER BY d0.value, d1.value",
             [0, 0], ["1", "2"])
         self.assertFormatQueryEquals(
-            "SELECT d0.doc_id"
+            "SELECT doc.doc_id, doc.doc_rev, doc.content"
             " FROM document_fields d0, document_fields d1, document_fields d2"
+            " INNER JOIN document doc ON doc.doc_id = d0.doc_id"
             " WHERE d0.field_name = ? AND d0.value = ?"
             " AND d0.doc_id = d1.doc_id"
             " AND d1.field_name = ? AND d1.value = ?"
@@ -263,12 +266,15 @@ class TestCDatabase(BackendTests):
 
     def test__format_query_wildcard(self):
         self.assertFormatQueryEquals(
-            "SELECT d0.doc_id FROM document_fields d0"
+            "SELECT doc.doc_id, doc.doc_rev, doc.content"
+            " FROM document_fields d0"
+            " INNER JOIN document doc ON doc.doc_id = d0.doc_id"
             " WHERE d0.field_name = ? AND d0.value NOT NULL ORDER BY d0.value",
             [1], ["*"])
         self.assertFormatQueryEquals(
-            "SELECT d0.doc_id"
+            "SELECT doc.doc_id, doc.doc_rev, doc.content"
             " FROM document_fields d0, document_fields d1"
+            " INNER JOIN document doc ON doc.doc_id = d0.doc_id"
             " WHERE d0.field_name = ? AND d0.value = ?"
             " AND d0.doc_id = d1.doc_id"
             " AND d1.field_name = ? AND d1.value NOT NULL"
@@ -277,7 +283,9 @@ class TestCDatabase(BackendTests):
 
     def test__format_query_glob(self):
         self.assertFormatQueryEquals(
-            "SELECT d0.doc_id FROM document_fields d0"
+            "SELECT doc.doc_id, doc.doc_rev, doc.content"
+            " FROM document_fields d0"
+            " INNER JOIN document doc ON doc.doc_id = d0.doc_id"
             " WHERE d0.field_name = ? AND d0.value GLOB ? ORDER BY d0.value",
             [2], ["1*"])
 

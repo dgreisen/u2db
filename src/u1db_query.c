@@ -702,7 +702,6 @@ u1db_get_from_index_list(u1database *db, u1query *query, void *context,
 {
     int status = U1DB_OK;
     sqlite3_stmt *statement = NULL;
-    char *doc_id = NULL;
     char *query_str = NULL;
     int i, bind_arg;
     int wildcard[20] = {0};
@@ -744,11 +743,7 @@ u1db_get_from_index_list(u1database *db, u1query *query, void *context,
     }
     status = sqlite3_step(statement);
     while (status == SQLITE_ROW) {
-        doc_id = (char*)sqlite3_column_text(statement, 0);
-        // We use u1db_get_docs so we can pass check_for_conflicts=0, which is
-        // currently expected by the test suite.
-        status = u1db_get_docs(
-            db, 1, (const char**)&doc_id, 1, 0, context, cb);
+        status = u1db__process_doc(db, statement, NULL, 1, 0, context, cb);
         if (status != U1DB_OK) { goto finish; }
         status = sqlite3_step(statement);
     }
@@ -772,7 +767,6 @@ u1db_get_range_from_index(u1database *db, u1query *query,
     int i, bind_arg, status = U1DB_OK;
     char *query_str = NULL;
     sqlite3_stmt *statement = NULL;
-    char *doc_id = NULL;
     char *stripped = NULL;
     int start_wildcard[20] = {0};
     int end_wildcard[20] = {0};
@@ -845,11 +839,7 @@ u1db_get_range_from_index(u1database *db, u1query *query,
     }
     status = sqlite3_step(statement);
     while (status == SQLITE_ROW) {
-        doc_id = (char*)sqlite3_column_text(statement, 0);
-        // We use u1db_get_docs so we can pass check_for_conflicts=0, which is
-        // currently expected by the test suite.
-        status = u1db_get_docs(
-            db, 1, (const char**)&doc_id, 1, 0, context, cb);
+        status = u1db__process_doc(db, statement, NULL, 1, 0, context, cb);
         if (status != U1DB_OK) { goto finish; }
         status = sqlite3_step(statement);
     }
@@ -1021,10 +1011,14 @@ u1db__format_query(int n_fields, const char **values, char **buf,
         return U1DB_NOMEM;
     }
     *buf = cur;
-    add_to_buf(&cur, &buf_size, "SELECT d0.doc_id FROM document_fields d0");
+    add_to_buf(
+        &cur, &buf_size,
+        "SELECT doc.doc_id, doc.doc_rev, doc.content FROM document_fields d0");
     for (i = 1; i < n_fields; ++i) {
         add_to_buf(&cur, &buf_size, ", document_fields d%d", i);
     }
+    add_to_buf(
+        &cur, &buf_size, " INNER JOIN document doc ON doc.doc_id = d0.doc_id");
     add_to_buf(&cur, &buf_size, " WHERE d0.field_name = ?");
     for (i = 0; i < n_fields; ++i) {
         if (i != 0) {
@@ -1092,18 +1086,24 @@ u1db__format_range_query(int n_fields, const char **start_values,
     if (n_fields < 1) {
         return U1DB_INVALID_PARAMETER;
     }
-    // 81 for 1 doc, 166 for 2, 251 for 3
-    buf_size = (1 + n_fields) * 100;
+    // Had to up the buf_size to prevent segfaults. Probably add_to_buf needs
+    // to be smarter about increasing storage when needed (i.e. do it *before*
+    // writing to the buffer, rather than after.)
+    buf_size = 100 + (1 + n_fields) * 100;
     // The first field is treated specially
     cur = (char*)calloc(buf_size, 1);
     if (cur == NULL) {
         return U1DB_NOMEM;
     }
     *buf = cur;
-    add_to_buf(&cur, &buf_size, "SELECT d0.doc_id FROM document_fields d0");
+    add_to_buf(
+        &cur, &buf_size,
+        "SELECT doc.doc_id, doc.doc_rev, doc.content FROM document_fields d0");
     for (i = 1; i < n_fields; ++i) {
         add_to_buf(&cur, &buf_size, ", document_fields d%d", i);
     }
+    add_to_buf(
+        &cur, &buf_size, " INNER JOIN document doc ON doc.doc_id = d0.doc_id");
     add_to_buf(&cur, &buf_size, " WHERE d0.field_name = ?");
     for (i = 0; i < n_fields; ++i) {
         if (i != 0) {
