@@ -50,6 +50,10 @@ initialize(u1database *db)
     int i, status, final_status;
     char default_replica_uid[33] = {'\0'};
 
+    status = sqlite3_exec(db->sql_handle, "BEGIN EXCLUSIVE", NULL, NULL, NULL);
+    if (status != SQLITE_OK) {
+        return status;
+    }
     for(i = 0; i < u1db__schema_len; i++) {
         status = sqlite3_prepare_v2(db->sql_handle,
             u1db__schema[i], -1, &statement, NULL);
@@ -72,6 +76,10 @@ initialize(u1database *db)
     u1db__generate_hex_uuid(default_replica_uid);
     u1db_set_replica_uid(db, default_replica_uid);
     u1db_set_document_size_limit(db, 0);
+    status = sqlite3_exec(db->sql_handle, "COMMIT", NULL, NULL, NULL);
+    if (status != SQLITE_OK) {
+        return status;
+    }
     return U1DB_OK;
 }
 
