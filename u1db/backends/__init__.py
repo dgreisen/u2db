@@ -91,11 +91,7 @@ class CommonBackend(u1db.Database):
         if not isinstance(content, dict):
             raise errors.InvalidContent
         json_string = json.dumps(content)
-        if doc_id is None:
-            doc_id = self._allocate_doc_id()
-        doc = self._factory(doc_id, None, json_string)
-        self.put_doc(doc)
-        return doc
+        return self.create_doc_from_json(json_string, doc_id)
 
     def create_doc_from_json(self, json, doc_id=None):
         if doc_id is None:
