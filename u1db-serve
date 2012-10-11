@@ -37,9 +37,16 @@ def main(args):
         help='Bind to this port when serving.')
     p.add_argument('--working-dir', default='.', metavar='WORKING_DIR',
                    help='Directory where the databases live.')
+    p.add_argument('--accept-cors-connections', default=None,
+                   metavar="ACCEPTED_ORIGINS",
+                   help="Comma separated accepted origins or *")
 
     args = p.parse_args(args)
-    server = serve.make_server(args.host, args.port, args.working_dir)
+    accept_cors_connections = args.accept_cors_connections
+    if accept_cors_connections is not None:
+        accept_cors_connections = accept_cors_connections.split(',')
+    server = serve.make_server(args.host, args.port, args.working_dir,
+                               accept_cors_connections)
     sys.stdout.write('listening on: %s:%s\n' % server.server_address)
     sys.stdout.flush()
     server.serve_forever()
