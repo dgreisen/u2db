@@ -209,11 +209,14 @@ class GlobalResource(object):
     url_pattern = "/"
 
     def __init__(self, state, responder):
+        self.state = state
         self.responder = responder
 
     @http_method()
     def get(self):
-        self.responder.send_response_json(version=_u1db_version)
+        info = self.state.global_info()
+        info['version'] = _u1db_version
+        self.responder.send_response_json(**info)
 
 
 @url_to_resource.register
