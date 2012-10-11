@@ -484,6 +484,23 @@ class LocalDatabaseTests(tests.DatabaseBaseTests):
         # strictly newer locally
         self.assertTrue(rev not in doc2.rev)
 
+    def test_put_doc_if_newer_autoresolve_deleted(self):
+        doc1 = self.db.create_doc_from_json('{}')
+        self.db.delete_doc(doc1)
+        rev = doc1.rev
+        doc = self.make_document(doc1.doc_id, "whatever:1", None)
+        state, _ = self.db._put_doc_if_newer(
+            doc, save_conflict=False, replica_uid='r', replica_gen=1,
+            replica_trans_id='foo')
+        self.assertEqual('superseded', state)
+        doc2 = self.db.get_doc(doc1.doc_id, include_deleted=True)
+        self.assertIsNone(doc2.get_json())
+        v2 = vectorclock.VectorClockRev(doc2.rev)
+        self.assertTrue(v2.is_newer(vectorclock.VectorClockRev("whatever:1")))
+        self.assertTrue(v2.is_newer(vectorclock.VectorClockRev(rev)))
+        # strictly newer locally
+        self.assertTrue(rev not in doc2.rev)
+
     def test_put_doc_if_newer_already_converged(self):
         orig_doc = '{"new": "doc"}'
         doc1 = self.db.create_doc_from_json(orig_doc)
@@ -1089,7 +1106,8 @@ class LocalDatabaseWithConflictsTests(tests.DatabaseBaseTests):
         self.assertRaises(errors.ConflictedDoc, self.db.delete_doc, doc2)
 
 
-class LocalDatabaseWithConflictsJSONPreservationTests(tests.DatabaseBaseTests):
+class LocalDatabaseWithConflictsOptionalJSONPreservationTests(
+    tests.DatabaseBaseTests):
     # test supporting/functionality around storing conflicts
 
     scenarios = LOCAL_SCENARIOS
