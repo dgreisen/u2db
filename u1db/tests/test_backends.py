@@ -1089,7 +1089,8 @@ class LocalDatabaseWithConflictsTests(tests.DatabaseBaseTests):
         self.assertRaises(errors.ConflictedDoc, self.db.delete_doc, doc2)
 
 
-class LocalDatabaseWithConflictsJSONPreservationTests(tests.DatabaseBaseTests):
+class LocalDatabaseWithConflictsOptionalJSONPreservationTests(
+    tests.DatabaseBaseTests):
     # test supporting/functionality around storing conflicts
 
     scenarios = LOCAL_SCENARIOS
