@@ -417,7 +417,7 @@ class DocumentBase(object):
         if json_string is not None:
             try:
                 value = json.loads(json_string)
-            except json.JSONDecodeError:
+            except ValueError:
                 raise InvalidJSON
             if not isinstance(value, dict):
                 raise InvalidJSON
@@ -490,7 +490,7 @@ class DocumentBase(object):
         if json_string is not None:
             try:
                 value = json.loads(json_string)
-            except json.JSONDecodeError:
+            except ValueError:
                 raise InvalidJSON
             if not isinstance(value, dict):
                 raise InvalidJSON
