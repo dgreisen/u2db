@@ -276,6 +276,29 @@ class AllDatabaseTests(tests.DatabaseBaseTests, tests.TestCaseWithServer):
     def test_get_docs_empty_list(self):
         self.assertEqual([], list(self.db.get_docs([])))
 
+    def test_get_all_docs_empty(self):
+        self.assertEqual([], list(self.db.get_all_docs()[1]))
+
+    def test_get_all_docs(self):
+        doc1 = self.db.create_doc_from_json(simple_doc)
+        doc2 = self.db.create_doc_from_json(nested_doc)
+        self.assertEqual(
+            sorted([doc1, doc2]), sorted(list(self.db.get_all_docs()[1])))
+
+    def test_get_all_docs_exclude_deleted(self):
+        doc1 = self.db.create_doc_from_json(simple_doc)
+        doc2 = self.db.create_doc_from_json(nested_doc)
+        self.db.delete_doc(doc2)
+        self.assertEqual([doc1], list(self.db.get_all_docs()[1]))
+
+    def test_get_all_docs_include_deleted(self):
+        doc1 = self.db.create_doc_from_json(simple_doc)
+        doc2 = self.db.create_doc_from_json(nested_doc)
+        self.db.delete_doc(doc2)
+        self.assertEqual(
+            sorted([doc1, doc2]),
+            sorted(list(self.db.get_all_docs(include_deleted=True)[1])))
+
     def test_handles_nested_content(self):
         doc = self.db.create_doc_from_json(nested_doc)
         self.assertGetDoc(self.db, doc.doc_id, doc.rev, nested_doc, False)
@@ -407,29 +430,6 @@ class LocalDatabaseTests(tests.DatabaseBaseTests):
     def test_put_doc_refuses_slashes_picky(self):
         doc = self.make_document('/a', None, simple_doc)
         self.assertRaises(errors.InvalidDocId, self.db.put_doc, doc)
-
-    def test_get_all_docs_empty(self):
-        self.assertEqual([], list(self.db.get_all_docs()[1]))
-
-    def test_get_all_docs(self):
-        doc1 = self.db.create_doc_from_json(simple_doc)
-        doc2 = self.db.create_doc_from_json(nested_doc)
-        self.assertEqual(
-            sorted([doc1, doc2]), sorted(list(self.db.get_all_docs()[1])))
-
-    def test_get_all_docs_exclude_deleted(self):
-        doc1 = self.db.create_doc_from_json(simple_doc)
-        doc2 = self.db.create_doc_from_json(nested_doc)
-        self.db.delete_doc(doc2)
-        self.assertEqual([doc1], list(self.db.get_all_docs()[1]))
-
-    def test_get_all_docs_include_deleted(self):
-        doc1 = self.db.create_doc_from_json(simple_doc)
-        doc2 = self.db.create_doc_from_json(nested_doc)
-        self.db.delete_doc(doc2)
-        self.assertEqual(
-            sorted([doc1, doc2]),
-            sorted(list(self.db.get_all_docs(include_deleted=True)[1])))
 
     def test_get_all_docs_generation(self):
         self.db.create_doc_from_json(simple_doc)

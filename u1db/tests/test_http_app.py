@@ -780,6 +780,21 @@ class TestHTTPApp(tests.TestCase):
              "has_conflicts": False}]
         self.assertEqual(expected, json.loads(resp.body))
 
+    def test_get_all_docs(self):
+        doc1 = self.db0.create_doc_from_json('{"x": 1}', doc_id='doc1')
+        doc2 = self.db0.create_doc_from_json('{"x": 1}', doc_id='doc2')
+        resp = self.app.get('/db0/all-docs')
+        self.assertEqual(200, resp.status)
+        self.assertEqual(
+            'application/json', resp.header('content-type'))
+        def doc_to_dic(doc):
+            return dict(doc_id=doc.doc_id, doc_rev=doc.rev,
+                        content=doc.get_json(),
+                        has_conflicts=doc.has_conflicts)
+        expected = sorted([doc_to_dic(doc1), doc_to_dic(doc2)])
+        self.assertEqual(expected, sorted(json.loads(resp.body)))
+        self.assertEqual(2, int(resp.header('x-u1db-generation')))
+
     def test_get_sync_info(self):
         self.db0._set_replica_gen_and_trans_id('other-id', 1, 'T-transid')
         resp = self.app.get('/db0/sync-from/other-id')

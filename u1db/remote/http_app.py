@@ -273,6 +273,34 @@ class DocsResource(object):
 
 
 @url_to_resource.register
+class AllDocsResource(object):
+    """All Documents resource."""
+
+    url_pattern = "/{dbname}/all-docs"
+
+    def __init__(self, dbname, state, responder):
+        self.responder = responder
+        self.db = state.open_database(dbname)
+
+    @http_method(include_deleted=parse_bool)
+    def get(self, include_deleted=False):
+        gen, docs = self.db.get_all_docs(include_deleted=include_deleted)
+        self.responder.content_type = 'application/json'
+        # returning a x-u1db-generation header is optional
+        # HTTPDatabase will fallback to return -1 if it's missing
+        self.responder.start_response(200,
+                                      headers={'x-u1db-generation': str(gen)})
+        self.responder.start_stream(),
+        for doc in docs:
+            entry = dict(
+                doc_id=doc.doc_id, doc_rev=doc.rev, content=doc.get_json(),
+                has_conflicts=doc.has_conflicts)
+            self.responder.stream_entry(entry)
+        self.responder.end_stream()
+        self.responder.finish_response()
+
+
+@url_to_resource.register
 class DocResource(object):
     """Document resource."""
 
