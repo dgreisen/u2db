@@ -40,7 +40,7 @@ def config():
         "package_data": {'': ["*.sql"]},
         "scripts": ['u1db-client', 'u1db-serve'],
         "ext_modules": ext,
-        "install_requires": ["dirspec", "paste", "routes"],
+        "install_requires": ["dirspec", "paste", "routes", "oauth"],
         # informational
         "tests_require": ["testtools", "testscenarios", "Cython",
                           "pyOpenSSL"],
