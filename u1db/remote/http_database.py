@@ -105,20 +105,28 @@ class HTTPDatabase(http_client.HTTPClientBase, Database):
         doc.has_conflicts = has_conflicts
         return doc
 
-    def get_docs(self, doc_ids, check_for_conflicts=True,
-                 include_deleted=False):
-        if not doc_ids:
-            return
-        doc_ids = ','.join(doc_ids)
-        res, headers = self._request(
-            'GET', ['docs'], {
-                "doc_ids": doc_ids, "include_deleted": include_deleted,
-                "check_for_conflicts": check_for_conflicts})
+    def _build_docs(self, res):
         for doc_dict in json.loads(res):
             doc = self._factory(
                 doc_dict['doc_id'], doc_dict['doc_rev'], doc_dict['content'])
             doc.has_conflicts = doc_dict['has_conflicts']
             yield doc
+
+    def get_docs(self, doc_ids, check_for_conflicts=True,
+                 include_deleted=False):
+        if not doc_ids:
+            return []
+        doc_ids = ','.join(doc_ids)
+        res, headers = self._request(
+            'GET', ['docs'], {
+                "doc_ids": doc_ids, "include_deleted": include_deleted,
+                "check_for_conflicts": check_for_conflicts})
+        return self._build_docs(res)
+
+    def get_all_docs(self, include_deleted=False):
+        res, headers = self._request(
+            'GET', ['all-docs'], {"include_deleted": include_deleted})
+        return -1, list(self._build_docs(res))
 
     def _allocate_doc_id(self):
         return 'D-%s' % (uuid.uuid4().hex,)
