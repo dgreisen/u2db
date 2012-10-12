@@ -793,6 +793,7 @@ class TestHTTPApp(tests.TestCase):
                         has_conflicts=doc.has_conflicts)
         expected = sorted([doc_to_dic(doc1), doc_to_dic(doc2)])
         self.assertEqual(expected, sorted(json.loads(resp.body)))
+        self.assertEqual(2, int(resp.header('x-u1db-generation')))
 
     def test_get_sync_info(self):
         self.db0._set_replica_gen_and_trans_id('other-id', 1, 'T-transid')

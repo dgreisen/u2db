@@ -126,7 +126,10 @@ class HTTPDatabase(http_client.HTTPClientBase, Database):
     def get_all_docs(self, include_deleted=False):
         res, headers = self._request(
             'GET', ['all-docs'], {"include_deleted": include_deleted})
-        return -1, list(self._build_docs(res))
+        gen = -1
+        if 'x-u1db-generation' in headers:
+            gen = int(headers['x-u1db-generation'])
+        return gen, list(self._build_docs(res))
 
     def _allocate_doc_id(self):
         return 'D-%s' % (uuid.uuid4().hex,)

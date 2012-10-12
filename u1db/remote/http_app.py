@@ -284,9 +284,12 @@ class AllDocsResource(object):
 
     @http_method(include_deleted=parse_bool)
     def get(self, include_deleted=False):
-        _, docs = self.db.get_all_docs(include_deleted=include_deleted)
+        gen, docs = self.db.get_all_docs(include_deleted=include_deleted)
         self.responder.content_type = 'application/json'
-        self.responder.start_response(200)
+        # returning a x-u1db-generation header is optional
+        # HTTPDatabase will fallback to return -1 if it's missing
+        self.responder.start_response(200,
+                                      headers={'x-u1db-generation': str(gen)})
         self.responder.start_stream(),
         for doc in docs:
             entry = dict(
