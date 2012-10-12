@@ -21,14 +21,18 @@ from paste import httpserver
 from u1db.remote import (
     http_app,
     server_state,
+    cors_middleware
     )
 
 
-def make_server(host, port, working_dir):
+def make_server(host, port, working_dir, accept_cors_connections=None):
     """Make a server on host and port exposing dbs living in working_dir."""
     state = server_state.ServerState()
     state.set_workingdir(working_dir)
     application = http_app.HTTPApp(state)
+    if accept_cors_connections:
+        application = cors_middleware.CORSMiddleware(application,
+                                                     accept_cors_connections)
     server = httpserver.WSGIServer(application, (host, port),
                                    httpserver.WSGIHandler)
     return server
