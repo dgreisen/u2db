@@ -39,7 +39,7 @@ def main(args):
                    help='Directory where the databases live.')
     p.add_argument('--accept-cors-connections', default=None,
                    metavar="ACCEPTED_ORIGINS",
-                   help="Comma separated accepted origins or *")
+                   help='Comma separated accepted origins or "*"')
 
     args = p.parse_args(args)
     accept_cors_connections = args.accept_cors_connections
