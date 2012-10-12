@@ -40,7 +40,7 @@ class TestCORSMiddleware(tests.TestCase):
         self.assertEqual(expect, resp.header('access-control-allow-origin'))
         self.assertEqual("GET, POST, PUT, DELETE, OPTIONS",
                          resp.header('access-control-allow-methods'))
-        self.assertEqual("authorization, content-type",
+        self.assertEqual("authorization, content-type, x-requested-with",
                          resp.header('access-control-allow-headers'))
 
     def test_options(self):

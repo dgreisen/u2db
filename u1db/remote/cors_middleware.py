@@ -26,7 +26,7 @@ class CORSMiddleware(object):
     def _cors_headers(self):
         return [('access-control-allow-origin', self.origins),
                 ('access-control-allow-headers',
-                 'authorization, content-type'),
+                 'authorization, content-type, x-requested-with'),
                 ('access-control-allow-methods',
                  'GET, POST, PUT, DELETE, OPTIONS')]
 
