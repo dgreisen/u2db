@@ -84,6 +84,7 @@ add_custom_target(check-verbose
 
 add_custom_target(html-docs
     COMMAND cd ${CMAKE_SOURCE_DIR}/html-docs; make html
+    DEPENDS cdocs
 )
 
 SET(CPACK_GENERATOR "TGZ")
