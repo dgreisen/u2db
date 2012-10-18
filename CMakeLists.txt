@@ -82,11 +82,6 @@ add_custom_target(check-verbose
     DEPENDS build-inplace-for-tests
 )
 
-add_custom_target(html-docs
-    COMMAND cd html-docs; make html
-    DEPENDS cdocs
-)
-
 SET(CPACK_GENERATOR "TGZ")
 SET(CPACK_DEBIAN_PACKAGE_MAINTAINER "Noone")
 INCLUDE(CPack)
