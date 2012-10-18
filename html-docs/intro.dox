@@ -1,6 +1,8 @@
-/*
-This is the C implementation of the u1db protocol, with a SQLite backend.
-
-If you're new to u1db, the documentation of the reference implementation is
-probably the best place to start, which can be found at _build/html/index.html
+/*! \mainpage U1DB Index
+ *
+ * \section intro_sec Introduction
+ * This is the C implementation of the u1db protocol, with a SQLite backend.
+ * 
+ * If you're new to u1db, the documentation of the reference implementation is
+ * probably the best place to start, which can be found at _build/html/index.html
 */
