@@ -54,6 +54,10 @@ add_custom_target(check
     DEPENDS build-inplace-for-tests doctests
 )
 
+add_custom_target(cdocs
+    COMMAND doxygen html-docs/doxygen.conf
+)
+
 add_custom_target(build-inplace-for-tests
     COMMAND U1DB_TEST=1 python setup.py build_ext -i -f -I ${CMAKE_SOURCE_DIR}/include
     DEPENDS ReplicatePythonSourceTree u1db
@@ -76,6 +80,11 @@ add_custom_target(check-valgrind-leaks
 add_custom_target(check-verbose
     COMMAND U1DB_TEST=1 python -c \"import unittest, sys\; from testtools import run\; run.TestProgram(argv=sys.argv, testRunner=unittest.TextTestRunner(verbosity=2), stdout=sys.stdout)\" discover
     DEPENDS build-inplace-for-tests
+)
+
+dd_custom_target(html-docs
+    COMMAND cd ${CMAKE_SOURCE_DIR}/html-docs \; make html
+    DEPENDS cdocs
 )
 
 SET(CPACK_GENERATOR "TGZ")
