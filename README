@@ -50,15 +50,15 @@ be infered from the output.
 Building the docs
 =================
 
-cd html-docs && make html
+cmake . && make html-docs
 
 after which the reference implementation documentation can be found at::
 
-_build/html/index.html
+html-docs/_build/html/index.html
 
 and the C implementation documentation at::
 
-_doxygen/html/index.html
+html-docs/_doxygen/html/index.html
 
 though a more useful starting point may be::
 
