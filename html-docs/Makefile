@@ -36,7 +36,10 @@ help:
 clean:
 	-rm -rf $(BUILDDIR)/*
 
-html: doctest
+cdocs: 
+	doxygen doxygen.conf
+
+html: doctest cdocs
 	$(SPHINXBUILD) -b html $(ALLSPHINXOPTS) $(BUILDDIR)/html
 	@echo
 	@echo "Build finished. The HTML pages are in $(BUILDDIR)/html."
