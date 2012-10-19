@@ -25,9 +25,8 @@
  * This is the C implementation of the u1db protocol, with a SQLite backend.
  *
  * If you're new to u1db, the documentation of the reference implementation is
- * probably the best place to start, which can be found at
+ * probably the best place to start.
  *
- * _build/html/index.html
 */
 
 #ifndef _U1DB_H_
