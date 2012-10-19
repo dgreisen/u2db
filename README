@@ -50,6 +50,16 @@ be infered from the output.
 Building the docs
 =================
 
-cd html-docs
-make doctest # check that the code examples all still work
-make html # build HTML documentation at _build/html/index.html
+cmake . && make html-docs
+
+after which the reference implementation documentation can be found at::
+
+html-docs/_build/html/index.html
+
+and the C implementation documentation at::
+
+html-docs/_doxygen/html/index.html
+
+though a more useful starting point may be::
+
+_doxygen/html/u1db_8h.html

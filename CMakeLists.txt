@@ -44,7 +44,7 @@ add_custom_target(doctests
     COMMAND cd html-docs && make doctest && cd ..
 )
 
-add_custom_target(check-nodoc
+add_custom_target(check-nodoctests
     COMMAND python -m testtools.run discover
     DEPENDS build-inplace-for-tests
 )
@@ -52,10 +52,6 @@ add_custom_target(check-nodoc
 add_custom_target(check
     COMMAND python -m testtools.run discover
     DEPENDS build-inplace-for-tests doctests
-)
-
-add_custom_target(cdocs
-    COMMAND doxygen html-docs/doxygen.conf
 )
 
 add_custom_target(build-inplace-for-tests
@@ -83,7 +79,7 @@ add_custom_target(check-verbose
 )
 
 add_custom_target(html-docs
-    COMMAND cd ${CMAKE_SOURCE_DIR}/html-docs; make html
+    COMMAND cd ${CMAKE_SOURCE_DIR}/html-docs \; make html
 )
 
 SET(CPACK_GENERATOR "TGZ")
