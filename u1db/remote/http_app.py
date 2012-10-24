@@ -49,7 +49,7 @@ def parse_bool(expression):
 
 
 def parse_list(expression):
-    if expression is None:
+    if not expression:
         return []
     return [t.strip() for t in expression.split(',')]
 
