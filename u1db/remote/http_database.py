@@ -105,24 +105,44 @@ class HTTPDatabase(http_client.HTTPClientBase, Database):
         doc.has_conflicts = has_conflicts
         return doc
 
-    def get_docs(self, doc_ids, check_for_conflicts=True,
-                 include_deleted=False):
-        if not doc_ids:
-            return
-        doc_ids = ','.join(doc_ids)
-        res, headers = self._request(
-            'GET', ['docs'], {
-                "doc_ids": doc_ids, "include_deleted": include_deleted,
-                "check_for_conflicts": check_for_conflicts})
+    def _build_docs(self, res):
         for doc_dict in json.loads(res):
             doc = self._factory(
                 doc_dict['doc_id'], doc_dict['doc_rev'], doc_dict['content'])
             doc.has_conflicts = doc_dict['has_conflicts']
             yield doc
 
+    def get_docs(self, doc_ids, check_for_conflicts=True,
+                 include_deleted=False):
+        if not doc_ids:
+            return []
+        doc_ids = ','.join(doc_ids)
+        res, headers = self._request(
+            'GET', ['docs'], {
+                "doc_ids": doc_ids, "include_deleted": include_deleted,
+                "check_for_conflicts": check_for_conflicts})
+        return self._build_docs(res)
+
+    def get_all_docs(self, include_deleted=False):
+        res, headers = self._request(
+            'GET', ['all-docs'], {"include_deleted": include_deleted})
+        gen = -1
+        if 'x-u1db-generation' in headers:
+            gen = int(headers['x-u1db-generation'])
+        return gen, list(self._build_docs(res))
+
+    def _allocate_doc_id(self):
+        return 'D-%s' % (uuid.uuid4().hex,)
+
+    def create_doc(self, content, doc_id=None):
+        if not isinstance(content, dict):
+            raise errors.InvalidContent
+        json_string = json.dumps(content)
+        return self.create_doc_from_json(json_string, doc_id)
+
     def create_doc_from_json(self, content, doc_id=None):
         if doc_id is None:
-            doc_id = 'D-%s' % (uuid.uuid4().hex,)
+            doc_id = self._allocate_doc_id()
         res, headers = self._request_json('PUT', ['doc', doc_id], {},
                                           content, 'application/json')
         new_doc = self._factory(doc_id, res['rev'], content)

@@ -276,6 +276,29 @@ class AllDatabaseTests(tests.DatabaseBaseTests, tests.TestCaseWithServer):
     def test_get_docs_empty_list(self):
         self.assertEqual([], list(self.db.get_docs([])))
 
+    def test_get_all_docs_empty(self):
+        self.assertEqual([], list(self.db.get_all_docs()[1]))
+
+    def test_get_all_docs(self):
+        doc1 = self.db.create_doc_from_json(simple_doc)
+        doc2 = self.db.create_doc_from_json(nested_doc)
+        self.assertEqual(
+            sorted([doc1, doc2]), sorted(list(self.db.get_all_docs()[1])))
+
+    def test_get_all_docs_exclude_deleted(self):
+        doc1 = self.db.create_doc_from_json(simple_doc)
+        doc2 = self.db.create_doc_from_json(nested_doc)
+        self.db.delete_doc(doc2)
+        self.assertEqual([doc1], list(self.db.get_all_docs()[1]))
+
+    def test_get_all_docs_include_deleted(self):
+        doc1 = self.db.create_doc_from_json(simple_doc)
+        doc2 = self.db.create_doc_from_json(nested_doc)
+        self.db.delete_doc(doc2)
+        self.assertEqual(
+            sorted([doc1, doc2]),
+            sorted(list(self.db.get_all_docs(include_deleted=True)[1])))
+
     def test_handles_nested_content(self):
         doc = self.db.create_doc_from_json(nested_doc)
         self.assertGetDoc(self.db, doc.doc_id, doc.rev, nested_doc, False)
@@ -408,29 +431,6 @@ class LocalDatabaseTests(tests.DatabaseBaseTests):
         doc = self.make_document('/a', None, simple_doc)
         self.assertRaises(errors.InvalidDocId, self.db.put_doc, doc)
 
-    def test_get_all_docs_empty(self):
-        self.assertEqual([], list(self.db.get_all_docs()[1]))
-
-    def test_get_all_docs(self):
-        doc1 = self.db.create_doc_from_json(simple_doc)
-        doc2 = self.db.create_doc_from_json(nested_doc)
-        self.assertEqual(
-            sorted([doc1, doc2]), sorted(list(self.db.get_all_docs()[1])))
-
-    def test_get_all_docs_exclude_deleted(self):
-        doc1 = self.db.create_doc_from_json(simple_doc)
-        doc2 = self.db.create_doc_from_json(nested_doc)
-        self.db.delete_doc(doc2)
-        self.assertEqual([doc1], list(self.db.get_all_docs()[1]))
-
-    def test_get_all_docs_include_deleted(self):
-        doc1 = self.db.create_doc_from_json(simple_doc)
-        doc2 = self.db.create_doc_from_json(nested_doc)
-        self.db.delete_doc(doc2)
-        self.assertEqual(
-            sorted([doc1, doc2]),
-            sorted(list(self.db.get_all_docs(include_deleted=True)[1])))
-
     def test_get_all_docs_generation(self):
         self.db.create_doc_from_json(simple_doc)
         self.db.create_doc_from_json(nested_doc)
@@ -478,6 +478,23 @@ class LocalDatabaseTests(tests.DatabaseBaseTests):
             replica_trans_id='foo')
         self.assertEqual('superseded', state)
         doc2 = self.db.get_doc(doc1.doc_id)
+        v2 = vectorclock.VectorClockRev(doc2.rev)
+        self.assertTrue(v2.is_newer(vectorclock.VectorClockRev("whatever:1")))
+        self.assertTrue(v2.is_newer(vectorclock.VectorClockRev(rev)))
+        # strictly newer locally
+        self.assertTrue(rev not in doc2.rev)
+
+    def test_put_doc_if_newer_autoresolve_deleted(self):
+        doc1 = self.db.create_doc_from_json('{}')
+        self.db.delete_doc(doc1)
+        rev = doc1.rev
+        doc = self.make_document(doc1.doc_id, "whatever:1", None)
+        state, _ = self.db._put_doc_if_newer(
+            doc, save_conflict=False, replica_uid='r', replica_gen=1,
+            replica_trans_id='foo')
+        self.assertEqual('superseded', state)
+        doc2 = self.db.get_doc(doc1.doc_id, include_deleted=True)
+        self.assertIsNone(doc2.get_json())
         v2 = vectorclock.VectorClockRev(doc2.rev)
         self.assertTrue(v2.is_newer(vectorclock.VectorClockRev("whatever:1")))
         self.assertTrue(v2.is_newer(vectorclock.VectorClockRev(rev)))
@@ -1089,7 +1106,8 @@ class LocalDatabaseWithConflictsTests(tests.DatabaseBaseTests):
         self.assertRaises(errors.ConflictedDoc, self.db.delete_doc, doc2)
 
 
-class LocalDatabaseWithConflictsJSONPreservationTests(tests.DatabaseBaseTests):
+class LocalDatabaseWithConflictsOptionalJSONPreservationTests(
+    tests.DatabaseBaseTests):
     # test supporting/functionality around storing conflicts
 
     scenarios = LOCAL_SCENARIOS

@@ -286,7 +286,7 @@ class TestHTTPInvocationByMethodWithBody(tests.TestCase):
                    'CONTENT_TYPE': 'application/json ; charset="utf-8"'}
         invoke = http_app.HTTPInvocationByMethodWithBody(resource, environ,
                                                          parameters)
-        res = invoke()
+        invoke()
         self.assertEqual('{"body": true}', resource.content)
 
     def test_put_sync_stream(self):
@@ -721,6 +721,13 @@ class TestHTTPApp(tests.TestCase):
              "has_conflicts": False}]
         self.assertEqual(expected, json.loads(resp.body))
 
+    def test_get_docs_empty_docids(self):
+        resp = self.app.get('/db0/docs?doc_ids=', expect_errors=True)
+        self.assertEqual(400, resp.status)
+        self.assertEqual('application/json', resp.header('content-type'))
+        self.assertEqual(
+            {"error": "missing document ids"}, json.loads(resp.body))
+
     def test_get_docs_missing_doc_ids(self):
         resp = self.app.get('/db0/docs', expect_errors=True)
         self.assertEqual(400, resp.status)
@@ -779,6 +786,23 @@ class TestHTTPApp(tests.TestCase):
             {"content": None, "doc_rev": "db0:2", "doc_id": "doc2",
              "has_conflicts": False}]
         self.assertEqual(expected, json.loads(resp.body))
+
+    def test_get_all_docs(self):
+        doc1 = self.db0.create_doc_from_json('{"x": 1}', doc_id='doc1')
+        doc2 = self.db0.create_doc_from_json('{"x": 1}', doc_id='doc2')
+        resp = self.app.get('/db0/all-docs')
+        self.assertEqual(200, resp.status)
+        self.assertEqual(
+            'application/json', resp.header('content-type'))
+
+        def doc_to_dic(doc):
+            return dict(doc_id=doc.doc_id, doc_rev=doc.rev,
+                        content=doc.get_json(),
+                        has_conflicts=doc.has_conflicts)
+
+        expected = sorted([doc_to_dic(doc1), doc_to_dic(doc2)])
+        self.assertEqual(expected, sorted(json.loads(resp.body)))
+        self.assertEqual(2, int(resp.header('x-u1db-generation')))
 
     def test_get_sync_info(self):
         self.db0._set_replica_gen_and_trans_id('other-id', 1, 'T-transid')

@@ -177,8 +177,12 @@ class TestRemoteSyncTargets(tests.TestCaseWithServer):
         self.assertGetDoc(
             db, 'doc-here', 'replica:1', '{"value": "here"}', False)
 
+    failure_scenario_exceptions = (Exception, errors.HTTPError)
+
     def test_sync_exchange_send_failure_and_retry_scenario(self):
         self.startServer()
+
+        server_side_exc, client_side_exc = self.failure_scenario_exceptions
 
         def blackhole_getstderr(inst):
             return cStringIO.StringIO()
@@ -193,7 +197,7 @@ class TestRemoteSyncTargets(tests.TestCaseWithServer):
                                   replica_uid=None, replica_gen=None,
                                   replica_trans_id=None):
             if doc.doc_id in trigger_ids:
-                raise Exception
+                raise server_side_exc
             return _put_doc_if_newer(doc, save_conflict=save_conflict,
                 replica_uid=replica_uid, replica_gen=replica_gen,
                 replica_trans_id=replica_trans_id)
@@ -209,7 +213,7 @@ class TestRemoteSyncTargets(tests.TestCaseWithServer):
         doc2 = self.make_document('doc-here2', 'replica:1',
                                   '{"value": "here2"}')
         self.assertRaises(
-            errors.HTTPError,
+            client_side_exc,
             remote_target.sync_exchange,
             [(doc1, 10, 'T-sid'), (doc2, 11, 'T-sud')],
             'replica', last_known_generation=0, last_known_trans_id=None,

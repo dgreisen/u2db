@@ -49,7 +49,7 @@ def parse_bool(expression):
 
 
 def parse_list(expression):
-    if expression is None:
+    if not expression:
         return []
     return [t.strip() for t in expression.split(',')]
 
@@ -209,11 +209,14 @@ class GlobalResource(object):
     url_pattern = "/"
 
     def __init__(self, state, responder):
+        self.state = state
         self.responder = responder
 
     @http_method()
     def get(self):
-        self.responder.send_response_json(version=_u1db_version)
+        info = self.state.global_info()
+        info['version'] = _u1db_version
+        self.responder.send_response_json(**info)
 
 
 @url_to_resource.register
@@ -262,6 +265,34 @@ class DocsResource(object):
         docs = self.db.get_docs(doc_ids, include_deleted=include_deleted)
         self.responder.content_type = 'application/json'
         self.responder.start_response(200)
+        self.responder.start_stream(),
+        for doc in docs:
+            entry = dict(
+                doc_id=doc.doc_id, doc_rev=doc.rev, content=doc.get_json(),
+                has_conflicts=doc.has_conflicts)
+            self.responder.stream_entry(entry)
+        self.responder.end_stream()
+        self.responder.finish_response()
+
+
+@url_to_resource.register
+class AllDocsResource(object):
+    """All Documents resource."""
+
+    url_pattern = "/{dbname}/all-docs"
+
+    def __init__(self, dbname, state, responder):
+        self.responder = responder
+        self.db = state.open_database(dbname)
+
+    @http_method(include_deleted=parse_bool)
+    def get(self, include_deleted=False):
+        gen, docs = self.db.get_all_docs(include_deleted=include_deleted)
+        self.responder.content_type = 'application/json'
+        # returning a x-u1db-generation header is optional
+        # HTTPDatabase will fallback to return -1 if it's missing
+        self.responder.start_response(200,
+                                      headers={'x-u1db-generation': str(gen)})
         self.responder.start_stream(),
         for doc in docs:
             entry = dict(

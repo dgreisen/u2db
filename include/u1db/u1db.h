@@ -18,6 +18,17 @@
  * @file u1db.h
  */
 
+/*! \mainpage U1DB Index Page
+ * 
+ * \section intro_sec Introduction
+ *
+ * This is the C implementation of the u1db protocol, with a SQLite backend.
+ *
+ * If you're new to u1db, the documentation of the reference implementation is
+ * probably the best place to start.
+ *
+*/
+
 #ifndef _U1DB_H_
 #define _U1DB_H_
 

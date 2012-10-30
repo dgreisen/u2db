@@ -1169,6 +1169,17 @@ class DatabaseSyncTests(tests.DatabaseBaseTests,
         self.assertRaises(
             errors.InvalidTransactionId, self.sync, self.db1, db2_copy)
 
+    def test_optional_sync_preserve_json(self):
+        self.db1 = self.create_database('test1', 'source')
+        self.db2 = self.create_database('test2', 'target')
+        cont1 = '{  "a":  2  }'
+        cont2 = '{ "b":3}'
+        self.db1.create_doc_from_json(cont1, doc_id="1")
+        self.db2.create_doc_from_json(cont2, doc_id="2")
+        self.sync(self.db1, self.db2)
+        self.assertEqual(cont1, self.db2.get_doc("1").get_json())
+        self.assertEqual(cont2, self.db1.get_doc("2").get_json())
+
 
 class TestDbSync(tests.TestCaseWithServer):
     """Test db.sync remote sync shortcut"""

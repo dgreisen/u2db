@@ -148,7 +148,28 @@ class TestHTTPDatabaseSimpleOperations(tests.TestCase):
         self.assertRaises(errors.HTTPError,
                           self.db.get_doc, 'something-something')
 
-    def test_create_doc_with_id(self):
+    def test_get_all_docs_gen_included(self):
+        self.response_val = ('[{"doc_id": "doc", "doc_rev": "db:1",'
+                             ' "content": "{}", "has_conflicts": false}]',
+                             {'x-u1db-generation': 2})
+        gen, docs = self.db.get_all_docs(include_deleted=True)
+        self.assertEqual(2, gen)
+        self.assertEqual(1, len(docs))
+        self.assertEqual(
+            ('GET', ['all-docs'], {'include_deleted': True}, None, None),
+            self.got)
+
+    def test_get_all_docs_gen_absent(self):
+        self.response_val = ('[{"doc_id": "doc", "doc_rev": "db:1",'
+                             ' "content": "{}", "has_conflicts": false}]', {})
+        gen, docs = self.db.get_all_docs()
+        self.assertEqual(-1, gen)
+        self.assertEqual(1, len(docs))
+        self.assertEqual(
+            ('GET', ['all-docs'], {'include_deleted': False}, None, None),
+            self.got)
+
+    def test_create_doc_from_json_with_id(self):
         self.response_val = {'rev': 'doc-rev'}, {}
         new_doc = self.db.create_doc_from_json('{"v": 1}', doc_id='doc-id')
         self.assertEqual('doc-rev', new_doc.rev)
@@ -157,9 +178,27 @@ class TestHTTPDatabaseSimpleOperations(tests.TestCase):
         self.assertEqual(('PUT', ['doc', 'doc-id'], {},
                           '{"v": 1}', 'application/json'), self.got)
 
-    def test_create_doc_without_id(self):
+    def test_create_doc_from_json_without_id(self):
         self.response_val = {'rev': 'doc-rev-2'}, {}
         new_doc = self.db.create_doc_from_json('{"v": 3}')
+        self.assertEqual('D-', new_doc.doc_id[:2])
+        self.assertEqual('doc-rev-2', new_doc.rev)
+        self.assertEqual('{"v": 3}', new_doc.get_json())
+        self.assertEqual(('PUT', ['doc', new_doc.doc_id], {},
+                          '{"v": 3}', 'application/json'), self.got)
+
+    def test_create_doc_with_id(self):
+        self.response_val = {'rev': 'doc-rev'}, {}
+        new_doc = self.db.create_doc({"v": 1}, doc_id='doc-id')
+        self.assertEqual('doc-rev', new_doc.rev)
+        self.assertEqual('doc-id', new_doc.doc_id)
+        self.assertEqual('{"v": 1}', new_doc.get_json())
+        self.assertEqual(('PUT', ['doc', 'doc-id'], {},
+                          '{"v": 1}', 'application/json'), self.got)
+
+    def test_create_doc_without_id(self):
+        self.response_val = {'rev': 'doc-rev-2'}, {}
+        new_doc = self.db.create_doc({"v": 3})
         self.assertEqual('D-', new_doc.doc_id[:2])
         self.assertEqual('doc-rev-2', new_doc.rev)
         self.assertEqual('{"v": 3}', new_doc.get_json())
