@@ -50,29 +50,50 @@ initialize(u1database *db)
     int i, status, final_status;
     char default_replica_uid[33] = {'\0'};
 
+    status = sqlite3_exec(db->sql_handle, "BEGIN EXCLUSIVE", NULL, NULL, NULL);
+    if (status != SQLITE_OK) {
+        return status;
+    }
     for(i = 0; i < u1db__schema_len; i++) {
         status = sqlite3_prepare_v2(db->sql_handle,
             u1db__schema[i], -1, &statement, NULL);
         if(status != SQLITE_OK) {
             // fprintf(stderr, "Could not compile the %d statement:\n%s\n",
             //         i, u1db__schema[i]);
-            return status;
+            goto rollback;
         }
         status = sqlite3_step(statement);
         final_status = sqlite3_finalize(statement);
         if(status != SQLITE_DONE) {
             // fprintf(stderr, "Failed to step %d:\n%s\n",
             //         i, u1db__schema[i]);
-            return status;
+            goto rollback;
         }
         if(final_status != SQLITE_OK) {
-            return final_status;
+            status = final_status;
+            goto rollback;
         }
     }
-    u1db__generate_hex_uuid(default_replica_uid);
-    u1db_set_replica_uid(db, default_replica_uid);
-    u1db_set_document_size_limit(db, 0);
+    status = u1db__generate_hex_uuid(default_replica_uid);
+    if(status != U1DB_OK) {
+        goto rollback;
+    }
+    status = u1db_set_replica_uid(db, default_replica_uid);
+    if(status != U1DB_OK) {
+        goto rollback;
+    }
+    status = u1db_set_document_size_limit(db, 0);
+    if(status != U1DB_OK) {
+        goto rollback;
+    }
+    status = sqlite3_exec(db->sql_handle, "COMMIT", NULL, NULL, NULL);
+    if (status != SQLITE_OK) {
+        return status;
+    }
     return U1DB_OK;
+rollback:
+    status = sqlite3_exec(db->sql_handle, "ROLLBACK", NULL, NULL, NULL);
+    return status;
 }
 
 u1database *
