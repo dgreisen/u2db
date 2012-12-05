@@ -7,6 +7,8 @@ application 'Cosas' as our example. The full source code to Cosas can be found
 in the u1db source tree.  It comes with a user interface, but we will only
 focus on the code that interacts with u1db here.
 
+This tutorial demonstrates the Python implementation of u1db.
+
 Defining the Task Object
 ------------------------
 
@@ -394,7 +396,45 @@ revisions of the conflicting versions it is meant to resolve.
             # refresh the UI to show the resolved version
             self.refresh_filter()
 
-Full Cosas Documentation and Source Code 
+Testing your programs
+---------------------
+
+When building tests for programs which use u1db, you may not want to create a real database
+file in your test suite. U1DB can be run entirely in-memory; this makes test suites easier
+to write.
+
+Python
+======
+
+For Python u1db-using programs, there are two ways to create an in-memory U1DB. The Python
+implementation of u1db has its own in-memory implementation:
+
+.. code-block:: python
+
+        # db = u1db.open(somepath, create=True) # this is how your program will normally use u1db
+
+        # Use the in-memory implementation instead:
+        from u1db.backends import inmemory
+        db = inmemory.InMemoryDatabase("test")
+
+Alternatively, you can take advantage of the Python implementation being backed by SQLite, and
+use SQLite's in-memory implementation:
+
+.. code-block:: python
+
+        db = u1db.open(":memory:", create=True) # create a SQLite database in memory
+
+C
+=
+
+The C implementation of u1db does not have its own in-memory implementation, but you can
+use SQLite's:
+
+.. code-block:: c
+
+        db = u1db_open(":memory:");
+
+Full Cosas Documentation and Source Code
 ----------------------------------------
 
 .. automodule:: cosas.cosas
@@ -402,4 +442,5 @@ Full Cosas Documentation and Source Code
 
 .. automodule:: cosas.ui
     :members:
+
 
