@@ -401,7 +401,7 @@ Testing your programs
 
 When building tests for programs which use u1db, you may not want to create a real database
 file in your test suite. U1DB can be run entirely in-memory; this makes test suites easier
-to write.
+to write and much faster to run!
 
 Python
 ======
@@ -432,7 +432,8 @@ use SQLite's:
 
 .. code-block:: c
 
-        db = u1db_open(":memory:");
+        #include <u1db/u1db.h>
+        u1database *db = u1db_open(":memory:");
 
 Full Cosas Documentation and Source Code
 ----------------------------------------
