@@ -308,8 +308,8 @@ grobbelaar doc3
 Querying an index
 ^^^^^^^^^^^^^^^^^
 
-Pass an index key or a tuple of index keys (if the index is on multiple fields)
-to ``get_from_index``; the last index key in each tuple (and *only* the last
+Pass an index key or multiple index keys (if the index is on multiple fields)
+to ``get_from_index``; the last index key (and *only* the last
 one) can end with an asterisk, which matches initial substrings. So, querying
 our ``by-firstname`` index from above:
 
@@ -331,6 +331,11 @@ with "J", and so will return the documents with ids: 'jw', 'jb', 'jm'.
     >>> assert(jw.doc_id in js)
     >>> assert(jb.doc_id in js)
     >>> assert(jm.doc_id in js)
+
+Index key values used when querying are always strings. If querying an
+index built with ``bool()`` use the values '0' and '1' to query for
+false and true respectively. For an index built with ``number()`` turn
+key number values into strings with the appropriate left zero-padding.
 
 Index functions
 ^^^^^^^^^^^^^^^
