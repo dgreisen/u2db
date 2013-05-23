@@ -337,6 +337,16 @@ index built with ``bool()`` use the values '0' and '1' to query for
 false and true respectively. For an index built with ``number()`` turn
 key number values into strings with the appropriate left zero-padding.
 
+.. doctest ::
+
+    >>> db = u1db.open('mydb11.u1db', create=True)
+    >>> db.create_index('done', "bool(done)")
+    >>> doc1 = db.create_doc({'task': 'milk', 'done': False})
+    >>> doc2 = db.create_doc({'task': 'coding', 'done': True})
+    >>> [doc.content['task'] for doc in db.get_from_index('done', '1')]
+    [u'coding']
+
+
 Index functions
 ^^^^^^^^^^^^^^^
 
@@ -404,4 +414,5 @@ Synchronising Functions
     os.remove(os.path.join(tmp_dir, "mydb8.u1db"))
     os.remove(os.path.join(tmp_dir, "mydb9.u1db"))
     os.remove(os.path.join(tmp_dir, "mydb10.u1db"))
+    os.remove(os.path.join(tmp_dir, "mydb11.u1db"))
     os.rmdir(tmp_dir)
