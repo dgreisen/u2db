@@ -18,6 +18,7 @@
 
 #include "u1db/u1db_internal.h"
 #include <sqlite3.h>
+#include <stdlib.h>
 #include <stdarg.h>
 #include <string.h>
 #include <ctype.h>
@@ -242,7 +243,7 @@ struct operation
     void *function;
     char *name;
     int value_type;
-    int arity;
+    int arity;  /* negative means any N*(-arity) values are OK */
     const int *value_types;
 } OPERATIONS[] = {
     { op_lower, "lower", json_type_string, 1, JUST_EXPRESSION },
@@ -1299,7 +1300,7 @@ parse_op(string_list *tokens, char *term, parse_tree *result)
     char *sep = NULL;
     parse_tree *node = NULL;
     int status = U1DB_OK;
-    int i, array_size;
+    int i, cyclic_arity;
 
     sep = get_token(tokens);
     if (sep == NULL || strcmp(sep, "(") != 0) {
@@ -1346,9 +1347,9 @@ parse_op(string_list *tokens, char *term, parse_tree *result)
         }
     }
     i = 0;
-    array_size = sizeof(result->value_types) / sizeof(int);
+    cyclic_arity = abs(result->arity);
     for (node = result->first_child; node != NULL; node = node->next_sibling) {
-        node->arg_type = result->value_types[i % array_size];
+        node->arg_type = result->value_types[i % cyclic_arity];
         if (node->arg_type == EXPRESSION) {
             status = to_getter(node);
             if (status != U1DB_OK)
