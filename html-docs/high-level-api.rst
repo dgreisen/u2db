@@ -335,16 +335,25 @@ with "J", and so will return the documents with ids: 'jw', 'jb', 'jm'.
 Index key values used when querying are always strings. If querying an
 index built with ``bool()`` use the values '0' and '1' to query for
 false and true respectively. For an index built with ``number()`` turn
-key number values into strings with the appropriate left zero-padding.
+key number values into strings with the appropriate left zero-padding
+(and note in particular that querying a ``number()`` index with an int
+value, such as ``db.get_from_index('by-number', 9)``, will throw an error).
 
 .. doctest ::
 
     >>> db = u1db.open('mydb11.u1db', create=True)
     >>> db.create_index('done', "bool(done)")
-    >>> doc1 = db.create_doc({'task': 'milk', 'done': False})
-    >>> doc2 = db.create_doc({'task': 'coding', 'done': True})
+    >>> doc1 = db.create_doc({'task': 'milk', 'done': False, 'hours': 1})
+    >>> doc2 = db.create_doc({'task': 'coding', 'done': True, 'hours': 12})
     >>> [doc.content['task'] for doc in db.get_from_index('done', '1')]
     [u'coding']
+    >>> db.create_index('by-hours', "number(hours, 3)")
+    >>> [doc.content['task'] for doc in db.get_from_index('by-hours', '12')]
+    []
+    >>> [doc.content['task'] for doc in db.get_from_index('by-hours', '012')]
+    [u'coding']
+    >>> [doc.content['task'] for doc in db.get_from_index('by-hours', '001')]
+    [u'milk']
 
 
 Index functions
