@@ -24,7 +24,7 @@ except ImportError:
 from u1db.errors import InvalidJSON, InvalidContent
 
 __version_info__ = (99, 12)
-__version__ = '.'.join(map(str, __version_info__))
+__version__ = '.'.join(map(lambda x: '%02d' % x, __version_info__))
 
 
 def open(path, create, document_factory=None):
