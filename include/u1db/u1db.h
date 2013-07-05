@@ -19,7 +19,7 @@
  */
 
 /*! \mainpage U1DB Index Page
- * 
+ *
  * \section intro_sec Introduction
  *
  * This is the C implementation of the u1db protocol, with a SQLite backend.
@@ -28,6 +28,10 @@
  * probably the best place to start.
  *
 */
+
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 #ifndef _U1DB_H_
 #define _U1DB_H_
@@ -340,7 +344,7 @@ typedef union _u1db_creds u1db_creds;
  *                         sync.
  */
 int u1db_sync(u1database *db, const char *url, const u1db_creds *creds,
-	      int *local_gen);
+          int *local_gen);
 
 
 /**
@@ -460,3 +464,7 @@ int u1db_simple_lookup1(u1database *db, const char *index_name,
                         void *context, u1db_doc_callback cb);
 
 #endif // _U1DB_H_
+
+#ifdef __cplusplus
+}
+#endif
