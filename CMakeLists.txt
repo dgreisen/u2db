@@ -55,12 +55,12 @@ add_custom_target(check
 )
 
 add_custom_target(build-inplace-for-tests
-    COMMAND U1DB_TEST=1 python setup.py build_ext -i -f -I ${CMAKE_SOURCE_DIR}/include
+    COMMAND U1DB_TEST=1 python setup.py build_ext -i -f -I ${CMAKE_SOURCE_DIR}/include -R ${CMAKE_BINARY_DIR}/src
     DEPENDS ReplicatePythonSourceTree u1db
 )
 
 add_custom_target(build-debug-for-tests
-    COMMAND U1DB_TEST=1 python-dbg setup.py build_ext -i -f -I ${CMAKE_SOURCE_DIR}/include
+    COMMAND U1DB_TEST=1 python-dbg setup.py build_ext -i -f -I ${CMAKE_SOURCE_DIR}/include -R ${CMAKE_BINARY_DIR}/src
     DEPENDS ReplicatePythonSourceTree u1db
 )
 add_custom_target(check-valgrind
@@ -88,7 +88,7 @@ INCLUDE(CPack)
 
 add_custom_target(install-python ALL
     # Do NOT build this one in-place
-    COMMAND python setup.py build_ext -f -I ${CMAKE_SOURCE_DIR}/include
+    COMMAND python setup.py build_ext -f -I ${CMAKE_SOURCE_DIR}/include -R ${CMAKE_BINARY_DIR}/src
     COMMAND python setup.py install --prefix=${CMAKE_INSTALL_PREFIX} --root=${CMAKE_CURRENT_BINARY_DIR}/temp
     DEPENDS ReplicatePythonSourceTree u1db
 )
